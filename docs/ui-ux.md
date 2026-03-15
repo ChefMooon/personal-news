@@ -2,7 +2,7 @@
 
 **Project:** personal-news
 **Status:** Draft
-**Last Updated:** 2026-03-15 (rev 6)
+**Last Updated:** 2026-03-15 (rev 7)
 **Related Docs:** [PRD.md](./PRD.md) | [data-sources.md](./data-sources.md) | [tech-notes.md](./tech-notes.md)
 
 ---
@@ -18,7 +18,7 @@
 
 ## 2. Application Shell
 
-The app has three top-level sections, navigated via a sidebar or top navigation bar (Decision needed: sidebar vs. top nav — recommendation is a collapsible left sidebar to maximize vertical content space on the dashboard):
+The app has four top-level sections, navigated via a **collapsible left sidebar**. The sidebar maximizes vertical content space on the dashboard. It has two states: expanded (200px, shows icon + label) and collapsed (56px, icon only). The active item is highlighted.
 
 | Section | Description |
 |---------|-------------|
@@ -120,7 +120,7 @@ The enabled/disabled state is also accessible from the YouTube section of the Se
 ```
 +------------------------------------------------------------+
 |  Reddit Digest                                     [gear]  |
-|  Last updated: Today at 06:00                              |
+|  Last updated: Today at 06:00    [Sort: Score ▾] [Columns] |
 +------------------------------------------------------------+
 |  r/subreddit1          r/subreddit2          r/subreddit3  |
 |  +------------------+  +-----------------+  +-----------+  |
@@ -133,17 +133,95 @@ The enabled/disabled state is also accessible from the YouTube section of the Se
 +------------------------------------------------------------+
 ```
 
-- Subreddits displayed in columns (or tabs if too many to fit — Decision needed: column layout vs. tabs for many subreddits).
 - Each post shows: title (linked), score, comment count, age.
 - Clicking a post title opens the Reddit permalink in the default browser.
 - A "Last updated" timestamp shows when the digest script last ran.
 - If the script has never run, the widget shows a prompt to run it for the first time.
 
+### 5.2 Sorting
+
+Posts within each subreddit (or within a grouped view) can be sorted by any of the following fields:
+
+| Sort field | Label | Direction |
+|------------|-------|-----------|
+| `score` | Score | Descending (default) |
+| `num_comments` | Comments | Descending |
+| `created_utc` | Age | Descending (newest first) |
+| `fetched_at` | Date collected | Descending |
+
+The active sort field and direction are shown in the widget header as a small dropdown control (e.g., "Sort: Score ▾"). The sort preference is per-widget and is persisted in the `reddit_digest_view_config` settings key (see Section 5.5).
+
+### 5.3 Grouping
+
+Posts can be grouped by:
+
+| Group by | Behaviour |
+|----------|-----------|
+| `subreddit` (default) | One column (or tab) per subreddit |
+| `none` | All posts in a single flat list, sorted by the active sort field |
+
+Grouping and layout mode are independent axes: a user can have grouped columns, grouped tabs, or a flat list in either layout mode.
+
+### 5.4 Layout Mode
+
+The widget supports two layout modes, toggled by a control in the widget header:
+
+| Mode | Description |
+|------|-------------|
+| **Columns** (default) | Subreddits rendered in a CSS grid of columns. Column count is auto-fit based on widget width (`minmax(220px, 1fr)`). Suitable for 2–5 subreddits. |
+| **Tabs** | Subreddits rendered as shadcn `Tabs`. One tab per subreddit (or "All" tab when group_by is `none`). Suitable for many subreddits (6+). |
+
+Layout mode is preserved per-widget in `reddit_digest_view_config`.
+
+### 5.5 View Config Persistence
+
+The full view configuration for the Reddit Digest widget is stored as a JSON value under the settings key `reddit_digest_view_config`:
+
+```json
+{
+  "sort_by": "score",
+  "sort_dir": "desc",
+  "group_by": "subreddit",
+  "layout_mode": "columns"
+}
+```
+
+Defaults (applied if the key is missing or any field is absent):
+- `sort_by`: `"score"`
+- `sort_dir`: `"desc"`
+- `group_by`: `"subreddit"`
+- `layout_mode`: `"columns"`
+
+This config is read and written via `settings:get` / `settings:set` using the `reddit_digest_view_config` key. No separate IPC channel is needed — it is a plain settings value. The widget reads it on mount and writes it on any control interaction.
+
 ---
 
-## 6. Saved Posts View
+## 6. Saved Posts
 
-This is a dedicated full-page view, not a dashboard widget (Assumed: saved posts are reference material, not "at a glance" content — they belong in their own view. Decision needed: confirm this or spec a dashboard widget variant).
+Saved Posts exist in two places:
+
+1. **Dashboard widget (`SavedPostsWidget`)** — a compact at-a-glance summary on the dashboard, showing the N most recently saved posts with title, subreddit, and saved date. No filtering or search. Clicking any post opens the Reddit permalink in the default browser. Clicking a "View All" link navigates to the full Saved Posts route.
+2. **Full-page view (`/saved-posts` route)** — the complete list/search/tag management experience described in the sections below.
+
+Both are registered as a module in the widget registry (module ID: `saved_posts`), so the dashboard widget can be shown/hidden and reordered alongside YouTube and Reddit Digest.
+
+### SavedPostsWidget (Dashboard)
+
+```
++------------------------------------------------------------+
+|  Saved Posts                                   [View All]  |
++------------------------------------------------------------+
+|  r/rust  •  Why Rust async is finally good      2h ago    |
+|  r/programming  •  I built a news dashboard     1d ago    |
+|  r/golang  •  New generics patterns in Go 1.22  3d ago    |
+|  ...  (up to 5 most recent posts)                          |
++------------------------------------------------------------+
+```
+
+- Shows up to 5 most recently saved posts.
+- Each row: subreddit chip, title (linked), relative saved date.
+- If ntfy is not configured, the widget shows a "Set up mobile saving" prompt with a link to Settings.
+- "View All" link in the widget header navigates to `/saved-posts`.
 
 Posts are ingested from a user-configured ntfy.sh topic on app startup. See [data-sources.md](./data-sources.md) Section 3 for the ingestion flow.
 
@@ -271,7 +349,7 @@ The badge is subtle (small dot, not a numbered chip) to respect the non-intrusiv
 | YouTube | List of configured channels — add by channel URL or ID; per-channel enabled/disabled toggle; remove channel; RSS poll interval (minutes) |
 | Reddit Digest | List of configured subreddits — add/remove; time window setting (week/month/all) |
 | Saved Posts | ntfy.sh topic name (plain text input); optional custom ntfy server URL (plain text) |
-| Appearance | (Assumed: light/dark mode toggle — Decision needed: is this in scope for v1?) |
+| Appearance | Theme selector: System Default, Light, Dark. Custom themes (future) are extensible via the `themes` table — see data-model.md §2.9. |
 
 ### 8.2 API Key Fields
 
@@ -482,4 +560,4 @@ Key components expected:
 - All interactive elements are keyboard-focusable.
 - Color is not the sole means of conveying status (e.g., "LIVE NOW" badge uses both color and text).
 - Font sizes follow Tailwind defaults (minimum 14px for body text).
-- Assumed: WCAG AA compliance is a goal but not formally audited for v1. (Decision needed: confirm.)
+- WCAG AA compliance is a stated v1 goal. Not formally audited, but targeted throughout. shadcn/ui Radix primitives provide the baseline (focus rings, ARIA roles, keyboard navigation). Color contrast for all text/background pairings must meet the 4.5:1 ratio minimum. Theme token values must be checked against this ratio before shipping any custom palette.
