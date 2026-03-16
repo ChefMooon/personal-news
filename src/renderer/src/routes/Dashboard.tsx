@@ -18,7 +18,9 @@ import { useWidgetLayout } from '../hooks/useWidgetLayout'
 import { WidgetWrapper } from '../components/WidgetWrapper'
 import { getModule } from '../modules/registry'
 import { Button } from '../components/ui/button'
-import { Settings2, Check } from 'lucide-react'
+import { Settings2, Check, Plus } from 'lucide-react'
+import { WidgetInstanceContext } from '../contexts/WidgetInstanceContext'
+import { AddWidgetModal, type AddWidgetConfig } from '../components/AddWidgetModal'
 
 // Import modules to trigger registration
 import '../modules/youtube/YouTubeWidget'
@@ -28,6 +30,7 @@ import '../modules/saved-posts/SavedPostsWidget'
 export default function Dashboard(): React.ReactElement {
   const { layout, setLayout, loading } = useWidgetLayout()
   const [editMode, setEditMode] = useState(false)
+  const [showAddModal, setShowAddModal] = useState(false)
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -47,12 +50,85 @@ export default function Dashboard(): React.ReactElement {
     setLayout({ ...layout, widget_order: newOrder })
   }
 
-  function handleToggleVisibility(id: string): void {
-    const newVisibility = {
-      ...layout.widget_visibility,
-      [id]: !layout.widget_visibility[id]
+  function handleToggleVisibility(instanceId: string): void {
+    setLayout({
+      ...layout,
+      widget_visibility: {
+        ...layout.widget_visibility,
+        [instanceId]: !layout.widget_visibility[instanceId]
+      }
+    })
+  }
+
+  function handleRename(instanceId: string, newLabel: string | null): void {
+    setLayout({
+      ...layout,
+      widget_instances: {
+        ...layout.widget_instances,
+        [instanceId]: { ...layout.widget_instances[instanceId], label: newLabel }
+      }
+    })
+  }
+
+  function handleRemove(instanceId: string): void {
+    const { [instanceId]: _inst, ...remainingInstances } = layout.widget_instances
+    const { [instanceId]: _vis, ...remainingVisibility } = layout.widget_visibility
+    setLayout({
+      ...layout,
+      widget_order: layout.widget_order.filter((id) => id !== instanceId),
+      widget_visibility: remainingVisibility,
+      widget_instances: remainingInstances
+    })
+  }
+
+  function handleAddFromModal(config: AddWidgetConfig): void {
+    const instanceId = `${config.moduleId}_${Date.now()}`
+
+    // Build new widget_order based on requested position
+    let newOrder: string[]
+    if (config.position === 'top') {
+      newOrder = [instanceId, ...layout.widget_order]
+    } else if (config.position === 'bottom') {
+      newOrder = [...layout.widget_order, instanceId]
+    } else {
+      const afterIndex = layout.widget_order.indexOf(config.position.afterId)
+      if (afterIndex === -1) {
+        newOrder = [...layout.widget_order, instanceId]
+      } else {
+        newOrder = [
+          ...layout.widget_order.slice(0, afterIndex + 1),
+          instanceId,
+          ...layout.widget_order.slice(afterIndex + 1)
+        ]
+      }
     }
-    setLayout({ ...layout, widget_visibility: newVisibility })
+
+    setLayout({
+      ...layout,
+      widget_order: newOrder,
+      widget_visibility: { ...layout.widget_visibility, [instanceId]: true },
+      widget_instances: {
+        ...layout.widget_instances,
+        [instanceId]: { instanceId, moduleId: config.moduleId, label: config.label }
+      }
+    })
+
+    // Persist initial Reddit Digest subreddit filter if one was set
+    if (config.moduleId === 'reddit_digest' && config.subredditFilter !== null) {
+      const storageKey = `reddit_digest_view_config:${instanceId}`
+      const initialConfig = {
+        sort_by: 'score',
+        sort_dir: 'desc',
+        group_by: 'subreddit',
+        layout_mode: 'columns',
+        subreddit_filter: config.subredditFilter
+      }
+      window.api
+        .invoke('settings:set', storageKey, JSON.stringify(initialConfig))
+        .catch(console.error)
+    }
+
+    setShowAddModal(false)
   }
 
   if (loading) {
@@ -64,31 +140,44 @@ export default function Dashboard(): React.ReactElement {
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="min-h-full flex flex-col">
       {/* Dashboard header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b">
+      <div className="flex items-center justify-between px-6 py-4 border-b sticky top-0 bg-background z-10">
         <h1 className="text-xl font-semibold">Dashboard</h1>
-        <Button
-          variant={editMode ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => setEditMode((e) => !e)}
-        >
-          {editMode ? (
-            <>
-              <Check className="h-4 w-4 mr-1" />
-              Done
-            </>
-          ) : (
-            <>
-              <Settings2 className="h-4 w-4 mr-1" />
-              Edit Layout
-            </>
+        <div className="flex items-center gap-2">
+          {editMode && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowAddModal(true)}
+              title="Add widget"
+            >
+              <Plus className="h-4 w-4 mr-1" />
+              Add Widget
+            </Button>
           )}
-        </Button>
+          <Button
+            variant={editMode ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setEditMode((e) => !e)}
+          >
+            {editMode ? (
+              <>
+                <Check className="h-4 w-4 mr-1" />
+                Done
+              </>
+            ) : (
+              <>
+                <Settings2 className="h-4 w-4 mr-1" />
+                Edit Layout
+              </>
+            )}
+          </Button>
+        </div>
       </div>
 
       {/* Widgets */}
-      <div className="flex-1 overflow-auto p-6 space-y-6">
+      <div className="flex-1 p-6 space-y-6 w-full">
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
@@ -98,25 +187,42 @@ export default function Dashboard(): React.ReactElement {
             items={layout.widget_order}
             strategy={verticalListSortingStrategy}
           >
-            {layout.widget_order.map((moduleId) => {
-              const mod = getModule(moduleId)
+            {layout.widget_order.map((instanceId) => {
+              const instance = layout.widget_instances[instanceId]
+              if (!instance) return null
+              const mod = getModule(instance.moduleId)
               if (!mod) return null
               const WidgetComponent = mod.widget
               return (
-                <WidgetWrapper
-                  key={moduleId}
-                  id={moduleId}
-                  editMode={editMode}
-                  visible={layout.widget_visibility[moduleId] !== false}
-                  onToggleVisibility={handleToggleVisibility}
-                >
-                  <WidgetComponent />
-                </WidgetWrapper>
+                <WidgetInstanceContext.Provider key={instanceId} value={instance}>
+                  <WidgetWrapper
+                    id={instanceId}
+                    label={instance.label}
+                    defaultLabel={mod.displayName}
+                    editMode={editMode}
+                    visible={layout.widget_visibility[instanceId] !== false}
+                    onToggleVisibility={handleToggleVisibility}
+                    onRename={handleRename}
+                    onRemove={handleRemove}
+                  >
+                    <WidgetComponent />
+                  </WidgetWrapper>
+                </WidgetInstanceContext.Provider>
               )
             })}
           </SortableContext>
         </DndContext>
+
       </div>
+
+      {/* Add Widget modal */}
+      {showAddModal && (
+        <AddWidgetModal
+          layout={layout}
+          onAdd={handleAddFromModal}
+          onClose={() => setShowAddModal(false)}
+        />
+      )}
     </div>
   )
 }

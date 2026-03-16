@@ -72,9 +72,16 @@ export interface ScriptWithLastRun {
   exit_code: number | null
 }
 
+export interface WidgetInstance {
+  instanceId: string
+  moduleId: string
+  label: string | null
+}
+
 export interface WidgetLayout {
   widget_order: string[]
   widget_visibility: Record<string, boolean>
+  widget_instances: Record<string, WidgetInstance>
 }
 
 export interface ThemeInfo {
@@ -87,4 +94,5 @@ export interface DigestViewConfig {
   sort_dir: 'asc' | 'desc'
   group_by: 'subreddit' | 'none'
   layout_mode: 'columns' | 'tabs'
+  subreddit_filter: string[] | null
 }

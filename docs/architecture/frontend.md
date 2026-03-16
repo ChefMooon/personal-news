@@ -211,29 +211,51 @@ export const moduleRegistry: ModuleRegistration[] = [
 ];
 ```
 
-### 5.2 Dashboard Rendering
+### 5.2 Widget Instances
 
-The `Dashboard` route reads `widget_order` and `widget_visibility` from IPC (settings table), then renders `WidgetWrapper` components in that order, skipping hidden modules. `@dnd-kit/core` wraps the list; on drag-end, the new order is written back via `settings:set`.
+The dashboard supports **multiple instances of the same module**. The `WidgetLayout` type tracks instances separately from module types:
 
 ```typescript
-// Simplified Dashboard render
-const orderedModules = widgetOrder
-  .map(id => moduleRegistry.find(m => m.id === id))
-  .filter(Boolean)
-  .filter(m => widgetVisibility[m.id] !== false);
+interface WidgetInstance {
+  instanceId: string   // e.g. "reddit_digest_1", "reddit_digest_1714000000000"
+  moduleId: string     // e.g. "reddit_digest"
+  label: string | null // user-supplied name; null = use module's displayName
+}
 
-return (
-  <DndContext onDragEnd={handleDragEnd}>
-    <SortableContext items={orderedModules.map(m => m.id)}>
-      {orderedModules.map(m => (
-        <WidgetWrapper key={m.id} moduleId={m.id} editMode={editMode}>
-          <m.WidgetComponent />
-        </WidgetWrapper>
-      ))}
-    </SortableContext>
-  </DndContext>
-);
+interface WidgetLayout {
+  widget_order: string[]                       // array of instanceIds
+  widget_visibility: Record<string, boolean>   // keyed by instanceId
+  widget_instances: Record<string, WidgetInstance>
+}
 ```
+
+`instanceId` is `${moduleId}_1` for the initial instance (migrated from old format) and `${moduleId}_${Date.now()}` for subsequently added instances.
+
+### 5.3 Instance Context
+
+`WidgetInstanceContext` (`src/renderer/src/contexts/WidgetInstanceContext.tsx`) provides `{ instanceId, moduleId, label }` to widget components via React context. Dashboard wraps each widget in a context provider before rendering it. Widget components read this context via `useWidgetInstance()` to access their own instance metadata without requiring prop changes.
+
+### 5.4 Dashboard Rendering
+
+`Dashboard.tsx` iterates `widget_order` (instanceIds), looks up the `WidgetInstance`, then the registered module by `moduleId`, and renders each widget inside a context provider:
+
+```typescript
+{layout.widget_order.map((instanceId) => {
+  const instance = layout.widget_instances[instanceId]
+  const mod = getModule(instance.moduleId)
+  return (
+    <WidgetInstanceContext.Provider value={instance}>
+      <WidgetWrapper id={instanceId} label={instance.label} defaultLabel={mod.displayName} ...>
+        <mod.widget />
+      </WidgetWrapper>
+    </WidgetInstanceContext.Provider>
+  )
+})}
+```
+
+### 5.5 Layout Migration
+
+`useWidgetLayout` automatically migrates the old format (where `widget_order` contained moduleIds directly) to the new instance format on first load. The migrated layout is written back to storage transparently. Old format: `widget_order: ["youtube", "reddit_digest"]` → New format: instances `youtube_1`, `reddit_digest_1` etc.
 
 ### 5.3 Settings Rendering
 
@@ -247,8 +269,13 @@ The Settings view iterates `moduleRegistry` and renders each module's `SettingsC
 
 - `editMode` state lives in `Dashboard.tsx`.
 - "Edit Layout" button toggles it.
-- In edit mode: drag handles appear on `WidgetWrapper`; each widget shows an eye-icon toggle (calls `settings:set` to update `widget_visibility`).
-- Drag-end handler calls `settings:set` to persist new `widget_order`.
+- In edit mode:
+  - Drag handles appear on each `WidgetWrapper` for reordering.
+  - Eye-icon toggle shows/hides individual widgets.
+  - Widget name is shown inline with a pencil icon — clicking opens an inline text input for renaming. Pressing Enter or blurring commits; Escape cancels. Clearing the name (or setting it back to the module's default name) removes the custom label.
+  - A trash icon removes the widget instance from the layout entirely.
+  - An "Add widget" strip appears at the bottom of the dashboard showing one button per registered module. Clicking adds a new instance of that module to the end of `widget_order`.
+- Drag-end handler, rename, add, and remove all call `setLayout` which persists the full `WidgetLayout` object via `settings:setWidgetLayout`.
 - Exiting edit mode (clicking "Done") simply sets `editMode = false`.
 
 ### 6.2 ntfy Onboarding Modal
@@ -276,12 +303,18 @@ The Settings view iterates `moduleRegistry` and renders each module's `SettingsC
 
 ### 6.5 Reddit Digest View Config
 
-- `RedditDigestWidget` reads `reddit_digest_view_config` from the settings table on mount via `settings:get('reddit_digest_view_config')`.
-- Parsed into `{ sort_by, sort_dir, group_by, layout_mode }` with defaults applied for any missing fields.
-- `DigestViewControls` renders a sort dropdown and a layout mode toggle button in the widget header. On change, the new config is written back via `settings:set('reddit_digest_view_config', JSON.stringify(newConfig))` and local state is updated immediately.
-- Sorting is applied in the renderer (client-side) over the data already returned by `reddit:getDigestPosts`. No round-trip to main for sort changes.
-- Grouping: when `group_by = 'subreddit'`, posts are grouped into columns/tabs by subreddit. When `group_by = 'none'`, all posts are merged into a single flat list sorted by the active sort field and displayed in a single column/tab labeled "All".
-- Layout mode toggle: swaps between the CSS grid columns layout and the shadcn `Tabs` layout. The same `DigestPostRow` component is used in both modes — only the container changes.
+Config is per-instance, stored under the settings key `reddit_digest_view_config:<instanceId>`.
+
+- `useRedditDigestConfig(instanceId)` loads config for the given instance. Falls back to the legacy global key `reddit_digest_view_config` on first load so existing saved preferences are preserved after migration.
+- Config shape: `{ sort_by, sort_dir, group_by, layout_mode, subreddit_filter }`. All fields have defaults; missing fields are filled by spreading over `DEFAULT_CONFIG`.
+- `DigestViewControls` renders:
+  - Sort field dropdown
+  - Sort direction toggle (↑/↓)
+  - Layout mode toggle (grid columns / tabs)
+  - Subreddit filter button — shows "All" when no filter is active, or a count badge when a filter is set. Clicking opens a floating checklist of all subreddits present in the data; checking/unchecking updates `subreddit_filter`.
+- `subreddit_filter: null` means show all subreddits; an array of subreddit names restricts the widget to those subreddits.
+- All filtering, sorting, and grouping is applied client-side in the renderer. No round-trip to main for config changes.
+- Multiple Reddit Digest widget instances each maintain independent configs, enabling e.g. one instance pinned to r/rust + r/programming and another to r/gaming.
 
 ### 6.6 Live Script Output
 
@@ -299,6 +332,8 @@ src/renderer/
 ├── App.tsx                   Root layout: Sidebar + Outlet
 ├── providers/
 │   └── ThemeProvider.tsx     Reads active_theme_id; applies data-theme to <html>
+├── contexts/
+│   └── WidgetInstanceContext.tsx  Per-instance context (instanceId, moduleId, label)
 ├── routes/
 │   ├── Dashboard.tsx
 │   ├── SavedPosts.tsx
@@ -314,7 +349,7 @@ src/renderer/
 │   │   └── YouTubeSettings.tsx
 │   ├── reddit/
 │   │   ├── RedditDigestWidget.tsx
-│   │   ├── DigestViewControls.tsx  Sort dropdown + layout toggle
+│   │   ├── DigestViewControls.tsx  Sort, layout, subreddit filter controls
 │   │   ├── SubredditColumn.tsx
 │   │   ├── DigestTabs.tsx          Tabs layout container
 │   │   ├── DigestPostRow.tsx

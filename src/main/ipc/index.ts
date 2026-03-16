@@ -9,6 +9,7 @@ import type {
   SavedPostSummary,
   ScriptWithLastRun,
   WidgetLayout,
+  WidgetInstance,
   ThemeInfo
 } from '../../shared/ipc-types'
 
@@ -67,9 +68,11 @@ export function registerIpcHandlers(): void {
     const visibilityRaw =
       getSetting('widget_visibility') ??
       '{"youtube":true,"reddit_digest":true,"saved_posts":true}'
+    const instancesRaw = getSetting('widget_instances') ?? '{}'
     return {
       widget_order: JSON.parse(orderRaw) as string[],
-      widget_visibility: JSON.parse(visibilityRaw) as Record<string, boolean>
+      widget_visibility: JSON.parse(visibilityRaw) as Record<string, boolean>,
+      widget_instances: JSON.parse(instancesRaw) as Record<string, WidgetInstance>
     }
   })
 
@@ -77,6 +80,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC.SETTINGS_SET_WIDGET_LAYOUT, (_event, layout: WidgetLayout): void => {
     setSetting('widget_order', JSON.stringify(layout.widget_order))
     setSetting('widget_visibility', JSON.stringify(layout.widget_visibility))
+    setSetting('widget_instances', JSON.stringify(layout.widget_instances))
   })
 
   // settings:getTheme

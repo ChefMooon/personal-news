@@ -74,8 +74,7 @@ Key-value store for all plain-text application settings.
 
 | Key | Type hint | Default | Description |
 |-----|-----------|---------|-------------|
-| `widget_order` | JSON array of module IDs | `'["youtube","reddit_digest","scripts"]'` | Ordered list of widget module IDs for dashboard layout |
-| `widget_visibility` | JSON object `{moduleId: boolean}` | all visible | Per-widget show/hide state |
+| `widget_layout` | JSON object (see below) | see `useWidgetLayout.ts` | Full dashboard layout: widget_order (instanceIds), widget_visibility, widget_instances |
 | `rss_poll_interval_minutes` | integer string | `"15"` | YouTube RSS polling interval |
 | `ntfy_topic` | string | — | ntfy.sh topic name (plain text) |
 | `ntfy_server_url` | URL string | `"https://ntfy.sh"` | ntfy server base URL |
@@ -83,7 +82,37 @@ Key-value store for all plain-text application settings.
 | `ntfy_last_polled_at` | integer string (Unix ts) | — | Timestamp of last successful ntfy poll |
 | `ntfy_onboarding_dismissed` | boolean string `"1"/"0"` | `"0"` | Whether user dismissed onboarding without completing |
 | `active_theme_id` | string | `"system"` | Active theme. Built-in values: `"system"`, `"light"`, `"dark"`. For user-created themes, this is the `themes.id` value (see §2.9). |
-| `reddit_digest_view_config` | JSON object string | see §2.9 of ui-ux.md | Reddit Digest widget view preferences: sort_by, sort_dir, group_by, layout_mode |
+| `reddit_digest_view_config:<instanceId>` | JSON object string | see below | Per-instance Reddit Digest view config. Keys: sort_by, sort_dir, group_by, layout_mode, subreddit_filter |
+
+**Widget layout shape (`widget_layout` key):**
+
+```json
+{
+  "widget_order": ["youtube_1", "reddit_digest_1", "reddit_digest_2"],
+  "widget_visibility": { "youtube_1": true, "reddit_digest_1": true, "reddit_digest_2": false },
+  "widget_instances": {
+    "youtube_1":       { "instanceId": "youtube_1",       "moduleId": "youtube",       "label": null },
+    "reddit_digest_1": { "instanceId": "reddit_digest_1", "moduleId": "reddit_digest", "label": "Tech News" },
+    "reddit_digest_2": { "instanceId": "reddit_digest_2", "moduleId": "reddit_digest", "label": "Gaming" }
+  }
+}
+```
+
+`widget_order` contains **instanceIds** (not moduleIds). Multiple instances of the same module are supported. `label` is a user-supplied display name; `null` means use the module's default display name.
+
+**DigestViewConfig shape (per instance):**
+
+```json
+{
+  "sort_by": "score",
+  "sort_dir": "desc",
+  "group_by": "subreddit",
+  "layout_mode": "columns",
+  "subreddit_filter": ["rust", "programming"]
+}
+```
+
+`subreddit_filter` is `null` to show all subreddits, or an array of subreddit names to restrict the widget to those subreddits only. This is what enables two Reddit Digest instances to show different content.
 
 The YouTube Data API v3 key is **not** stored here. It is encrypted via `safeStorage` and stored as a binary blob in Electron's app config directory.
 
