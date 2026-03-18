@@ -6,6 +6,8 @@ export const IPC = {
   YOUTUBE_SET_CHANNEL_ENABLED: 'youtube:setChannelEnabled',
   YOUTUBE_ADD_CHANNEL: 'youtube:addChannel',
   YOUTUBE_REMOVE_CHANNEL: 'youtube:removeChannel',
+  YOUTUBE_POLL_NOW: 'youtube:pollNow',
+  YOUTUBE_GET_POLL_DEBUG: 'youtube:getPollDebug',
   YOUTUBE_UPDATED: 'youtube:updated',
   REDDIT_GET_DIGEST_POSTS: 'reddit:getDigestPosts',
   REDDIT_GET_SAVED_POSTS_SUMMARY: 'reddit:getSavedPostsSummary',
@@ -104,6 +106,53 @@ export interface YouTubeApiKeyStatus {
 export interface IpcMutationResult {
   ok: boolean
   error: string | null
+}
+
+export type MediaType = 'short' | 'video'
+
+export interface NormalizedFeedChannelInfo {
+  id: string
+  title: string
+  url: string
+  publishedAt: string | null
+}
+
+export interface NormalizedFeedEntry {
+  id: string
+  title: string
+  url: string
+  publishedAt: string | null
+  updatedAt: string | null
+  thumbnailUrl: string | null
+  thumbnailWidth: number | null
+  thumbnailHeight: number | null
+  description: string | null
+  viewCount: number
+  ratingCount: number
+  ratingAverage: number
+  mediaType: MediaType
+}
+
+export interface ParsedFeed {
+  channel: NormalizedFeedChannelInfo
+  entries: NormalizedFeedEntry[]
+  parsedAt: string
+}
+
+export interface YouTubePollDebugItem {
+  channelId: string
+  channelName: string
+  feedUrl: string
+  rawFeedXml: string | null
+  startedAt: number
+  finishedAt: number | null
+  status: 'ok' | 'error'
+  fetchedEntries: number
+  insertedCount: number
+  updatedCount: number
+  error: string | null
+  sampleEntries: NormalizedFeedEntry[]
+  normalizedFeed: ParsedFeed | null
 }
 
 export interface DigestViewConfig {

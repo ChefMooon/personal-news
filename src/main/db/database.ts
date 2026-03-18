@@ -39,27 +39,33 @@ function runMigrations(database: Database.Database): void {
     | undefined
   const currentVersion = versionRow ? parseInt(versionRow.value, 10) : 0
 
-  if (currentVersion < 1) {
-    // Read and run migration 001
-    // In dev, migrations are in src/main/db/migrations/
-    // In production, they'd be in resources/
+  let nextVersion = currentVersion + 1
+  let appliedAny = false
+
+  while (nextVersion <= 2) {
     let migrationPath: string
+    const migrationFile = `${String(nextVersion).padStart(3, '0')}_${
+      nextVersion === 1 ? 'initial' : 'remove_youtube_seed'
+    }.sql`
+
     if (app.isPackaged) {
-      migrationPath = join(process.resourcesPath, 'migrations', '001_initial.sql')
+      migrationPath = join(process.resourcesPath, 'migrations', migrationFile)
     } else {
-      // In dev, __dirname = out/main/, project root is 2 levels up
-      migrationPath = join(__dirname, '../../src/main/db/migrations/001_initial.sql')
+      migrationPath = join(__dirname, `../../src/main/db/migrations/${migrationFile}`)
     }
 
     const sql = readFileSync(migrationPath, 'utf-8')
-
     const runMigration = database.transaction(() => {
       database.exec(sql)
     })
     runMigration()
 
-    console.log('[DB] Migration 001 applied')
-  } else {
+    appliedAny = true
+    console.log(`[DB] Migration ${String(nextVersion).padStart(3, '0')} applied`)
+    nextVersion += 1
+  }
+
+  if (!appliedAny) {
     console.log(`[DB] Schema is up to date (version ${currentVersion})`)
   }
 }

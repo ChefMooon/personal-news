@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { GripVertical, Eye, EyeOff, Trash2, Pencil } from 'lucide-react'
-import { cn } from '../lib/utils'
 
 interface WidgetWrapperProps {
   id: string

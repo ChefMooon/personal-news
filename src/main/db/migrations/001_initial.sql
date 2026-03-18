@@ -140,43 +140,6 @@ INSERT OR IGNORE INTO settings VALUES ('rss_poll_interval_minutes', '15');
 INSERT OR IGNORE INTO settings VALUES ('active_theme_id', 'system');
 INSERT OR IGNORE INTO settings VALUES ('reddit_digest_view_config', '{"sort_by":"score","sort_dir":"desc","group_by":"subreddit","layout_mode":"columns"}');
 
-INSERT OR IGNORE INTO yt_channels VALUES
-  ('UC_x5XG1OV2P6uZZ5FSM9Ttw', 'Google Developers',
-   'https://yt3.ggpht.com/placeholder-thumb-1.jpg',
-   1700000000, 1, 0),
-  ('UCVHFbw7woebKtfvTzSGJ1pQ', 'Fireship',
-   'https://yt3.ggpht.com/placeholder-thumb-2.jpg',
-   1700000100, 1, 1);
-
-INSERT OR IGNORE INTO yt_videos VALUES
-  ('dQw4w9WgXcQ', 'UC_x5XG1OV2P6uZZ5FSM9Ttw',
-   'Building with Gemini API — Full Tutorial',
-   1710000000,
-   'https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg',
-   1823, 'none', NULL, 1710100000),
-  ('abc123def456', 'UC_x5XG1OV2P6uZZ5FSM9Ttw',
-   'Flutter 3.19 — What is New',
-   1709900000,
-   'https://i.ytimg.com/vi/abc123def456/hqdefault.jpg',
-   934, 'none', NULL, 1710100000),
-  ('liveStream001', 'UC_x5XG1OV2P6uZZ5FSM9Ttw',
-   'Google I/O 2026 Keynote — LIVE',
-   1710200000,
-   'https://i.ytimg.com/vi/liveStream001/hqdefault.jpg',
-   NULL, 'upcoming',
-   1710507600,
-   1710200000),
-  ('xyz789ghi000', 'UCVHFbw7woebKtfvTzSGJ1pQ',
-   'I built a full-stack app in 100 seconds',
-   1710050000,
-   'https://i.ytimg.com/vi/xyz789ghi000/hqdefault.jpg',
-   412, 'none', NULL, 1710100000),
-  ('xyz789ghi001', 'UCVHFbw7woebKtfvTzSGJ1pQ',
-   'Next.js 15 is here',
-   1709980000,
-   'https://i.ytimg.com/vi/xyz789ghi001/hqdefault.jpg',
-   380, 'none', NULL, 1710100000);
-
 INSERT OR IGNORE INTO reddit_digest_posts VALUES
   ('abc001', 'programming', 'I built a personal news dashboard in Electron',
    'https://github.com/example/personal-news',

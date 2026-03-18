@@ -1,4 +1,5 @@
 import { BrowserWindow, ipcMain, safeStorage, shell } from 'electron'
+import { XMLParser } from 'fast-xml-parser'
 import { getDb } from '../db/database'
 import { deleteSetting, getSetting, setSetting } from '../settings/store'
 import { IPC } from '../../shared/ipc-types'
@@ -12,11 +13,29 @@ import type {
   WidgetInstance,
   ThemeInfo,
   IpcMutationResult,
-  YouTubeApiKeyStatus
+  YouTubeApiKeyStatus,
+  YouTubePollDebugItem
 } from '../../shared/ipc-types'
-import { applyYouTubePollInterval } from '../sources/youtube/index'
+import {
+  applyYouTubePollInterval,
+  getYouTubePollDebug,
+  triggerYouTubePollNow
+} from '../sources/youtube/index'
 
 const YOUTUBE_API_KEY_SETTING = 'youtube_api_key_encrypted'
+const YOUTUBE_RESOLVE_DEBUG_PREFIX = '[youtube:addChannel debug]'
+const xmlParser = new XMLParser({
+  ignoreAttributes: false,
+  attributeNamePrefix: ''
+})
+
+function logYouTubeResolveDebug(message: string, payload?: Record<string, unknown>): void {
+  if (payload) {
+    console.info(YOUTUBE_RESOLVE_DEBUG_PREFIX, message, payload)
+    return
+  }
+  console.info(YOUTUBE_RESOLVE_DEBUG_PREFIX, message)
+}
 
 function emitYoutubeUpdated(): void {
   for (const win of BrowserWindow.getAllWindows()) {
@@ -63,7 +82,7 @@ function parseChannelInput(input: string): { channelId: string | null; query: st
     return { channelId: trimmed, query: null }
   }
 
-  if (trimmed.startsWith('@')) {
+  if (/^@[\w.-]+$/.test(trimmed)) {
     return { channelId: null, query: trimmed }
   }
 
@@ -76,17 +95,19 @@ function parseChannelInput(input: string): { channelId: string | null; query: st
         return { channelId: id, query: null }
       }
     }
-    if (pathSegments.length >= 1 && pathSegments[0].startsWith('@')) {
+    if (pathSegments.length >= 1 && /^@[\w.-]+$/.test(pathSegments[0])) {
       return { channelId: null, query: pathSegments[0] }
     }
-    if (pathSegments.length >= 2 && (pathSegments[0] === 'c' || pathSegments[0] === 'user')) {
-      return { channelId: null, query: pathSegments[1] }
+
+    // Accept YouTube URLs even when they are not direct /channel/<id> or /@handle forms.
+    if (url.hostname.includes('youtube.com') || url.hostname.includes('youtu.be')) {
+      return { channelId: null, query: trimmed }
     }
   } catch {
-    // Fall back to search query path below.
+    // Non-URL inputs continue to strict format validation below.
   }
 
-  return { channelId: null, query: trimmed }
+  return { channelId: null, query: null }
 }
 
 async function fetchChannelById(apiKey: string, channelId: string): Promise<YtChannel | null> {
@@ -129,52 +150,321 @@ async function fetchChannelById(apiKey: string, channelId: string): Promise<YtCh
   }
 }
 
-async function resolveChannelFromInput(input: string): Promise<YtChannel> {
-  const apiKey = getDecryptedYouTubeApiKey()
-  if (!apiKey) {
-    throw new Error('Set and validate your YouTube API key before adding channels.')
+async function fetchChannelFromRss(channelId: string): Promise<YtChannel | null> {
+  const feedUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(channelId)}`
+  const response = await fetch(feedUrl)
+  if (!response.ok) {
+    return null
   }
 
-  const parsed = parseChannelInput(input)
-  if (!parsed.channelId && !parsed.query) {
-    throw new Error('Enter a channel URL, @handle, or channel ID.')
+  const xml = await response.text()
+  const parsed = xmlParser.parse(xml) as {
+    feed?: {
+      author?: { name?: string } | Array<{ name?: string }>
+      entry?:
+        | {
+            'media:group'?: {
+              'media:thumbnail'?: { url?: string } | Array<{ url?: string }>
+            }
+          }
+        | Array<{
+            'media:group'?: {
+              'media:thumbnail'?: { url?: string } | Array<{ url?: string }>
+            }
+          }>
+    }
   }
 
+  const authorRaw = parsed.feed?.author
+  const author = Array.isArray(authorRaw) ? authorRaw[0]?.name : authorRaw?.name
+  const entriesRaw = parsed.feed?.entry
+  const firstEntry = Array.isArray(entriesRaw) ? entriesRaw[0] : entriesRaw
+  const thumbnailRaw = firstEntry?.['media:group']?.['media:thumbnail']
+  const thumbnailUrl = Array.isArray(thumbnailRaw)
+    ? thumbnailRaw[0]?.url ?? null
+    : thumbnailRaw?.url ?? null
+
+  return {
+    channel_id: channelId,
+    name: author?.trim() || channelId,
+    thumbnail_url: thumbnailUrl,
+    added_at: Math.floor(Date.now() / 1000),
+    enabled: 1,
+    sort_order: 0
+  }
+}
+
+function extractMetaContent(html: string, property: string): string | null {
+  const escaped = property.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const regex = new RegExp(
+    `<meta[^>]+(?:property|name)=["']${escaped}["'][^>]+content=["']([^"']+)["'][^>]*>`,
+    'i'
+  )
+  const match = html.match(regex)
+  return match?.[1]?.trim() ?? null
+}
+
+function extractChannelIdFromHtml(html: string): { channelId: string | null; matchedBy: string | null } {
+  // Priority 1: og:url is always the canonical URL for the page-owner's channel.
+  // This is the most reliable signal because it reflects what YouTube set for THIS page,
+  // whereas JSON channelId fields can belong to any embedded/recommended channel.
+  const ogUrl = extractMetaContent(html, 'og:url')
+  if (ogUrl) {
+    const ogUrlMatch = ogUrl.match(/\/channel\/(UC[\w-]{22})/)
+    if (ogUrlMatch?.[1]) {
+      return { channelId: ogUrlMatch[1], matchedBy: 'og-url' }
+    }
+  }
+
+  // Priority 2: canonical link href also uniquely identifies the page owner.
+  const canonicalMatch = html.match(
+    /<link[^>]+rel=["']canonical["'][^>]+href=["']https?:\/\/www\.youtube\.com\/channel\/(UC[\w-]{22})["']/i
+  )
+  if (canonicalMatch?.[1]) {
+    return { channelId: canonicalMatch[1], matchedBy: 'canonical-link-channel' }
+  }
+
+  // Priority 3: JSON patterns — less precise because these can match channels
+  // referenced anywhere on the page (sidebar, recommendations, embeds, etc.).
+  const fallbackPatterns: Array<{ key: string; regex: RegExp }> = [
+    { key: 'channelId-json', regex: /"channelId"\s*:\s*"(UC[\w-]{22})"/ },
+    { key: 'channelId-escaped-json', regex: /channelId\\":\\"(UC[\w-]{22})\\"/ },
+    { key: 'channel-url-fragment', regex: /\/channel\/(UC[\w-]{22})/ }
+  ]
+
+  for (const pattern of fallbackPatterns) {
+    const match = html.match(pattern.regex)
+    if (match?.[1]) {
+      return { channelId: match[1], matchedBy: pattern.key }
+    }
+  }
+
+  return { channelId: null, matchedBy: null }
+}
+
+async function resolveChannelIdFromPage(url: string): Promise<{
+  channelId: string | null
+  title: string | null
+  thumbnailUrl: string | null
+}> {
+  logYouTubeResolveDebug('resolveChannelIdFromPage:start', { url })
+  const response = await fetch(url)
+  logYouTubeResolveDebug('resolveChannelIdFromPage:response', {
+    url,
+    ok: response.ok,
+    status: response.status
+  })
+  if (!response.ok) {
+    return { channelId: null, title: null, thumbnailUrl: null }
+  }
+  const html = await response.text()
+
+  const extracted = extractChannelIdFromHtml(html)
+  const channelId = extracted.channelId
+  const title = extractMetaContent(html, 'og:title')
+  const thumbnailUrl = extractMetaContent(html, 'og:image')
+
+  logYouTubeResolveDebug('resolveChannelIdFromPage:parsed', {
+    url,
+    hasChannelId: Boolean(channelId),
+    channelId,
+    matchedBy: extracted.matchedBy,
+    title,
+    hasThumbnailUrl: Boolean(thumbnailUrl)
+  })
+
+  return { channelId, title, thumbnailUrl }
+}
+
+async function resolveChannelWithoutApiKey(
+  input: string,
+  parsed: { channelId: string | null; query: string | null }
+): Promise<YtChannel> {
+  logYouTubeResolveDebug('resolveWithoutApiKey:start', {
+    input,
+    parsedChannelId: parsed.channelId,
+    parsedQuery: parsed.query
+  })
   if (parsed.channelId) {
-    const found = await fetchChannelById(apiKey, parsed.channelId)
+    const found = await fetchChannelFromRss(parsed.channelId)
+    logYouTubeResolveDebug('resolveWithoutApiKey:channelIdPath', {
+      parsedChannelId: parsed.channelId,
+      rssFound: Boolean(found)
+    })
     if (!found) {
-      throw new Error('No channel found for that channel ID.')
+      throw new Error('Could not load channel feed. Verify the channel ID and try again.')
     }
     return found
   }
 
-  const searchParams = new URLSearchParams({
-    part: 'snippet',
-    type: 'channel',
-    maxResults: '1',
-    q: parsed.query ?? '',
-    key: apiKey
-  })
-  const searchResponse = await fetch(
-    `https://www.googleapis.com/youtube/v3/search?${searchParams.toString()}`
-  )
-  const searchPayload = (await searchResponse.json()) as {
-    items?: Array<{ id?: { channelId?: string } }>
-    error?: { message?: string }
-  }
-  if (!searchResponse.ok || searchPayload.error) {
-    throw new Error(searchPayload.error?.message ?? 'Failed to resolve channel from YouTube API.')
-  }
-  const resolvedChannelId = searchPayload.items?.[0]?.id?.channelId
-  if (!resolvedChannelId) {
-    throw new Error('No channel found for that input.')
+  const trimmed = input.trim()
+  if (!trimmed) {
+    throw new Error('Enter a channel ID, @handle, or full YouTube channel URL.')
   }
 
-  const found = await fetchChannelById(apiKey, resolvedChannelId)
-  if (!found) {
-    throw new Error('No channel found for that input.')
+  let candidateUrl: string | null = null
+  if (trimmed.startsWith('@')) {
+    candidateUrl = `https://www.youtube.com/${trimmed}`
+  } else {
+    try {
+      const parsedUrl = new URL(trimmed)
+      if (parsedUrl.hostname.includes('youtube.com') || parsedUrl.hostname.includes('youtu.be')) {
+        candidateUrl = parsedUrl.toString()
+      }
+    } catch {
+      candidateUrl = null
+    }
   }
-  return found
+
+  if (!candidateUrl) {
+    logYouTubeResolveDebug('resolveWithoutApiKey:noCandidateUrl', { input })
+    throw new Error('Enter a channel ID, @handle, or full YouTube channel URL.')
+  }
+
+  logYouTubeResolveDebug('resolveWithoutApiKey:candidateUrl', { candidateUrl })
+
+  const pageResolved = await resolveChannelIdFromPage(candidateUrl)
+  logYouTubeResolveDebug('resolveWithoutApiKey:pageResolved', {
+    candidateUrl,
+    channelId: pageResolved.channelId,
+    title: pageResolved.title
+  })
+  if (!pageResolved.channelId) {
+    throw new Error('Could not resolve a channel from that URL. Use a channel ID, @handle, or channel URL.')
+  }
+
+  const fromRss = await fetchChannelFromRss(pageResolved.channelId)
+  logYouTubeResolveDebug('resolveWithoutApiKey:rssFromPage', {
+    channelId: pageResolved.channelId,
+    rssFound: Boolean(fromRss)
+  })
+  if (!fromRss) {
+    return {
+      channel_id: pageResolved.channelId,
+      name: pageResolved.title || pageResolved.channelId,
+      thumbnail_url: pageResolved.thumbnailUrl,
+      added_at: Math.floor(Date.now() / 1000),
+      enabled: 1,
+      sort_order: 0
+    }
+  }
+
+  return {
+    ...fromRss,
+    name: fromRss.name === fromRss.channel_id ? pageResolved.title || fromRss.name : fromRss.name,
+    thumbnail_url: fromRss.thumbnail_url || pageResolved.thumbnailUrl
+  }
+}
+
+async function resolveChannelFromInput(input: string): Promise<YtChannel> {
+  const parsed = parseChannelInput(input)
+  logYouTubeResolveDebug('resolveFromInput:start', {
+    input,
+    parsedChannelId: parsed.channelId,
+    parsedQuery: parsed.query
+  })
+  if (!parsed.channelId && !parsed.query) {
+    logYouTubeResolveDebug('resolveFromInput:rejectedInputFormat', { input })
+    throw new Error('Enter a channel ID, @handle, or full YouTube channel URL.')
+  }
+
+  let apiKey: string | null = null
+  try {
+    apiKey = getDecryptedYouTubeApiKey()
+  } catch {
+    apiKey = null
+  }
+
+  logYouTubeResolveDebug('resolveFromInput:apiKeyStatus', {
+    hasApiKey: Boolean(apiKey)
+  })
+
+  if (!apiKey) {
+    return resolveChannelWithoutApiKey(input, parsed)
+  }
+
+  if (parsed.channelId) {
+    const found = await fetchChannelById(apiKey, parsed.channelId)
+    logYouTubeResolveDebug('resolveFromInput:channelIdPath', {
+      channelId: parsed.channelId,
+      apiFound: Boolean(found)
+    })
+    if (!found) {
+      const rssFound = await fetchChannelFromRss(parsed.channelId)
+      logYouTubeResolveDebug('resolveFromInput:channelIdPathRssFallback', {
+        channelId: parsed.channelId,
+        rssFound: Boolean(rssFound)
+      })
+      if (!rssFound) {
+        throw new Error('No channel found for that channel ID.')
+      }
+      return rssFound
+    }
+    return found
+  }
+
+  const trimmed = input.trim()
+  let candidateUrl: string | null = null
+  if (parsed.query?.startsWith('@')) {
+    candidateUrl = `https://www.youtube.com/${parsed.query}`
+  } else {
+    try {
+      const parsedUrl = new URL(trimmed)
+      if (parsedUrl.hostname.includes('youtube.com') || parsedUrl.hostname.includes('youtu.be')) {
+        candidateUrl = parsedUrl.toString()
+      }
+    } catch {
+      candidateUrl = null
+    }
+  }
+
+  if (!candidateUrl) {
+    logYouTubeResolveDebug('resolveFromInput:noCandidateUrl', { input, parsedQuery: parsed.query })
+    throw new Error('Enter a channel ID, @handle, or full YouTube channel URL.')
+  }
+
+  logYouTubeResolveDebug('resolveFromInput:candidateUrl', { candidateUrl })
+
+  const pageResolved = await resolveChannelIdFromPage(candidateUrl)
+  logYouTubeResolveDebug('resolveFromInput:pageResolved', {
+    candidateUrl,
+    channelId: pageResolved.channelId,
+    title: pageResolved.title
+  })
+  if (!pageResolved.channelId) {
+    throw new Error('Could not resolve a channel from that URL. Use a channel ID, @handle, or channel URL.')
+  }
+
+  const found = await fetchChannelById(apiKey, pageResolved.channelId)
+  logYouTubeResolveDebug('resolveFromInput:apiFetchByResolvedId', {
+    channelId: pageResolved.channelId,
+    apiFound: Boolean(found)
+  })
+  if (found) {
+    return found
+  }
+
+  const fromRss = await fetchChannelFromRss(pageResolved.channelId)
+  logYouTubeResolveDebug('resolveFromInput:rssFallbackByResolvedId', {
+    channelId: pageResolved.channelId,
+    rssFound: Boolean(fromRss)
+  })
+  if (fromRss) {
+    return {
+      ...fromRss,
+      name: fromRss.name === fromRss.channel_id ? pageResolved.title || fromRss.name : fromRss.name,
+      thumbnail_url: fromRss.thumbnail_url || pageResolved.thumbnailUrl
+    }
+  }
+
+  return {
+    channel_id: pageResolved.channelId,
+    name: pageResolved.title || pageResolved.channelId,
+    thumbnail_url: pageResolved.thumbnailUrl,
+    added_at: Math.floor(Date.now() / 1000),
+    enabled: 1,
+    sort_order: 0
+  }
 }
 
 export function registerIpcHandlers(): void {
@@ -212,8 +502,14 @@ export function registerIpcHandlers(): void {
 
   // youtube:addChannel
   ipcMain.handle(IPC.YOUTUBE_ADD_CHANNEL, async (_event, input: string): Promise<IpcMutationResult> => {
+    logYouTubeResolveDebug('ipc:addChannel:start', { input })
     try {
       const channel = await resolveChannelFromInput(input)
+      logYouTubeResolveDebug('ipc:addChannel:resolved', {
+        input,
+        channelId: channel.channel_id,
+        channelName: channel.name
+      })
       const db = getDb()
       const existing = db
         .prepare('SELECT channel_id FROM yt_channels WHERE channel_id = ?')
@@ -241,8 +537,16 @@ export function registerIpcHandlers(): void {
       }
 
       emitYoutubeUpdated()
+      logYouTubeResolveDebug('ipc:addChannel:success', {
+        channelId: channel.channel_id,
+        existed: Boolean(existing)
+      })
       return { ok: true, error: null }
     } catch (error) {
+      logYouTubeResolveDebug('ipc:addChannel:error', {
+        input,
+        error: error instanceof Error ? error.message : String(error)
+      })
       return {
         ok: false,
         error: error instanceof Error ? error.message : 'Failed to add YouTube channel.'
@@ -259,6 +563,24 @@ export function registerIpcHandlers(): void {
     }
     emitYoutubeUpdated()
     return { ok: true, error: null }
+  })
+
+  // youtube:pollNow
+  ipcMain.handle(IPC.YOUTUBE_POLL_NOW, async (): Promise<IpcMutationResult> => {
+    try {
+      await triggerYouTubePollNow()
+      return { ok: true, error: null }
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : 'Failed to poll YouTube RSS feeds.'
+      }
+    }
+  })
+
+  // youtube:getPollDebug
+  ipcMain.handle(IPC.YOUTUBE_GET_POLL_DEBUG, (): YouTubePollDebugItem[] => {
+    return getYouTubePollDebug()
   })
 
   // reddit:getDigestPosts
