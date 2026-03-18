@@ -3,6 +3,9 @@
 export const IPC = {
   YOUTUBE_GET_CHANNELS: 'youtube:getChannels',
   YOUTUBE_GET_VIDEOS: 'youtube:getVideos',
+  YOUTUBE_SET_CHANNEL_ENABLED: 'youtube:setChannelEnabled',
+  YOUTUBE_ADD_CHANNEL: 'youtube:addChannel',
+  YOUTUBE_REMOVE_CHANNEL: 'youtube:removeChannel',
   YOUTUBE_UPDATED: 'youtube:updated',
   REDDIT_GET_DIGEST_POSTS: 'reddit:getDigestPosts',
   REDDIT_GET_SAVED_POSTS_SUMMARY: 'reddit:getSavedPostsSummary',
@@ -11,6 +14,10 @@ export const IPC = {
   SETTINGS_SET_WIDGET_LAYOUT: 'settings:setWidgetLayout',
   SETTINGS_GET_THEME: 'settings:getTheme',
   SETTINGS_SET_THEME: 'settings:setTheme',
+  SETTINGS_GET_YOUTUBE_API_KEY_STATUS: 'settings:getYouTubeApiKeyStatus',
+  SETTINGS_SET_YOUTUBE_API_KEY: 'settings:setYouTubeApiKey',
+  SETTINGS_CLEAR_YOUTUBE_API_KEY: 'settings:clearYouTubeApiKey',
+  SETTINGS_SET_RSS_POLL_INTERVAL: 'settings:setRssPollInterval',
   SETTINGS_GET: 'settings:get',
   SETTINGS_SET: 'settings:set',
   SHELL_OPEN_EXTERNAL: 'shell:openExternal'
@@ -87,6 +94,16 @@ export interface WidgetLayout {
 export interface ThemeInfo {
   id: string
   tokens: Record<string, string> | null
+}
+
+export interface YouTubeApiKeyStatus {
+  isSet: boolean
+  suffix: string | null
+}
+
+export interface IpcMutationResult {
+  ok: boolean
+  error: string | null
 }
 
 export interface DigestViewConfig {

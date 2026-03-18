@@ -118,4 +118,13 @@
     height: 100vh;
     display: flex;
   }
+
+  /* Prevent Electron drag regions from swallowing input focus/clicks. */
+  input,
+  button,
+  textarea,
+  select,
+  [role='button'] {
+    -webkit-app-region: no-drag;
+  }
 }

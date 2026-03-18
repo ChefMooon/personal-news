@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs'
 import { Input } from '../components/ui/input'
 import { Button } from '../components/ui/button'
@@ -6,6 +6,7 @@ import { Switch } from '../components/ui/switch'
 import { useTheme } from '../providers/ThemeProvider'
 import { useYouTubeChannels } from '../hooks/useYouTubeChannels'
 import { Eye, EyeOff } from 'lucide-react'
+import { IPC, type IpcMutationResult, type YouTubeApiKeyStatus } from '../../../shared/ipc-types'
 import {
   Select,
   SelectContent,
@@ -17,6 +18,64 @@ import {
 function ApiKeysTab(): React.ReactElement {
   const [showKey, setShowKey] = useState(false)
   const [key, setKey] = useState('')
+  const [status, setStatus] = useState<YouTubeApiKeyStatus | null>(null)
+  const [message, setMessage] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  const refreshStatus = (): void => {
+    window.api
+      .invoke(IPC.SETTINGS_GET_YOUTUBE_API_KEY_STATUS)
+      .then((data) => {
+        setStatus(data as YouTubeApiKeyStatus)
+      })
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : 'Failed to load API key status.')
+      })
+  }
+
+  useEffect(() => {
+    refreshStatus()
+  }, [])
+
+  const saveKey = async (): Promise<void> => {
+    setSaving(true)
+    setMessage(null)
+    setError(null)
+    try {
+      const result = (await window.api.invoke(
+        IPC.SETTINGS_SET_YOUTUBE_API_KEY,
+        key
+      )) as IpcMutationResult
+      if (!result.ok) {
+        setError(result.error ?? 'Failed to save API key.')
+        return
+      }
+      setKey('')
+      setMessage('API key saved and validated successfully.')
+      refreshStatus()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save API key.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const clearKey = async (): Promise<void> => {
+    setSaving(true)
+    setMessage(null)
+    setError(null)
+    try {
+      await window.api.invoke(IPC.SETTINGS_CLEAR_YOUTUBE_API_KEY)
+      setKey('')
+      setMessage('Saved API key removed.')
+      refreshStatus()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to clear API key.')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   return (
     <div className="space-y-4 max-w-md">
@@ -44,12 +103,23 @@ function ApiKeysTab(): React.ReactElement {
           </div>
           <Button
             onClick={() => {
-              console.log('[Settings] Save API key (no-op in prototype)')
+              void saveKey()
             }}
+            disabled={saving}
           >
-            Save
+            {saving ? 'Saving...' : 'Save'}
+          </Button>
+          <Button variant="outline" onClick={() => void clearKey()} disabled={saving}>
+            Clear
           </Button>
         </div>
+        {status?.isSet ? (
+          <p className="text-xs text-muted-foreground mt-2">
+            Saved key detected (ending in {status.suffix ?? 'n/a'}).
+          </p>
+        ) : null}
+        {message ? <p className="text-xs text-emerald-600 mt-2">{message}</p> : null}
+        {error ? <p className="text-xs text-red-600 mt-2">{error}</p> : null}
       </div>
     </div>
   )
@@ -57,16 +127,158 @@ function ApiKeysTab(): React.ReactElement {
 
 function YouTubeTab(): React.ReactElement {
   const { channels } = useYouTubeChannels()
-  const [localEnabled, setLocalEnabled] = useState<Record<string, boolean>>({})
+  const addInputRef = useRef<HTMLInputElement | null>(null)
+  const [pendingByChannel, setPendingByChannel] = useState<Record<string, boolean>>({})
+  const [removingByChannel, setRemovingByChannel] = useState<Record<string, boolean>>({})
   const [addInput, setAddInput] = useState('')
+  const [message, setMessage] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [adding, setAdding] = useState(false)
+  const [intervalValue, setIntervalValue] = useState('15')
+  const [savingInterval, setSavingInterval] = useState(false)
+  const canSubmitChannel = addInput.trim().length > 0 && !adding
+
+  useEffect(() => {
+    window.api
+      .invoke(IPC.SETTINGS_GET, 'rss_poll_interval_minutes')
+      .then((raw) => {
+        if (typeof raw === 'string' && raw.trim()) {
+          setIntervalValue(raw)
+        }
+      })
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : 'Failed to load RSS poll interval.')
+      })
+  }, [])
+
+  useEffect(() => {
+    setPendingByChannel({})
+  }, [channels])
 
   const isEnabled = (channelId: string, defaultVal: number): boolean => {
-    if (channelId in localEnabled) return localEnabled[channelId]
+    if (channelId in pendingByChannel) return pendingByChannel[channelId]
     return defaultVal === 1
+  }
+
+  const setChannelEnabled = async (channelId: string, checked: boolean): Promise<void> => {
+    setError(null)
+    setMessage(null)
+    setPendingByChannel((prev) => ({ ...prev, [channelId]: checked }))
+    try {
+      const result = (await window.api.invoke(
+        IPC.YOUTUBE_SET_CHANNEL_ENABLED,
+        channelId,
+        checked
+      )) as IpcMutationResult
+      if (!result.ok) {
+        setError(result.error ?? 'Failed to update channel state.')
+        setPendingByChannel((prev) => {
+          const next = { ...prev }
+          delete next[channelId]
+          return next
+        })
+        return
+      }
+      setMessage('Channel setting saved.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update channel state.')
+      setPendingByChannel((prev) => {
+        const next = { ...prev }
+        delete next[channelId]
+        return next
+      })
+    }
+  }
+
+  const removeChannel = async (channelId: string, name: string): Promise<void> => {
+    const confirmed = window.confirm(`Remove channel "${name}"?`)
+    if (!confirmed) {
+      return
+    }
+
+    setMessage(null)
+    setError(null)
+    setRemovingByChannel((prev) => ({ ...prev, [channelId]: true }))
+    try {
+      const result = (await window.api.invoke(
+        IPC.YOUTUBE_REMOVE_CHANNEL,
+        channelId
+      )) as IpcMutationResult
+      if (!result.ok) {
+        setError(result.error ?? 'Failed to remove channel.')
+        return
+      }
+      setMessage('Channel removed successfully.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to remove channel.')
+    } finally {
+      setRemovingByChannel((prev) => {
+        const next = { ...prev }
+        delete next[channelId]
+        return next
+      })
+    }
+  }
+
+  const addChannel = async (): Promise<void> => {
+    setAdding(true)
+    setMessage(null)
+    setError(null)
+    try {
+      const result = (await window.api.invoke(IPC.YOUTUBE_ADD_CHANNEL, addInput)) as IpcMutationResult
+      if (!result.ok) {
+        setError(result.error ?? 'Failed to add channel.')
+        return
+      }
+      setAddInput('')
+      setMessage('Channel saved successfully.')
+      addInputRef.current?.focus()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to add channel.')
+    } finally {
+      setAdding(false)
+    }
+  }
+
+  const savePollInterval = async (): Promise<void> => {
+    setSavingInterval(true)
+    setMessage(null)
+    setError(null)
+    const parsed = Number.parseInt(intervalValue, 10)
+    try {
+      const result = (await window.api.invoke(
+        IPC.SETTINGS_SET_RSS_POLL_INTERVAL,
+        parsed
+      )) as IpcMutationResult
+      if (!result.ok) {
+        setError(result.error ?? 'Failed to save RSS poll interval.')
+        return
+      }
+      setMessage('RSS poll interval saved.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save RSS poll interval.')
+    } finally {
+      setSavingInterval(false)
+    }
   }
 
   return (
     <div className="space-y-4 max-w-lg">
+      <div>
+        <h3 className="text-sm font-medium mb-2">RSS Poll Interval (minutes)</h3>
+        <div className="flex gap-2 items-center">
+          <Input
+            value={intervalValue}
+            onChange={(e) => setIntervalValue(e.target.value)}
+            inputMode="numeric"
+            className="w-40"
+          />
+          <Button variant="outline" onClick={() => void savePollInterval()} disabled={savingInterval}>
+            {savingInterval ? 'Saving...' : 'Save Interval'}
+          </Button>
+        </div>
+      </div>
+
       <div>
         <h3 className="text-sm font-medium mb-2">Configured Channels</h3>
         {channels.length === 0 ? (
@@ -74,7 +286,7 @@ function YouTubeTab(): React.ReactElement {
         ) : (
           <div className="space-y-2">
             {channels.map((ch) => (
-              <div key={ch.channel_id} className="flex items-center justify-between py-2 border-b last:border-0">
+              <div key={ch.channel_id} className="flex items-center justify-between py-2 border-b last:border-0 gap-3">
                 <div className="flex items-center gap-2">
                   {ch.thumbnail_url ? (
                     <img src={ch.thumbnail_url} alt="" className="w-7 h-7 rounded-full bg-muted" />
@@ -86,14 +298,24 @@ function YouTubeTab(): React.ReactElement {
                     <p className="text-xs text-muted-foreground font-mono">{ch.channel_id}</p>
                   </div>
                 </div>
-                <Switch
-                  checked={isEnabled(ch.channel_id, ch.enabled)}
-                  onCheckedChange={(checked) => {
-                    // Update local state only — persistence not wired in prototype
-                    setLocalEnabled((prev) => ({ ...prev, [ch.channel_id]: checked }))
-                    console.log(`[Settings] Toggle channel ${ch.channel_id}: ${checked}`)
-                  }}
-                />
+                <div className="flex items-center gap-2">
+                  <Switch
+                    checked={isEnabled(ch.channel_id, ch.enabled)}
+                    onCheckedChange={(checked) => {
+                      void setChannelEnabled(ch.channel_id, checked)
+                    }}
+                  />
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => {
+                      void removeChannel(ch.channel_id, ch.name)
+                    }}
+                    disabled={Boolean(removingByChannel[ch.channel_id])}
+                  >
+                    {removingByChannel[ch.channel_id] ? 'Removing...' : 'Remove'}
+                  </Button>
+                </div>
               </div>
             ))}
           </div>
@@ -102,22 +324,37 @@ function YouTubeTab(): React.ReactElement {
 
       <div>
         <h3 className="text-sm font-medium mb-2">Add Channel</h3>
-        <div className="flex gap-2">
+        <div className="relative z-10 flex gap-2 pointer-events-auto">
           <Input
+            ref={addInputRef}
             placeholder="Channel URL or ID..."
             value={addInput}
             onChange={(e) => setAddInput(e.target.value)}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter' || event.nativeEvent.isComposing) {
+                return
+              }
+              event.preventDefault()
+              if (!canSubmitChannel) {
+                return
+              }
+              void addChannel()
+            }}
+            className="pointer-events-auto"
           />
           <Button
             variant="outline"
             onClick={() => {
-              console.log('[Settings] Add channel (no-op in prototype):', addInput)
+              void addChannel()
             }}
+            disabled={!canSubmitChannel}
           >
-            Add
+            {adding ? 'Adding...' : 'Add'}
           </Button>
         </div>
       </div>
+      {message ? <p className="text-xs text-emerald-600">{message}</p> : null}
+      {error ? <p className="text-xs text-red-600">{error}</p> : null}
     </div>
   )
 }

@@ -12,3 +12,8 @@ export function setSetting(key: string, value: string): void {
   const db = getDb()
   db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(key, value)
 }
+
+export function deleteSetting(key: string): void {
+  const db = getDb()
+  db.prepare('DELETE FROM settings WHERE key = ?').run(key)
+}
