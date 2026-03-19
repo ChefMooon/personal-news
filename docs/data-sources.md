@@ -27,7 +27,7 @@ Display upcoming live streams and recent video uploads for a configured list of 
 |-------|--------|-------|
 | Channel ID | User config | Entered in Settings |
 | Channel name | YouTube Data API v3 | Fetched on channel add |
-| Channel thumbnail | YouTube Data API v3 | Fetched on channel add |
+| Channel thumbnail | Temp avatar + YouTube Data API v3 | Temporary avatar on channel add; replaced on later poll by channels.list |
 | Video ID | RSS feed | Primary discovery mechanism |
 | Video title | RSS feed | Available in feed |
 | Video published date | RSS feed | Available in feed |
@@ -59,9 +59,14 @@ When new video IDs are detected in the RSS feed:
 - Parts requested: `snippet`, `contentDetails`, `liveStreamingDetails`.
 - Results are stored in the database and the UI is updated.
 
-**Channel initialization (one-time on add):**
-- A `channels.list` call fetches channel name and thumbnail.
+**Channel initialization (on add):**
+- A temporary local avatar is stored immediately so the channel list has a stable thumbnail without waiting for poll.
 - An initial `videos.list` call fetches metadata for the first batch of videos from the RSS feed.
+
+**Channel thumbnail refresh (during poll):**
+- Poll cycles run a `channels.list` refresh only for channels still using temporary or missing thumbnails.
+- The returned channel thumbnail replaces `yt_channels.thumbnail_url`.
+- This refresh updates channel thumbnails only and does not modify `yt_videos.thumbnail_url` behavior.
 
 ### 1.4 Live Stream Detection
 

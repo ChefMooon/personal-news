@@ -7,7 +7,7 @@ export const IPC = {
   YOUTUBE_ADD_CHANNEL: 'youtube:addChannel',
   YOUTUBE_REMOVE_CHANNEL: 'youtube:removeChannel',
   YOUTUBE_POLL_NOW: 'youtube:pollNow',
-  YOUTUBE_GET_POLL_DEBUG: 'youtube:getPollDebug',
+  YOUTUBE_CLEAR_VIDEOS_CACHE: 'youtube:clearVideosCache',
   YOUTUBE_UPDATED: 'youtube:updated',
   REDDIT_GET_DIGEST_POSTS: 'reddit:getDigestPosts',
   REDDIT_GET_SAVED_POSTS_SUMMARY: 'reddit:getSavedPostsSummary',
@@ -20,6 +20,8 @@ export const IPC = {
   SETTINGS_SET_YOUTUBE_API_KEY: 'settings:setYouTubeApiKey',
   SETTINGS_CLEAR_YOUTUBE_API_KEY: 'settings:clearYouTubeApiKey',
   SETTINGS_SET_RSS_POLL_INTERVAL: 'settings:setRssPollInterval',
+  SETTINGS_GET_YOUTUBE_VIEW_CONFIG: 'settings:getYouTubeViewConfig',
+  SETTINGS_SET_YOUTUBE_VIEW_CONFIG: 'settings:setYouTubeViewConfig',
   SETTINGS_GET: 'settings:get',
   SETTINGS_SET: 'settings:set',
   SHELL_OPEN_EXTERNAL: 'shell:openExternal'
@@ -41,6 +43,7 @@ export interface YtVideo {
   published_at: number
   thumbnail_url: string | null
   duration_sec: number | null
+  media_type: MediaType | null
   broadcast_status: 'none' | 'upcoming' | 'live' | null
   scheduled_start: number | null
   fetched_at: number
@@ -103,12 +106,24 @@ export interface YouTubeApiKeyStatus {
   suffix: string | null
 }
 
+export interface YouTubeViewConfig {
+  showVideos: boolean
+  showShorts: boolean
+  showUpcomingStreams: boolean
+  showLiveNow: boolean
+  showPastLivestreams: boolean
+}
+
 export interface IpcMutationResult {
   ok: boolean
   error: string | null
 }
 
-export type MediaType = 'short' | 'video'
+export interface YouTubeCacheClearResult extends IpcMutationResult {
+  deletedCount: number
+}
+
+export type MediaType = 'short' | 'video' | 'upcoming_stream' | 'live'
 
 export interface NormalizedFeedChannelInfo {
   id: string
@@ -131,28 +146,15 @@ export interface NormalizedFeedEntry {
   ratingCount: number
   ratingAverage: number
   mediaType: MediaType
+  mediaTypeConfidence?: 'high' | 'low'
+  durationSeconds?: number | null
+  channelId?: string
 }
 
 export interface ParsedFeed {
   channel: NormalizedFeedChannelInfo
   entries: NormalizedFeedEntry[]
   parsedAt: string
-}
-
-export interface YouTubePollDebugItem {
-  channelId: string
-  channelName: string
-  feedUrl: string
-  rawFeedXml: string | null
-  startedAt: number
-  finishedAt: number | null
-  status: 'ok' | 'error'
-  fetchedEntries: number
-  insertedCount: number
-  updatedCount: number
-  error: string | null
-  sampleEntries: NormalizedFeedEntry[]
-  normalizedFeed: ParsedFeed | null
 }
 
 export interface DigestViewConfig {

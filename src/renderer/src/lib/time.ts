@@ -20,3 +20,23 @@ export function formatFutureTime(unixTs: number): string {
   const minutes = Math.floor((diff % 3600) / 60)
   return `Starts in ${hours}h ${minutes}m`
 }
+
+export function formatAbsoluteTime(unixTs: number): string {
+  return new Date(unixTs * 1000).toLocaleString()
+}
+
+export function formatDuration(seconds: number | null): string | null {
+  if (seconds == null || seconds < 0) {
+    return null
+  }
+
+  const hours = Math.floor(seconds / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  const remainingSeconds = seconds % 60
+
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, '0')}:${String(remainingSeconds).padStart(2, '0')}`
+  }
+
+  return `${minutes}:${String(remainingSeconds).padStart(2, '0')}`
+}

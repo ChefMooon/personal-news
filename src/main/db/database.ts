@@ -26,6 +26,13 @@ export function openDatabase(): Database.Database {
 }
 
 function runMigrations(database: Database.Database): void {
+  const migrationFiles: Record<number, string> = {
+    1: '001_initial.sql',
+    2: '002_remove_youtube_seed.sql',
+    3: '003_youtube_retry_queue.sql',
+    4: '004_add_yt_video_media_type.sql'
+  }
+
   // Ensure meta table exists first
   database.exec(`
     CREATE TABLE IF NOT EXISTS meta (
@@ -42,11 +49,14 @@ function runMigrations(database: Database.Database): void {
   let nextVersion = currentVersion + 1
   let appliedAny = false
 
-  while (nextVersion <= 2) {
+  const latestVersion = Math.max(...Object.keys(migrationFiles).map((k) => parseInt(k, 10)))
+
+  while (nextVersion <= latestVersion) {
     let migrationPath: string
-    const migrationFile = `${String(nextVersion).padStart(3, '0')}_${
-      nextVersion === 1 ? 'initial' : 'remove_youtube_seed'
-    }.sql`
+    const migrationFile = migrationFiles[nextVersion]
+    if (!migrationFile) {
+      throw new Error(`Missing migration file mapping for schema version ${nextVersion}`)
+    }
 
     if (app.isPackaged) {
       migrationPath = join(process.resourcesPath, 'migrations', migrationFile)

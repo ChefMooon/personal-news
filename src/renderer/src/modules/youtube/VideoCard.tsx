@@ -1,9 +1,26 @@
 import React from 'react'
 import type { YtVideo } from '../../../../shared/ipc-types'
-import { formatRelativeTime } from '../../lib/time'
+import { formatAbsoluteTime, formatDuration, formatRelativeTime } from '../../lib/time'
 
 interface VideoCardProps {
   video: YtVideo
+}
+
+function getMediaLabel(video: YtVideo): string {
+  if (video.broadcast_status === 'live') {
+    return 'LIVE'
+  }
+  if (video.broadcast_status === 'upcoming') {
+    return 'UPCOMING'
+  }
+
+  const mediaType =
+    video.media_type ?? (video.duration_sec != null && video.duration_sec <= 60 ? 'short' : 'video')
+
+  if (mediaType === 'short') return 'SHORT'
+  if (mediaType === 'live') return 'PAST LIVE'
+  if (mediaType === 'upcoming_stream') return 'UPCOMING'
+  return 'VIDEO'
 }
 
 export function VideoCard({ video }: VideoCardProps): React.ReactElement {
@@ -11,6 +28,12 @@ export function VideoCard({ video }: VideoCardProps): React.ReactElement {
     const url = `https://www.youtube.com/watch?v=${video.video_id}`
     window.api.invoke('shell:openExternal', url).catch(console.error)
   }
+
+  const duration = formatDuration(video.duration_sec)
+  const publishedRelative = formatRelativeTime(video.published_at)
+  const publishedAbsolute = formatAbsoluteTime(video.published_at)
+  const syncedRelative = formatRelativeTime(video.fetched_at)
+  const mediaLabel = getMediaLabel(video)
 
   return (
     <button
@@ -33,13 +56,26 @@ export function VideoCard({ video }: VideoCardProps): React.ReactElement {
             <span className="text-muted-foreground text-xs">No thumbnail</span>
           </div>
         )}
+
+        <div className="absolute left-1.5 top-1.5 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+          {mediaLabel}
+        </div>
+
+        {duration ? (
+          <div className="absolute bottom-1.5 right-1.5 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-medium text-white">
+            {duration}
+          </div>
+        ) : null}
       </div>
       {/* Title */}
       <p className="mt-1 text-xs font-medium line-clamp-2 text-foreground group-hover:text-primary transition-colors leading-tight">
         {video.title}
       </p>
       {/* Date */}
-      <p className="mt-0.5 text-xs text-muted-foreground">{formatRelativeTime(video.published_at)}</p>
+      <p className="mt-0.5 text-xs text-muted-foreground" title={publishedAbsolute}>
+        Published {publishedRelative}
+      </p>
+      <p className="text-[10px] text-muted-foreground/80">Synced {syncedRelative}</p>
     </button>
   )
 }

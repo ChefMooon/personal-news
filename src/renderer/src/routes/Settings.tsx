@@ -9,8 +9,8 @@ import { Eye, EyeOff } from 'lucide-react'
 import {
   IPC,
   type IpcMutationResult,
-  type YouTubeApiKeyStatus,
-  type YouTubePollDebugItem
+  type YouTubeCacheClearResult,
+  type YouTubeApiKeyStatus
 } from '../../../shared/ipc-types'
 import {
   Select,
@@ -29,7 +29,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle
 } from '../components/ui/alert-dialog'
-import { formatRelativeTime } from '../lib/time'
 
 function ApiKeysTab(): React.ReactElement {
   const [showKey, setShowKey] = useState(false)
@@ -153,9 +152,8 @@ function YouTubeTab(): React.ReactElement {
   const [adding, setAdding] = useState(false)
   const [intervalValue, setIntervalValue] = useState('15')
   const [savingInterval, setSavingInterval] = useState(false)
-  const [debugItems, setDebugItems] = useState<YouTubePollDebugItem[]>([])
-  const [loadingDebug, setLoadingDebug] = useState(false)
   const [pollingNow, setPollingNow] = useState(false)
+  const [clearingVideoCache, setClearingVideoCache] = useState(false)
   const canSubmitChannel = addInput.trim().length > 0 && !adding
 
   useEffect(() => {
@@ -174,22 +172,6 @@ function YouTubeTab(): React.ReactElement {
   useEffect(() => {
     setPendingByChannel({})
   }, [channels])
-
-  const loadPollDebug = async (): Promise<void> => {
-    setLoadingDebug(true)
-    try {
-      const data = (await window.api.invoke(IPC.YOUTUBE_GET_POLL_DEBUG)) as YouTubePollDebugItem[]
-      setDebugItems(data)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load YouTube poll debug data.')
-    } finally {
-      setLoadingDebug(false)
-    }
-  }
-
-  useEffect(() => {
-    void loadPollDebug()
-  }, [])
 
   const isEnabled = (channelId: string, defaultVal: number): boolean => {
     if (channelId in pendingByChannel) return pendingByChannel[channelId]
@@ -308,11 +290,35 @@ function YouTubeTab(): React.ReactElement {
         return
       }
       setMessage('YouTube RSS poll completed.')
-      await loadPollDebug()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to run YouTube RSS poll.')
     } finally {
       setPollingNow(false)
+    }
+  }
+
+  const clearVideoCache = async (): Promise<void> => {
+    const confirmed = window.confirm(
+      'Delete all cached YouTube videos? Channels will be kept and videos can be re-fetched on next poll.'
+    )
+    if (!confirmed) {
+      return
+    }
+
+    setClearingVideoCache(true)
+    setMessage(null)
+    setError(null)
+    try {
+      const result = (await window.api.invoke(IPC.YOUTUBE_CLEAR_VIDEOS_CACHE)) as YouTubeCacheClearResult
+      if (!result.ok) {
+        setError(result.error ?? 'Failed to clear YouTube cache.')
+        return
+      }
+      setMessage(`YouTube cache cleared. Removed ${result.deletedCount} video entries.`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to clear YouTube cache.')
+    } finally {
+      setClearingVideoCache(false)
     }
   }
 
@@ -369,6 +375,16 @@ function YouTubeTab(): React.ReactElement {
             {savingInterval ? 'Saving...' : 'Save Interval'}
           </Button>
         </div>
+      </div>
+
+      <div>
+        <h3 className="text-sm font-medium mb-2">Cache Maintenance</h3>
+        <Button variant="destructive" onClick={() => void clearVideoCache()} disabled={clearingVideoCache}>
+          {clearingVideoCache ? 'Clearing Cache...' : 'Clear Cached YouTube Videos'}
+        </Button>
+        <p className="mt-2 text-xs text-muted-foreground">
+          This removes rows from yt_videos only. Channels are preserved.
+        </p>
       </div>
 
       <div>
@@ -449,110 +465,15 @@ function YouTubeTab(): React.ReactElement {
       </div>
 
       <div>
-        <h3 className="text-sm font-medium mb-2">RSS Debug</h3>
-        <div className="flex gap-2 mb-3">
-          <Button variant="outline" onClick={() => void pollNow()} disabled={pollingNow}>
-            {pollingNow ? 'Polling...' : 'Poll Now'}
-          </Button>
-          <Button variant="outline" onClick={() => void loadPollDebug()} disabled={loadingDebug}>
-            {loadingDebug ? 'Refreshing...' : 'Refresh Debug'}
-          </Button>
-        </div>
-
-        {debugItems.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No poll data yet. Run a poll to inspect feed output.</p>
-        ) : (
-          <div className="space-y-2">
-            {debugItems.map((item) => (
-              <div key={item.channelId} className="rounded-md border p-3 space-y-2">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-medium">{item.channelName}</p>
-                    <p className="text-xs text-muted-foreground font-mono">{item.channelId}</p>
-                  </div>
-                  <p
-                    className={`text-xs font-medium ${
-                      item.status === 'ok' ? 'text-emerald-600' : 'text-red-600'
-                    }`}
-                  >
-                    {item.status === 'ok' ? 'OK' : 'ERROR'}
-                  </p>
-                </div>
-
-                <p className="text-xs text-muted-foreground">Last run: {formatRelativeTime(item.startedAt)}</p>
-                <p className="text-xs text-muted-foreground break-all">Feed: {item.feedUrl}</p>
-                <p className="text-xs text-muted-foreground">
-                  Entries: {item.fetchedEntries} | Inserted: {item.insertedCount} | Updated: {item.updatedCount}
-                </p>
-                {item.error ? <p className="text-xs text-red-600">{item.error}</p> : null}
-
-                {item.sampleEntries.length > 0 ? (
-                  <div>
-                    <p className="text-xs font-medium mb-1">Sample Entries</p>
-                    <div className="space-y-1">
-                      {item.sampleEntries.map((entry) => (
-                        <p key={entry.id} className="text-xs text-muted-foreground">
-                          <span className="font-mono">[{entry.mediaType}]</span> {entry.id} - {entry.title}
-                        </p>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-
-                {item.normalizedFeed != null ? (
-                  <details className="rounded-md border bg-muted/20 p-2">
-                    <summary className="cursor-pointer text-xs font-medium">Normalized Feed</summary>
-                    <div className="mt-2 space-y-2">
-                      <div>
-                        <p className="text-xs font-medium mb-1">Channel</p>
-                        <p className="text-xs text-muted-foreground">
-                          {item.normalizedFeed.channel.title} ({item.normalizedFeed.channel.id})
-                        </p>
-                        <p className="text-xs text-muted-foreground break-all">
-                          {item.normalizedFeed.channel.url}
-                        </p>
-                        {item.normalizedFeed.channel.publishedAt != null ? (
-                          <p className="text-xs text-muted-foreground">
-                            Published: {item.normalizedFeed.channel.publishedAt}
-                          </p>
-                        ) : null}
-                      </div>
-                      <div>
-                        <p className="text-xs font-medium mb-1">
-                          Entries ({item.normalizedFeed.entries.length})
-                        </p>
-                        <div className="space-y-1">
-                          {item.normalizedFeed.entries.map((entry) => (
-                            <div key={entry.id} className="text-xs text-muted-foreground">
-                              <span className="font-mono">[{entry.mediaType}]</span>{' '}
-                              {entry.id} - {entry.title}
-                              {entry.publishedAt != null ? (
-                                <span> ({entry.publishedAt})</span>
-                              ) : null}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        Parsed at: {item.normalizedFeed.parsedAt}
-                      </p>
-                    </div>
-                  </details>
-                ) : null}
-
-                {item.rawFeedXml ? (
-                  <details className="rounded-md border bg-muted/20 p-2">
-                    <summary className="cursor-pointer text-xs font-medium">Raw RSS XML</summary>
-                    <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap break-all rounded bg-background p-2 text-[11px] leading-4">
-                      {item.rawFeedXml}
-                    </pre>
-                  </details>
-                ) : null}
-              </div>
-            ))}
-          </div>
-        )}
+        <h3 className="text-sm font-medium mb-2">YouTube Sync</h3>
+        <Button variant="outline" onClick={() => void pollNow()} disabled={pollingNow}>
+          {pollingNow ? 'Polling...' : 'Poll Now'}
+        </Button>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Runs a YouTube poll immediately using the current channel list and API key.
+        </p>
       </div>
+
       {message ? <p className="text-xs text-emerald-600">{message}</p> : null}
       {error ? <p className="text-xs text-red-600">{error}</p> : null}
     </div>

@@ -1,5 +1,5 @@
 import React from 'react'
-import type { YtChannel } from '../../../../shared/ipc-types'
+import type { YtChannel, YtVideo, YouTubeViewConfig } from '../../../../shared/ipc-types'
 import { useYouTubeVideos } from '../../hooks/useYouTubeVideos'
 import { StreamPanel } from './StreamPanel'
 import { VideoCarousel } from './VideoCarousel'
@@ -7,15 +7,48 @@ import { Separator } from '../../components/ui/separator'
 
 interface ChannelRowProps {
   channel: YtChannel
+  viewConfig: YouTubeViewConfig
 }
 
-export function ChannelRow({ channel }: ChannelRowProps): React.ReactElement {
-  const { videos } = useYouTubeVideos(channel.channel_id)
+function inferMediaType(video: YtVideo): 'video' | 'short' | 'upcoming_stream' | 'live' {
+  if (video.broadcast_status === 'live') return 'live'
+  if (video.broadcast_status === 'upcoming') return 'upcoming_stream'
+  if (video.media_type != null) return video.media_type
+  if (video.duration_sec != null && video.duration_sec <= 60) return 'short'
+  return 'video'
+}
 
-  const streams = videos.filter(
+function applyMediaTypeFilter(videos: YtVideo[], config: YouTubeViewConfig): YtVideo[] {
+  return videos.filter((video) => {
+    if (video.broadcast_status === 'live') {
+      return config.showLiveNow
+    }
+
+    if (video.broadcast_status === 'upcoming') {
+      return config.showUpcomingStreams
+    }
+
+    const mediaType = inferMediaType(video)
+    if (mediaType === 'short') {
+      return config.showShorts
+    }
+
+    if (mediaType === 'live') {
+      return config.showPastLivestreams
+    }
+
+    return config.showVideos
+  })
+}
+
+export function ChannelRow({ channel, viewConfig }: ChannelRowProps): React.ReactElement {
+  const { videos } = useYouTubeVideos(channel.channel_id)
+  const filteredVideos = applyMediaTypeFilter(videos, viewConfig)
+
+  const streams = filteredVideos.filter(
     (v) => v.broadcast_status === 'upcoming' || v.broadcast_status === 'live'
   )
-  const regularVideos = videos.filter(
+  const regularVideos = filteredVideos.filter(
     (v) => v.broadcast_status === 'none' || v.broadcast_status === null
   )
 

@@ -13,34 +13,80 @@ import type {
   WidgetInstance,
   ThemeInfo,
   IpcMutationResult,
+  YouTubeCacheClearResult,
   YouTubeApiKeyStatus,
-  YouTubePollDebugItem
+  YouTubeViewConfig
 } from '../../shared/ipc-types'
 import {
   applyYouTubePollInterval,
-  getYouTubePollDebug,
   triggerYouTubePollNow
 } from '../sources/youtube/index'
 
 const YOUTUBE_API_KEY_SETTING = 'youtube_api_key_encrypted'
-const YOUTUBE_RESOLVE_DEBUG_PREFIX = '[youtube:addChannel debug]'
+const YOUTUBE_VIEW_CONFIG_KEY_PREFIX = 'youtube_view_config:'
 const xmlParser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: ''
 })
 
-function logYouTubeResolveDebug(message: string, payload?: Record<string, unknown>): void {
-  if (payload) {
-    console.info(YOUTUBE_RESOLVE_DEBUG_PREFIX, message, payload)
-    return
+function logYouTubeResolveDebug(_message: string, _payload?: Record<string, unknown>): void {
+}
+
+function hashString(input: string): number {
+  let hash = 0
+  for (let i = 0; i < input.length; i += 1) {
+    hash = (hash * 31 + input.charCodeAt(i)) >>> 0
   }
-  console.info(YOUTUBE_RESOLVE_DEBUG_PREFIX, message)
+  return hash
+}
+
+function getChannelInitials(channelName: string, channelId: string): string {
+  const words = channelName
+    .trim()
+    .split(/\s+/)
+    .filter((part) => part.length > 0)
+
+  const fromName = words
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? '')
+    .join('')
+
+  if (fromName.length > 0) {
+    return fromName
+  }
+
+  const fallback = channelId.replace(/^UC/, '').slice(0, 2).toUpperCase()
+  return fallback.length > 0 ? fallback : 'YT'
+}
+
+function buildTemporaryChannelThumbnail(channelId: string, channelName: string): string {
+  const palettes: Array<{ bg: string; fg: string; ring: string }> = [
+    { bg: '#0f766e', fg: '#ecfeff', ring: '#5eead4' },
+    { bg: '#1d4ed8', fg: '#eff6ff', ring: '#93c5fd' },
+    { bg: '#be123c', fg: '#fff1f2', ring: '#fda4af' },
+    { bg: '#7c2d12', fg: '#fff7ed', ring: '#fdba74' },
+    { bg: '#14532d', fg: '#f0fdf4', ring: '#86efac' },
+    { bg: '#581c87', fg: '#faf5ff', ring: '#d8b4fe' }
+  ]
+
+  const palette = palettes[hashString(channelId) % palettes.length]
+  const initials = getChannelInitials(channelName, channelId)
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='96' height='96' viewBox='0 0 96 96'><desc>pn-temp-channel-avatar</desc><rect width='96' height='96' rx='48' fill='${palette.bg}'/><circle cx='48' cy='48' r='43' fill='none' stroke='${palette.ring}' stroke-width='2'/><text x='48' y='56' text-anchor='middle' fill='${palette.fg}' font-size='30' font-family='Segoe UI, Arial, sans-serif' font-weight='700'>${initials}</text></svg>`
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
 }
 
 function emitYoutubeUpdated(): void {
   for (const win of BrowserWindow.getAllWindows()) {
     win.webContents.send(IPC.YOUTUBE_UPDATED)
   }
+}
+
+const DEFAULT_YOUTUBE_VIEW_CONFIG: YouTubeViewConfig = {
+  showVideos: true,
+  showShorts: true,
+  showUpcomingStreams: true,
+  showLiveNow: true,
+  showPastLivestreams: true
 }
 
 function getDecryptedYouTubeApiKey(): string | null {
@@ -514,11 +560,12 @@ export function registerIpcHandlers(): void {
       const existing = db
         .prepare('SELECT channel_id FROM yt_channels WHERE channel_id = ?')
         .get(channel.channel_id) as { channel_id: string } | undefined
+      const temporaryThumbnail = buildTemporaryChannelThumbnail(channel.channel_id, channel.name)
 
       if (existing) {
         db.prepare(
           'UPDATE yt_channels SET name = ?, thumbnail_url = ? WHERE channel_id = ?'
-        ).run(channel.name, channel.thumbnail_url, channel.channel_id)
+        ).run(channel.name, temporaryThumbnail, channel.channel_id)
       } else {
         const row = db.prepare('SELECT COALESCE(MAX(sort_order), -1) AS max_sort FROM yt_channels').get() as {
           max_sort: number
@@ -529,7 +576,7 @@ export function registerIpcHandlers(): void {
         ).run(
           channel.channel_id,
           channel.name,
-          channel.thumbnail_url,
+          temporaryThumbnail,
           channel.added_at,
           channel.enabled,
           row.max_sort + 1
@@ -578,9 +625,12 @@ export function registerIpcHandlers(): void {
     }
   })
 
-  // youtube:getPollDebug
-  ipcMain.handle(IPC.YOUTUBE_GET_POLL_DEBUG, (): YouTubePollDebugItem[] => {
-    return getYouTubePollDebug()
+  // youtube:clearVideosCache
+  ipcMain.handle(IPC.YOUTUBE_CLEAR_VIDEOS_CACHE, (): YouTubeCacheClearResult => {
+    const db = getDb()
+    const result = db.prepare('DELETE FROM yt_videos').run()
+    emitYoutubeUpdated()
+    return { ok: true, error: null, deletedCount: result.changes }
   })
 
   // reddit:getDigestPosts
@@ -717,6 +767,38 @@ export function registerIpcHandlers(): void {
       }
       setSetting('rss_poll_interval_minutes', String(minutes))
       applyYouTubePollInterval(minutes)
+      return { ok: true, error: null }
+    }
+  )
+
+  // settings:getYouTubeViewConfig
+  ipcMain.handle(IPC.SETTINGS_GET_YOUTUBE_VIEW_CONFIG, (_event, instanceId: string): YouTubeViewConfig => {
+    const scopedKey = `${YOUTUBE_VIEW_CONFIG_KEY_PREFIX}${instanceId}`
+    const scopedRaw = getSetting(scopedKey)
+    const legacyRaw = getSetting('youtube_view_config')
+    const raw = scopedRaw ?? legacyRaw
+
+    if (!raw) {
+      return DEFAULT_YOUTUBE_VIEW_CONFIG
+    }
+
+    try {
+      const parsed = JSON.parse(raw) as Partial<YouTubeViewConfig>
+      return { ...DEFAULT_YOUTUBE_VIEW_CONFIG, ...parsed }
+    } catch {
+      return DEFAULT_YOUTUBE_VIEW_CONFIG
+    }
+  })
+
+  // settings:setYouTubeViewConfig
+  ipcMain.handle(
+    IPC.SETTINGS_SET_YOUTUBE_VIEW_CONFIG,
+    (_event, instanceId: string, config: YouTubeViewConfig): IpcMutationResult => {
+      if (!instanceId || instanceId.trim().length === 0) {
+        return { ok: false, error: 'Instance ID is required.' }
+      }
+
+      setSetting(`${YOUTUBE_VIEW_CONFIG_KEY_PREFIX}${instanceId}`, JSON.stringify(config))
       return { ok: true, error: null }
     }
   )

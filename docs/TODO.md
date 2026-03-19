@@ -11,7 +11,7 @@ Each item links to the relevant architecture doc for the full spec.
 - [ ] **YouTube Data API v3 delta fetch** — when RSS detects a new video ID not in the DB, call the YouTube v3 API to fetch full video details (duration, live broadcast status, scheduled start). Minimise quota usage — only call on new IDs. See `docs/architecture/data-sources.md §1.3`.
 - [ ] **API key validation** — when the user saves their YouTube API key in Settings, make a cheap test call (e.g. `videos?part=id&id=dQw4w9WgXcQ`) and surface success/error inline.
 - [ ] **Add channel flow** — the "Add" button in Settings > YouTube should resolve a channel URL or handle via the YouTube API, save the result to `yt_channels`, and push a `youtube:updated` event to the renderer. Currently a no-op.
-- [ ] **Per-channel enabled toggle persistence** — the toggle in Settings > YouTube currently updates local state only. Wire it to `settings:setChannelEnabled` IPC → UPDATE `yt_channels SET enabled = ?`.
+- [x] **Per-channel enabled toggle persistence** — the toggle in Settings > YouTube currently updates local state only. Wire it to `settings:setChannelEnabled` IPC → UPDATE `yt_channels SET enabled = ?`.
 - [ ] **Push `youtube:updated` event** — after each RSS poll or API fetch that changes data, call `BrowserWindow.webContents.send('youtube:updated')` so the renderer re-fetches without polling.
 
 ---
@@ -47,7 +47,7 @@ Each item links to the relevant architecture doc for the full spec.
 
 ## Settings & Credentials
 
-- [ ] **safeStorage for YouTube API key** — replace the `console.log` no-op in Settings > API Keys with a real `safeStorage.encryptString` / `decryptString` implementation. The key must never be written to the plain `settings` table. See `docs/architecture/tech-notes.md §5`.
+- [x] **safeStorage for YouTube API key** — replace the `console.log` no-op in Settings > API Keys with a real `safeStorage.encryptString` / `decryptString` implementation. The key must never be written to the plain `settings` table. See `docs/architecture/tech-notes.md §5`.
 - [ ] **ntfy topic configuration** — implement the ntfy settings fields in Settings > Saved Posts: topic name (plain text), optional custom server URL, Test Connection button, last-synced timestamp. See `docs/ui-ux.md §8.3`.
 - [ ] **YouTube RSS poll interval setting** — the input in Settings > YouTube should read from and write to `rss_poll_interval_minutes` in the `settings` table, and re-register the cron job with the new interval.
 - [ ] **Reddit Digest settings tab** — currently a "coming soon" placeholder. Add subreddit list management (add/remove subreddits the digest script will target).

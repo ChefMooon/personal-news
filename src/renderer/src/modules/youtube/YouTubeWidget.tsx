@@ -1,5 +1,7 @@
 import React from 'react'
 import { useYouTubeChannels } from '../../hooks/useYouTubeChannels'
+import { useYouTubeViewConfig } from '../../hooks/useYouTubeViewConfig'
+import { useWidgetInstance } from '../../contexts/WidgetInstanceContext'
 import { ChannelRow } from './ChannelRow'
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card'
 import { Separator } from '../../components/ui/separator'
@@ -7,7 +9,9 @@ import { Youtube } from 'lucide-react'
 import { registerRendererModule } from '../registry'
 
 function YouTubeWidget(): React.ReactElement {
+  const { instanceId } = useWidgetInstance()
   const { channels, loading } = useYouTubeChannels()
+  const { config: viewConfig } = useYouTubeViewConfig(instanceId)
 
   const enabledChannels = channels.filter((c) => c.enabled)
 
@@ -35,7 +39,7 @@ function YouTubeWidget(): React.ReactElement {
             {enabledChannels.map((channel, idx) => (
               <div key={channel.channel_id}>
                 {idx > 0 && <Separator className="my-1" />}
-                <ChannelRow channel={channel} />
+                <ChannelRow channel={channel} viewConfig={viewConfig} />
               </div>
             ))}
           </div>
