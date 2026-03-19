@@ -11,7 +11,7 @@ Phone (share sheet)
   └─ POST message to ntfy topic
        └─ [ntfy.sh server holds message]
 
-App startup / manual poll
+App startup / scheduled poll / manual poll
   └─ GET {server}/{topic}/json?poll=1&since={lastId}
        └─ Parse NDJSON response
             └─ For each Reddit URL:
@@ -45,6 +45,7 @@ All stored in the `settings` table via `getSetting` / `setSetting`.
 | `ntfy_server_url` | Base URL of the ntfy server (defaults to `https://ntfy.sh`) |
 | `ntfy_last_message_id` | ID of the last ntfy message processed — used as the `since` cursor |
 | `ntfy_last_polled_at` | Unix timestamp of the last successful poll |
+| `ntfy_poll_interval_minutes` | Background poll interval in minutes (default `60`) |
 
 ---
 
@@ -53,7 +54,8 @@ All stored in the `settings` table via `getSetting` / `setSetting`.
 ### Trigger points
 
 1. **Startup** — `pollNtfyStartup()` is called when `RedditModule.initialize()` runs (main process boot). Errors are caught and broadcast as a push event; they do not crash the app.
-2. **Manual** — `triggerNtfyPoll()` is called by the `reddit:pollNtfy` IPC handler when the user clicks "Test Connection" or "Sync Now" in the UI.
+2. **Scheduled** — a cron scheduler runs `triggerNtfyPoll()` using `ntfy_poll_interval_minutes` (defaults to 60). Existing scheduler tasks are restarted whenever interval settings change.
+3. **Manual** — `triggerNtfyPoll()` is called by the `reddit:pollNtfy` IPC handler when the user clicks "Test Connection" or "Sync Now" in the UI.
 
 ### Concurrency guard
 
@@ -161,7 +163,8 @@ Key points:
 |---|---|---|
 | `reddit:pollNtfy` | Renderer → Main | Triggers a manual poll. Returns `NtfyPollResult`. Throws `NO_TOPIC_CONFIGURED` if `ntfy_topic` is not set. |
 | `reddit:getNtfyStaleness` | Renderer → Main | Returns `NtfyStaleness` — whether a topic is configured and whether the last poll was more than 24 hours ago. |
-| `reddit:ntfyIngestComplete` | Main → Renderer (push) | Emitted after startup or manual poll completes. Payload: `{ postsIngested: number, error?: string }`. |
+| `settings:setNtfyPollInterval` | Renderer → Main | Validates and saves `ntfy_poll_interval_minutes` (1..1440) and reapplies scheduler immediately. |
+| `reddit:ntfyIngestComplete` | Main → Renderer (push) | Emitted after startup, scheduled, or manual poll completes. Payload: `{ postsIngested: number, error?: string }`. |
 
 ### `NtfyPollResult`
 

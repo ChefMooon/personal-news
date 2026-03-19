@@ -520,6 +520,8 @@ function PlaceholderTab({ name }: { name: string }): React.ReactElement {
 }
 
 function SavedPostsTab(): React.ReactElement {
+  const [intervalValue, setIntervalValue] = useState('60')
+  const [savingInterval, setSavingInterval] = useState(false)
   const [topicConfigured, setTopicConfigured] = useState(false)
   const [topic, setTopic] = useState('')
   const [server, setServer] = useState('')
@@ -542,6 +544,18 @@ function SavedPostsTab(): React.ReactElement {
         setIsStale(s.isStale)
       })
       .catch(console.error)
+    window.api
+      .invoke(IPC.SETTINGS_GET, 'ntfy_poll_interval_minutes')
+      .then((v) => {
+        if (typeof v === 'string' && v.trim()) {
+          setIntervalValue(v)
+          return
+        }
+        setIntervalValue('60')
+      })
+      .catch(() => {
+        setIntervalValue('60')
+      })
     window.api.invoke(IPC.SETTINGS_GET, 'ntfy_topic').then((v) => setTopic((v as string) || '')).catch(console.error)
     window.api.invoke(IPC.SETTINGS_GET, 'ntfy_server_url').then((v) => setServer((v as string) || 'https://ntfy.sh')).catch(console.error)
   }
@@ -561,6 +575,27 @@ function SavedPostsTab(): React.ReactElement {
       setTestResult('Could not reach the ntfy server.')
     } finally {
       setTesting(false)
+    }
+  }
+
+  const savePollInterval = async (): Promise<void> => {
+    setSavingInterval(true)
+    setTestResult(null)
+    const parsed = Number.parseInt(intervalValue, 10)
+    try {
+      const result = (await window.api.invoke(
+        IPC.SETTINGS_SET_NTFY_POLL_INTERVAL,
+        parsed
+      )) as IpcMutationResult
+      if (!result.ok) {
+        setTestResult(result.error ?? 'Failed to save ntfy poll interval.')
+        return
+      }
+      setTestResult('ntfy poll interval saved.')
+    } catch (err) {
+      setTestResult(err instanceof Error ? err.message : 'Failed to save ntfy poll interval.')
+    } finally {
+      setSavingInterval(false)
     }
   }
 
@@ -591,6 +626,21 @@ function SavedPostsTab(): React.ReactElement {
 
   return (
     <div className="space-y-4 max-w-md">
+      <div>
+        <h3 className="text-sm font-medium mb-2">Sync Poll Interval (minutes)</h3>
+        <div className="flex gap-2 items-center">
+          <Input
+            value={intervalValue}
+            onChange={(e) => setIntervalValue(e.target.value)}
+            inputMode="numeric"
+            className="w-40"
+          />
+          <Button variant="outline" size="sm" onClick={() => void savePollInterval()} disabled={savingInterval}>
+            {savingInterval ? 'Saving...' : 'Save Interval'}
+          </Button>
+        </div>
+      </div>
+
       <div>
         <h3 className="text-sm font-medium mb-2">ntfy.sh Configuration</h3>
         <div className="space-y-1 text-sm">

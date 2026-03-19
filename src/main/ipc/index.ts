@@ -24,7 +24,7 @@ import {
   applyYouTubePollInterval,
   triggerYouTubePollNow
 } from '../sources/youtube/index'
-import { triggerNtfyPoll } from '../sources/reddit/index'
+import { applyNtfyPollInterval, triggerNtfyPoll } from '../sources/reddit/index'
 
 const YOUTUBE_API_KEY_SETTING = 'youtube_api_key_encrypted'
 const YOUTUBE_VIEW_CONFIG_KEY_PREFIX = 'youtube_view_config:'
@@ -964,6 +964,22 @@ export function registerIpcHandlers(): void {
       }
       setSetting('rss_poll_interval_minutes', String(minutes))
       applyYouTubePollInterval(minutes)
+      return { ok: true, error: null }
+    }
+  )
+
+  // settings:setNtfyPollInterval
+  ipcMain.handle(
+    IPC.SETTINGS_SET_NTFY_POLL_INTERVAL,
+    (_event, minutes: number): IpcMutationResult => {
+      if (!Number.isInteger(minutes) || minutes < 1 || minutes > 1440) {
+        return {
+          ok: false,
+          error: 'ntfy poll interval must be a whole number between 1 and 1440 minutes.'
+        }
+      }
+      setSetting('ntfy_poll_interval_minutes', String(minutes))
+      applyNtfyPollInterval(minutes)
       return { ok: true, error: null }
     }
   )

@@ -29,6 +29,7 @@ export const IPC = {
   SETTINGS_SET_YOUTUBE_API_KEY: 'settings:setYouTubeApiKey',
   SETTINGS_CLEAR_YOUTUBE_API_KEY: 'settings:clearYouTubeApiKey',
   SETTINGS_SET_RSS_POLL_INTERVAL: 'settings:setRssPollInterval',
+  SETTINGS_SET_NTFY_POLL_INTERVAL: 'settings:setNtfyPollInterval',
   SETTINGS_GET_YOUTUBE_VIEW_CONFIG: 'settings:getYouTubeViewConfig',
   SETTINGS_SET_YOUTUBE_VIEW_CONFIG: 'settings:setYouTubeViewConfig',
   SETTINGS_GET: 'settings:get',
