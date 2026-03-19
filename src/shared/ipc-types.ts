@@ -238,3 +238,28 @@ export interface DigestViewConfig {
   layout_mode: 'columns' | 'tabs'
   subreddit_filter: string[] | null
 }
+
+export interface SavedPostsViewConfig {
+  // Filtering
+  subreddit_filter: string[] | null
+  tag_filter: string[] | null
+  // Sorting & pagination
+  sort_by: 'saved_at' | 'score'
+  sort_dir: 'asc' | 'desc'
+  max_posts: number
+  // Presentation
+  showMetadata: boolean
+  cardDensity: 'compact' | 'detailed'
+  showBodyPreview: boolean
+  showViewAllLink: boolean
+}
+
+export interface GetSavedPostsRequest {
+  search?: string
+  subreddit_filter?: string[]
+  tag_filter?: string[]
+  sort_by?: 'saved_at' | 'score'
+  sort_dir?: 'asc' | 'desc'
+  limit?: number
+  offset?: number
+}

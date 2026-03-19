@@ -1,13 +1,17 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import type { SavedPost } from '../../../shared/ipc-types'
-import { IPC } from '../../../shared/ipc-types'
+import { IPC, type GetSavedPostsRequest } from '../../../shared/ipc-types'
 
 interface UseSavedPostsOptions {
   limit?: number
   offset?: number
   search?: string
   subreddit?: string | null
+  subreddit_filter?: string[] | null
   tag?: string | null
+  tag_filter?: string[] | null
+  sort_by?: 'saved_at' | 'score'
+  sort_dir?: 'asc' | 'desc'
 }
 
 interface UseSavedPostsResult {
@@ -35,20 +39,45 @@ export function useSavedPosts(options?: UseSavedPostsOptions): UseSavedPostsResu
   const [subreddit, setSubreddit] = useState<string | null>(options?.subreddit ?? null)
   const [tag, setTag] = useState<string | null>(options?.tag ?? null)
   const [offset, setOffset] = useState(options?.offset ?? 0)
+
+  // Query parameters from options (for widget usage)
+  const subredditFilter = options?.subreddit_filter
+  const tagFilter = options?.tag_filter
+  const sortBy = options?.sort_by ?? 'saved_at'
+  const sortDir = options?.sort_dir ?? 'desc'
   const limit = options?.limit ?? 50
+
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const fetchPosts = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const result = (await window.api.invoke(IPC.REDDIT_GET_SAVED_POSTS, {
-        search: search || undefined,
-        subreddit: subreddit || undefined,
-        tag: tag || undefined,
+      const request: GetSavedPostsRequest = {
         limit,
-        offset
-      })) as { posts: SavedPost[]; total: number }
+        offset,
+        sort_by: sortBy,
+        sort_dir: sortDir
+      }
+
+      // Support both old page-style filters and new widget-style filters
+      if (search) request.search = search
+      if (subreddit) {
+        request.subreddit = subreddit
+      } else if (subredditFilter) {
+        request.subreddit_filter = subredditFilter
+      }
+
+      if (tag) {
+        request.tag = tag
+      } else if (tagFilter) {
+        request.tag_filter = tagFilter
+      }
+
+      const result = (await window.api.invoke(IPC.REDDIT_GET_SAVED_POSTS, request)) as {
+        posts: SavedPost[]
+        total: number
+      }
       setPosts(result.posts)
       setTotal(result.total)
     } catch (err) {
@@ -56,7 +85,7 @@ export function useSavedPosts(options?: UseSavedPostsOptions): UseSavedPostsResu
     } finally {
       setLoading(false)
     }
-  }, [search, subreddit, tag, limit, offset])
+  }, [search, subreddit, subredditFilter, tag, tagFilter, sortBy, sortDir, limit, offset])
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)

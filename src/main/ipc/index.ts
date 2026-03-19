@@ -674,7 +674,11 @@ export function registerIpcHandlers(): void {
       options?: {
         search?: string
         subreddit?: string
+        subreddit_filter?: string[]
         tag?: string
+        tag_filter?: string[]
+        sort_by?: 'saved_at' | 'score'
+        sort_dir?: 'asc' | 'desc'
         limit?: number
         offset?: number
       }
@@ -684,27 +688,50 @@ export function registerIpcHandlers(): void {
       const params: unknown[] = []
       let joinFts = false
 
+      // Search (FTS)
       if (options?.search) {
         joinFts = true
         conditions.push('saved_posts_fts MATCH ?')
         params.push(options.search)
       }
-      if (options?.subreddit) {
+
+      // Subreddit filter (support both old single and new multi format)
+      if (options?.subreddit_filter && options.subreddit_filter.length > 0) {
+        const placeholders = options.subreddit_filter.map(() => '?').join(', ')
+        conditions.push(`sp.subreddit IN (${placeholders})`)
+        params.push(...options.subreddit_filter)
+      } else if (options?.subreddit) {
+        // Backward compatibility with old single-subreddit format
         conditions.push('sp.subreddit = ?')
         params.push(options.subreddit)
       }
-      if (options?.tag) {
+
+      // Tag filter (support both old single and new multi format)
+      if (options?.tag_filter && options.tag_filter.length > 0) {
+        // Filter to posts that have at least one of the requested tags
+        const tagConditions = options.tag_filter
+          .map(() => 'EXISTS (SELECT 1 FROM json_each(sp.tags) WHERE value = ?)')
+          .join(' OR ')
+        conditions.push(`(${tagConditions})`)
+        params.push(...options.tag_filter)
+      } else if (options?.tag) {
+        // Backward compatibility with old single-tag format
         conditions.push('EXISTS (SELECT 1 FROM json_each(sp.tags) WHERE value = ?)')
         params.push(options.tag)
       }
 
       const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
-      const limit = options?.limit ?? 50
+      const limit = Math.min(options?.limit ?? 50, 500) // Cap at 500
       const offset = options?.offset ?? 0
 
       const fromClause = joinFts
         ? 'FROM saved_posts sp JOIN saved_posts_fts ON sp.rowid = saved_posts_fts.rowid'
         : 'FROM saved_posts sp'
+
+      // Build ORDER BY clause
+      const sortBy = options?.sort_by ?? 'saved_at'
+      const sortDir = options?.sort_dir ?? 'desc'
+      const orderClause = `ORDER BY sp.${sortBy} ${sortDir.toUpperCase()}`
 
       const countRow = db
         .prepare(`SELECT COUNT(*) as cnt ${fromClause} ${whereClause}`)
@@ -712,7 +739,7 @@ export function registerIpcHandlers(): void {
 
       const rows = db
         .prepare(
-          `SELECT sp.* ${fromClause} ${whereClause} ORDER BY sp.saved_at DESC LIMIT ? OFFSET ?`
+          `SELECT sp.* ${fromClause} ${whereClause} ${orderClause} LIMIT ? OFFSET ?`
         )
         .all(...params, limit, offset) as Array<{
         post_id: string
