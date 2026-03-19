@@ -8,6 +8,9 @@ import type {
   YtVideo,
   DigestPost,
   SavedPostSummary,
+  SavedPost,
+  NtfyStaleness,
+  NtfyPollResult,
   ScriptWithLastRun,
   WidgetLayout,
   WidgetInstance,
@@ -21,6 +24,7 @@ import {
   applyYouTubePollInterval,
   triggerYouTubePollNow
 } from '../sources/youtube/index'
+import { triggerNtfyPoll } from '../sources/reddit/index'
 
 const YOUTUBE_API_KEY_SETTING = 'youtube_api_key_encrypted'
 const YOUTUBE_VIEW_CONFIG_KEY_PREFIX = 'youtube_view_config:'
@@ -660,6 +664,188 @@ export function registerIpcHandlers(): void {
         'SELECT post_id, title, permalink, subreddit, saved_at FROM saved_posts ORDER BY saved_at DESC LIMIT 5'
       )
       .all() as SavedPostSummary[]
+  })
+
+  // reddit:getSavedPosts
+  ipcMain.handle(
+    IPC.REDDIT_GET_SAVED_POSTS,
+    (
+      _event,
+      options?: {
+        search?: string
+        subreddit?: string
+        tag?: string
+        limit?: number
+        offset?: number
+      }
+    ): { posts: SavedPost[]; total: number } => {
+      const db = getDb()
+      const conditions: string[] = []
+      const params: unknown[] = []
+      let joinFts = false
+
+      if (options?.search) {
+        joinFts = true
+        conditions.push('saved_posts_fts MATCH ?')
+        params.push(options.search)
+      }
+      if (options?.subreddit) {
+        conditions.push('sp.subreddit = ?')
+        params.push(options.subreddit)
+      }
+      if (options?.tag) {
+        conditions.push('EXISTS (SELECT 1 FROM json_each(sp.tags) WHERE value = ?)')
+        params.push(options.tag)
+      }
+
+      const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
+      const limit = options?.limit ?? 50
+      const offset = options?.offset ?? 0
+
+      const fromClause = joinFts
+        ? 'FROM saved_posts sp JOIN saved_posts_fts ON sp.rowid = saved_posts_fts.rowid'
+        : 'FROM saved_posts sp'
+
+      const countRow = db
+        .prepare(`SELECT COUNT(*) as cnt ${fromClause} ${whereClause}`)
+        .get(...params) as { cnt: number }
+
+      const rows = db
+        .prepare(
+          `SELECT sp.* ${fromClause} ${whereClause} ORDER BY sp.saved_at DESC LIMIT ? OFFSET ?`
+        )
+        .all(...params, limit, offset) as Array<{
+        post_id: string
+        title: string
+        url: string
+        permalink: string
+        subreddit: string | null
+        author: string | null
+        score: number | null
+        body: string | null
+        saved_at: number
+        note: string | null
+        tags: string | null
+      }>
+
+      const posts: SavedPost[] = rows.map((row) => ({
+        ...row,
+        tags: row.tags ? (JSON.parse(row.tags) as string[]) : []
+      }))
+
+      return { posts, total: countRow.cnt }
+    }
+  )
+
+  // reddit:updatePostTags
+  ipcMain.handle(
+    IPC.REDDIT_UPDATE_POST_TAGS,
+    (_event, postId: string, tags: string[]): { ok: true } => {
+      const db = getDb()
+      db.prepare('UPDATE saved_posts SET tags = ? WHERE post_id = ?').run(
+        JSON.stringify(tags),
+        postId
+      )
+      return { ok: true }
+    }
+  )
+
+  // reddit:getAllTags
+  ipcMain.handle(IPC.REDDIT_GET_ALL_TAGS, (): string[] => {
+    const db = getDb()
+    const rows = db
+      .prepare(
+        `SELECT DISTINCT je.value as tag
+         FROM saved_posts, json_each(saved_posts.tags) je
+         WHERE saved_posts.tags IS NOT NULL
+         ORDER BY je.value`
+      )
+      .all() as Array<{ tag: string }>
+    return rows.map((r) => r.tag)
+  })
+
+  // reddit:renameTag
+  ipcMain.handle(
+    IPC.REDDIT_RENAME_TAG,
+    (_event, oldTag: string, newTag: string): { affectedPosts: number } => {
+      const db = getDb()
+      const rows = db
+        .prepare(
+          `SELECT post_id, tags FROM saved_posts
+           WHERE tags IS NOT NULL
+             AND EXISTS (SELECT 1 FROM json_each(saved_posts.tags) WHERE value = ?)`
+        )
+        .all(oldTag) as Array<{ post_id: string; tags: string }>
+
+      const update = db.prepare('UPDATE saved_posts SET tags = ? WHERE post_id = ?')
+      const rename = db.transaction(() => {
+        for (const row of rows) {
+          const parsed = JSON.parse(row.tags) as string[]
+          const updated = parsed.map((t) => (t === oldTag ? newTag : t))
+          update.run(JSON.stringify(updated), row.post_id)
+        }
+      })
+      rename()
+
+      return { affectedPosts: rows.length }
+    }
+  )
+
+  // reddit:deleteTag
+  ipcMain.handle(
+    IPC.REDDIT_DELETE_TAG,
+    (_event, tag: string): { affectedPosts: number } => {
+      const db = getDb()
+      const rows = db
+        .prepare(
+          `SELECT post_id, tags FROM saved_posts
+           WHERE tags IS NOT NULL
+             AND EXISTS (SELECT 1 FROM json_each(saved_posts.tags) WHERE value = ?)`
+        )
+        .all(tag) as Array<{ post_id: string; tags: string }>
+
+      const update = db.prepare('UPDATE saved_posts SET tags = ? WHERE post_id = ?')
+      const remove = db.transaction(() => {
+        for (const row of rows) {
+          const parsed = JSON.parse(row.tags) as string[]
+          const updated = parsed.filter((t) => t !== tag)
+          update.run(updated.length > 0 ? JSON.stringify(updated) : null, row.post_id)
+        }
+      })
+      remove()
+
+      return { affectedPosts: rows.length }
+    }
+  )
+
+  // reddit:pollNtfy
+  ipcMain.handle(IPC.REDDIT_POLL_NTFY, async (): Promise<NtfyPollResult> => {
+    const topic = getSetting('ntfy_topic')
+    if (!topic) {
+      throw new Error('NO_TOPIC_CONFIGURED')
+    }
+    const result = await triggerNtfyPoll()
+    const lastPolledAt = parseInt(getSetting('ntfy_last_polled_at') ?? '0', 10) || 0
+    return { postsIngested: result.postsIngested, messagesReceived: result.messagesReceived, lastPolledAt }
+  })
+
+  // reddit:clearSavedPosts
+  ipcMain.handle(IPC.REDDIT_CLEAR_SAVED_POSTS, (): { deletedCount: number } => {
+    const db = getDb()
+    const result = db.prepare('DELETE FROM saved_posts').run()
+    return { deletedCount: result.changes }
+  })
+
+  // reddit:getNtfyStaleness
+  ipcMain.handle(IPC.REDDIT_GET_NTFY_STALENESS, (): NtfyStaleness => {
+    const topicConfigured = Boolean(getSetting('ntfy_topic'))
+    const raw = getSetting('ntfy_last_polled_at')
+    const lastPolledAt = raw ? parseInt(raw, 10) || null : null
+    const STALE_THRESHOLD_SEC = 86400
+    const now = Math.floor(Date.now() / 1000)
+    const isStale =
+      topicConfigured && (lastPolledAt === null || now - lastPolledAt > STALE_THRESHOLD_SEC)
+    return { lastPolledAt, isStale, topicConfigured }
   })
 
   // scripts:getAll

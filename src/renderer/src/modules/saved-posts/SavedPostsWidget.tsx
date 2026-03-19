@@ -1,15 +1,78 @@
-import React from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSavedPostsSummary } from '../../hooks/useSavedPostsSummary'
+import { useNtfyStaleness } from '../../hooks/useNtfyStaleness'
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card'
 import { Badge } from '../../components/ui/badge'
+import { Button } from '../../components/ui/button'
 import { Bookmark } from 'lucide-react'
 import { formatRelativeTime } from '../../lib/time'
 import { registerRendererModule } from '../registry'
+import { IPC, type SavedPostSummary } from '../../../../shared/ipc-types'
+import { NtfyOnboardingWizard } from './NtfyOnboardingWizard'
 
 function SavedPostsWidget(): React.ReactElement {
-  const { posts, loading } = useSavedPostsSummary()
+  const { posts: initialPosts, loading: initialLoading } = useSavedPostsSummary()
+  const staleness = useNtfyStaleness()
   const navigate = useNavigate()
+  const [showOnboarding, setShowOnboarding] = useState(false)
+  const [posts, setPosts] = useState(initialPosts)
+  const [loading, setLoading] = useState(initialLoading)
+
+  useEffect(() => {
+    setPosts(initialPosts)
+    setLoading(initialLoading)
+  }, [initialPosts, initialLoading])
+
+  const refetchPosts = useCallback(() => {
+    window.api
+      .invoke(IPC.REDDIT_GET_SAVED_POSTS_SUMMARY)
+      .then((data) => {
+        setPosts(data as SavedPostSummary[])
+      })
+      .catch(console.error)
+  }, [])
+
+  // Listen for ntfy ingest complete push events
+  useEffect(() => {
+    const listener = (): void => {
+      refetchPosts()
+    }
+    window.api.on(IPC.REDDIT_NTFY_INGEST_COMPLETE, listener)
+    return () => {
+      window.api.off(IPC.REDDIT_NTFY_INGEST_COMPLETE, listener)
+    }
+  }, [refetchPosts])
+
+  if (!staleness.loading && !staleness.topicConfigured) {
+    return (
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Bookmark className="h-5 w-5" />
+            Saved Posts
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground mb-3">
+            Set up mobile saving to get started.
+          </p>
+          <Button size="sm" onClick={() => setShowOnboarding(true)}>
+            Set Up
+          </Button>
+          <NtfyOnboardingWizard
+            isOpen={showOnboarding}
+            onClose={() => setShowOnboarding(false)}
+            onComplete={() => {
+              setShowOnboarding(false)
+              staleness.refetch()
+              refetchPosts()
+            }}
+          />
+        </CardContent>
+      </Card>
+    )
+  }
 
   return (
     <Card>

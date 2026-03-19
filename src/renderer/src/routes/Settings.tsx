@@ -29,6 +29,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle
 } from '../components/ui/alert-dialog'
+import { NtfyOnboardingWizard } from '../modules/saved-posts/NtfyOnboardingWizard'
 
 function ApiKeysTab(): React.ReactElement {
   const [showKey, setShowKey] = useState(false)
@@ -518,6 +519,183 @@ function PlaceholderTab({ name }: { name: string }): React.ReactElement {
   )
 }
 
+function SavedPostsTab(): React.ReactElement {
+  const [topicConfigured, setTopicConfigured] = useState(false)
+  const [topic, setTopic] = useState('')
+  const [server, setServer] = useState('')
+  const [lastPolled, setLastPolled] = useState<number | null>(null)
+  const [isStale, setIsStale] = useState(false)
+  const [showWizard, setShowWizard] = useState(false)
+  const [testResult, setTestResult] = useState<string | null>(null)
+  const [testing, setTesting] = useState(false)
+  const [showGuide, setShowGuide] = useState(false)
+  const [showClearConfirm, setShowClearConfirm] = useState(false)
+  const [clearing, setClearing] = useState(false)
+
+  const loadStatus = (): void => {
+    window.api
+      .invoke(IPC.REDDIT_GET_NTFY_STALENESS)
+      .then((result) => {
+        const s = result as { topicConfigured: boolean; lastPolledAt: number | null; isStale: boolean }
+        setTopicConfigured(s.topicConfigured)
+        setLastPolled(s.lastPolledAt)
+        setIsStale(s.isStale)
+      })
+      .catch(console.error)
+    window.api.invoke(IPC.SETTINGS_GET, 'ntfy_topic').then((v) => setTopic((v as string) || '')).catch(console.error)
+    window.api.invoke(IPC.SETTINGS_GET, 'ntfy_server_url').then((v) => setServer((v as string) || 'https://ntfy.sh')).catch(console.error)
+  }
+
+  useEffect(() => {
+    loadStatus()
+  }, [])
+
+  const handleTest = async (): Promise<void> => {
+    setTesting(true)
+    setTestResult(null)
+    try {
+      const result = (await window.api.invoke(IPC.REDDIT_POLL_NTFY)) as { postsIngested: number }
+      setTestResult(`Connected — ${result.postsIngested} messages received.`)
+      loadStatus()
+    } catch {
+      setTestResult('Could not reach the ntfy server.')
+    } finally {
+      setTesting(false)
+    }
+  }
+
+  if (!topicConfigured) {
+    return (
+      <div className="space-y-4 max-w-md">
+        <h3 className="text-sm font-medium">Set Up Mobile Post Saving</h3>
+        <p className="text-xs text-muted-foreground">
+          Save Reddit posts from your phone using ntfy.sh, a free push notification service.
+          Personal News will automatically sync saved posts when you open it.
+        </p>
+        <Button onClick={() => setShowWizard(true)}>Set Up</Button>
+        <NtfyOnboardingWizard
+          isOpen={showWizard}
+          onClose={() => setShowWizard(false)}
+          onComplete={() => {
+            setShowWizard(false)
+            loadStatus()
+          }}
+        />
+      </div>
+    )
+  }
+
+  const lastPolledText = lastPolled
+    ? new Date(lastPolled * 1000).toLocaleString()
+    : 'Never'
+
+  return (
+    <div className="space-y-4 max-w-md">
+      <div>
+        <h3 className="text-sm font-medium mb-2">ntfy.sh Configuration</h3>
+        <div className="space-y-1 text-sm">
+          <p>
+            <span className="text-muted-foreground">Topic:</span>{' '}
+            <span className="font-mono">{topic}</span>
+          </p>
+          <p>
+            <span className="text-muted-foreground">Server:</span>{' '}
+            <span className="text-muted-foreground font-mono">{server}</span>
+          </p>
+          <p>
+            <span className="text-muted-foreground">Last synced:</span>{' '}
+            <span className={isStale ? 'text-amber-500 font-medium' : ''}>
+              {lastPolledText}
+            </span>
+          </p>
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <Button variant="outline" size="sm" onClick={() => void handleTest()} disabled={testing}>
+          {testing ? 'Testing...' : 'Test Connection'}
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => setShowWizard(true)}>
+          Edit
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => setShowGuide(true)}>
+          Mobile Setup Guide
+        </Button>
+      </div>
+      {testResult && (
+        <p className={`text-xs ${testResult.startsWith('Connected') ? 'text-emerald-600' : 'text-red-600'}`}>
+          {testResult}
+        </p>
+      )}
+      <NtfyOnboardingWizard
+        isOpen={showWizard || showGuide}
+        onClose={() => {
+          setShowWizard(false)
+          setShowGuide(false)
+        }}
+        onComplete={() => {
+          setShowWizard(false)
+          setShowGuide(false)
+          loadStatus()
+        }}
+        initialTopic={topic}
+        initialServerUrl={server}
+      />
+
+      <div className="pt-6 border-t">
+        <h3 className="text-sm font-medium mb-1">Danger Zone</h3>
+        <p className="text-xs text-muted-foreground mb-3">
+          Permanently delete all saved posts from the local database. This cannot be undone.
+        </p>
+        <Button
+          variant="destructive"
+          size="sm"
+          onClick={() => setShowClearConfirm(true)}
+          disabled={clearing}
+        >
+          {clearing ? 'Clearing...' : 'Clear Saved Posts Database'}
+        </Button>
+      </div>
+
+      <AlertDialog open={showClearConfirm} onOpenChange={(open) => !open && setShowClearConfirm(false)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear all saved posts?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete all saved posts from the local database. Tags, notes,
+              and post data will be lost. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={clearing}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={clearing}
+              onClick={(e) => {
+                e.preventDefault()
+                setClearing(true)
+                window.api
+                  .invoke(IPC.REDDIT_CLEAR_SAVED_POSTS)
+                  .then((result) => {
+                    const r = result as { deletedCount: number }
+                    setTestResult(`Cleared ${r.deletedCount} saved posts.`)
+                  })
+                  .catch((err) => {
+                    setTestResult(err instanceof Error ? err.message : 'Failed to clear database.')
+                  })
+                  .finally(() => {
+                    setClearing(false)
+                    setShowClearConfirm(false)
+                  })
+              }}
+            >
+              {clearing ? 'Clearing...' : 'Clear All Posts'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  )
+}
+
 export default function Settings(): React.ReactElement {
   return (
     <div className="flex flex-col h-full px-6 py-4">
@@ -540,7 +718,7 @@ export default function Settings(): React.ReactElement {
           <PlaceholderTab name="Reddit Digest" />
         </TabsContent>
         <TabsContent value="saved-posts" className="mt-4">
-          <PlaceholderTab name="Saved Posts" />
+          <SavedPostsTab />
         </TabsContent>
         <TabsContent value="appearance" className="mt-4">
           <AppearanceTab />

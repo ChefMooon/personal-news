@@ -11,6 +11,15 @@ export const IPC = {
   YOUTUBE_UPDATED: 'youtube:updated',
   REDDIT_GET_DIGEST_POSTS: 'reddit:getDigestPosts',
   REDDIT_GET_SAVED_POSTS_SUMMARY: 'reddit:getSavedPostsSummary',
+  REDDIT_GET_SAVED_POSTS: 'reddit:getSavedPosts',
+  REDDIT_UPDATE_POST_TAGS: 'reddit:updatePostTags',
+  REDDIT_GET_ALL_TAGS: 'reddit:getAllTags',
+  REDDIT_RENAME_TAG: 'reddit:renameTag',
+  REDDIT_DELETE_TAG: 'reddit:deleteTag',
+  REDDIT_POLL_NTFY: 'reddit:pollNtfy',
+  REDDIT_GET_NTFY_STALENESS: 'reddit:getNtfyStaleness',
+  REDDIT_NTFY_INGEST_COMPLETE: 'reddit:ntfyIngestComplete',
+  REDDIT_CLEAR_SAVED_POSTS: 'reddit:clearSavedPosts',
   SCRIPTS_GET_ALL: 'scripts:getAll',
   SETTINGS_GET_WIDGET_LAYOUT: 'settings:getWidgetLayout',
   SETTINGS_SET_WIDGET_LAYOUT: 'settings:setWidgetLayout',
@@ -179,6 +188,46 @@ export interface ParsedFeed {
   channel: NormalizedFeedChannelInfo
   entries: NormalizedFeedEntry[]
   parsedAt: string
+}
+
+export interface SavedPost {
+  post_id: string
+  title: string
+  url: string
+  permalink: string
+  subreddit: string | null
+  author: string | null
+  score: number | null
+  body: string | null
+  saved_at: number
+  note: string | null
+  tags: string[]
+}
+
+export interface SavedPostInput {
+  postId: string
+  title: string
+  url: string
+  permalink: string
+  subreddit: string | null
+  author: string | null
+  score: number | null
+  body: string | null
+  savedAt: number
+  note: string | null
+  tags: null
+}
+
+export interface NtfyStaleness {
+  lastPolledAt: number | null
+  isStale: boolean
+  topicConfigured: boolean
+}
+
+export interface NtfyPollResult {
+  postsIngested: number
+  messagesReceived: number
+  lastPolledAt: number
 }
 
 export interface DigestViewConfig {
