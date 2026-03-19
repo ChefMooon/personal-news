@@ -8,11 +8,11 @@ Each item links to the relevant architecture doc for the full spec.
 ## YouTube
 
 - [ ] **RSS feed polling** — implement the interval timer using `node-cron`. On each tick, fetch the Atom feed for every enabled channel, parse with `fast-xml-parser`, compare against DB to detect new/changed videos. Store results in `yt_videos`. See `docs/architecture/data-sources.md §1`.
-- [ ] **YouTube Data API v3 delta fetch** — when RSS detects a new video ID not in the DB, call the YouTube v3 API to fetch full video details (duration, live broadcast status, scheduled start). Minimise quota usage — only call on new IDs. See `docs/architecture/data-sources.md §1.3`.
-- [ ] **API key validation** — when the user saves their YouTube API key in Settings, make a cheap test call (e.g. `videos?part=id&id=dQw4w9WgXcQ`) and surface success/error inline.
-- [ ] **Add channel flow** — the "Add" button in Settings > YouTube should resolve a channel URL or handle via the YouTube API, save the result to `yt_channels`, and push a `youtube:updated` event to the renderer. Currently a no-op.
+- [x] **YouTube Data API v3 delta fetch** — when RSS detects a new video ID not in the DB, call the YouTube v3 API to fetch full video details (duration, live broadcast status, scheduled start). Minimise quota usage — only call on new IDs. See `docs/architecture/data-sources.md §1.3`.
+- [x] **API key validation** — when the user saves their YouTube API key in Settings, make a cheap test call (e.g. `videos?part=id&id=dQw4w9WgXcQ`) and surface success/error inline.
+- [x] **Add channel flow** — the "Add" button in Settings > YouTube should resolve a channel URL or handle via the YouTube API, save the result to `yt_channels`, and push a `youtube:updated` event to the renderer. Currently a no-op.
 - [x] **Per-channel enabled toggle persistence** — the toggle in Settings > YouTube currently updates local state only. Wire it to `settings:setChannelEnabled` IPC → UPDATE `yt_channels SET enabled = ?`.
-- [ ] **Push `youtube:updated` event** — after each RSS poll or API fetch that changes data, call `BrowserWindow.webContents.send('youtube:updated')` so the renderer re-fetches without polling.
+- [x] **Push `youtube:updated` event** — after each RSS poll or API fetch that changes data, call `BrowserWindow.webContents.send('youtube:updated')` so the renderer re-fetches without polling.
 
 ---
 
