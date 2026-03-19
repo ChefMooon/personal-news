@@ -6,7 +6,18 @@ const DEFAULT_CONFIG: YouTubeViewConfig = {
   showShorts: true,
   showUpcomingStreams: true,
   showLiveNow: true,
-  showPastLivestreams: true
+  showPastLivestreams: true,
+  channelMode: 'all',
+  selectedChannelIds: [],
+  channelOrder: [],
+  pinnedChannelIds: [],
+  showUpcomingPanel: true,
+  maxVideosPerChannel: 15,
+  videoSortDirection: 'newest',
+  cardDensity: 'detailed',
+  showChannelHeaders: true,
+  collapseChannelsByDefault: false,
+  perChannelMediaOverrides: {}
 }
 
 export function useYouTubeViewConfig(instanceId: string): {

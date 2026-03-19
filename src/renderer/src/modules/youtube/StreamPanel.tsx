@@ -10,12 +10,7 @@ export function StreamPanel({ streams }: StreamPanelProps): React.ReactElement {
   const upcomingStreams = streams.filter((stream) => stream.broadcast_status === 'upcoming')
 
   if (upcomingStreams.length === 0) {
-    return (
-      <div className="w-[200px] shrink-0">
-        <h4 className="text-xs font-medium text-foreground mb-2">Upcoming Streams</h4>
-        <p className="text-xs text-muted-foreground italic">No upcoming streams</p>
-      </div>
-    )
+    return <></>
   }
 
   return (

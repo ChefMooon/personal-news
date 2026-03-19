@@ -106,12 +106,36 @@ export interface YouTubeApiKeyStatus {
   suffix: string | null
 }
 
-export interface YouTubeViewConfig {
+export interface ChannelMediaOverrides {
   showVideos: boolean
   showShorts: boolean
   showUpcomingStreams: boolean
   showLiveNow: boolean
   showPastLivestreams: boolean
+}
+
+export interface YouTubeViewConfig {
+  // Media type filters
+  showVideos: boolean
+  showShorts: boolean
+  showUpcomingStreams: boolean
+  showLiveNow: boolean
+  showPastLivestreams: boolean
+  // Channel selection & order (per widget instance)
+  channelMode: 'all' | 'selected'
+  selectedChannelIds: string[]
+  channelOrder: string[]
+  pinnedChannelIds: string[]
+  // Stream panel
+  showUpcomingPanel: boolean
+  // Layout & display
+  maxVideosPerChannel: number
+  videoSortDirection: 'newest' | 'oldest'
+  cardDensity: 'compact' | 'detailed'
+  showChannelHeaders: boolean
+  collapseChannelsByDefault: boolean
+  // Per-channel media type overrides
+  perChannelMediaOverrides: Record<string, Partial<ChannelMediaOverrides>>
 }
 
 export interface IpcMutationResult {

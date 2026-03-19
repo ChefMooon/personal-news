@@ -1,9 +1,11 @@
 import React from 'react'
 import type { YtVideo } from '../../../../shared/ipc-types'
 import { formatAbsoluteTime, formatDuration, formatRelativeTime } from '../../lib/time'
+import { cn } from '../../lib/utils'
 
 interface VideoCardProps {
   video: YtVideo
+  density?: 'compact' | 'detailed'
 }
 
 function getMediaLabel(video: YtVideo): string {
@@ -23,32 +25,36 @@ function getMediaLabel(video: YtVideo): string {
   return 'VIDEO'
 }
 
-export function VideoCard({ video }: VideoCardProps): React.ReactElement {
+export function VideoCard({ video, density = 'detailed' }: VideoCardProps): React.ReactElement {
   const handleClick = (): void => {
     const url = `https://www.youtube.com/watch?v=${video.video_id}`
     window.api.invoke('shell:openExternal', url).catch(console.error)
   }
 
+  const isCompact = density === 'compact'
   const duration = formatDuration(video.duration_sec)
   const publishedRelative = formatRelativeTime(video.published_at)
   const publishedAbsolute = formatAbsoluteTime(video.published_at)
   const syncedRelative = formatRelativeTime(video.fetched_at)
   const mediaLabel = getMediaLabel(video)
 
+  const cardWidth = isCompact ? 'w-[140px]' : 'w-[180px]'
+  const thumbHeight = isCompact ? 'h-[79px]' : 'h-[101px]'
+
   return (
     <button
       onClick={handleClick}
-      className="flex flex-col w-[180px] shrink-0 text-left group cursor-pointer"
+      className={cn('flex flex-col shrink-0 text-left group cursor-pointer', cardWidth)}
     >
       {/* 16:9 thumbnail */}
-      <div className="relative w-[180px] h-[101px] rounded-md overflow-hidden bg-muted">
+      <div className={cn('relative rounded-md overflow-hidden bg-muted w-full', thumbHeight)}>
         {video.thumbnail_url ? (
           <img
             src={video.thumbnail_url}
             alt={video.title}
             className="w-full h-full object-cover group-hover:opacity-90 transition-opacity"
             onError={(e) => {
-              (e.target as HTMLImageElement).style.display = 'none'
+              ;(e.target as HTMLImageElement).style.display = 'none'
             }}
           />
         ) : (
@@ -67,15 +73,23 @@ export function VideoCard({ video }: VideoCardProps): React.ReactElement {
           </div>
         ) : null}
       </div>
+
       {/* Title */}
       <p className="mt-1 text-xs font-medium line-clamp-2 text-foreground group-hover:text-primary transition-colors leading-tight">
         {video.title}
       </p>
-      {/* Date */}
-      <p className="mt-0.5 text-xs text-muted-foreground" title={publishedAbsolute}>
-        Published {publishedRelative}
-      </p>
-      <p className="text-[10px] text-muted-foreground/80">Synced {syncedRelative}</p>
+
+      {/* Date info — full in detailed mode, condensed in compact */}
+      {isCompact ? (
+        <p className="mt-0.5 text-[10px] text-muted-foreground">{publishedRelative}</p>
+      ) : (
+        <>
+          <p className="mt-0.5 text-xs text-muted-foreground" title={publishedAbsolute}>
+            Published {publishedRelative}
+          </p>
+          <p className="text-[10px] text-muted-foreground/80">Synced {syncedRelative}</p>
+        </>
+      )}
     </button>
   )
 }
