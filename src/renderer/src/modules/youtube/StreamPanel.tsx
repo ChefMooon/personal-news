@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import type { YtVideo } from '../../../../shared/ipc-types'
 import { formatFutureTime } from '../../lib/time'
 
@@ -7,15 +7,26 @@ interface StreamPanelProps {
 }
 
 export function StreamPanel({ streams }: StreamPanelProps): React.ReactElement {
-  const upcomingStreams = streams.filter((stream) => stream.broadcast_status === 'upcoming')
+  const [, setTick] = useState(0)
 
-  if (upcomingStreams.length === 0) {
-    return <></>
-  }
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 60_000)
+    return () => clearInterval(id)
+  }, [])
+
+  const now = Math.floor(Date.now() / 1000)
+  const upcomingStreams = streams.filter(
+    (stream) =>
+      stream.broadcast_status === 'upcoming' &&
+      (stream.scheduled_start == null || stream.scheduled_start > now)
+  )
 
   return (
     <div className="flex flex-col gap-2 w-[200px] shrink-0">
       <h4 className="text-xs font-medium text-foreground">Upcoming Streams</h4>
+      {upcomingStreams.length === 0 ? (
+        <p className="text-xs text-muted-foreground">No upcoming streams</p>
+      ) : (
       <div className="flex flex-col rounded-md border border-border divide-y divide-border overflow-hidden bg-card">
         {upcomingStreams.map((stream) => (
           <button
@@ -37,6 +48,7 @@ export function StreamPanel({ streams }: StreamPanelProps): React.ReactElement {
           </button>
         ))}
       </div>
+      )}
     </div>
   )
 }

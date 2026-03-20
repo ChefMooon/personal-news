@@ -16,9 +16,14 @@ export function formatFutureTime(unixTs: number): string {
 
   if (diff <= 0) return 'now'
   if (diff < 3600) return `Starts in ${Math.floor(diff / 60)}m`
-  const hours = Math.floor(diff / 3600)
-  const minutes = Math.floor((diff % 3600) / 60)
-  return `Starts in ${hours}h ${minutes}m`
+  if (diff < 86400) {
+    const hours = Math.floor(diff / 3600)
+    const minutes = Math.floor((diff % 3600) / 60)
+    return `Starts in ${hours}h ${minutes}m`
+  }
+  const days = Math.floor(diff / 86400)
+  const hours = Math.floor((diff % 86400) / 3600)
+  return `Starts in ${days}d ${hours}h`
 }
 
 export function formatAbsoluteTime(unixTs: number): string {

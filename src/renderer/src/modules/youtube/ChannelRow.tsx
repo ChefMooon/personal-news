@@ -94,7 +94,7 @@ export function ChannelRow({
       {/* Content: StreamPanel (left) + VideoCarousel (right) */}
       {isContentVisible && (
         <div className="flex gap-4">
-          {viewConfig.showUpcomingPanel && streams.length > 0 && (
+          {viewConfig.showUpcomingPanel && (
             <>
               <StreamPanel streams={streams} />
               <Separator orientation="vertical" className="h-auto" />
