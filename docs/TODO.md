@@ -27,12 +27,12 @@ Each item links to the relevant architecture doc for the full spec.
 
 ## Saved Posts (ntfy.sh)
 
-- [ ] **ntfy.sh polling on startup** — on app launch, call the ntfy topic URL, fetch messages since the last `ntfy_last_message_id` cursor, parse each message as a Reddit URL, and upsert into `saved_posts`. Store the new cursor in `settings`. See `docs/architecture/data-sources.md §3`.
-- [ ] **ntfy stale-poll warning** — if `ntfy_last_polled_at` is more than 24 hours ago, show a warning banner in the Saved Posts view with a "Sync Now" button and last-polled timestamp. See `docs/ui-ux.md §6.0`.
-- [ ] **ntfy onboarding flow** — implement the 4-step setup wizard that appears on first visit to Saved Posts with no topic configured: explain ntfy, generate a topic name, test connection, show phone setup guide. See `docs/ui-ux.md §8.4`.
-- [ ] **Saved Posts full-page view** — implement `/saved-posts` route: full list with search (FTS5), filter by subreddit, sort controls. Currently a placeholder. See `docs/ui-ux.md §6`.
-- [ ] **FTS5 full-text search** — the `saved_posts_fts` virtual table and sync triggers are already in the schema. Wire up the `saved-posts:search` IPC channel to query it.
-- [ ] **Tag management** — implement inline tag add/remove on saved post rows. Add a tag management panel (rename, delete) in Settings > Saved Posts. Tags are stored as a JSON array in `saved_posts.tags`. See `docs/ui-ux.md §6.3`.
+- [x] **ntfy.sh polling on startup** — on app launch, call the ntfy topic URL, fetch messages since the last `ntfy_last_message_id` cursor, parse each message as a Reddit URL, and upsert into `saved_posts`. Store the new cursor in `settings`. See `docs/architecture/data-sources.md §3`.
+- [x] **ntfy stale-poll warning** — if `ntfy_last_polled_at` is more than 24 hours ago, show a warning banner in the Saved Posts view with a "Sync Now" button and last-polled timestamp. See `docs/ui-ux.md §6.0`.
+- [x] **ntfy onboarding flow** — implement the 4-step setup wizard that appears on first visit to Saved Posts with no topic configured: explain ntfy, generate a topic name, test connection, show phone setup guide. See `docs/ui-ux.md §8.4`.
+- [x] **Saved Posts full-page view** — implement `/saved-posts` route: full list with search (FTS5), filter by subreddit, sort controls. Currently a placeholder. See `docs/ui-ux.md §6`.
+- [x] **FTS5 full-text search** — the `saved_posts_fts` virtual table and sync triggers are already in the schema. Wire up the `saved-posts:search` IPC channel to query it.
+- [x] **Tag management** — implement inline tag add/remove on saved post rows. Add a tag management panel (rename, delete) in Settings > Saved Posts. Tags are stored as a JSON array in `saved_posts.tags`. See `docs/ui-ux.md §6.3`.
 
 ---
 
@@ -48,8 +48,8 @@ Each item links to the relevant architecture doc for the full spec.
 ## Settings & Credentials
 
 - [x] **safeStorage for YouTube API key** — replace the `console.log` no-op in Settings > API Keys with a real `safeStorage.encryptString` / `decryptString` implementation. The key must never be written to the plain `settings` table. See `docs/architecture/tech-notes.md §5`.
-- [ ] **ntfy topic configuration** — implement the ntfy settings fields in Settings > Saved Posts: topic name (plain text), optional custom server URL, Test Connection button, last-synced timestamp. See `docs/ui-ux.md §8.3`.
-- [ ] **YouTube RSS poll interval setting** — the input in Settings > YouTube should read from and write to `rss_poll_interval_minutes` in the `settings` table, and re-register the cron job with the new interval.
+- [x] **ntfy topic configuration** — implement the ntfy settings fields in Settings > Saved Posts: topic name (plain text), optional custom server URL, Test Connection button, last-synced timestamp. See `docs/ui-ux.md §8.3`.
+- [x] **YouTube RSS poll interval setting** — the input in Settings > YouTube should read from and write to `rss_poll_interval_minutes` in the `settings` table, and re-register the cron job with the new interval.
 - [ ] **Reddit Digest settings tab** — currently a "coming soon" placeholder. Add subreddit list management (add/remove subreddits the digest script will target).
 
 ---

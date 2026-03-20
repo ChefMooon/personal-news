@@ -30,6 +30,7 @@ import {
   AlertDialogTitle
 } from '../components/ui/alert-dialog'
 import { NtfyOnboardingWizard } from '../modules/saved-posts/NtfyOnboardingWizard'
+import { TagManagementModal } from '../modules/saved-posts/TagManagementModal'
 
 function ApiKeysTab(): React.ReactElement {
   const [showKey, setShowKey] = useState(false)
@@ -533,6 +534,7 @@ function SavedPostsTab(): React.ReactElement {
   const [showGuide, setShowGuide] = useState(false)
   const [showClearConfirm, setShowClearConfirm] = useState(false)
   const [clearing, setClearing] = useState(false)
+  const [showTagManager, setShowTagManager] = useState(false)
 
   const loadStatus = (): void => {
     window.api
@@ -699,6 +701,21 @@ function SavedPostsTab(): React.ReactElement {
         initialTopic={topic}
         initialServerUrl={server}
       />
+
+      <div className="pt-6 border-t">
+        <h3 className="text-sm font-medium mb-1">Tag Management</h3>
+        <p className="text-xs text-muted-foreground mb-3">
+          Rename or delete tags across all saved posts.
+        </p>
+        <Button variant="outline" size="sm" onClick={() => setShowTagManager(true)}>
+          Manage Tags
+        </Button>
+        <TagManagementModal
+          isOpen={showTagManager}
+          onClose={() => setShowTagManager(false)}
+          onTagUpdated={() => {}}
+        />
+      </div>
 
       <div className="pt-6 border-t">
         <h3 className="text-sm font-medium mb-1">Danger Zone</h3>
