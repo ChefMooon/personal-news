@@ -45,7 +45,8 @@ function computeDisplayedChannels(
 }
 
 function YouTubeWidget(): React.ReactElement {
-  const { instanceId } = useWidgetInstance()
+  const { instanceId, label } = useWidgetInstance()
+  const widgetTitle = label ?? 'YouTube'
   const { channels, loading } = useYouTubeChannels()
   const { config: viewConfig, setConfig } = useYouTubeViewConfig(instanceId)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -82,7 +83,7 @@ function YouTubeWidget(): React.ReactElement {
           <div className="flex items-center justify-between">
             <CardTitle className="text-base flex items-center gap-2">
               <Youtube className="h-5 w-5 text-red-500" />
-              YouTube
+              {widgetTitle}
             </CardTitle>
             <button
               className="p-1 rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"

@@ -95,6 +95,7 @@ function PostCard({
 
 function SavedPostsWidget(): React.ReactElement {
   const instance = useWidgetInstance()
+  const widgetTitle = instance.label ?? 'Saved Posts'
   const { config, setConfig } = useSavedPostsConfig(instance.instanceId)
   const staleness = useNtfyStaleness()
   const navigate = useNavigate()
@@ -163,7 +164,7 @@ function SavedPostsWidget(): React.ReactElement {
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
             <Bookmark className="h-5 w-5" />
-            Saved Posts
+            {widgetTitle}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -219,7 +220,7 @@ function SavedPostsWidget(): React.ReactElement {
         <div className="flex items-center justify-between">
           <CardTitle className="text-base flex items-center gap-2">
             <Bookmark className="h-5 w-5" />
-            Saved Posts
+            {widgetTitle}
           </CardTitle>
           <div className="flex items-center gap-2">
             <SavedPostsControls
