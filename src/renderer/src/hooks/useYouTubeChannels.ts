@@ -23,10 +23,7 @@ export function useYouTubeChannels(): { channels: YtChannel[]; loading: boolean 
     const handler = (): void => {
       fetch()
     }
-    window.api.on('youtube:updated', handler)
-    return () => {
-      window.api.off('youtube:updated', handler)
-    }
+    return window.api.on('youtube:updated', handler)
   }, [fetch])
 
   return { channels, loading }

@@ -23,10 +23,7 @@ export function useYouTubeVideos(channelId: string): { videos: YtVideo[]; loadin
       fetch()
     }
 
-    window.api.on('youtube:updated', handler)
-    return () => {
-      window.api.off('youtube:updated', handler)
-    }
+    return window.api.on('youtube:updated', handler)
   }, [fetch])
 
   return { videos, loading }

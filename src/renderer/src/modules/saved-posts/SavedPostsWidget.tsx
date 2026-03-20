@@ -134,10 +134,7 @@ function SavedPostsWidget(): React.ReactElement {
     const listener = (): void => {
       void refetch()
     }
-    window.api.on(IPC.REDDIT_NTFY_INGEST_COMPLETE, listener)
-    return () => {
-      window.api.off(IPC.REDDIT_NTFY_INGEST_COMPLETE, listener)
-    }
+    return window.api.on(IPC.REDDIT_NTFY_INGEST_COMPLETE, listener)
   }, [refetch])
 
   // Group posts by source when configured

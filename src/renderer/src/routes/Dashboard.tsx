@@ -81,6 +81,18 @@ export default function Dashboard(): React.ReactElement {
     })
   }
 
+  function handleMoveUp(instanceId: string): void {
+    const index = layout.widget_order.indexOf(instanceId)
+    if (index <= 0) return
+    setLayout({ ...layout, widget_order: arrayMove(layout.widget_order, index, index - 1) })
+  }
+
+  function handleMoveDown(instanceId: string): void {
+    const index = layout.widget_order.indexOf(instanceId)
+    if (index < 0 || index >= layout.widget_order.length - 1) return
+    setLayout({ ...layout, widget_order: arrayMove(layout.widget_order, index, index + 1) })
+  }
+
   function handleAddFromModal(config: AddWidgetConfig): void {
     const instanceId = `${config.moduleId}_${Date.now()}`
 
@@ -193,6 +205,7 @@ export default function Dashboard(): React.ReactElement {
               const mod = getModule(instance.moduleId)
               if (!mod) return null
               const WidgetComponent = mod.widget
+              const widgetIndex = layout.widget_order.indexOf(instanceId)
               return (
                 <WidgetInstanceContext.Provider key={instanceId} value={instance}>
                   <WidgetWrapper
@@ -201,9 +214,13 @@ export default function Dashboard(): React.ReactElement {
                     defaultLabel={mod.displayName}
                     editMode={editMode}
                     visible={layout.widget_visibility[instanceId] !== false}
+                    isFirst={widgetIndex === 0}
+                    isLast={widgetIndex === layout.widget_order.length - 1}
                     onToggleVisibility={handleToggleVisibility}
                     onRename={handleRename}
                     onRemove={handleRemove}
+                    onMoveUp={handleMoveUp}
+                    onMoveDown={handleMoveDown}
                   >
                     <WidgetComponent />
                   </WidgetWrapper>

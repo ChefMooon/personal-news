@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { GripVertical, Eye, EyeOff, Trash2, Pencil } from 'lucide-react'
+import { GripVertical, Eye, EyeOff, Trash2, Pencil, ChevronUp, ChevronDown } from 'lucide-react'
 
 interface WidgetWrapperProps {
   id: string
@@ -9,9 +9,13 @@ interface WidgetWrapperProps {
   defaultLabel: string
   editMode: boolean
   visible: boolean
+  isFirst: boolean
+  isLast: boolean
   onToggleVisibility: (id: string) => void
   onRename: (id: string, newLabel: string | null) => void
   onRemove: (id: string) => void
+  onMoveUp: (id: string) => void
+  onMoveDown: (id: string) => void
   children: React.ReactNode
 }
 
@@ -21,9 +25,13 @@ export function WidgetWrapper({
   defaultLabel,
   editMode,
   visible,
+  isFirst,
+  isLast,
   onToggleVisibility,
   onRename,
   onRemove,
+  onMoveUp,
+  onMoveDown,
   children
 }: WidgetWrapperProps): React.ReactElement {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
@@ -72,6 +80,26 @@ export function WidgetWrapper({
             aria-label="Drag to reorder"
           >
             <GripVertical className="h-4 w-4" />
+          </button>
+
+          {/* Move up */}
+          <button
+            onClick={() => onMoveUp(id)}
+            disabled={isFirst}
+            className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-30 disabled:cursor-not-allowed"
+            aria-label="Move widget up"
+          >
+            <ChevronUp className="h-4 w-4" />
+          </button>
+
+          {/* Move down */}
+          <button
+            onClick={() => onMoveDown(id)}
+            disabled={isLast}
+            className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-30 disabled:cursor-not-allowed"
+            aria-label="Move widget down"
+          >
+            <ChevronDown className="h-4 w-4" />
           </button>
 
           {/* Visibility toggle */}

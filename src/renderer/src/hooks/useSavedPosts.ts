@@ -108,10 +108,7 @@ export function useSavedPosts(options?: UseSavedPostsOptions): UseSavedPostsResu
     const listener = (): void => {
       void fetchPosts()
     }
-    window.api.on(IPC.REDDIT_NTFY_INGEST_COMPLETE, listener)
-    return () => {
-      window.api.off(IPC.REDDIT_NTFY_INGEST_COMPLETE, listener)
-    }
+    return window.api.on(IPC.REDDIT_NTFY_INGEST_COMPLETE, listener)
   }, [fetchPosts])
 
   return {
