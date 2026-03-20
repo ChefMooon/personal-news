@@ -1,7 +1,6 @@
 import type Database from 'better-sqlite3'
 import { getSetting, setSetting } from '../../settings/store'
-import { isRedditPostUrl } from './validation'
-import { fetchRedditPost } from './metadata'
+import { fetchMetadataForUrl } from '../link-sources'
 
 interface NtfyMessage {
   id: string
@@ -46,7 +45,7 @@ export async function pollNtfy(db: Database.Database): Promise<{ postsIngested: 
   const since = lastMessageId ?? 'all'
 
   const fetchUrl = `${serverUrl}/${encodeURIComponent(topic)}/json?poll=1&since=${encodeURIComponent(since)}`
-  console.log(`[Reddit/ntfy] Polling: ${fetchUrl}`)
+  console.log(`[ntfy] Polling: ${fetchUrl}`)
 
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 10_000)
@@ -68,20 +67,21 @@ export async function pollNtfy(db: Database.Database): Promise<{ postsIngested: 
 
   const text = await response.text()
   const lines = text.split('\n').filter((line) => line.trim().length > 0)
-  console.log(`[Reddit/ntfy] Response OK — ${lines.length} line(s) received`)
+  console.log(`[ntfy] Response OK — ${lines.length} line(s) received`)
 
   let postsIngested = 0
   let messagesReceived = 0
   let lastProcessedId: string | null = null
 
   const upsert = db.prepare(`
-    INSERT INTO saved_posts (post_id, title, url, permalink, subreddit, author, score, body, saved_at, tags, note)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO saved_posts (post_id, title, url, permalink, subreddit, author, score, body, saved_at, tags, note, source)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(post_id) DO UPDATE SET
       title = excluded.title,
       url = excluded.url,
       score = excluded.score,
-      note = COALESCE(excluded.note, saved_posts.note)
+      note = COALESCE(excluded.note, saved_posts.note),
+      source = excluded.source
   `)
 
   for (const line of lines) {
@@ -100,17 +100,17 @@ export async function pollNtfy(db: Database.Database): Promise<{ postsIngested: 
     messagesReceived++
 
     const { url, note } = parseNtfyMessage(msg.message)
-    console.log(`[Reddit/ntfy] Message ${messagesReceived}: url="${url}", note=${note !== null ? `"${note}"` : 'null'}`)
+    console.log(`[ntfy] Message ${messagesReceived}: url="${url}", note=${note !== null ? `"${note}"` : 'null'}`)
 
-    if (!isRedditPostUrl(url)) {
-      console.warn(`[Reddit/ntfy] Skipping — not a recognized Reddit post URL: "${url}"`)
+    if (!/^https?:\/\//i.test(url)) {
+      console.warn(`[ntfy] Skipping — not a valid HTTP URL: "${url}"`)
       continue
     }
 
     try {
-      console.log(`[Reddit/ntfy] Fetching Reddit metadata for: ${url}`)
-      const post = await fetchRedditPost(url)
-      console.log(`[Reddit/ntfy] Fetched post: id=${post.postId}, title="${post.title}"`)
+      console.log(`[ntfy] Fetching metadata for: ${url}`)
+      const post = await fetchMetadataForUrl(url, note)
+      console.log(`[ntfy] Fetched post: id=${post.postId}, source=${post.source}, title="${post.title}"`)
       upsert.run(
         post.postId,
         post.title,
@@ -122,12 +122,13 @@ export async function pollNtfy(db: Database.Database): Promise<{ postsIngested: 
         post.body,
         post.savedAt,
         null,
-        note
+        post.note,
+        post.source
       )
       postsIngested++
-      console.log(`[Reddit/ntfy] Post ingested: ${post.postId}`)
+      console.log(`[ntfy] Post ingested: ${post.postId}`)
     } catch (error) {
-      console.warn(`[Reddit/ntfy] Failed to fetch metadata for ${url}:`, error)
+      console.warn(`[ntfy] Failed to fetch metadata for ${url}:`, error)
     }
   }
 
@@ -136,6 +137,6 @@ export async function pollNtfy(db: Database.Database): Promise<{ postsIngested: 
   }
   setSetting('ntfy_last_polled_at', String(Math.floor(Date.now() / 1000)))
 
-  console.log(`[Reddit/ntfy] Poll complete: ${messagesReceived} messages, ${postsIngested} posts ingested`)
+  console.log(`[ntfy] Poll complete: ${messagesReceived} messages, ${postsIngested} posts ingested`)
   return { postsIngested, messagesReceived }
 }

@@ -72,11 +72,14 @@ export interface DigestPost {
   fetched_at: number
 }
 
+export type LinkSource = 'reddit' | 'x' | 'bsky' | 'generic'
+
 export interface SavedPostSummary {
   post_id: string
   title: string
   permalink: string
   subreddit: string | null
+  source: LinkSource
   saved_at: number
 }
 
@@ -200,6 +203,7 @@ export interface SavedPost {
   author: string | null
   score: number | null
   body: string | null
+  source: LinkSource
   saved_at: number
   note: string | null
   tags: string[]
@@ -214,6 +218,7 @@ export interface SavedPostInput {
   author: string | null
   score: number | null
   body: string | null
+  source: LinkSource
   savedAt: number
   note: string | null
   tags: null
@@ -243,12 +248,19 @@ export interface SavedPostsViewConfig {
   // Filtering
   subreddit_filter: string[] | null
   tag_filter: string[] | null
+  source_filter: LinkSource[] | null
   // Sorting & pagination
   sort_by: 'saved_at' | 'score'
   sort_dir: 'asc' | 'desc'
   max_posts: number
+  // Grouping
+  group_by: 'none' | 'source'
+  showGroupHeaders: boolean
+  sourceOrder: LinkSource[]
   // Presentation
   showMetadata: boolean
+  showSourceBadge: boolean
+  showUrl: boolean
   cardDensity: 'compact' | 'detailed'
   showBodyPreview: boolean
   showViewAllLink: boolean
@@ -258,6 +270,7 @@ export interface GetSavedPostsRequest {
   search?: string
   subreddit_filter?: string[]
   tag_filter?: string[]
+  source_filter?: LinkSource[]
   sort_by?: 'saved_at' | 'score'
   sort_dir?: 'asc' | 'desc'
   limit?: number

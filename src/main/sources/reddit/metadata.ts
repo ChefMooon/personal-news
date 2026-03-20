@@ -79,6 +79,7 @@ export async function fetchRedditPost(url: string): Promise<SavedPostInput> {
     author: author === '[deleted]' ? null : (author ?? null),
     score: typeof data.score === 'number' ? data.score : null,
     body: (data.selftext as string) || null,
+    source: 'reddit',
     savedAt: Math.floor(Date.now() / 1000),
     note: null,
     tags: null

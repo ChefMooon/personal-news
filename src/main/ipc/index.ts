@@ -661,7 +661,7 @@ export function registerIpcHandlers(): void {
     const db = getDb()
     return db
       .prepare(
-        'SELECT post_id, title, permalink, subreddit, saved_at FROM saved_posts ORDER BY saved_at DESC LIMIT 5'
+        'SELECT post_id, title, permalink, subreddit, source, saved_at FROM saved_posts ORDER BY saved_at DESC LIMIT 5'
       )
       .all() as SavedPostSummary[]
   })
@@ -677,6 +677,7 @@ export function registerIpcHandlers(): void {
         subreddit_filter?: string[]
         tag?: string
         tag_filter?: string[]
+        source_filter?: string[]
         sort_by?: 'saved_at' | 'score'
         sort_dir?: 'asc' | 'desc'
         limit?: number
@@ -704,6 +705,13 @@ export function registerIpcHandlers(): void {
         // Backward compatibility with old single-subreddit format
         conditions.push('sp.subreddit = ?')
         params.push(options.subreddit)
+      }
+
+      // Source filter
+      if (options?.source_filter && options.source_filter.length > 0) {
+        const placeholders = options.source_filter.map(() => '?').join(', ')
+        conditions.push(`sp.source IN (${placeholders})`)
+        params.push(...options.source_filter)
       }
 
       // Tag filter (support both old single and new multi format)
@@ -750,6 +758,7 @@ export function registerIpcHandlers(): void {
         author: string | null
         score: number | null
         body: string | null
+        source: string
         saved_at: number
         note: string | null
         tags: string | null
@@ -757,6 +766,7 @@ export function registerIpcHandlers(): void {
 
       const posts: SavedPost[] = rows.map((row) => ({
         ...row,
+        source: row.source as SavedPost['source'],
         tags: row.tags ? (JSON.parse(row.tags) as string[]) : []
       }))
 

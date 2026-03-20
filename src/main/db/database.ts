@@ -32,7 +32,8 @@ function runMigrations(database: Database.Database): void {
     3: '003_youtube_retry_queue.sql',
     4: '004_add_yt_video_media_type.sql',
     5: '005_add_saved_post_note.sql',
-    6: '006_add_ntfy_poll_interval_setting.sql'
+    6: '006_add_ntfy_poll_interval_setting.sql',
+    7: '007_add_saved_post_source.sql'
   }
 
   // Ensure meta table exists first

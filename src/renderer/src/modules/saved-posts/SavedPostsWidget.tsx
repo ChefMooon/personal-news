@@ -11,8 +11,87 @@ import { Button } from '../../components/ui/button'
 import { Bookmark, ArrowUp, Clock } from 'lucide-react'
 import { formatRelativeTime } from '../../lib/time'
 import { registerRendererModule } from '../registry'
-import { IPC, type SavedPost } from '../../../../shared/ipc-types'
+import { IPC, type SavedPost, type LinkSource } from '../../../../shared/ipc-types'
 import { NtfyOnboardingWizard } from './NtfyOnboardingWizard'
+
+const SOURCE_LABELS: Record<LinkSource, string> = {
+  reddit: 'Reddit',
+  x: 'X',
+  bsky: 'Bluesky',
+  generic: 'Link'
+}
+
+function formatAuthor(post: SavedPost): string | null {
+  if (!post.author) return null
+  if (post.source === 'reddit') return `u/${post.author}`
+  if (post.source === 'x') return `@${post.author}`
+  return post.author
+}
+
+function PostCard({
+  post,
+  config,
+  onOpen
+}: {
+  post: SavedPost
+  config: { showMetadata: boolean; showSourceBadge: boolean; showUrl: boolean; showBodyPreview: boolean; cardDensity: 'compact' | 'detailed' }
+  onOpen: (post: SavedPost) => void
+}): React.ReactElement {
+  const author = formatAuthor(post)
+  return (
+    <button
+      onClick={() => onOpen(post)}
+      className={
+        config.cardDensity === 'compact'
+          ? 'flex items-start gap-2 py-1 w-full text-left hover:opacity-75 transition-opacity'
+          : 'flex flex-col gap-1.5 py-2 px-2 rounded bg-muted/30 w-full text-left hover:bg-muted/50 transition-colors'
+      }
+    >
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {config.showSourceBadge && (
+          <Badge variant="outline" className="text-xs shrink-0">
+            {SOURCE_LABELS[post.source]}
+          </Badge>
+        )}
+        {post.source === 'reddit' && post.subreddit && config.showMetadata && (
+          <Badge variant="secondary" className="text-xs shrink-0">
+            r/{post.subreddit}
+          </Badge>
+        )}
+        {author && config.showMetadata && (
+          <span className="text-xs text-muted-foreground">{author}</span>
+        )}
+      </div>
+      <div
+        className={
+          config.cardDensity === 'compact'
+            ? 'text-sm font-medium line-clamp-2 flex-1'
+            : 'text-sm font-medium'
+        }
+      >
+        {post.title}
+      </div>
+      {config.showUrl && (
+        <p className="text-xs text-muted-foreground truncate max-w-full">{post.url}</p>
+      )}
+      {config.showBodyPreview && post.body && (
+        <p className="text-xs text-muted-foreground line-clamp-2">{post.body}</p>
+      )}
+      <div className="flex items-center gap-2 text-xs">
+        {post.score !== null && config.showMetadata && (
+          <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-muted/60 text-foreground/80 whitespace-nowrap">
+            <ArrowUp className="h-3 w-3" />
+            <span>{post.score.toLocaleString()}</span>
+          </div>
+        )}
+        <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-muted/60 text-foreground/80 whitespace-nowrap" title={new Date(post.saved_at * 1000).toLocaleString()}>
+          <Clock className="h-3 w-3" />
+          <span>{formatRelativeTime(post.saved_at)}</span>
+        </div>
+      </div>
+    </button>
+  )
+}
 
 function SavedPostsWidget(): React.ReactElement {
   const instance = useWidgetInstance()
@@ -27,6 +106,7 @@ function SavedPostsWidget(): React.ReactElement {
     offset: 0,
     subreddit_filter: config.subreddit_filter,
     tag_filter: config.tag_filter,
+    source_filter: config.source_filter,
     sort_by: config.sort_by,
     sort_dir: config.sort_dir
   })
@@ -59,6 +139,24 @@ function SavedPostsWidget(): React.ReactElement {
     }
   }, [refetch])
 
+  // Group posts by source when configured
+  const groupedPosts = useMemo(() => {
+    if (config.group_by !== 'source') return null
+    const groups = new Map<LinkSource, SavedPost[]>()
+    for (const post of posts) {
+      const existing = groups.get(post.source)
+      if (existing) {
+        existing.push(post)
+      } else {
+        groups.set(post.source, [post])
+      }
+    }
+    // Return groups in configured sourceOrder, skip empty groups
+    return config.sourceOrder
+      .filter((source) => groups.has(source))
+      .map((source) => ({ source, posts: groups.get(source)! }))
+  }, [posts, config.group_by, config.sourceOrder])
+
   if (!staleness.loading && !staleness.topicConfigured) {
     return (
       <Card>
@@ -89,10 +187,31 @@ function SavedPostsWidget(): React.ReactElement {
     )
   }
 
-  const handleOpenExternal = (permalink: string): void => {
-    const url = `https://reddit.com${permalink}`
+  const handleOpenExternal = (post: SavedPost): void => {
+    const url = post.source === 'reddit' ? `https://reddit.com${post.permalink}` : post.url
     window.api.invoke('shell:openExternal', url).catch(console.error)
   }
+
+  const cardConfig = {
+    showMetadata: config.showMetadata,
+    showSourceBadge: config.showSourceBadge,
+    showUrl: config.showUrl,
+    showBodyPreview: config.showBodyPreview,
+    cardDensity: config.cardDensity
+  }
+
+  const renderPostList = (postsToRender: SavedPost[]): React.ReactElement => (
+    <div className={config.cardDensity === 'compact' ? 'space-y-2' : 'space-y-3'}>
+      {postsToRender.map((post) => (
+        <PostCard
+          key={post.post_id}
+          post={post}
+          config={cardConfig}
+          onOpen={handleOpenExternal}
+        />
+      ))}
+    </div>
+  )
 
   return (
     <Card>
@@ -125,55 +244,21 @@ function SavedPostsWidget(): React.ReactElement {
           <p className="text-sm text-muted-foreground">Loading...</p>
         ) : posts.length === 0 ? (
           <p className="text-sm text-muted-foreground">No saved posts yet.</p>
-        ) : (
-          <div className={config.cardDensity === 'compact' ? 'space-y-2' : 'space-y-3'}>
-            {posts.map((post) => (
-              <button
-                key={post.post_id}
-                onClick={() => handleOpenExternal(post.permalink)}
-                className={
-                  config.cardDensity === 'compact'
-                    ? 'flex items-start gap-2 py-1 w-full text-left hover:opacity-75 transition-opacity'
-                    : 'flex flex-col gap-1.5 py-2 px-2 rounded bg-muted/30 w-full text-left hover:bg-muted/50 transition-colors'
-                }
-              >
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  {post.subreddit && config.showMetadata && (
-                    <Badge variant="secondary" className="text-xs shrink-0">
-                      r/{post.subreddit}
-                    </Badge>
-                  )}
-                  {post.author && config.showMetadata && (
-                    <span className="text-xs text-muted-foreground">u/{post.author}</span>
-                  )}
-                </div>
-                <div
-                  className={
-                    config.cardDensity === 'compact'
-                      ? 'text-sm font-medium line-clamp-2 flex-1'
-                      : 'text-sm font-medium'
-                  }
-                >
-                  {post.title}
-                </div>
-                {config.showBodyPreview && post.body && (
-                  <p className="text-xs text-muted-foreground line-clamp-2">{post.body}</p>
+        ) : groupedPosts ? (
+          <div className="space-y-4">
+            {groupedPosts.map(({ source, posts: groupPosts }) => (
+              <div key={source}>
+                {config.showGroupHeaders && (
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                    {SOURCE_LABELS[source]}
+                  </h4>
                 )}
-                <div className="flex items-center gap-2 text-xs">
-                  {post.score !== null && config.showMetadata && (
-                    <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-muted/60 text-foreground/80 whitespace-nowrap">
-                      <ArrowUp className="h-3 w-3" />
-                      <span>{post.score.toLocaleString()}</span>
-                    </div>
-                  )}
-                  <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-muted/60 text-foreground/80 whitespace-nowrap" title={new Date(post.saved_at * 1000).toLocaleString()}>
-                    <Clock className="h-3 w-3" />
-                    <span>{formatRelativeTime(post.saved_at)}</span>
-                  </div>
-                </div>
-              </button>
+                {renderPostList(groupPosts)}
+              </div>
             ))}
           </div>
+        ) : (
+          renderPostList(posts)
         )}
       </CardContent>
       <NtfyOnboardingWizard

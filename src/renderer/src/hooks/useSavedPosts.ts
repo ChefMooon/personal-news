@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import type { SavedPost } from '../../../shared/ipc-types'
+import type { SavedPost, LinkSource } from '../../../shared/ipc-types'
 import { IPC, type GetSavedPostsRequest } from '../../../shared/ipc-types'
 
 interface UseSavedPostsOptions {
@@ -10,6 +10,7 @@ interface UseSavedPostsOptions {
   subreddit_filter?: string[] | null
   tag?: string | null
   tag_filter?: string[] | null
+  source_filter?: LinkSource[] | null
   sort_by?: 'saved_at' | 'score'
   sort_dir?: 'asc' | 'desc'
 }
@@ -43,6 +44,7 @@ export function useSavedPosts(options?: UseSavedPostsOptions): UseSavedPostsResu
   // Query parameters from options (for widget usage)
   const subredditFilter = options?.subreddit_filter
   const tagFilter = options?.tag_filter
+  const sourceFilter = options?.source_filter
   const sortBy = options?.sort_by ?? 'saved_at'
   const sortDir = options?.sort_dir ?? 'desc'
   const limit = options?.limit ?? 50
@@ -63,15 +65,19 @@ export function useSavedPosts(options?: UseSavedPostsOptions): UseSavedPostsResu
       // Support both old page-style filters and new widget-style filters
       if (search) request.search = search
       if (subreddit) {
-        request.subreddit = subreddit
+        request.subreddit_filter = [subreddit]
       } else if (subredditFilter) {
         request.subreddit_filter = subredditFilter
       }
 
       if (tag) {
-        request.tag = tag
+        request.tag_filter = [tag]
       } else if (tagFilter) {
         request.tag_filter = tagFilter
+      }
+
+      if (sourceFilter) {
+        request.source_filter = sourceFilter
       }
 
       const result = (await window.api.invoke(IPC.REDDIT_GET_SAVED_POSTS, request)) as {
@@ -85,7 +91,7 @@ export function useSavedPosts(options?: UseSavedPostsOptions): UseSavedPostsResu
     } finally {
       setLoading(false)
     }
-  }, [search, subreddit, subredditFilter, tag, tagFilter, sortBy, sortDir, limit, offset])
+  }, [search, subreddit, subredditFilter, tag, tagFilter, sourceFilter, sortBy, sortDir, limit, offset])
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)

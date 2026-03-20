@@ -1,6 +1,6 @@
 # ntfy Module — Architecture & Data Flow
 
-ntfy is used as a zero-infrastructure push channel. The user sends a Reddit post URL to a private ntfy topic from their phone, and the app polls that topic to ingest the post into the local `saved_posts` database.
+ntfy is used as a zero-infrastructure push channel. The user sends any link (Reddit, X/Twitter, Bluesky, or generic URL) to a private ntfy topic from their phone, and the app polls that topic to ingest the link into the local `saved_posts` database with automatic source detection.
 
 ---
 
@@ -14,10 +14,13 @@ Phone (share sheet)
 App startup / scheduled poll / manual poll
   └─ GET {server}/{topic}/json?poll=1&since={lastId}
        └─ Parse NDJSON response
-            └─ For each Reddit URL:
-                 ├─ (if /s/ short link) HEAD request → resolve canonical URL
-                 ├─ GET {canonicalUrl}.json → fetch post metadata
-                 └─ UPSERT into saved_posts table
+            └─ For each URL:
+                 ├─ detectSource(url) → reddit | x | bsky | generic
+                 ├─ fetchMetadataForUrl(url, note) → source-specific metadata
+                 │    ├─ Reddit: resolve short links, fetch JSON API
+                 │    ├─ X / Bluesky: extract handle + post ID from URL
+                 │    └─ Generic: use URL as title, hash as post_id
+                 └─ UPSERT into saved_posts with source
 ```
 
 ---
@@ -30,8 +33,9 @@ App startup / scheduled poll / manual poll
 | `src/main/sources/reddit/metadata.ts` | Fetches post title/body/score from the Reddit JSON API |
 | `src/main/sources/reddit/validation.ts` | URL validation regex and normalizer |
 | `src/main/sources/reddit/index.ts` | Module entry — startup poll, mutex, push events |
+| `src/main/sources/link-sources.ts` | Source detection registry — `detectSource()`, `getSourceLabel()`, `fetchMetadataForUrl()` |
 | `src/main/ipc/index.ts` | IPC handlers exposed to the renderer |
-| `src/shared/ipc-types.ts` | Shared types: `NtfyPollResult`, `NtfyStaleness` |
+| `src/shared/ipc-types.ts` | Shared types: `NtfyPollResult`, `NtfyStaleness`, `LinkSource` |
 
 ---
 
@@ -56,6 +60,8 @@ All stored in the `settings` table via `getSetting` / `setSetting`.
 1. **Startup** — `pollNtfyStartup()` is called when `RedditModule.initialize()` runs (main process boot). Errors are caught and broadcast as a push event; they do not crash the app.
 2. **Scheduled** — a cron scheduler runs `triggerNtfyPoll()` using `ntfy_poll_interval_minutes` (defaults to 60). Existing scheduler tasks are restarted whenever interval settings change.
 3. **Manual** — `triggerNtfyPoll()` is called by the `reddit:pollNtfy` IPC handler when the user clicks "Test Connection" or "Sync Now" in the UI.
+
+All URLs are processed regardless of source. Non-Reddit URLs are routed through source detection and their source-specific metadata fetcher (or the generic fallback).
 
 ### Concurrency guard
 
@@ -95,9 +101,30 @@ The `message` field supports three formats:
 
 The JSON format arises when certain mobile share-sheet clients (e.g. iOS Shortcuts) send structured data.
 
+URLs from any HTTP/HTTPS source are accepted. Source detection determines metadata handling (see Source Detection below).
+
 ### Cursor advancement
 
 After processing all lines, `ntfy_last_message_id` is updated to the last `msg.id` seen. This means re-polls only fetch new messages. `ntfy_last_polled_at` is always updated to the current timestamp on a successful poll, regardless of whether any posts were ingested.
+
+---
+
+## Source Detection (`link-sources.ts`)
+
+The `SourceDefinition` interface defines per-source behaviour: URL pattern, post ID extraction, and metadata fetching. Source definitions are evaluated in order; the first matching `urlPattern` wins. If no pattern matches, the source is `generic`.
+
+| Source | `urlPattern` | Metadata behaviour |
+|---|---|---|
+| `reddit` | `reddit.com/...` | Resolve short links, fetch Reddit JSON API for full post metadata |
+| `x` | `x.com/...` or `twitter.com/...` | Extract handle and status ID from URL |
+| `bsky` | `bsky.app/...` | Extract handle and post ID from URL |
+| `generic` | _(fallback)_ | Use URL as title, hash URL for `post_id` |
+
+Public functions:
+
+- `detectSource(url)` — returns the `LinkSource` for a URL
+- `getSourceLabel(source)` — returns a display label (e.g. `'Reddit'`, `'X'`, `'Bluesky'`, `'Link'`)
+- `fetchMetadataForUrl(url, note)` — returns a `SavedPostInput` with source-specific fields populated
 
 ---
 

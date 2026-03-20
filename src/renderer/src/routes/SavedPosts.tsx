@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { IPC } from '../../../shared/ipc-types'
-import type { SavedPost } from '../../../shared/ipc-types'
+import type { SavedPost, LinkSource } from '../../../shared/ipc-types'
 import { useSavedPosts } from '../hooks/useSavedPosts'
 import { useNtfyStaleness } from '../hooks/useNtfyStaleness'
 import { StaleWarning } from '../modules/saved-posts/StaleWarning'
@@ -97,7 +97,15 @@ function PostTagEditor({
   )
 }
 
+const SOURCE_LABELS: Record<LinkSource, string> = {
+  reddit: 'Reddit',
+  x: 'X',
+  bsky: 'Bluesky',
+  generic: 'Link'
+}
+
 export default function SavedPosts(): React.ReactElement {
+  const [source, setSource] = useState<string | null>(null)
   const {
     posts,
     total,
@@ -111,7 +119,9 @@ export default function SavedPosts(): React.ReactElement {
     offset,
     setOffset,
     refetch
-  } = useSavedPosts()
+  } = useSavedPosts({
+    source_filter: source ? [source as LinkSource] : undefined
+  })
   const staleness = useNtfyStaleness()
   const [showOnboarding, setShowOnboarding] = useState(false)
   const [showTagManager, setShowTagManager] = useState(false)
@@ -249,6 +259,21 @@ export default function SavedPosts(): React.ReactElement {
             ))}
           </SelectContent>
         </Select>
+        <Select
+          value={source ?? '_all'}
+          onValueChange={(val) => setSource(val === '_all' ? null : val)}
+        >
+          <SelectTrigger className="w-[140px] h-9">
+            <SelectValue placeholder="All sources" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="_all">All sources</SelectItem>
+            <SelectItem value="reddit">Reddit</SelectItem>
+            <SelectItem value="x">X (Twitter)</SelectItem>
+            <SelectItem value="bsky">Bluesky</SelectItem>
+            <SelectItem value="generic">Other Links</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Post list */}
@@ -277,14 +302,17 @@ export default function SavedPosts(): React.ReactElement {
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-0.5">
-                    {post.subreddit && (
+                    <Badge variant="outline" className="text-xs shrink-0">
+                      {SOURCE_LABELS[post.source]}
+                    </Badge>
+                    {post.source === 'reddit' && post.subreddit && (
                       <Badge variant="secondary" className="text-xs shrink-0">
                         r/{post.subreddit}
                       </Badge>
                     )}
                     {post.author && (
                       <span className="text-xs text-muted-foreground">
-                        u/{post.author}
+                        {post.source === 'reddit' ? `u/${post.author}` : post.source === 'x' ? `@${post.author}` : post.author}
                       </span>
                     )}
                     {post.score != null && (
@@ -298,7 +326,7 @@ export default function SavedPosts(): React.ReactElement {
                   </div>
                   <button
                     onClick={() => {
-                      const url = `https://reddit.com${post.permalink}`
+                      const url = post.source === 'reddit' ? `https://reddit.com${post.permalink}` : post.url
                       window.api.invoke('shell:openExternal', url).catch(console.error)
                     }}
                     className="text-sm font-medium text-left hover:text-primary transition-colors line-clamp-2 w-full"

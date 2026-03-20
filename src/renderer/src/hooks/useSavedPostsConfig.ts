@@ -4,10 +4,16 @@ import type { SavedPostsViewConfig } from '../../../shared/ipc-types'
 const DEFAULT_CONFIG: SavedPostsViewConfig = {
   subreddit_filter: null,
   tag_filter: null,
+  source_filter: null,
   sort_by: 'saved_at',
   sort_dir: 'desc',
   max_posts: 5,
+  group_by: 'none',
+  showGroupHeaders: true,
+  sourceOrder: ['reddit', 'x', 'bsky', 'generic'],
   showMetadata: true,
+  showSourceBadge: true,
+  showUrl: false,
   cardDensity: 'compact',
   showBodyPreview: false,
   showViewAllLink: true

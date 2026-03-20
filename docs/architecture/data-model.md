@@ -204,43 +204,44 @@ CREATE INDEX idx_reddit_digest_fetched_at
 
 ### 2.6 `saved_posts`
 
-Reddit posts saved by the user via the ntfy.sh mobile flow.
+Links saved by the user via the ntfy.sh mobile flow. Supports Reddit, X/Twitter, Bluesky, and generic URLs.
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
-| `post_id` | TEXT | PRIMARY KEY | Reddit post ID |
+| `post_id` | TEXT | PRIMARY KEY | Post/link ID (source-specific or hashed URL for generic) |
 | `title` | TEXT | NOT NULL | Post title |
 | `url` | TEXT | NOT NULL | Linked URL (or permalink for text posts) |
-| `permalink` | TEXT | NOT NULL | Full Reddit permalink path |
-| `subreddit` | TEXT | | Subreddit name; null if fetch failed |
-| `author` | TEXT | | Author username; null if deleted |
+| `permalink` | TEXT | NOT NULL | Full permalink path |
+| `subreddit` | TEXT | | Subreddit name; null for non-Reddit sources or if fetch failed |
+| `author` | TEXT | | Author username; null if deleted or unavailable |
 | `score` | INTEGER | | Score at time of ingestion |
 | `body` | TEXT | | Post body text (for text posts); null for link posts |
 | `saved_at` | INTEGER | NOT NULL | Unix timestamp when the app ingested this post |
 | `tags` | TEXT | | JSON array of tag strings, e.g. `["ai","research"]`; null if untagged |
+| `source` | TEXT | NOT NULL DEFAULT `'reddit'` | Link source: `'reddit'`, `'x'`, `'bsky'`, `'generic'` |
 
 **Full-text search:**
 
 ```sql
 CREATE VIRTUAL TABLE saved_posts_fts
-    USING fts5(title, body, subreddit, content='saved_posts', content_rowid='rowid');
+    USING fts5(title, body, subreddit, source, content='saved_posts', content_rowid='rowid');
 
 -- Trigger to keep FTS index in sync:
 CREATE TRIGGER saved_posts_ai AFTER INSERT ON saved_posts BEGIN
-    INSERT INTO saved_posts_fts(rowid, title, body, subreddit)
-        VALUES (new.rowid, new.title, new.body, new.subreddit);
+    INSERT INTO saved_posts_fts(rowid, title, body, subreddit, source)
+        VALUES (new.rowid, new.title, new.body, new.subreddit, new.source);
 END;
 
 CREATE TRIGGER saved_posts_ad AFTER DELETE ON saved_posts BEGIN
-    INSERT INTO saved_posts_fts(saved_posts_fts, rowid, title, body, subreddit)
-        VALUES ('delete', old.rowid, old.title, old.body, old.subreddit);
+    INSERT INTO saved_posts_fts(saved_posts_fts, rowid, title, body, subreddit, source)
+        VALUES ('delete', old.rowid, old.title, old.body, old.subreddit, old.source);
 END;
 
 CREATE TRIGGER saved_posts_au AFTER UPDATE ON saved_posts BEGIN
-    INSERT INTO saved_posts_fts(saved_posts_fts, rowid, title, body, subreddit)
-        VALUES ('delete', old.rowid, old.title, old.body, old.subreddit);
-    INSERT INTO saved_posts_fts(rowid, title, body, subreddit)
-        VALUES (new.rowid, new.title, new.body, new.subreddit);
+    INSERT INTO saved_posts_fts(saved_posts_fts, rowid, title, body, subreddit, source)
+        VALUES ('delete', old.rowid, old.title, old.body, old.subreddit, old.source);
+    INSERT INTO saved_posts_fts(rowid, title, body, subreddit, source)
+        VALUES (new.rowid, new.title, new.body, new.subreddit, new.source);
 END;
 ```
 
@@ -252,6 +253,9 @@ CREATE INDEX idx_saved_posts_saved_at
 
 CREATE INDEX idx_saved_posts_subreddit
     ON saved_posts (subreddit);
+
+CREATE INDEX idx_saved_posts_source
+    ON saved_posts (source);
 ```
 
 **Tags note:** Tags are stored as a JSON array in the `tags` column. This is sufficient for v1 given expected cardinality (personal use, tens to hundreds of posts). A normalized `tags` table is not needed for v1. Tag filtering is done with `json_each()` in SQLite.
