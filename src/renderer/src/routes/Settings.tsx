@@ -5,7 +5,7 @@ import { Button } from '../components/ui/button'
 import { Switch } from '../components/ui/switch'
 import { useTheme } from '../providers/ThemeProvider'
 import { useYouTubeChannels } from '../hooks/useYouTubeChannels'
-import { Eye, EyeOff } from 'lucide-react'
+import { Eye, EyeOff, ExternalLink } from 'lucide-react'
 import {
   IPC,
   type IpcMutationResult,
@@ -644,9 +644,18 @@ function SavedPostsTab(): React.ReactElement {
       <div>
         <h3 className="text-sm font-medium mb-2">ntfy.sh Configuration</h3>
         <div className="space-y-1 text-sm">
-          <p>
+          <p className="flex items-center gap-1">
             <span className="text-muted-foreground">Topic:</span>{' '}
-            <span className="font-mono">{topic}</span>
+            <button
+              className="font-mono underline underline-offset-2 decoration-muted-foreground/50 hover:text-blue-400 transition-colors inline-flex items-center gap-1"
+              onClick={() => {
+                const base = server.replace(/\/+$/, '')
+                window.api.invoke('shell:openExternal', `${base}/${topic}`).catch(console.error)
+              }}
+            >
+              {topic}
+              <ExternalLink className="h-3 w-3" />
+            </button>
           </p>
           <p>
             <span className="text-muted-foreground">Server:</span>{' '}
