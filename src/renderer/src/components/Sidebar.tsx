@@ -1,13 +1,13 @@
 import React, { useState } from 'react'
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, Bookmark, Terminal, Settings, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react'
+import { LayoutDashboard, Bookmark, Terminal, Settings, ChevronLeft, ChevronRight } from 'lucide-react'
 import { cn } from '../lib/utils'
 
 interface NavItem {
   to: string
   label: string
   icon: React.ReactNode
-  badge?: React.ReactNode
+  attention?: boolean
 }
 
 export function Sidebar(): React.ReactElement {
@@ -28,10 +28,8 @@ export function Sidebar(): React.ReactElement {
       to: '/scripts',
       label: 'Script Manager',
       icon: <Terminal className="h-5 w-5 shrink-0" />,
-      // Hardcode hasStale: true — seed data includes a stale script
-      badge: (
-        <AlertTriangle className="h-4 w-4 text-yellow-500 shrink-0" />
-      )
+      // Hardcode attention: true — seed data includes a stale script
+      attention: true
     },
     {
       to: '/settings',
@@ -49,16 +47,28 @@ export function Sidebar(): React.ReactElement {
       style={{ flexShrink: 0 }}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-4 border-b">
+      <div
+        className={cn(
+          'flex items-center border-b py-2',
+          collapsed ? '' : 'justify-between px-3'
+        )}
+      >
         {!collapsed && (
           <span className="text-sm font-semibold text-foreground truncate">Personal News</span>
         )}
         <button
           onClick={() => setCollapsed((c) => !c)}
-          className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors ml-auto"
+          className={cn(
+            'flex items-center justify-center px-3 py-2 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground transition-colors',
+            collapsed ? 'flex-1 mx-1' : 'ml-auto'
+          )}
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
-          {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+          {collapsed ? (
+            <ChevronRight className="h-5 w-5 shrink-0" />
+          ) : (
+            <ChevronLeft className="h-5 w-5 shrink-0" />
+          )}
         </button>
       </div>
 
@@ -74,18 +84,16 @@ export function Sidebar(): React.ReactElement {
                 'flex items-center gap-3 px-3 py-2 mx-1 rounded-md text-sm transition-colors',
                 isActive
                   ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                  : item.attention
+                    ? 'bg-amber-500/10 text-muted-foreground hover:bg-amber-500/20 hover:text-foreground'
+                    : 'text-muted-foreground hover:bg-accent hover:text-foreground'
               )
             }
           >
             {item.icon}
             {!collapsed && (
-              <>
-                <span className="flex-1 truncate">{item.label}</span>
-                {item.badge}
-              </>
+              <span className="flex-1 truncate">{item.label}</span>
             )}
-            {collapsed && item.badge && <span className="absolute ml-6">{item.badge}</span>}
           </NavLink>
         ))}
       </nav>
