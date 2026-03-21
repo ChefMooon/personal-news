@@ -23,6 +23,9 @@ export const IPC = {
   SCRIPTS_GET_ALL: 'scripts:getAll',
   SCRIPTS_RUN: 'scripts:run',
   SCRIPTS_CANCEL: 'scripts:cancel',
+  SCRIPTS_UPDATE: 'scripts:update',
+  SCRIPTS_SET_SCHEDULE: 'scripts:setSchedule',
+  SCRIPTS_SET_ENABLED: 'scripts:setEnabled',
   SCRIPTS_GET_RUN_HISTORY: 'scripts:getRunHistory',
   SCRIPTS_OUTPUT: 'scripts:output',
   SCRIPTS_UPDATED: 'scripts:updated',
@@ -93,6 +96,7 @@ export interface SavedPostSummary {
 export interface ScriptWithLastRun {
   id: number
   name: string
+  description: string | null
   file_path: string
   interpreter: string
   args: string | null
@@ -119,6 +123,25 @@ export interface ScriptOutputChunk {
   runId: number
   stream: 'stdout' | 'stderr'
   text: string
+}
+
+export interface ScriptScheduleInput {
+  type: 'manual' | 'on_app_start' | 'interval' | 'fixed_time'
+  minutes?: number
+  runOnAppStart?: boolean
+  hour?: number
+  minute?: number
+}
+
+export interface ScriptUpdateInput {
+  id: number
+  name: string
+  description: string | null
+  file_path: string
+  interpreter: string
+  args: string | null
+  schedule: ScriptScheduleInput
+  enabled: boolean
 }
 
 export interface WidgetInstance {

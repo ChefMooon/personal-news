@@ -20,7 +20,9 @@ import type {
   IpcMutationResult,
   YouTubeCacheClearResult,
   YouTubeApiKeyStatus,
-  YouTubeViewConfig
+  YouTubeViewConfig,
+  ScriptScheduleInput,
+  ScriptUpdateInput
 } from '../../shared/ipc-types'
 import {
   applyYouTubePollInterval,
@@ -29,6 +31,7 @@ import {
 import { applyNtfyPollInterval, triggerNtfyPoll } from '../sources/reddit/index'
 import {
   activeRuns,
+  refreshScriptSchedule,
   runScriptById,
   setScriptEmitters,
   syncScriptsFromHomeDir
@@ -539,8 +542,62 @@ async function resolveChannelFromInput(input: string): Promise<YtChannel> {
 interface ScheduleDef {
   type: 'on_app_start' | 'interval' | 'fixed_time'
   minutes?: number
+  run_on_app_start?: boolean
   hour?: number
   minute?: number
+}
+
+function normalizeScriptSchedule(input: ScriptScheduleInput): {
+  scheduleJson: string | null
+  isManual: boolean
+  error: string | null
+} {
+  if (input.type === 'manual') {
+    return { scheduleJson: null, isManual: true, error: null }
+  }
+
+  if (input.type === 'on_app_start') {
+    return {
+      scheduleJson: JSON.stringify({ type: 'on_app_start' satisfies ScheduleDef['type'] }),
+      isManual: false,
+      error: null
+    }
+  }
+
+  if (input.type === 'interval') {
+    const minutes = Math.floor(input.minutes ?? 0)
+    const runOnAppStart = Boolean(input.runOnAppStart)
+    if (!Number.isFinite(minutes) || minutes < 1 || minutes > 1440) {
+      return { scheduleJson: null, isManual: false, error: 'Interval minutes must be between 1 and 1440.' }
+    }
+    return {
+      scheduleJson: JSON.stringify({
+        type: 'interval' satisfies ScheduleDef['type'],
+        minutes,
+        run_on_app_start: runOnAppStart
+      }),
+      isManual: false,
+      error: null
+    }
+  }
+
+  if (input.type === 'fixed_time') {
+    const hour = Math.floor(input.hour ?? -1)
+    const minute = Math.floor(input.minute ?? -1)
+    if (!Number.isFinite(hour) || hour < 0 || hour > 23) {
+      return { scheduleJson: null, isManual: false, error: 'Hour must be between 0 and 23.' }
+    }
+    if (!Number.isFinite(minute) || minute < 0 || minute > 59) {
+      return { scheduleJson: null, isManual: false, error: 'Minute must be between 0 and 59.' }
+    }
+    return {
+      scheduleJson: JSON.stringify({ type: 'fixed_time' satisfies ScheduleDef['type'], hour, minute }),
+      isManual: false,
+      error: null
+    }
+  }
+
+  return { scheduleJson: null, isManual: false, error: 'Unsupported schedule type.' }
 }
 
 function computeIsStale(
@@ -962,6 +1019,136 @@ export function registerIpcHandlers(): void {
       ...row,
       is_stale: computeIsStale(row.schedule, last_success_finished_at, now)
     }))
+  })
+
+  // scripts:update
+  ipcMain.handle(IPC.SCRIPTS_UPDATE, (_event, input: ScriptUpdateInput): IpcMutationResult => {
+    if (!Number.isInteger(input.id) || input.id <= 0) {
+      return { ok: false, error: 'Invalid script ID.' }
+    }
+
+    const normalizedName = input.name.trim()
+    const normalizedPath = input.file_path.trim()
+    const normalizedInterpreter = input.interpreter.trim()
+    const normalizedDescription = input.description?.trim() || null
+    const normalizedArgs = input.args?.trim() || null
+
+    if (!normalizedName) {
+      return { ok: false, error: 'Name is required.' }
+    }
+    if (!normalizedPath) {
+      return { ok: false, error: 'File path is required.' }
+    }
+    if (!normalizedInterpreter) {
+      return { ok: false, error: 'Interpreter is required.' }
+    }
+
+    const schedule = normalizeScriptSchedule(input.schedule)
+    if (schedule.error) {
+      return { ok: false, error: schedule.error }
+    }
+
+    if (schedule.isManual && input.enabled) {
+      return { ok: false, error: 'Manual schedule cannot have auto-run enabled.' }
+    }
+
+    const db = getDb()
+    const result = db
+      .prepare(
+        `UPDATE scripts
+         SET name = ?, description = ?, file_path = ?, interpreter = ?, args = ?, schedule = ?, enabled = ?
+         WHERE id = ?`
+      )
+      .run(
+        normalizedName,
+        normalizedDescription,
+        normalizedPath,
+        normalizedInterpreter,
+        normalizedArgs,
+        schedule.scheduleJson,
+        input.enabled ? 1 : 0,
+        input.id
+      )
+
+    if (result.changes === 0) {
+      return { ok: false, error: 'Script not found.' }
+    }
+
+    refreshScriptSchedule(db, input.id, { runOnAppStart: false })
+    emitScriptsUpdated()
+    return { ok: true, error: null }
+  })
+
+  // scripts:setSchedule
+  ipcMain.handle(
+    IPC.SCRIPTS_SET_SCHEDULE,
+    (_event, scriptId: number, scheduleInput: ScriptScheduleInput): IpcMutationResult => {
+      if (!Number.isInteger(scriptId) || scriptId <= 0) {
+        return { ok: false, error: 'Invalid script ID.' }
+      }
+
+      const schedule = normalizeScriptSchedule(scheduleInput)
+      if (schedule.error) {
+        return { ok: false, error: schedule.error }
+      }
+
+      const db = getDb()
+      const existing = db.prepare('SELECT enabled FROM scripts WHERE id = ?').get(scriptId) as
+        | { enabled: number }
+        | undefined
+
+      if (!existing) {
+        return { ok: false, error: 'Script not found.' }
+      }
+
+      if (schedule.isManual && existing.enabled === 1) {
+        return { ok: false, error: 'Manual schedule cannot have auto-run enabled.' }
+      }
+
+      const result = db
+        .prepare('UPDATE scripts SET schedule = ? WHERE id = ?')
+        .run(schedule.scheduleJson, scriptId)
+
+      if (result.changes === 0) {
+        return { ok: false, error: 'Script not found.' }
+      }
+
+      refreshScriptSchedule(db, scriptId, { runOnAppStart: false })
+      emitScriptsUpdated()
+      return { ok: true, error: null }
+    }
+  )
+
+  // scripts:setEnabled
+  ipcMain.handle(IPC.SCRIPTS_SET_ENABLED, (_event, scriptId: number, enabled: boolean): IpcMutationResult => {
+    if (!Number.isInteger(scriptId) || scriptId <= 0) {
+      return { ok: false, error: 'Invalid script ID.' }
+    }
+
+    const db = getDb()
+    const existing = db.prepare('SELECT schedule FROM scripts WHERE id = ?').get(scriptId) as
+      | { schedule: string | null }
+      | undefined
+
+    if (!existing) {
+      return { ok: false, error: 'Script not found.' }
+    }
+
+    if (!existing.schedule && enabled) {
+      return { ok: false, error: 'Cannot enable auto-run when schedule is manual.' }
+    }
+
+    const result = db
+      .prepare('UPDATE scripts SET enabled = ? WHERE id = ?')
+      .run(enabled ? 1 : 0, scriptId)
+
+    if (result.changes === 0) {
+      return { ok: false, error: 'Script not found.' }
+    }
+
+    refreshScriptSchedule(db, scriptId, { runOnAppStart: false })
+    emitScriptsUpdated()
+    return { ok: true, error: null }
   })
 
   // scripts:run

@@ -318,41 +318,52 @@ type ScheduleConfig =
 
 ---
 
-#### `scripts:create`
+#### `scripts:update`
 
-Registers a new script.
+Updates a registered script's full editable configuration. If the schedule or enabled state changes, the scheduler is reconfigured immediately.
 
-- **Args:** `[input: ScriptInput]`
+- **Args:** `[input: ScriptUpdateInput]`
+- **Returns:** `{ ok: boolean; error: string | null }`
 
 ```typescript
-interface ScriptInput {
+interface ScriptScheduleInput {
+  type: 'manual' | 'on_app_start' | 'interval' | 'fixed_time';
+  minutes?: number;
+  hour?: number;
+  minute?: number;
+}
+
+interface ScriptUpdateInput {
+  id: number;
   name: string;
-  filePath: string;
-  args?: string;
-  schedule?: ScheduleConfig | null;
+  description: string | null;
+  file_path: string;
+  interpreter: string;
+  args: string | null;
+  schedule: ScriptScheduleInput;
+  enabled: boolean;
 }
 ```
 
-- **Returns:** `ScriptSummary`
-- **Throws:** `{ code: 'FILE_NOT_FOUND' | 'INVALID_PATH', message: string }`
+---
+
+#### `scripts:setSchedule`
+
+Updates only the schedule for a script.
+
+- **Args:** `[id: number, schedule: ScriptScheduleInput]`
+- **Returns:** `{ ok: boolean; error: string | null }`
 
 ---
 
-#### `scripts:update`
+#### `scripts:setEnabled`
 
-Updates a registered script's configuration. If the schedule changes, the scheduler replaces the existing cron job.
+Updates only the script auto-run toggle.
 
-- **Args:** `[id: number, updates: Partial<ScriptInput>]`
-- **Returns:** `ScriptSummary`
+- **Args:** `[id: number, enabled: boolean]`
+- **Returns:** `{ ok: boolean; error: string | null }`
 
----
-
-#### `scripts:delete`
-
-Removes a script and all its run history.
-
-- **Args:** `[id: number]`
-- **Returns:** `{ ok: true }`
+Manual schedule guard: enabling auto-run while schedule is manual is rejected.
 
 ---
 
@@ -397,15 +408,6 @@ interface ScriptRun {
 
 ---
 
-#### `scripts:getStaleStatus`
-
-Returns a simple flag indicating whether any scheduled scripts are currently stale. Used by the Sidebar to show/hide the nav badge without loading full script data.
-
-- **Args:** none
-- **Returns:** `{ hasStale: boolean }`
-
----
-
 ### Push — Main → Renderer
 
 ---
@@ -418,11 +420,11 @@ Streams stdout/stderr chunks to the renderer while a script is running.
 
 ---
 
-#### `scripts:runComplete`
+#### `scripts:updated`
 
-Fired when a script process exits (success or failure).
+Fired when scripts data changes (run completion, refresh, or script config mutations).
 
-- **Payload:** `{ scriptId: number; runId: number; exitCode: number }`
+- **Payload:** none
 
 ---
 
@@ -602,15 +604,14 @@ interface ThemeOption {
 | `reddit:getDigestPosts` | R→M | invoke | Get Reddit digest posts (flat array) |
 | `reddit:ntfyIngestComplete` | M→R | push | Startup ingestion finished |
 | `scripts:getAll` | R→M | invoke | List all scripts with status |
-| `scripts:create` | R→M | invoke | Register a new script |
 | `scripts:update` | R→M | invoke | Edit script config |
-| `scripts:delete` | R→M | invoke | Delete script + run history |
+| `scripts:setSchedule` | R→M | invoke | Update script schedule only |
+| `scripts:setEnabled` | R→M | invoke | Update script auto-run toggle |
 | `scripts:run` | R→M | invoke | Run script immediately |
 | `scripts:cancel` | R→M | invoke | Kill running script |
 | `scripts:getRunHistory` | R→M | invoke | Get run history for script |
-| `scripts:getStaleStatus` | R→M | invoke | Check if any scripts are stale |
 | `scripts:output` | M→R | push | Live stdout/stderr chunk |
-| `scripts:runComplete` | M→R | push | Script execution finished |
+| `scripts:updated` | M→R | push | Script data changed; refresh state |
 | `settings:get` | R→M | invoke | Get one setting value |
 | `settings:set` | R→M | invoke | Set one setting value |
 | `settings:getApiKeyStatus` | R→M | invoke | Check if YouTube API key is set |

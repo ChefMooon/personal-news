@@ -38,6 +38,8 @@ function formatScriptName(fileName: string): string {
 }
 
 export function syncScriptsFromHomeDir(db: Database.Database): void {
+  db.prepare('UPDATE scripts SET enabled = 0 WHERE schedule IS NULL AND enabled != 0').run()
+
   const scriptHomeDir = getSetting(SCRIPT_HOME_DIR_SETTING)
   if (!scriptHomeDir) {
     return
@@ -67,7 +69,7 @@ export function syncScriptsFromHomeDir(db: Database.Database): void {
 
   const entries = readdirSync(scriptHomeDir, { withFileTypes: true })
   const insertScript = db.prepare(
-    'INSERT INTO scripts (name, file_path, interpreter, args, schedule, enabled, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    'INSERT INTO scripts (name, description, file_path, interpreter, args, schedule, enabled, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
   )
   const deleteScript = db.prepare('DELETE FROM scripts WHERE id = ?')
 
@@ -85,7 +87,8 @@ export function syncScriptsFromHomeDir(db: Database.Database): void {
       continue
     }
 
-    insertScript.run(formatScriptName(entry.name), filePath, 'python3', null, null, 1, now)
+    // Manual schedule implies auto-run is off until the user selects a schedule.
+    insertScript.run(formatScriptName(entry.name), null, filePath, 'python3', null, null, 0, now)
   }
 
   for (const script of existingScripts) {
@@ -106,6 +109,30 @@ export function runScriptById(db: Database.Database, script: ScriptWithLastRun):
   ).then(() => {
     emitUpdated?.()
   })
+}
+
+export function refreshScriptSchedule(
+  db: Database.Database,
+  scriptId: number,
+  options?: { runOnAppStart?: boolean }
+): void {
+  const script = db
+    .prepare(
+      `SELECT s.*, r.started_at, r.finished_at, r.exit_code, 0 AS is_stale
+       FROM scripts s
+       LEFT JOIN script_runs r ON r.id = (
+         SELECT id FROM script_runs WHERE script_id = s.id ORDER BY started_at DESC LIMIT 1
+       )
+       WHERE s.id = ?`
+    )
+    .get(scriptId) as ScriptWithLastRun | undefined
+
+  if (!script) {
+    scheduler.unregisterScript(scriptId)
+    return
+  }
+
+  scheduler.registerScript(script, options)
 }
 
 export const ScriptManagerModule: DataSourceModule = {

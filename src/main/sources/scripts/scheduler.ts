@@ -7,9 +7,12 @@ type RunFn = (script: ScriptWithLastRun) => Promise<void>
 interface ScheduleDef {
   type: 'on_app_start' | 'interval' | 'fixed_time'
   minutes?: number
+  run_on_app_start?: boolean
   hour?: number
   minute?: number
 }
+
+const LOCAL_TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone
 
 function toCronExpression(def: ScheduleDef): string | null {
   if (def.type === 'interval' && def.minutes) {
@@ -42,12 +45,13 @@ export class ScriptScheduler {
       .all() as ScriptWithLastRun[]
 
     for (const script of scripts) {
-      this.registerScript(script)
+      this.registerScript(script, { runOnAppStart: true })
     }
   }
 
-  registerScript(script: ScriptWithLastRun): void {
-    if (!script.schedule || !this.runFn) return
+  registerScript(script: ScriptWithLastRun, options?: { runOnAppStart?: boolean }): void {
+    this.unregisterScript(script.id)
+    if (!script.schedule || !this.runFn || script.enabled !== 1) return
 
     let def: ScheduleDef
     try {
@@ -58,12 +62,21 @@ export class ScriptScheduler {
     }
 
     if (def.type === 'on_app_start') {
-      // Run immediately on app start (fire and forget)
-      console.log(`[Scheduler] Running on_app_start script: ${script.name}`)
-      this.runFn(script).catch((err: Error) => {
-        console.error(`[Scheduler] on_app_start script ${script.name} failed:`, err)
-      })
+      if (options?.runOnAppStart) {
+        // Run on initialization only; hot updates should not auto-trigger an execution.
+        console.log(`[Scheduler] Running on_app_start script: ${script.name}`)
+        this.runFn(script).catch((err: Error) => {
+          console.error(`[Scheduler] on_app_start script ${script.name} failed:`, err)
+        })
+      }
       return
+    }
+
+    if (def.type === 'interval' && options?.runOnAppStart && def.run_on_app_start) {
+      console.log(`[Scheduler] Running interval script on app start: ${script.name}`)
+      this.runFn(script).catch((err: Error) => {
+        console.error(`[Scheduler] interval start-run script ${script.name} failed:`, err)
+      })
     }
 
     const expr = toCronExpression(def)
@@ -77,15 +90,21 @@ export class ScriptScheduler {
       return
     }
 
-    const task = cron.schedule(expr, () => {
-      if (!this.runFn) return
-      this.runFn(script).catch((err: Error) => {
-        console.error(`[Scheduler] Scheduled script ${script.name} failed:`, err)
-      })
-    })
+    const task = cron.schedule(
+      expr,
+      () => {
+        if (!this.runFn) return
+        this.runFn(script).catch((err: Error) => {
+          console.error(`[Scheduler] Scheduled script ${script.name} failed:`, err)
+        })
+      },
+      { timezone: LOCAL_TIMEZONE || undefined }
+    )
 
     this.tasks.set(script.id, task)
-    console.log(`[Scheduler] Registered script "${script.name}" with cron: ${expr}`)
+    console.log(
+      `[Scheduler] Registered script "${script.name}" with cron: ${expr} (timezone: ${LOCAL_TIMEZONE || 'system'})`
+    )
   }
 
   unregisterScript(scriptId: number): void {

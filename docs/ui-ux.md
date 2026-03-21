@@ -269,7 +269,7 @@ If the last successful ntfy poll was more than 24 hours ago, a non-blocking warn
 ### 7.1 Layout
 
 - A list of registered scripts with name, schedule, last run time, and last exit code.
-- Each row has: Run Now button, Edit button, Delete button.
+- Each row has a Run Now button and expands inline to reveal edit controls and run history.
 - A status indicator reflects the last run result and staleness state (see Section 7.4 for staleness rules):
   - **Green** — last run succeeded and script is not stale.
   - **Red** — last run failed (non-zero exit code).
@@ -280,11 +280,17 @@ If the last successful ntfy poll was more than 24 hours ago, a non-blocking warn
 
 Opens when a script row is clicked or Edit is pressed. Contains:
 - Display name (editable)
+- Description (editable, optional)
 - File path (editable, `.py` files only in v1)
-- Interpreter (read-only display: `python3` — not user-editable in v1)
+- Interpreter (editable)
 - Arguments (editable)
-- Schedule configuration (radio: Manual / On app start / Every N minutes / Daily at time)
+- Schedule configuration (Manual / On app start / Every N minutes / Daily at time)
+- Auto-run toggle (disabled when schedule is Manual)
 - Output history: a list of past runs with timestamp, duration, exit code, and an expandable output pane.
+
+Manual schedule semantics:
+- Manual means `schedule = null` and auto-run is unavailable.
+- The auto-run control is visibly disabled in Manual mode and forced to off when a user switches to Manual.
 
 ### 7.3 Live Output
 

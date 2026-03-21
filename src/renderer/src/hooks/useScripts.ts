@@ -1,5 +1,12 @@
 import { useState, useEffect, useCallback } from 'react'
-import type { ScriptWithLastRun, ScriptRunRecord, ScriptOutputChunk } from '../../../shared/ipc-types'
+import type {
+  ScriptWithLastRun,
+  ScriptRunRecord,
+  ScriptOutputChunk,
+  ScriptUpdateInput,
+  ScriptScheduleInput,
+  IpcMutationResult
+} from '../../../shared/ipc-types'
 import { IPC } from '../../../shared/ipc-types'
 
 interface UseScriptsReturn {
@@ -10,6 +17,9 @@ interface UseScriptsReturn {
   outputLines: Map<number, ScriptOutputChunk[]>
   runScript: (id: number) => Promise<void>
   cancelScript: (id: number) => Promise<void>
+  updateScript: (input: ScriptUpdateInput) => Promise<IpcMutationResult>
+  setScriptSchedule: (id: number, schedule: ScriptScheduleInput) => Promise<IpcMutationResult>
+  setScriptEnabled: (id: number, enabled: boolean) => Promise<IpcMutationResult>
   getRunHistory: (id: number) => Promise<ScriptRunRecord[]>
   refresh: () => Promise<void>
 }
@@ -89,6 +99,45 @@ export function useScripts(): UseScriptsReturn {
     }
   }, [])
 
+  const updateScript = useCallback(async (input: ScriptUpdateInput): Promise<IpcMutationResult> => {
+    try {
+      const result = (await window.api.invoke(IPC.SCRIPTS_UPDATE, input)) as IpcMutationResult
+      if (result.ok) {
+        await fetchScripts()
+      }
+      return result
+    } catch (err) {
+      console.error('[useScripts] updateScript error:', err)
+      return { ok: false, error: 'Failed to update script.' }
+    }
+  }, [fetchScripts])
+
+  const setScriptSchedule = useCallback(async (id: number, schedule: ScriptScheduleInput): Promise<IpcMutationResult> => {
+    try {
+      const result = (await window.api.invoke(IPC.SCRIPTS_SET_SCHEDULE, id, schedule)) as IpcMutationResult
+      if (result.ok) {
+        await fetchScripts()
+      }
+      return result
+    } catch (err) {
+      console.error('[useScripts] setScriptSchedule error:', err)
+      return { ok: false, error: 'Failed to update script schedule.' }
+    }
+  }, [fetchScripts])
+
+  const setScriptEnabled = useCallback(async (id: number, enabled: boolean): Promise<IpcMutationResult> => {
+    try {
+      const result = (await window.api.invoke(IPC.SCRIPTS_SET_ENABLED, id, enabled)) as IpcMutationResult
+      if (result.ok) {
+        await fetchScripts()
+      }
+      return result
+    } catch (err) {
+      console.error('[useScripts] setScriptEnabled error:', err)
+      return { ok: false, error: 'Failed to update script auto-run setting.' }
+    }
+  }, [fetchScripts])
+
   const getRunHistory = useCallback(async (id: number): Promise<ScriptRunRecord[]> => {
     try {
       return (await window.api.invoke(IPC.SCRIPTS_GET_RUN_HISTORY, id)) as ScriptRunRecord[]
@@ -115,6 +164,9 @@ export function useScripts(): UseScriptsReturn {
     outputLines,
     runScript,
     cancelScript,
+    updateScript,
+    setScriptSchedule,
+    setScriptEnabled,
     getRunHistory,
     refresh
   }

@@ -107,6 +107,7 @@ CREATE INDEX IF NOT EXISTS idx_saved_posts_subreddit
 CREATE TABLE IF NOT EXISTS scripts (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     name        TEXT NOT NULL,
+    description TEXT,
     file_path   TEXT NOT NULL,
     interpreter TEXT NOT NULL DEFAULT 'python3',
     args        TEXT,

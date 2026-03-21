@@ -302,11 +302,12 @@ Registered Python scripts managed by the Script Manager.
 |--------|------|-------------|-------------|
 | `id` | INTEGER | PRIMARY KEY AUTOINCREMENT | Script row ID |
 | `name` | TEXT | NOT NULL | User-supplied display name |
+| `description` | TEXT | | Optional script description shown in Script Manager |
 | `file_path` | TEXT | NOT NULL | Absolute path to the `.py` file |
 | `interpreter` | TEXT | NOT NULL DEFAULT `'python3'` | Interpreter to use; fixed to `'python3'` in v1 but stored for future extensibility |
 | `args` | TEXT | | Arguments string (space-separated); null if none |
 | `schedule` | TEXT | | JSON schedule config (see below); null = manual only |
-| `enabled` | INTEGER | NOT NULL DEFAULT 1 | `1` = active; `0` = disabled (won't run on schedule or app start) |
+| `enabled` | INTEGER | NOT NULL DEFAULT 0 | `1` = auto-run enabled for scheduled scripts; `0` = disabled |
 | `created_at` | INTEGER | NOT NULL | Unix timestamp when script was registered |
 
 **Schedule JSON shape:**
@@ -323,6 +324,8 @@ Registered Python scripts managed by the Script Manager.
 // Daily at fixed time:
 { "type": "fixed_time", "hour": 6, "minute": 0 }
 ```
+
+**Normalization rule:** manual schedule (`schedule IS NULL`) always implies `enabled = 0`. The backend rejects any attempt to persist manual schedule with auto-run enabled.
 
 ---
 
