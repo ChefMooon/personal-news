@@ -163,11 +163,13 @@ export interface ScriptNotificationsReadResult extends IpcMutationResult {
 }
 
 export interface ScriptScheduleInput {
-  type: 'manual' | 'on_app_start' | 'interval' | 'fixed_time'
+  type: 'manual' | 'on_app_start' | 'interval' | 'daily' | 'weekly' | 'monthly' | 'fixed_time'
   minutes?: number
   runOnAppStart?: boolean
   hour?: number
   minute?: number
+  daysOfWeek?: number[]
+  dayOfMonth?: number
 }
 
 export interface ScriptUpdateInput {

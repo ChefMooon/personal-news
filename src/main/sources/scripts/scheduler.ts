@@ -11,7 +11,7 @@ export interface ScriptScheduleRunContext {
 export interface ScriptStartupWarning {
   scriptId: number
   scriptName: string
-  scheduleType: 'interval' | 'fixed_time'
+  scheduleType: 'interval' | 'daily' | 'weekly' | 'monthly' | 'fixed_time'
   missedRuns: number
   downtimeSeconds: number
 }
@@ -20,11 +20,13 @@ type RunFn = (script: ScriptWithLastRun, context: ScriptScheduleRunContext) => P
 type StartupWarningFn = (warning: ScriptStartupWarning) => void
 
 interface ScheduleDef {
-  type: 'on_app_start' | 'interval' | 'fixed_time'
+  type: 'on_app_start' | 'interval' | 'daily' | 'weekly' | 'monthly' | 'fixed_time'
   minutes?: number
   run_on_app_start?: boolean
   hour?: number
   minute?: number
+  days_of_week?: number[]
+  day_of_month?: number
 }
 
 export interface StartupDecision {
@@ -34,7 +36,30 @@ export interface StartupDecision {
 }
 
 const MAX_INTERVAL_CATCH_UP_MISSED_RUNS = 6
-const MAX_FIXED_TIME_CATCH_UP_MISSED_RUNS = 2
+const MAX_DAILY_CATCH_UP_MISSED_RUNS = 2
+const MAX_WEEKLY_CATCH_UP_MISSED_RUNS = 1
+const MAX_MONTHLY_CATCH_UP_MISSED_RUNS = 1
+
+function normalizeDaysOfWeek(input: number[] | undefined): number[] {
+  const source = Array.isArray(input) ? input : []
+  const unique = new Set<number>()
+  for (const value of source) {
+    const day = Math.floor(value)
+    if (Number.isFinite(day) && day >= 0 && day <= 6) {
+      unique.add(day)
+    }
+  }
+  const normalized = [...unique].sort((a, b) => a - b)
+  return normalized.length > 0 ? normalized : [1]
+}
+
+function normalizeDayOfMonth(input: number | undefined): number {
+  const day = Math.floor(input ?? 1)
+  if (!Number.isFinite(day) || day < 1 || day > 31) {
+    return 1
+  }
+  return day
+}
 
 function countFixedTimeWindows(lastRunAt: number, now: number, hour: number, minute: number): number {
   if (now <= lastRunAt) return 0
@@ -53,16 +78,96 @@ function countFixedTimeWindows(lastRunAt: number, now: number, hour: number, min
   return count
 }
 
+function countWeeklyWindows(lastRunAt: number, now: number, hour: number, minute: number, days: number[]): number {
+  if (now <= lastRunAt) return 0
+
+  const daySet = new Set(days)
+  const nextWindow = new Date(lastRunAt * 1000)
+  nextWindow.setHours(hour, minute, 0, 0)
+
+  while (Math.floor(nextWindow.getTime() / 1000) <= lastRunAt || !daySet.has(nextWindow.getDay())) {
+    nextWindow.setDate(nextWindow.getDate() + 1)
+  }
+
+  let count = 0
+  while (Math.floor(nextWindow.getTime() / 1000) <= now && count <= 5300) {
+    count += 1
+    do {
+      nextWindow.setDate(nextWindow.getDate() + 1)
+    } while (!daySet.has(nextWindow.getDay()))
+  }
+
+  return count
+}
+
+function getMonthlyWindowTimestamp(year: number, month: number, day: number, hour: number, minute: number): number | null {
+  const lastDay = new Date(year, month + 1, 0).getDate()
+  if (day > lastDay) {
+    return null
+  }
+  const window = new Date(year, month, day, hour, minute, 0, 0)
+  return Math.floor(window.getTime() / 1000)
+}
+
+function countMonthlyWindows(lastRunAt: number, now: number, hour: number, minute: number, dayOfMonth: number): number {
+  if (now <= lastRunAt) return 0
+
+  const lastRunDate = new Date(lastRunAt * 1000)
+  let year = lastRunDate.getFullYear()
+  let month = lastRunDate.getMonth()
+  let nextWindow: number | null = null
+
+  while (nextWindow === null) {
+    const ts = getMonthlyWindowTimestamp(year, month, dayOfMonth, hour, minute)
+    if (ts !== null && ts > lastRunAt) {
+      nextWindow = ts
+      break
+    }
+    month += 1
+    if (month > 11) {
+      month = 0
+      year += 1
+    }
+  }
+
+  let count = 0
+  while (nextWindow !== null && nextWindow <= now && count <= 500) {
+    count += 1
+    do {
+      month += 1
+      if (month > 11) {
+        month = 0
+        year += 1
+      }
+      nextWindow = getMonthlyWindowTimestamp(year, month, dayOfMonth, hour, minute)
+    } while (nextWindow === null)
+  }
+
+  return count
+}
+
 const LOCAL_TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone
 
 function toCronExpression(def: ScheduleDef): string | null {
   if (def.type === 'interval' && def.minutes) {
     return `*/${def.minutes} * * * *`
   }
-  if (def.type === 'fixed_time') {
+  if (def.type === 'fixed_time' || def.type === 'daily') {
     const h = def.hour ?? 0
     const m = def.minute ?? 0
     return `${m} ${h} * * *`
+  }
+  if (def.type === 'weekly') {
+    const h = def.hour ?? 0
+    const m = def.minute ?? 0
+    const days = normalizeDaysOfWeek(def.days_of_week)
+    return `${m} ${h} * * ${days.join(',')}`
+  }
+  if (def.type === 'monthly') {
+    const h = def.hour ?? 0
+    const m = def.minute ?? 0
+    const day = normalizeDayOfMonth(def.day_of_month)
+    return `${m} ${h} ${day} * *`
   }
   return null
 }
@@ -90,7 +195,7 @@ export function decideStartupAction(
     return { action: 'warning', missedRuns, downtimeSeconds }
   }
 
-  if (def.type === 'fixed_time') {
+  if (def.type === 'fixed_time' || def.type === 'daily') {
     const downtimeSeconds = now - lastRunAt
     const hour = def.hour ?? 0
     const minute = def.minute ?? 0
@@ -100,7 +205,41 @@ export function decideStartupAction(
       return { action: 'none', missedRuns: 0, downtimeSeconds }
     }
 
-    if (missedRuns <= MAX_FIXED_TIME_CATCH_UP_MISSED_RUNS) {
+    if (missedRuns <= MAX_DAILY_CATCH_UP_MISSED_RUNS) {
+      return { action: 'catch_up', missedRuns, downtimeSeconds }
+    }
+    return { action: 'warning', missedRuns, downtimeSeconds }
+  }
+
+  if (def.type === 'weekly') {
+    const downtimeSeconds = now - lastRunAt
+    const hour = def.hour ?? 0
+    const minute = def.minute ?? 0
+    const days = normalizeDaysOfWeek(def.days_of_week)
+    const missedRuns = countWeeklyWindows(lastRunAt, now, hour, minute, days)
+
+    if (missedRuns === 0) {
+      return { action: 'none', missedRuns: 0, downtimeSeconds }
+    }
+
+    if (missedRuns <= MAX_WEEKLY_CATCH_UP_MISSED_RUNS) {
+      return { action: 'catch_up', missedRuns, downtimeSeconds }
+    }
+    return { action: 'warning', missedRuns, downtimeSeconds }
+  }
+
+  if (def.type === 'monthly') {
+    const downtimeSeconds = now - lastRunAt
+    const hour = def.hour ?? 0
+    const minute = def.minute ?? 0
+    const dayOfMonth = normalizeDayOfMonth(def.day_of_month)
+    const missedRuns = countMonthlyWindows(lastRunAt, now, hour, minute, dayOfMonth)
+
+    if (missedRuns === 0) {
+      return { action: 'none', missedRuns: 0, downtimeSeconds }
+    }
+
+    if (missedRuns <= MAX_MONTHLY_CATCH_UP_MISSED_RUNS) {
       return { action: 'catch_up', missedRuns, downtimeSeconds }
     }
     return { action: 'warning', missedRuns, downtimeSeconds }

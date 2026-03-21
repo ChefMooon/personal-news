@@ -520,7 +520,7 @@ print(json.dumps(payload))
 
 ### 4.4 First-Run Registration
 
-When the user configures their first subreddit in Settings → Reddit Digest, the app automatically registers `reddit_digest.py` as a Script Manager entry with a default `fixed_time` schedule of `06:00` daily. The user can modify or delete this registration in the Script Manager.
+When the user configures their first subreddit in Settings → Reddit Digest, the app automatically registers `reddit_digest.py` as a Script Manager entry with a default weekly schedule at `09:00` on Monday. The user can modify or delete this registration in the Script Manager.
 
 The app locates the bundled script via `process.resourcesPath/resources/scripts/reddit_digest.py`, with dev fallbacks to the repository `resources/scripts` path.
 

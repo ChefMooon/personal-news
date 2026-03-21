@@ -663,7 +663,7 @@ function RedditDigestTab(): React.ReactElement {
       </div>
 
       <div className="rounded-md border bg-muted/20 px-3 py-3 text-xs text-muted-foreground space-y-1">
-        <p>The first saved subreddit auto-registers the bundled Reddit Digest script in Script Manager with a daily 06:00 schedule.</p>
+        <p>The first saved subreddit auto-registers the bundled Reddit Digest script in Script Manager with a weekly Monday 09:00 schedule.</p>
         <p>Use Script Manager to run it immediately, view live output, or adjust the schedule.</p>
       </div>
 

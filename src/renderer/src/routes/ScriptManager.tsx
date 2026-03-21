@@ -8,6 +8,7 @@ import { ScrollArea } from '../components/ui/scroll-area'
 import { Switch } from '../components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
 import { formatRelativeTime } from '../lib/time'
+import { cn } from '../lib/utils'
 import {
   AlertTriangle,
   Play,
@@ -42,7 +43,31 @@ interface ScriptDraft {
   intervalRunOnAppStart: boolean
   hour: string
   minute: string
+  weeklyDays: number[]
+  dayOfMonth: string
   enabled: boolean
+}
+
+const WEEKDAY_OPTIONS: Array<{ value: number; label: string }> = [
+  { value: 0, label: 'Sun' },
+  { value: 1, label: 'Mon' },
+  { value: 2, label: 'Tue' },
+  { value: 3, label: 'Wed' },
+  { value: 4, label: 'Thu' },
+  { value: 5, label: 'Fri' },
+  { value: 6, label: 'Sat' }
+]
+
+function normalizeWeekDays(days: number[]): number[] {
+  const unique = new Set<number>()
+  for (const value of days) {
+    const day = Math.floor(value)
+    if (Number.isFinite(day) && day >= 0 && day <= 6) {
+      unique.add(day)
+    }
+  }
+  const normalized = [...unique].sort((a, b) => a - b)
+  return normalized.length > 0 ? normalized : [1]
 }
 
 function scheduleInputFromDraft(draft: ScriptDraft): ScriptScheduleInput {
@@ -55,8 +80,24 @@ function scheduleInputFromDraft(draft: ScriptDraft): ScriptScheduleInput {
       runOnAppStart: draft.intervalRunOnAppStart
     }
   }
+  if (draft.scheduleType === 'weekly') {
+    return {
+      type: 'weekly',
+      hour: Number.parseInt(draft.hour || '0', 10),
+      minute: Number.parseInt(draft.minute || '0', 10),
+      daysOfWeek: normalizeWeekDays(draft.weeklyDays)
+    }
+  }
+  if (draft.scheduleType === 'monthly') {
+    return {
+      type: 'monthly',
+      hour: Number.parseInt(draft.hour || '0', 10),
+      minute: Number.parseInt(draft.minute || '0', 10),
+      dayOfMonth: Number.parseInt(draft.dayOfMonth || '1', 10)
+    }
+  }
   return {
-    type: 'fixed_time',
+    type: 'daily',
     hour: Number.parseInt(draft.hour || '0', 10),
     minute: Number.parseInt(draft.minute || '0', 10)
   }
@@ -64,14 +105,19 @@ function scheduleInputFromDraft(draft: ScriptDraft): ScriptScheduleInput {
 
 function parseSchedule(
   schedule: string | null
-): Pick<ScriptDraft, 'scheduleType' | 'intervalMinutes' | 'intervalRunOnAppStart' | 'hour' | 'minute'> {
+): Pick<
+  ScriptDraft,
+  'scheduleType' | 'intervalMinutes' | 'intervalRunOnAppStart' | 'hour' | 'minute' | 'weeklyDays' | 'dayOfMonth'
+> {
   if (!schedule) {
     return {
       scheduleType: 'manual',
       intervalMinutes: '60',
       intervalRunOnAppStart: false,
       hour: '9',
-      minute: '0'
+      minute: '0',
+      weeklyDays: [1],
+      dayOfMonth: '1'
     }
   }
 
@@ -82,6 +128,8 @@ function parseSchedule(
       run_on_app_start?: boolean
       hour?: number
       minute?: number
+      days_of_week?: number[]
+      day_of_month?: number
     }
     if (parsed.type === 'on_app_start') {
       return {
@@ -89,7 +137,9 @@ function parseSchedule(
         intervalMinutes: '60',
         intervalRunOnAppStart: false,
         hour: '9',
-        minute: '0'
+        minute: '0',
+        weeklyDays: [1],
+        dayOfMonth: '1'
       }
     }
     if (parsed.type === 'interval') {
@@ -98,16 +148,42 @@ function parseSchedule(
         intervalMinutes: String(parsed.minutes ?? 60),
         intervalRunOnAppStart: Boolean(parsed.run_on_app_start),
         hour: '9',
-        minute: '0'
+        minute: '0',
+        weeklyDays: [1],
+        dayOfMonth: '1'
       }
     }
-    if (parsed.type === 'fixed_time') {
+    if (parsed.type === 'daily' || parsed.type === 'fixed_time') {
       return {
-        scheduleType: 'fixed_time',
+        scheduleType: 'daily',
         intervalMinutes: '60',
         intervalRunOnAppStart: false,
         hour: String(parsed.hour ?? 9),
-        minute: String(parsed.minute ?? 0)
+        minute: String(parsed.minute ?? 0),
+        weeklyDays: [1],
+        dayOfMonth: '1'
+      }
+    }
+    if (parsed.type === 'weekly') {
+      return {
+        scheduleType: 'weekly',
+        intervalMinutes: '60',
+        intervalRunOnAppStart: false,
+        hour: String(parsed.hour ?? 9),
+        minute: String(parsed.minute ?? 0),
+        weeklyDays: normalizeWeekDays(parsed.days_of_week ?? [1]),
+        dayOfMonth: '1'
+      }
+    }
+    if (parsed.type === 'monthly') {
+      return {
+        scheduleType: 'monthly',
+        intervalMinutes: '60',
+        intervalRunOnAppStart: false,
+        hour: String(parsed.hour ?? 9),
+        minute: String(parsed.minute ?? 0),
+        weeklyDays: [1],
+        dayOfMonth: String(parsed.day_of_month ?? 1)
       }
     }
   } catch {
@@ -119,7 +195,9 @@ function parseSchedule(
     intervalMinutes: '60',
     intervalRunOnAppStart: false,
     hour: '9',
-    minute: '0'
+    minute: '0',
+    weeklyDays: [1],
+    dayOfMonth: '1'
   }
 }
 
@@ -136,6 +214,8 @@ function makeDraft(script: ScriptWithLastRun): ScriptDraft {
     intervalRunOnAppStart: schedule.intervalRunOnAppStart,
     hour: schedule.hour,
     minute: schedule.minute,
+    weeklyDays: schedule.weeklyDays,
+    dayOfMonth: schedule.dayOfMonth,
     enabled: script.enabled === 1
   }
 }
@@ -168,14 +248,23 @@ function getScheduleDescription(schedule: string | null): string {
       minute?: number
       minutes?: number
       run_on_app_start?: boolean
+      days_of_week?: number[]
+      day_of_month?: number
     }
     if (s.type === 'on_app_start') return 'On app start'
     if (s.type === 'interval') {
       const base = `Every ${s.minutes} minutes`
       return s.run_on_app_start ? `${base} (plus once at app start)` : base
     }
-    if (s.type === 'fixed_time') {
-      return `Daily at ${String(s.hour ?? 0).padStart(2, '0')}:${String(s.minute ?? 0).padStart(2, '0')} (24h)`
+    if (s.type === 'daily' || s.type === 'fixed_time') {
+      return `Daily at ${String(s.hour ?? 0).padStart(2, '0')}:${String(s.minute ?? 0).padStart(2, '0')}`
+    }
+    if (s.type === 'weekly') {
+      const days = normalizeWeekDays(s.days_of_week ?? [1]).map((day) => WEEKDAY_OPTIONS.find((o) => o.value === day)?.label ?? String(day))
+      return `Weekly on ${days.join(', ')} at ${String(s.hour ?? 0).padStart(2, '0')}:${String(s.minute ?? 0).padStart(2, '0')}`
+    }
+    if (s.type === 'monthly') {
+      return `Monthly on day ${s.day_of_month ?? 1} at ${String(s.hour ?? 0).padStart(2, '0')}:${String(s.minute ?? 0).padStart(2, '0')}`
     }
   } catch {
     // Ignore malformed schedule display data.
@@ -368,7 +457,9 @@ function ScriptDetailPanel({
                 <SelectItem value="manual">Manual (Run Now only)</SelectItem>
                 <SelectItem value="on_app_start">On app start (one-time)</SelectItem>
                 <SelectItem value="interval">Interval (app must be running)</SelectItem>
-                <SelectItem value="fixed_time">Fixed time 24h (app must be running)</SelectItem>
+                <SelectItem value="daily">Daily (app must be running)</SelectItem>
+                <SelectItem value="weekly">Weekly (app must be running)</SelectItem>
+                <SelectItem value="monthly">Monthly (app must be running)</SelectItem>
               </SelectContent>
             </Select>
 
@@ -409,7 +500,7 @@ function ScriptDetailPanel({
               </>
             )}
 
-            {draft.scheduleType === 'fixed_time' && (
+            {(draft.scheduleType === 'daily' || draft.scheduleType === 'fixed_time') && (
               <>
                 <div className="grid grid-cols-2 gap-2">
                   <label className="space-y-1">
@@ -438,6 +529,114 @@ function ScriptDetailPanel({
                 </p>
                 <p className="text-[11px] text-muted-foreground">
                   Change it in Windows Settings &gt; Time &amp; language &gt; Date &amp; time &gt; Time zone.
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  Runs only while the app is open.
+                </p>
+              </>
+            )}
+
+            {draft.scheduleType === 'weekly' && (
+              <>
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="space-y-1">
+                    <span className="text-xs text-muted-foreground">Hour (24h)</span>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={23}
+                      value={draft.hour}
+                      onChange={(e) => setDraft((prev) => ({ ...prev, hour: e.target.value }))}
+                    />
+                  </label>
+                  <label className="space-y-1">
+                    <span className="text-xs text-muted-foreground">Minute</span>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={59}
+                      value={draft.minute}
+                      onChange={(e) => setDraft((prev) => ({ ...prev, minute: e.target.value }))}
+                    />
+                  </label>
+                </div>
+                <div className="space-y-1">
+                  <span className="text-xs text-muted-foreground">Days of week</span>
+                  <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-7">
+                    {WEEKDAY_OPTIONS.map((option) => {
+                      const selected = draft.weeklyDays.includes(option.value)
+                      return (
+                        <Button
+                          key={option.value}
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className={cn(selected && 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground')}
+                          onClick={() =>
+                            setDraft((prev) => {
+                              const hasDay = prev.weeklyDays.includes(option.value)
+                              if (hasDay) {
+                                const next = prev.weeklyDays.filter((d) => d !== option.value)
+                                return { ...prev, weeklyDays: next.length > 0 ? next : prev.weeklyDays }
+                              }
+                              return { ...prev, weeklyDays: [...prev.weeklyDays, option.value].sort((a, b) => a - b) }
+                            })
+                          }
+                        >
+                          {option.label}
+                        </Button>
+                      )
+                    })}
+                  </div>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Uses your local time zone ({localTimeZone}) from Windows system time zone settings.
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  Runs only while the app is open.
+                </p>
+              </>
+            )}
+
+            {draft.scheduleType === 'monthly' && (
+              <>
+                <div className="grid grid-cols-3 gap-2">
+                  <label className="space-y-1">
+                    <span className="text-xs text-muted-foreground">Day (1-31)</span>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={31}
+                      value={draft.dayOfMonth}
+                      onChange={(e) => setDraft((prev) => ({ ...prev, dayOfMonth: e.target.value }))}
+                    />
+                  </label>
+                  <label className="space-y-1">
+                    <span className="text-xs text-muted-foreground">Hour (24h)</span>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={23}
+                      value={draft.hour}
+                      onChange={(e) => setDraft((prev) => ({ ...prev, hour: e.target.value }))}
+                    />
+                  </label>
+                  <label className="space-y-1">
+                    <span className="text-xs text-muted-foreground">Minute</span>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={59}
+                      value={draft.minute}
+                      onChange={(e) => setDraft((prev) => ({ ...prev, minute: e.target.value }))}
+                    />
+                  </label>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  On months with fewer days than selected (for example day 31 in April), that month is skipped.
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  Uses your local time zone ({localTimeZone}) from Windows system time zone settings.
                 </p>
                 <p className="text-[11px] text-muted-foreground">
                   Runs only while the app is open.

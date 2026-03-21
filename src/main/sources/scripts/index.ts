@@ -19,7 +19,12 @@ const SCRIPT_HOME_DIR_SETTING = 'script_home_dir'
 const REDDIT_DIGEST_SUBREDDITS_SETTING = 'reddit_digest_subreddits'
 const REDDIT_DIGEST_AUTO_DISABLED_SETTING = 'reddit_digest_script_auto_disabled'
 const REDDIT_DIGEST_SCRIPT_ID_SETTING = 'reddit_digest_script_id'
-const DEFAULT_REDDIT_DIGEST_SCHEDULE = JSON.stringify({ type: 'fixed_time', hour: 6, minute: 0 })
+const DEFAULT_REDDIT_DIGEST_SCHEDULE = JSON.stringify({
+  type: 'weekly',
+  hour: 9,
+  minute: 0,
+  days_of_week: [1]
+})
 
 let emitOutput: ((chunk: ScriptOutputChunk) => void) | null = null
 let emitUpdated: (() => void) | null = null

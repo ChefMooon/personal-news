@@ -589,11 +589,39 @@ async function resolveChannelFromInput(input: string): Promise<YtChannel> {
 }
 
 interface ScheduleDef {
-  type: 'on_app_start' | 'interval' | 'fixed_time'
+  type: 'on_app_start' | 'interval' | 'daily' | 'weekly' | 'monthly' | 'fixed_time'
   minutes?: number
   run_on_app_start?: boolean
   hour?: number
   minute?: number
+  days_of_week?: number[]
+  day_of_month?: number
+}
+
+function normalizeDaysOfWeek(input: number[] | undefined): number[] {
+  const source = Array.isArray(input) ? input : []
+  const unique = new Set<number>()
+  for (const value of source) {
+    const day = Math.floor(value)
+    if (Number.isFinite(day) && day >= 0 && day <= 6) {
+      unique.add(day)
+    }
+  }
+  return [...unique].sort((a, b) => a - b)
+}
+
+function getNormalizedTime(input: ScriptScheduleInput):
+  | { hour: number; minute: number; error: null }
+  | { hour: null; minute: null; error: string } {
+  const hour = Math.floor(input.hour ?? -1)
+  const minute = Math.floor(input.minute ?? -1)
+  if (!Number.isFinite(hour) || hour < 0 || hour > 23) {
+    return { hour: null, minute: null, error: 'Hour must be between 0 and 23.' }
+  }
+  if (!Number.isFinite(minute) || minute < 0 || minute > 59) {
+    return { hour: null, minute: null, error: 'Minute must be between 0 and 59.' }
+  }
+  return { hour, minute, error: null }
 }
 
 function normalizeScriptSchedule(input: ScriptScheduleInput): {
@@ -630,17 +658,59 @@ function normalizeScriptSchedule(input: ScriptScheduleInput): {
     }
   }
 
-  if (input.type === 'fixed_time') {
-    const hour = Math.floor(input.hour ?? -1)
-    const minute = Math.floor(input.minute ?? -1)
-    if (!Number.isFinite(hour) || hour < 0 || hour > 23) {
-      return { scheduleJson: null, isManual: false, error: 'Hour must be between 0 and 23.' }
-    }
-    if (!Number.isFinite(minute) || minute < 0 || minute > 59) {
-      return { scheduleJson: null, isManual: false, error: 'Minute must be between 0 and 59.' }
+  if (input.type === 'fixed_time' || input.type === 'daily') {
+    const time = getNormalizedTime(input)
+    if (time.error) {
+      return { scheduleJson: null, isManual: false, error: time.error }
     }
     return {
-      scheduleJson: JSON.stringify({ type: 'fixed_time' satisfies ScheduleDef['type'], hour, minute }),
+      scheduleJson: JSON.stringify({
+        type: 'daily' satisfies ScheduleDef['type'],
+        hour: time.hour,
+        minute: time.minute
+      }),
+      isManual: false,
+      error: null
+    }
+  }
+
+  if (input.type === 'weekly') {
+    const time = getNormalizedTime(input)
+    if (time.error) {
+      return { scheduleJson: null, isManual: false, error: time.error }
+    }
+    const days = normalizeDaysOfWeek(input.daysOfWeek)
+    if (days.length === 0) {
+      return { scheduleJson: null, isManual: false, error: 'Select at least one day of week.' }
+    }
+    return {
+      scheduleJson: JSON.stringify({
+        type: 'weekly' satisfies ScheduleDef['type'],
+        hour: time.hour,
+        minute: time.minute,
+        days_of_week: days
+      }),
+      isManual: false,
+      error: null
+    }
+  }
+
+  if (input.type === 'monthly') {
+    const time = getNormalizedTime(input)
+    if (time.error) {
+      return { scheduleJson: null, isManual: false, error: time.error }
+    }
+    const dayOfMonth = Math.floor(input.dayOfMonth ?? 1)
+    if (!Number.isFinite(dayOfMonth) || dayOfMonth < 1 || dayOfMonth > 31) {
+      return { scheduleJson: null, isManual: false, error: 'Day of month must be between 1 and 31.' }
+    }
+    return {
+      scheduleJson: JSON.stringify({
+        type: 'monthly' satisfies ScheduleDef['type'],
+        hour: time.hour,
+        minute: time.minute,
+        day_of_month: dayOfMonth
+      }),
       isManual: false,
       error: null
     }
@@ -665,8 +735,14 @@ function computeIsStale(
   if (def.type === 'interval' && def.minutes) {
     return now - lastSuccessFinishedAt > def.minutes * 60 * 2
   }
-  if (def.type === 'fixed_time') {
+  if (def.type === 'fixed_time' || def.type === 'daily') {
     return now - lastSuccessFinishedAt > 25 * 3600
+  }
+  if (def.type === 'weekly') {
+    return now - lastSuccessFinishedAt > 8 * 24 * 3600
+  }
+  if (def.type === 'monthly') {
+    return now - lastSuccessFinishedAt > 40 * 24 * 3600
   }
   return false
 }
