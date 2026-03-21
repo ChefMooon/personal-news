@@ -33,7 +33,8 @@ function runMigrations(database: Database.Database): void {
     4: '004_add_yt_video_media_type.sql',
     5: '005_add_saved_post_note.sql',
     6: '006_add_ntfy_poll_interval_setting.sql',
-    7: '007_add_saved_post_source.sql'
+    7: '007_add_saved_post_source.sql',
+    8: '008_remove_script_seed.sql'
   }
 
   // Ensure meta table exists first

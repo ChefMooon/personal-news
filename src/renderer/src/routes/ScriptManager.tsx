@@ -5,7 +5,7 @@ import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
 import { ScrollArea } from '../components/ui/scroll-area'
 import { formatRelativeTime } from '../lib/time'
-import { AlertTriangle, Play, Square, ChevronDown, ChevronRight, Clock, FolderOpen, Settings } from 'lucide-react'
+import { AlertTriangle, Play, Square, ChevronDown, ChevronRight, Clock, FolderOpen, RefreshCw, Settings } from 'lucide-react'
 import { IPC } from '../../../shared/ipc-types'
 import type { ScriptWithLastRun, ScriptRunRecord, ScriptOutputChunk } from '../../../shared/ipc-types'
 
@@ -34,8 +34,6 @@ interface ScriptDetailPanelProps {
   script: ScriptWithLastRun
   isRunning: boolean
   outputLines: Map<number, ScriptOutputChunk[]>
-  onRun: () => void
-  onCancel: () => void
   getRunHistory: (id: number) => Promise<ScriptRunRecord[]>
 }
 
@@ -43,8 +41,6 @@ function ScriptDetailPanel({
   script,
   isRunning,
   outputLines,
-  onRun,
-  onCancel,
   getRunHistory
 }: ScriptDetailPanelProps): React.ReactElement {
   const [history, setHistory] = useState<ScriptRunRecord[] | null>(null)
@@ -265,8 +261,6 @@ function ScriptRow({
           script={script}
           isRunning={isRunning}
           outputLines={outputLines}
-          onRun={() => onRun(script.id)}
-          onCancel={() => onCancel(script.id)}
           getRunHistory={getRunHistory}
         />
       )}
@@ -276,7 +270,7 @@ function ScriptRow({
 
 export default function ScriptManager(): React.ReactElement {
   const navigate = useNavigate()
-  const { scripts, loading, runningIds, outputLines, runScript, cancelScript, getRunHistory } =
+  const { scripts, loading, refreshing, runningIds, outputLines, runScript, cancelScript, getRunHistory, refresh } =
     useScripts()
   const [scriptHomeDir, setScriptHomeDir] = useState<string>('')
   const [openFolderError, setOpenFolderError] = useState<string | null>(null)
@@ -309,6 +303,16 @@ export default function ScriptManager(): React.ReactElement {
             </Badge>
           )}
           <Button
+            size="icon"
+            variant="outline"
+            disabled={!scriptHomeDir || refreshing}
+            onClick={() => { void refresh() }}
+            aria-label="Refresh scripts"
+            title="Refresh scripts"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+          </Button>
+          <Button
             size="sm"
             variant="outline"
             disabled={!scriptHomeDir}
@@ -334,7 +338,9 @@ export default function ScriptManager(): React.ReactElement {
       {loading ? (
         <p className="text-sm text-muted-foreground">Loading scripts…</p>
       ) : scripts.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No scripts registered.</p>
+        <p className="text-sm text-muted-foreground">
+          No scripts found in the configured Script Home Directory.
+        </p>
       ) : (
         <div>
           {scripts.map((script) => (

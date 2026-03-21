@@ -30,7 +30,8 @@ import { applyNtfyPollInterval, triggerNtfyPoll } from '../sources/reddit/index'
 import {
   activeRuns,
   runScriptById,
-  setScriptEmitters
+  setScriptEmitters,
+  syncScriptsFromHomeDir
 } from '../sources/scripts/index'
 
 const YOUTUBE_API_KEY_SETTING = 'youtube_api_key_encrypted'
@@ -937,6 +938,7 @@ export function registerIpcHandlers(): void {
   // scripts:getAll — includes is_stale computed from last successful run
   ipcMain.handle(IPC.SCRIPTS_GET_ALL, (): ScriptWithLastRun[] => {
     const db = getDb()
+    syncScriptsFromHomeDir(db)
     const rows = db
       .prepare(
         `SELECT s.*,
@@ -971,6 +973,7 @@ export function registerIpcHandlers(): void {
       return { ok: false, error: 'Script is already running.' }
     }
     const db = getDb()
+    syncScriptsFromHomeDir(db)
     const script = db
       .prepare(
         `SELECT s.*, r.started_at, r.finished_at, r.exit_code, 0 AS is_stale
@@ -1185,7 +1188,16 @@ export function registerIpcHandlers(): void {
 
   // settings:set (generic)
   ipcMain.handle(IPC.SETTINGS_SET, (_event, key: string, value: string): void => {
+    const previousValue = key === 'script_home_dir' ? getSetting(key) : null
     setSetting(key, value)
+    if (key === 'script_home_dir' && previousValue !== value) {
+      const db = getDb()
+      db.prepare('DELETE FROM scripts').run()
+      syncScriptsFromHomeDir(db)
+      for (const win of BrowserWindow.getAllWindows()) {
+        win.webContents.send(IPC.SCRIPTS_UPDATED)
+      }
+    }
   })
 
   // shell:openExternal

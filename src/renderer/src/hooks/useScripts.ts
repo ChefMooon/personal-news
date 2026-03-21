@@ -5,37 +5,42 @@ import { IPC } from '../../../shared/ipc-types'
 interface UseScriptsReturn {
   scripts: ScriptWithLastRun[]
   loading: boolean
+  refreshing: boolean
   runningIds: Set<number>
   outputLines: Map<number, ScriptOutputChunk[]>
   runScript: (id: number) => Promise<void>
   cancelScript: (id: number) => Promise<void>
   getRunHistory: (id: number) => Promise<ScriptRunRecord[]>
-  refresh: () => void
+  refresh: () => Promise<void>
 }
 
 export function useScripts(): UseScriptsReturn {
   const [scripts, setScripts] = useState<ScriptWithLastRun[]>([])
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [runningIds, setRunningIds] = useState<Set<number>>(new Set())
   const [outputLines, setOutputLines] = useState<Map<number, ScriptOutputChunk[]>>(new Map())
 
-  const fetchScripts = useCallback((): void => {
+  const fetchScripts = useCallback(async (): Promise<void> => {
     setLoading(true)
-    window.api
-      .invoke(IPC.SCRIPTS_GET_ALL)
-      .then((data) => setScripts(data as ScriptWithLastRun[]))
-      .catch(console.error)
-      .finally(() => setLoading(false))
+    try {
+      const data = await window.api.invoke(IPC.SCRIPTS_GET_ALL)
+      setScripts(data as ScriptWithLastRun[])
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => {
-    fetchScripts()
+    void fetchScripts()
   }, [fetchScripts])
 
   // Subscribe to push updates after a run completes — also clears runningIds
   useEffect(() => {
     const unsub = window.api.on(IPC.SCRIPTS_UPDATED, () => {
-      fetchScripts()
+      void fetchScripts()
       // Clear all running status on refresh; backend is the source of truth
       setRunningIds(new Set())
     })
@@ -93,15 +98,25 @@ export function useScripts(): UseScriptsReturn {
     }
   }, [])
 
+  const refresh = useCallback(async (): Promise<void> => {
+    setRefreshing(true)
+    try {
+      await fetchScripts()
+    } finally {
+      setRefreshing(false)
+    }
+  }, [fetchScripts])
+
   return {
     scripts,
     loading,
+    refreshing,
     runningIds,
     outputLines,
     runScript,
     cancelScript,
     getRunHistory,
-    refresh: fetchScripts
+    refresh
   }
 }
 
