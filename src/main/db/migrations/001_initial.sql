@@ -141,24 +141,6 @@ INSERT OR IGNORE INTO settings VALUES ('rss_poll_interval_minutes', '15');
 INSERT OR IGNORE INTO settings VALUES ('active_theme_id', 'system');
 INSERT OR IGNORE INTO settings VALUES ('reddit_digest_view_config', '{"sort_by":"score","sort_dir":"desc","group_by":"subreddit","layout_mode":"columns"}');
 
-INSERT OR IGNORE INTO reddit_digest_posts VALUES
-  ('abc001', 'programming', 'I built a personal news dashboard in Electron',
-   'https://github.com/example/personal-news',
-   '/r/programming/comments/abc001/i_built_a_personal_news_dashboard_in_electron/',
-   'user_one', 1842, 93, 1709900000, 1710100000),
-  ('abc002', 'programming', 'Why SQLite is the best database for desktop apps',
-   'https://example.com/sqlite-desktop',
-   '/r/programming/comments/abc002/why_sqlite/',
-   'user_two', 967, 44, 1709800000, 1710100000),
-  ('abc003', 'rust', 'Rust 2024 edition — what changed',
-   'https://blog.rust-lang.org/2024/edition',
-   '/r/rust/comments/abc003/rust_2024_edition/',
-   'rustacean_99', 3201, 187, 1709950000, 1710100000),
-  ('abc004', 'rust', 'async Rust is finally good',
-   'https://example.com/async-rust',
-   '/r/rust/comments/abc004/async_rust/',
-   'async_fan', 2110, 204, 1709870000, 1710100000);
-
 INSERT OR IGNORE INTO saved_posts
   (post_id, title, url, permalink, subreddit, author, score, body, saved_at, tags)
 VALUES

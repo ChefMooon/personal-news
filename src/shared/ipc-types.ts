@@ -16,6 +16,7 @@ export const IPC = {
   REDDIT_GET_ALL_TAGS: 'reddit:getAllTags',
   REDDIT_RENAME_TAG: 'reddit:renameTag',
   REDDIT_DELETE_TAG: 'reddit:deleteTag',
+  REDDIT_VALIDATE_DIGEST_SUBREDDIT: 'reddit:validateDigestSubreddit',
   REDDIT_POLL_NTFY: 'reddit:pollNtfy',
   REDDIT_GET_NTFY_STALENESS: 'reddit:getNtfyStaleness',
   REDDIT_NTFY_INGEST_COMPLETE: 'reddit:ntfyIngestComplete',

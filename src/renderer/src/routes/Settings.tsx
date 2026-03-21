@@ -590,9 +590,27 @@ function RedditDigestTab(): React.ReactElement {
       return
     }
 
-    const next = [...subreddits, normalized].sort()
-    await persist(next, 'Subreddit saved.')
-    setDraft('')
+    setSaving(true)
+    setMessage(null)
+    setError(null)
+    try {
+      const validation = (await window.api.invoke(
+        IPC.REDDIT_VALIDATE_DIGEST_SUBREDDIT,
+        normalized
+      )) as IpcMutationResult
+      if (!validation.ok) {
+        setError(validation.error ?? `r/${normalized} could not be added.`)
+        return
+      }
+
+      const next = [...subreddits, normalized].sort()
+      await persist(next, 'Subreddit saved.')
+      setDraft('')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to validate subreddit.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const removeSubreddit = async (subreddit: string): Promise<void> => {

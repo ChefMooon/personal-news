@@ -155,6 +155,44 @@ async function validateYouTubeApiKey(apiKey: string): Promise<IpcMutationResult>
   return { ok: true, error: null }
 }
 
+async function validateRedditDigestSubreddit(subreddit: string): Promise<IpcMutationResult> {
+  const normalized = subreddit.trim().replace(/^r\//i, '').toLowerCase()
+  if (!normalized) {
+    return { ok: false, error: 'Subreddit name is required.' }
+  }
+  if (!/^[a-z0-9_]+$/i.test(normalized)) {
+    return { ok: false, error: 'Subreddits may contain letters, numbers, and underscores only.' }
+  }
+
+  const params = new URLSearchParams({ t: 'week', limit: '1' })
+  const response = await fetch(`https://www.reddit.com/r/${normalized}/top.json?${params.toString()}`, {
+    headers: { 'User-Agent': 'personal-news-digest/1.0' }
+  })
+
+  if (!response.ok) {
+    return {
+      ok: false,
+      error:
+        response.status === 404
+          ? `r/${normalized} was not found.`
+          : `Reddit returned HTTP ${response.status} for r/${normalized}.`
+    }
+  }
+
+  const payload = (await response.json()) as {
+    data?: { children?: Array<unknown> }
+  }
+  const children = payload.data?.children
+  if (!Array.isArray(children) || children.length === 0) {
+    return {
+      ok: false,
+      error: `r/${normalized} currently returned no top posts for the default digest window.`
+    }
+  }
+
+  return { ok: true, error: null }
+}
+
 function parseChannelInput(input: string): { channelId: string | null; query: string | null } {
   const trimmed = input.trim()
   if (!trimmed) {
@@ -1366,6 +1404,21 @@ export function registerIpcHandlers(): void {
       const encrypted = safeStorage.encryptString(trimmed)
       setSetting(YOUTUBE_API_KEY_SETTING, encrypted.toString('base64'))
       return { ok: true, error: null }
+    }
+  )
+
+  // reddit:validateDigestSubreddit
+  ipcMain.handle(
+    IPC.REDDIT_VALIDATE_DIGEST_SUBREDDIT,
+    async (_event, subreddit: string): Promise<IpcMutationResult> => {
+      try {
+        return await validateRedditDigestSubreddit(subreddit)
+      } catch (error) {
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : 'Failed to validate subreddit.'
+        }
+      }
     }
   )
 

@@ -36,7 +36,8 @@ function runMigrations(database: Database.Database): void {
     7: '007_add_saved_post_source.sql',
     8: '008_remove_script_seed.sql',
     9: '009_add_script_description.sql',
-    10: '010_add_script_notifications.sql'
+    10: '010_add_script_notifications.sql',
+    11: '011_remove_reddit_digest_seed.sql'
   }
 
   // Ensure meta table exists first
