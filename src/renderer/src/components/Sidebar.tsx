@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { LayoutDashboard, Bookmark, Terminal, Settings, ChevronLeft, ChevronRight } from 'lucide-react'
 import { cn } from '../lib/utils'
+import { useScripts } from '../hooks/useScripts'
 
 interface NavItem {
   to: string
@@ -12,6 +13,8 @@ interface NavItem {
 
 export function Sidebar(): React.ReactElement {
   const [collapsed, setCollapsed] = useState(false)
+  const { scripts } = useScripts()
+  const hasStaleScripts = scripts.some((s) => s.is_stale)
 
   const navItems: NavItem[] = [
     {
@@ -28,8 +31,7 @@ export function Sidebar(): React.ReactElement {
       to: '/scripts',
       label: 'Script Manager',
       icon: <Terminal className="h-5 w-5 shrink-0" />,
-      // Hardcode attention: true — seed data includes a stale script
-      attention: true
+      attention: hasStaleScripts
     },
     {
       to: '/settings',

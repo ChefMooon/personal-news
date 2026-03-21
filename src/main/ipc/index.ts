@@ -12,6 +12,8 @@ import type {
   NtfyStaleness,
   NtfyPollResult,
   ScriptWithLastRun,
+  ScriptRunRecord,
+  ScriptOutputChunk,
   WidgetLayout,
   WidgetInstance,
   ThemeInfo,
@@ -25,6 +27,11 @@ import {
   triggerYouTubePollNow
 } from '../sources/youtube/index'
 import { applyNtfyPollInterval, triggerNtfyPoll } from '../sources/reddit/index'
+import {
+  activeRuns,
+  runScriptById,
+  setScriptEmitters
+} from '../sources/scripts/index'
 
 const YOUTUBE_API_KEY_SETTING = 'youtube_api_key_encrypted'
 const YOUTUBE_VIEW_CONFIG_KEY_PREFIX = 'youtube_view_config:'
@@ -528,7 +535,49 @@ async function resolveChannelFromInput(input: string): Promise<YtChannel> {
   }
 }
 
+interface ScheduleDef {
+  type: 'on_app_start' | 'interval' | 'fixed_time'
+  minutes?: number
+  hour?: number
+  minute?: number
+}
+
+function computeIsStale(
+  schedule: string | null,
+  lastSuccessFinishedAt: number | null,
+  now: number
+): boolean {
+  if (!schedule) return false
+  if (lastSuccessFinishedAt === null) return false
+  let def: ScheduleDef
+  try {
+    def = JSON.parse(schedule) as ScheduleDef
+  } catch {
+    return false
+  }
+  if (def.type === 'interval' && def.minutes) {
+    return now - lastSuccessFinishedAt > def.minutes * 60 * 2
+  }
+  if (def.type === 'fixed_time') {
+    return now - lastSuccessFinishedAt > 25 * 3600
+  }
+  return false
+}
+
 export function registerIpcHandlers(): void {
+  // Wire script output emitter
+  function emitScriptsOutput(chunk: ScriptOutputChunk): void {
+    for (const win of BrowserWindow.getAllWindows()) {
+      win.webContents.send(IPC.SCRIPTS_OUTPUT, chunk)
+    }
+  }
+  function emitScriptsUpdated(): void {
+    for (const win of BrowserWindow.getAllWindows()) {
+      win.webContents.send(IPC.SCRIPTS_UPDATED)
+    }
+  }
+  setScriptEmitters(emitScriptsOutput, emitScriptsUpdated)
+
   // youtube:getChannels
   ipcMain.handle(IPC.YOUTUBE_GET_CHANNELS, (): YtChannel[] => {
     const db = getDb()
@@ -885,18 +934,94 @@ export function registerIpcHandlers(): void {
     return { lastPolledAt, isStale, topicConfigured }
   })
 
-  // scripts:getAll
+  // scripts:getAll — includes is_stale computed from last successful run
   ipcMain.handle(IPC.SCRIPTS_GET_ALL, (): ScriptWithLastRun[] => {
     const db = getDb()
-    return db
+    const rows = db
       .prepare(
-        `SELECT s.*, r.started_at, r.finished_at, r.exit_code
+        `SELECT s.*,
+                r.started_at,
+                r.finished_at,
+                r.exit_code,
+                rs.finished_at AS last_success_finished_at
          FROM scripts s
          LEFT JOIN script_runs r ON r.id = (
            SELECT id FROM script_runs WHERE script_id = s.id ORDER BY started_at DESC LIMIT 1
+         )
+         LEFT JOIN script_runs rs ON rs.id = (
+           SELECT id FROM script_runs WHERE script_id = s.id AND exit_code = 0
+           ORDER BY started_at DESC LIMIT 1
          )`
       )
-      .all() as ScriptWithLastRun[]
+      .all() as Array<ScriptWithLastRun & { last_success_finished_at: number | null }>
+
+    const now = Math.floor(Date.now() / 1000)
+    return rows.map(({ last_success_finished_at, ...row }) => ({
+      ...row,
+      is_stale: computeIsStale(row.schedule, last_success_finished_at, now)
+    }))
+  })
+
+  // scripts:run
+  ipcMain.handle(IPC.SCRIPTS_RUN, async (_event, scriptId: number): Promise<{ ok: boolean; error: string | null }> => {
+    if (!Number.isInteger(scriptId) || scriptId <= 0) {
+      return { ok: false, error: 'Invalid script ID.' }
+    }
+    if (activeRuns.has(scriptId)) {
+      return { ok: false, error: 'Script is already running.' }
+    }
+    const db = getDb()
+    const script = db
+      .prepare(
+        `SELECT s.*, r.started_at, r.finished_at, r.exit_code, 0 AS is_stale
+         FROM scripts s
+         LEFT JOIN script_runs r ON r.id = (
+           SELECT id FROM script_runs WHERE script_id = s.id ORDER BY started_at DESC LIMIT 1
+         )
+         WHERE s.id = ?`
+      )
+      .get(scriptId) as ScriptWithLastRun | undefined
+    if (!script) {
+      return { ok: false, error: `Script ${scriptId} not found.` }
+    }
+    runScriptById(db, script).catch((err: Error) => {
+      console.error(`[IPC] scripts:run error for script ${scriptId}:`, err)
+    })
+    return { ok: true, error: null }
+  })
+
+  // scripts:cancel
+  ipcMain.handle(IPC.SCRIPTS_CANCEL, (_event, scriptId: number): { ok: boolean; error: string | null } => {
+    if (!Number.isInteger(scriptId) || scriptId <= 0) {
+      return { ok: false, error: 'Invalid script ID.' }
+    }
+    const run = activeRuns.get(scriptId)
+    if (!run) {
+      return { ok: false, error: 'Script is not running.' }
+    }
+    try {
+      run.child.kill()
+    } catch (err) {
+      return { ok: false, error: `Failed to kill process: ${(err as Error).message}` }
+    }
+    return { ok: true, error: null }
+  })
+
+  // scripts:getRunHistory
+  ipcMain.handle(IPC.SCRIPTS_GET_RUN_HISTORY, (_event, scriptId: number): ScriptRunRecord[] => {
+    if (!Number.isInteger(scriptId) || scriptId <= 0) {
+      return []
+    }
+    const db = getDb()
+    return db
+      .prepare(
+        `SELECT id, script_id, started_at, finished_at, exit_code, stdout, stderr
+         FROM script_runs
+         WHERE script_id = ?
+         ORDER BY started_at DESC
+         LIMIT 50`
+      )
+      .all(scriptId) as ScriptRunRecord[]
   })
 
   // settings:getWidgetLayout

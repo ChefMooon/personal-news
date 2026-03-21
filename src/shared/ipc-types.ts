@@ -21,6 +21,11 @@ export const IPC = {
   REDDIT_NTFY_INGEST_COMPLETE: 'reddit:ntfyIngestComplete',
   REDDIT_CLEAR_SAVED_POSTS: 'reddit:clearSavedPosts',
   SCRIPTS_GET_ALL: 'scripts:getAll',
+  SCRIPTS_RUN: 'scripts:run',
+  SCRIPTS_CANCEL: 'scripts:cancel',
+  SCRIPTS_GET_RUN_HISTORY: 'scripts:getRunHistory',
+  SCRIPTS_OUTPUT: 'scripts:output',
+  SCRIPTS_UPDATED: 'scripts:updated',
   SETTINGS_GET_WIDGET_LAYOUT: 'settings:getWidgetLayout',
   SETTINGS_SET_WIDGET_LAYOUT: 'settings:setWidgetLayout',
   SETTINGS_GET_THEME: 'settings:getTheme',
@@ -95,6 +100,23 @@ export interface ScriptWithLastRun {
   started_at: number | null
   finished_at: number | null
   exit_code: number | null
+  is_stale: boolean
+}
+
+export interface ScriptRunRecord {
+  id: number
+  script_id: number
+  started_at: number
+  finished_at: number | null
+  exit_code: number | null
+  stdout: string | null
+  stderr: string | null
+}
+
+export interface ScriptOutputChunk {
+  runId: number
+  stream: 'stdout' | 'stderr'
+  text: string
 }
 
 export interface WidgetInstance {
