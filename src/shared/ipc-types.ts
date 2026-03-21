@@ -27,7 +27,10 @@ export const IPC = {
   SCRIPTS_SET_SCHEDULE: 'scripts:setSchedule',
   SCRIPTS_SET_ENABLED: 'scripts:setEnabled',
   SCRIPTS_GET_RUN_HISTORY: 'scripts:getRunHistory',
+  SCRIPTS_GET_NOTIFICATIONS: 'scripts:getNotifications',
+  SCRIPTS_MARK_NOTIFICATIONS_READ: 'scripts:markNotificationsRead',
   SCRIPTS_OUTPUT: 'scripts:output',
+  SCRIPTS_RUN_COMPLETE: 'scripts:runComplete',
   SCRIPTS_UPDATED: 'scripts:updated',
   SETTINGS_GET_WIDGET_LAYOUT: 'settings:getWidgetLayout',
   SETTINGS_SET_WIDGET_LAYOUT: 'settings:setWidgetLayout',
@@ -123,6 +126,38 @@ export interface ScriptOutputChunk {
   runId: number
   stream: 'stdout' | 'stderr'
   text: string
+}
+
+export type ScriptRunTrigger = 'manual' | 'scheduled' | 'on_app_start' | 'catch_up' | 'startup_warning'
+
+export interface ScriptRunCompleteEvent {
+  kind: 'run_complete' | 'startup_warning'
+  scriptId: number
+  scriptName: string
+  runId: number | null
+  startedAt: number | null
+  finishedAt: number
+  exitCode: number | null
+  trigger: ScriptRunTrigger
+  severity: 'info' | 'warning' | 'error'
+  message: string
+  missedRuns: number | null
+  downtimeSeconds: number | null
+}
+
+export interface ScriptNotification {
+  id: number
+  script_id: number
+  run_id: number | null
+  severity: 'info' | 'warning' | 'error'
+  message: string
+  is_read: number
+  created_at: number
+  read_at: number | null
+}
+
+export interface ScriptNotificationsReadResult extends IpcMutationResult {
+  updatedCount: number
 }
 
 export interface ScriptScheduleInput {

@@ -3,6 +3,7 @@ import type {
   ScriptWithLastRun,
   ScriptRunRecord,
   ScriptOutputChunk,
+  ScriptRunCompleteEvent,
   ScriptUpdateInput,
   ScriptScheduleInput,
   IpcMutationResult
@@ -56,6 +57,22 @@ export function useScripts(): UseScriptsReturn {
     })
     return unsub
   }, [fetchScripts])
+
+  // Additive listener for run completion/warning events (future notification UX hook point)
+  useEffect(() => {
+    const unsub = window.api.on(IPC.SCRIPTS_RUN_COMPLETE, (...args: unknown[]) => {
+      const event = args[0] as ScriptRunCompleteEvent
+      if (event.kind !== 'run_complete') {
+        return
+      }
+      setRunningIds((prev) => {
+        const next = new Set(prev)
+        next.delete(event.scriptId)
+        return next
+      })
+    })
+    return unsub
+  }, [])
 
   // Subscribe to live output chunks (capped to last 50 run IDs to prevent unbounded growth)
   useEffect(() => {

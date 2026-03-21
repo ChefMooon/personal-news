@@ -9,12 +9,21 @@ export interface ActiveRun {
   runId: number
 }
 
+export interface ScriptRunCompletion {
+  runId: number
+  scriptId: number
+  startedAt: number
+  finishedAt: number
+  exitCode: number
+  message: string
+}
+
 export function runScript(
   db: Database.Database,
   script: ScriptWithLastRun,
   onOutput: (chunk: ScriptOutputChunk) => void,
   activeMap: Map<number, ActiveRun>
-): Promise<void> {
+): Promise<ScriptRunCompletion> {
   return new Promise((resolve) => {
     const args = script.args ? script.args.split(/\s+/).filter(Boolean) : []
     const child = spawn(script.interpreter, [script.file_path, ...args], {
@@ -67,7 +76,8 @@ export function runScript(
         'UPDATE script_runs SET finished_at = ?, exit_code = ?, stdout = ?, stderr = ? WHERE id = ?'
       ).run(finishedAt, exitCode, stdoutBuf || null, stderrBuf || null, runId)
       activeMap.delete(script.id)
-      resolve()
+      const message = exitCode === 0 ? 'Script run completed successfully.' : `Script run exited with code ${exitCode}.`
+      resolve({ runId, scriptId: script.id, startedAt: now, finishedAt, exitCode, message })
     })
 
     child.on('error', (err) => {
@@ -76,7 +86,14 @@ export function runScript(
         'UPDATE script_runs SET finished_at = ?, exit_code = ?, stderr = ? WHERE id = ?'
       ).run(finishedAt, -1, err.message, runId)
       activeMap.delete(script.id)
-      resolve()
+      resolve({
+        runId,
+        scriptId: script.id,
+        startedAt: now,
+        finishedAt,
+        exitCode: -1,
+        message: `Script process failed to start: ${err.message}`
+      })
     })
   })
 }

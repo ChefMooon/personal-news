@@ -35,7 +35,8 @@ function runMigrations(database: Database.Database): void {
     6: '006_add_ntfy_poll_interval_setting.sql',
     7: '007_add_saved_post_source.sql',
     8: '008_remove_script_seed.sql',
-    9: '009_add_script_description.sql'
+    9: '009_add_script_description.sql',
+    10: '010_add_script_notifications.sql'
   }
 
   // Ensure meta table exists first

@@ -14,6 +14,8 @@ import type {
   ScriptWithLastRun,
   ScriptRunRecord,
   ScriptOutputChunk,
+  ScriptNotification,
+  ScriptNotificationsReadResult,
   WidgetLayout,
   WidgetInstance,
   ThemeInfo,
@@ -22,7 +24,8 @@ import type {
   YouTubeApiKeyStatus,
   YouTubeViewConfig,
   ScriptScheduleInput,
-  ScriptUpdateInput
+  ScriptUpdateInput,
+  ScriptRunCompleteEvent
 } from '../../shared/ipc-types'
 import {
   applyYouTubePollInterval,
@@ -634,7 +637,12 @@ export function registerIpcHandlers(): void {
       win.webContents.send(IPC.SCRIPTS_UPDATED)
     }
   }
-  setScriptEmitters(emitScriptsOutput, emitScriptsUpdated)
+  function emitScriptsRunComplete(event: ScriptRunCompleteEvent): void {
+    for (const win of BrowserWindow.getAllWindows()) {
+      win.webContents.send(IPC.SCRIPTS_RUN_COMPLETE, event)
+    }
+  }
+  setScriptEmitters(emitScriptsOutput, emitScriptsUpdated, emitScriptsRunComplete)
 
   // youtube:getChannels
   ipcMain.handle(IPC.YOUTUBE_GET_CHANNELS, (): YtChannel[] => {
@@ -1213,6 +1221,60 @@ export function registerIpcHandlers(): void {
       )
       .all(scriptId) as ScriptRunRecord[]
   })
+
+  // scripts:getNotifications
+  ipcMain.handle(IPC.SCRIPTS_GET_NOTIFICATIONS, (_event, limit?: number): ScriptNotification[] => {
+    const db = getDb()
+    const safeLimit = Number.isInteger(limit) ? Math.min(Math.max(limit as number, 1), 200) : 100
+    return db
+      .prepare(
+        `SELECT id, script_id, run_id, severity, message, is_read, created_at, read_at
+         FROM script_notifications
+         ORDER BY created_at DESC
+         LIMIT ?`
+      )
+      .all(safeLimit) as ScriptNotification[]
+  })
+
+  // scripts:markNotificationsRead
+  ipcMain.handle(
+    IPC.SCRIPTS_MARK_NOTIFICATIONS_READ,
+    (_event, ids?: number[]): ScriptNotificationsReadResult => {
+      const db = getDb()
+      const now = Math.floor(Date.now() / 1000)
+
+      if (typeof ids === 'undefined') {
+        const result = db
+          .prepare(
+            `UPDATE script_notifications
+             SET is_read = 1, read_at = ?
+             WHERE is_read = 0`
+          )
+          .run(now)
+        return { ok: true, error: null, updatedCount: result.changes }
+      }
+
+      if (ids.length === 0) {
+        return { ok: true, error: null, updatedCount: 0 }
+      }
+
+      const validIds = [...new Set(ids.filter((id) => Number.isInteger(id) && id > 0))]
+      if (validIds.length === 0) {
+        return { ok: false, error: 'No valid notification IDs provided.', updatedCount: 0 }
+      }
+
+      const placeholders = validIds.map(() => '?').join(', ')
+      const result = db
+        .prepare(
+          `UPDATE script_notifications
+           SET is_read = 1, read_at = ?
+           WHERE is_read = 0 AND id IN (${placeholders})`
+        )
+        .run(now, ...validIds)
+
+      return { ok: true, error: null, updatedCount: result.changes }
+    }
+  )
 
   // settings:getWidgetLayout
   ipcMain.handle(IPC.SETTINGS_GET_WIDGET_LAYOUT, (): WidgetLayout => {
