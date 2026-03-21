@@ -18,10 +18,10 @@ Each item links to the relevant architecture doc for the full spec.
 
 ## Reddit Digest
 
-- [ ] **Reddit digest script execution** — wire the "Run Now" button in Script Manager to actually spawn the `reddit_digest.py` script as a child process, stream stdout/stderr to the DB (`script_runs`), and push a `scripts:runComplete` event when done. See `docs/architecture/data-sources.md §4`.
-- [ ] **Ingest script output into DB** — after `reddit_digest.py` runs, parse its output and upsert results into `reddit_digest_posts`. The script should write JSON to stdout; the main process reads and saves it.
-- [ ] **Stale script warning — real computation** — `scripts:getAll` currently returns hardcoded stale state from seed data. Replace with real staleness logic: compare `last_run_at` against `schedule_interval` threshold. See `docs/architecture/data-model.md §2.2` stale detection query.
-- [ ] **Sidebar stale badge — dynamic** — the amber dot on the Script Manager nav item is currently hardcoded. Drive it from the `scripts:getAll` result: show the dot if any script has `isStale: true`.
+- [x] **Reddit digest script execution** — wire the "Run Now" button in Script Manager to actually spawn the `reddit_digest.py` script as a child process, stream stdout/stderr to the DB (`script_runs`), and push a `scripts:runComplete` event when done. See `docs/architecture/data-sources.md §4`.
+- [x] **Ingest script output into DB** — after `reddit_digest.py` runs, parse its output and upsert results into `reddit_digest_posts`. The script should write JSON to stdout; the main process reads and saves it.
+- [x] **Stale script warning — real computation** — `scripts:getAll` currently returns hardcoded stale state from seed data. Replace with real staleness logic: compare `last_run_at` against `schedule_interval` threshold. See `docs/architecture/data-model.md §2.2` stale detection query.
+- [x] **Sidebar stale badge — dynamic** — the amber dot on the Script Manager nav item is currently hardcoded. Drive it from the `scripts:getAll` result: show the dot if any script has `isStale: true`.
 
 ---
 
@@ -50,7 +50,7 @@ Each item links to the relevant architecture doc for the full spec.
 - [x] **safeStorage for YouTube API key** — replace the `console.log` no-op in Settings > API Keys with a real `safeStorage.encryptString` / `decryptString` implementation. The key must never be written to the plain `settings` table. See `docs/architecture/tech-notes.md §5`.
 - [x] **ntfy topic configuration** — implement the ntfy settings fields in Settings > Saved Posts: topic name (plain text), optional custom server URL, Test Connection button, last-synced timestamp. See `docs/ui-ux.md §8.3`.
 - [x] **YouTube RSS poll interval setting** — the input in Settings > YouTube should read from and write to `rss_poll_interval_minutes` in the `settings` table, and re-register the cron job with the new interval.
-- [ ] **Reddit Digest settings tab** — currently a "coming soon" placeholder. Add subreddit list management (add/remove subreddits the digest script will target).
+- [x] **Reddit Digest settings tab** — currently a "coming soon" placeholder. Add subreddit list management (add/remove subreddits the digest script will target).
 
 ---
 

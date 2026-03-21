@@ -19,6 +19,7 @@ export const IPC = {
   REDDIT_POLL_NTFY: 'reddit:pollNtfy',
   REDDIT_GET_NTFY_STALENESS: 'reddit:getNtfyStaleness',
   REDDIT_NTFY_INGEST_COMPLETE: 'reddit:ntfyIngestComplete',
+  REDDIT_UPDATED: 'reddit:updated',
   REDDIT_CLEAR_SAVED_POSTS: 'reddit:clearSavedPosts',
   SCRIPTS_GET_ALL: 'scripts:getAll',
   SCRIPTS_RUN: 'scripts:run',

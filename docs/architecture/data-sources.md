@@ -481,62 +481,48 @@ function isScriptStale(script: ScriptRow, lastSuccessfulRun: ScriptRunRow | null
 
 ### 4.1 Purpose
 
-Collects top posts for configured subreddits and writes them to the `reddit_digest_posts` table in the local SQLite database.
+Collects top posts for configured subreddits and writes a JSON payload to stdout. The Electron main process validates that payload and upserts it into `reddit_digest_posts`.
 
 ### 4.2 Configuration
 
 The script reads its configuration from two sources (in priority order):
-1. Command-line arguments: `--db-path`, `--subreddits`, `--time-window`
+1. Command-line arguments: `--db-path`, `--time-window`, `--limit`
 2. The `settings` table in the SQLite database at `--db-path`
 
 Required args:
 - `--db-path <path>`: Absolute path to `data.db`
-- `--subreddits <r1,r2,r3>`: Comma-separated subreddit names
 
 Optional args:
 - `--time-window <week|month|all>`: Default `week`
 - `--limit <n>`: Posts per subreddit. Default `25`.
 
+Required settings:
+- `reddit_digest_subreddits`: JSON array of subreddit names, e.g. `["programming", "rust"]`
+
 ### 4.3 Behavior
 
 ```python
-import sqlite3, requests, time, argparse
-
 def fetch_top_posts(subreddit, time_window, limit):
-    url = f"https://www.reddit.com/r/{subreddit}/top.json?t={time_window}&limit={limit}"
-    headers = {"User-Agent": "personal-news-digest/1.0"}
-    resp = requests.get(url, headers=headers, timeout=15)
-    resp.raise_for_status()
-    return resp.json()["data"]["children"]
+  ...
 
-def upsert_post(conn, post_data, subreddit):
-    data = post_data["data"]
-    conn.execute("""
-        INSERT INTO reddit_digest_posts
-            (post_id, subreddit, title, url, permalink, author, score, num_comments, created_utc, fetched_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(post_id) DO UPDATE SET
-            score = excluded.score,
-            num_comments = excluded.num_comments,
-            fetched_at = excluded.fetched_at
-    """, (
-        data["id"], subreddit, data["title"], data["url"],
-        data["permalink"], data.get("author"), data["score"],
-        data["num_comments"], int(data["created_utc"]),
-        int(time.time())
-    ))
+payload = {
+  "generated_at": int(time.time()),
+  "subreddits": subreddits,
+  "posts": normalized_posts,
+}
+print(json.dumps(payload))
 ```
 
 - Rate limiting: 1-second `time.sleep` between subreddit requests.
-- Idempotent: uses `ON CONFLICT DO UPDATE` (upsert).
+- Idempotent: the Electron main process uses `ON CONFLICT DO UPDATE` (upsert).
 - Exits with code `0` on success, non-zero on failure.
-- Prints progress to stdout (visible in Script Manager live output).
+- Prints progress to stderr (visible in Script Manager live output) and reserves stdout for the final JSON payload.
 
 ### 4.4 First-Run Registration
 
 When the user configures their first subreddit in Settings → Reddit Digest, the app automatically registers `reddit_digest.py` as a Script Manager entry with a default `fixed_time` schedule of `06:00` daily. The user can modify or delete this registration in the Script Manager.
 
-The app locates the bundled script via `app.getAppPath()` + `resources/scripts/reddit_digest.py` (or `process.resourcesPath` in packaged builds).
+The app locates the bundled script via `process.resourcesPath/resources/scripts/reddit_digest.py`, with dev fallbacks to the repository `resources/scripts` path.
 
 ---
 

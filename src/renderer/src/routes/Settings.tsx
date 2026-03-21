@@ -513,10 +513,144 @@ function AppearanceTab(): React.ReactElement {
   )
 }
 
-function PlaceholderTab({ name }: { name: string }): React.ReactElement {
+function normalizeSubredditInput(value: string): string | null {
+  const normalized = value.trim().replace(/^r\//i, '').toLowerCase()
+  if (!normalized) {
+    return null
+  }
+  if (!/^[a-z0-9_]+$/i.test(normalized)) {
+    return null
+  }
+  return normalized
+}
+
+function RedditDigestTab(): React.ReactElement {
+  const [subreddits, setSubreddits] = useState<string[]>([])
+  const [draft, setDraft] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [message, setMessage] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const load = (): void => {
+    window.api
+      .invoke(IPC.SETTINGS_GET, 'reddit_digest_subreddits')
+      .then((raw) => {
+        if (typeof raw !== 'string' || raw.trim().length === 0) {
+          setSubreddits([])
+          return
+        }
+        try {
+          const parsed = JSON.parse(raw) as unknown
+          if (!Array.isArray(parsed)) {
+            setSubreddits([])
+            return
+          }
+          setSubreddits(
+            parsed
+              .filter((value): value is string => typeof value === 'string')
+              .map((value) => value.trim().toLowerCase())
+              .filter((value, index, values) => value.length > 0 && values.indexOf(value) === index)
+          )
+        } catch {
+          setSubreddits([])
+        }
+      })
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : 'Failed to load Reddit Digest settings.')
+      })
+  }
+
+  useEffect(() => {
+    load()
+  }, [])
+
+  const persist = async (nextSubreddits: string[], successMessage: string): Promise<void> => {
+    setSaving(true)
+    setMessage(null)
+    setError(null)
+    try {
+      await window.api.invoke(IPC.SETTINGS_SET, 'reddit_digest_subreddits', JSON.stringify(nextSubreddits))
+      setSubreddits(nextSubreddits)
+      setMessage(successMessage)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save Reddit Digest settings.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const addSubreddit = async (): Promise<void> => {
+    const normalized = normalizeSubredditInput(draft)
+    if (!normalized) {
+      setError('Subreddits may contain letters, numbers, and underscores only.')
+      return
+    }
+    if (subreddits.includes(normalized)) {
+      setError(`r/${normalized} is already configured.`)
+      return
+    }
+
+    const next = [...subreddits, normalized].sort()
+    await persist(next, 'Subreddit saved.')
+    setDraft('')
+  }
+
+  const removeSubreddit = async (subreddit: string): Promise<void> => {
+    const next = subreddits.filter((value) => value !== subreddit)
+    await persist(next, `Removed r/${subreddit}.`)
+  }
+
   return (
-    <div className="flex items-center justify-center py-12">
-      <p className="text-muted-foreground text-sm">{name} configuration coming soon.</p>
+    <div className="space-y-4 max-w-lg">
+      <div>
+        <h3 className="text-sm font-medium mb-1">Tracked subreddits</h3>
+        <p className="text-xs text-muted-foreground mb-3">
+          The bundled Reddit Digest script will fetch top posts for these subreddits and ingest them into the dashboard.
+        </p>
+        <div className="flex gap-2">
+          <Input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder="programming"
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter' || event.nativeEvent.isComposing) {
+                return
+              }
+              event.preventDefault()
+              if (!draft.trim() || saving) {
+                return
+              }
+              void addSubreddit()
+            }}
+          />
+          <Button variant="outline" onClick={() => void addSubreddit()} disabled={saving || draft.trim().length === 0}>
+            Add
+          </Button>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        {subreddits.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No subreddits configured yet.</p>
+        ) : (
+          subreddits.map((subreddit) => (
+            <div key={subreddit} className="flex items-center justify-between rounded-md border px-3 py-2">
+              <span className="text-sm font-medium">r/{subreddit}</span>
+              <Button variant="ghost" size="sm" onClick={() => void removeSubreddit(subreddit)} disabled={saving}>
+                Remove
+              </Button>
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="rounded-md border bg-muted/20 px-3 py-3 text-xs text-muted-foreground space-y-1">
+        <p>The first saved subreddit auto-registers the bundled Reddit Digest script in Script Manager with a daily 06:00 schedule.</p>
+        <p>Use Script Manager to run it immediately, view live output, or adjust the schedule.</p>
+      </div>
+
+      {message ? <p className="text-xs text-emerald-600">{message}</p> : null}
+      {error ? <p className="text-xs text-red-600">{error}</p> : null}
     </div>
   )
 }
@@ -843,7 +977,7 @@ export default function Settings(): React.ReactElement {
           <YouTubeTab />
         </TabsContent>
         <TabsContent value="reddit-digest" className="mt-4">
-          <PlaceholderTab name="Reddit Digest" />
+          <RedditDigestTab />
         </TabsContent>
         <TabsContent value="saved-posts" className="mt-4">
           <SavedPostsTab />

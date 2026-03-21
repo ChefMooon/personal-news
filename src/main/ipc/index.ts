@@ -34,6 +34,7 @@ import {
 import { applyNtfyPollInterval, triggerNtfyPoll } from '../sources/reddit/index'
 import {
   activeRuns,
+  ensureBundledRedditDigestScript,
   refreshScriptSchedule,
   runScriptById,
   setScriptEmitters,
@@ -42,6 +43,7 @@ import {
 
 const YOUTUBE_API_KEY_SETTING = 'youtube_api_key_encrypted'
 const YOUTUBE_VIEW_CONFIG_KEY_PREFIX = 'youtube_view_config:'
+const REDDIT_DIGEST_SUBREDDITS_SETTING = 'reddit_digest_subreddits'
 const xmlParser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: ''
@@ -96,6 +98,12 @@ function buildTemporaryChannelThumbnail(channelId: string, channelName: string):
 function emitYoutubeUpdated(): void {
   for (const win of BrowserWindow.getAllWindows()) {
     win.webContents.send(IPC.YOUTUBE_UPDATED)
+  }
+}
+
+function emitRedditUpdated(): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    win.webContents.send(IPC.REDDIT_UPDATED)
   }
 }
 
@@ -642,7 +650,7 @@ export function registerIpcHandlers(): void {
       win.webContents.send(IPC.SCRIPTS_RUN_COMPLETE, event)
     }
   }
-  setScriptEmitters(emitScriptsOutput, emitScriptsUpdated, emitScriptsRunComplete)
+  setScriptEmitters(emitScriptsOutput, emitScriptsUpdated, emitScriptsRunComplete, emitRedditUpdated)
 
   // youtube:getChannels
   ipcMain.handle(IPC.YOUTUBE_GET_CHANNELS, (): YtChannel[] => {
@@ -1437,15 +1445,25 @@ export function registerIpcHandlers(): void {
 
   // settings:set (generic)
   ipcMain.handle(IPC.SETTINGS_SET, (_event, key: string, value: string): void => {
-    const previousValue = key === 'script_home_dir' ? getSetting(key) : null
+    const previousValue =
+      key === 'script_home_dir' || key === REDDIT_DIGEST_SUBREDDITS_SETTING ? getSetting(key) : null
     setSetting(key, value)
     if (key === 'script_home_dir' && previousValue !== value) {
       const db = getDb()
       db.prepare('DELETE FROM scripts').run()
+      ensureBundledRedditDigestScript(db)
       syncScriptsFromHomeDir(db)
       for (const win of BrowserWindow.getAllWindows()) {
         win.webContents.send(IPC.SCRIPTS_UPDATED)
       }
+    }
+    if (key === REDDIT_DIGEST_SUBREDDITS_SETTING && previousValue !== value) {
+      const db = getDb()
+      const scriptId = ensureBundledRedditDigestScript(db)
+      if (scriptId !== null) {
+        refreshScriptSchedule(db, scriptId, { runOnAppStart: false })
+      }
+      emitScriptsUpdated()
     }
   })
 
