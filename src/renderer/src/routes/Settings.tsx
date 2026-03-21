@@ -523,8 +523,6 @@ function PlaceholderTab({ name }: { name: string }): React.ReactElement {
 
 function ScriptsTab(): React.ReactElement {
   const [dir, setDir] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -536,20 +534,6 @@ function ScriptsTab(): React.ReactElement {
       })
   }, [])
 
-  const saveDir = async (): Promise<void> => {
-    setSaving(true)
-    setMessage(null)
-    setError(null)
-    try {
-      await window.api.invoke(IPC.SETTINGS_SET, 'script_home_dir', dir)
-      setMessage('Script home directory saved.')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save script home directory.')
-    } finally {
-      setSaving(false)
-    }
-  }
-
   return (
     <div className="space-y-4 max-w-md">
       <div>
@@ -560,15 +544,26 @@ function ScriptsTab(): React.ReactElement {
         <div className="flex gap-2">
           <Input
             value={dir}
-            onChange={(e) => setDir(e.target.value)}
-            placeholder="/path/to/scripts"
+            readOnly
+            placeholder="No folder selected"
             className="flex-1"
           />
-          <Button onClick={() => { void saveDir() }} disabled={saving}>
-            {saving ? 'Saving...' : 'Save'}
+          <Button
+            onClick={async () => {
+              setError(null)
+              const picked = await window.api.invoke(IPC.DIALOG_SHOW_OPEN_FOLDER) as string | null
+              if (picked === null) return
+              try {
+                await window.api.invoke(IPC.SETTINGS_SET, 'script_home_dir', picked)
+                setDir(picked)
+              } catch (err) {
+                setError(err instanceof Error ? err.message : 'Failed to save script home directory.')
+              }
+            }}
+          >
+            Browse
           </Button>
         </div>
-        {message ? <p className="text-xs text-emerald-600 mt-2">{message}</p> : null}
         {error ? <p className="text-xs text-red-600 mt-2">{error}</p> : null}
       </div>
     </div>

@@ -40,7 +40,8 @@ export const IPC = {
   SETTINGS_GET: 'settings:get',
   SETTINGS_SET: 'settings:set',
   SHELL_OPEN_EXTERNAL: 'shell:openExternal',
-  SHELL_OPEN_PATH: 'shell:openPath'
+  SHELL_OPEN_PATH: 'shell:openPath',
+  DIALOG_SHOW_OPEN_FOLDER: 'dialog:showOpenFolder'
 } as const
 
 export interface YtChannel {

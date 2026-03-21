@@ -1,4 +1,4 @@
-import { BrowserWindow, ipcMain, safeStorage, shell } from 'electron'
+import { BrowserWindow, dialog, ipcMain, safeStorage, shell } from 'electron'
 import { XMLParser } from 'fast-xml-parser'
 import { getDb } from '../db/database'
 import { deleteSetting, getSetting, setSetting } from '../settings/store'
@@ -1196,5 +1196,14 @@ export function registerIpcHandlers(): void {
   // shell:openPath
   ipcMain.handle(IPC.SHELL_OPEN_PATH, (_event, folderPath: string): Promise<string> => {
     return shell.openPath(folderPath)
+  })
+
+  // dialog:showOpenFolder
+  ipcMain.handle(IPC.DIALOG_SHOW_OPEN_FOLDER, async (): Promise<string | null> => {
+    const win = BrowserWindow.getFocusedWindow()
+    const result = await dialog.showOpenDialog(win ?? new BrowserWindow({ show: false }), {
+      properties: ['openDirectory']
+    })
+    return result.canceled || result.filePaths.length === 0 ? null : result.filePaths[0]
   })
 }
