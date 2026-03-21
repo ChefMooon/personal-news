@@ -107,6 +107,7 @@ CREATE INDEX IF NOT EXISTS idx_saved_posts_subreddit
 CREATE TABLE IF NOT EXISTS scripts (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     name        TEXT NOT NULL,
+    description TEXT,
     file_path   TEXT NOT NULL,
     interpreter TEXT NOT NULL DEFAULT 'python3',
     args        TEXT,
@@ -173,21 +174,3 @@ VALUES
    'https://go.dev/blog/generics',
    '/r/golang/comments/sp003/new_generics/',
    'golang', 'gopher_99', 1203, NULL, 1741863600, NULL);
-
-INSERT OR IGNORE INTO scripts VALUES
-  (1, 'Reddit Digest', '/home/user/scripts/reddit_digest.py',
-   'python3', '--limit 25',
-   '{"type":"fixed_time","hour":6,"minute":0}',
-   1, 1700000000),
-  (2, 'Backup Notes', '/home/user/scripts/backup_notes.py',
-   'python3', NULL,
-   '{"type":"interval","minutes":120}',
-   1, 1700000100);
-
-INSERT OR IGNORE INTO script_runs VALUES
-  (1, 1,
-   1709827200, 1709827245, 0,
-   'Fetched 50 posts across 2 subreddits.', NULL),
-  (2, 2,
-   1742036400, 1742036412, 0,
-   'Backup complete. 142 files copied.', NULL);

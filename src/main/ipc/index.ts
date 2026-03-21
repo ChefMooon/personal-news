@@ -1,4 +1,4 @@
-import { BrowserWindow, ipcMain, safeStorage, shell } from 'electron'
+import { BrowserWindow, dialog, ipcMain, safeStorage, shell } from 'electron'
 import { XMLParser } from 'fast-xml-parser'
 import { getDb } from '../db/database'
 import { deleteSetting, getSetting, setSetting } from '../settings/store'
@@ -12,19 +12,33 @@ import type {
   NtfyStaleness,
   NtfyPollResult,
   ScriptWithLastRun,
+  ScriptRunRecord,
+  ScriptOutputChunk,
+  ScriptNotification,
+  ScriptNotificationsReadResult,
   WidgetLayout,
   WidgetInstance,
   ThemeInfo,
   IpcMutationResult,
   YouTubeCacheClearResult,
   YouTubeApiKeyStatus,
-  YouTubeViewConfig
+  YouTubeViewConfig,
+  ScriptScheduleInput,
+  ScriptUpdateInput,
+  ScriptRunCompleteEvent
 } from '../../shared/ipc-types'
 import {
   applyYouTubePollInterval,
   triggerYouTubePollNow
 } from '../sources/youtube/index'
 import { applyNtfyPollInterval, triggerNtfyPoll } from '../sources/reddit/index'
+import {
+  activeRuns,
+  refreshScriptSchedule,
+  runScriptById,
+  setScriptEmitters,
+  syncScriptsFromHomeDir
+} from '../sources/scripts/index'
 
 const YOUTUBE_API_KEY_SETTING = 'youtube_api_key_encrypted'
 const YOUTUBE_VIEW_CONFIG_KEY_PREFIX = 'youtube_view_config:'
@@ -528,7 +542,108 @@ async function resolveChannelFromInput(input: string): Promise<YtChannel> {
   }
 }
 
+interface ScheduleDef {
+  type: 'on_app_start' | 'interval' | 'fixed_time'
+  minutes?: number
+  run_on_app_start?: boolean
+  hour?: number
+  minute?: number
+}
+
+function normalizeScriptSchedule(input: ScriptScheduleInput): {
+  scheduleJson: string | null
+  isManual: boolean
+  error: string | null
+} {
+  if (input.type === 'manual') {
+    return { scheduleJson: null, isManual: true, error: null }
+  }
+
+  if (input.type === 'on_app_start') {
+    return {
+      scheduleJson: JSON.stringify({ type: 'on_app_start' satisfies ScheduleDef['type'] }),
+      isManual: false,
+      error: null
+    }
+  }
+
+  if (input.type === 'interval') {
+    const minutes = Math.floor(input.minutes ?? 0)
+    const runOnAppStart = Boolean(input.runOnAppStart)
+    if (!Number.isFinite(minutes) || minutes < 1 || minutes > 1440) {
+      return { scheduleJson: null, isManual: false, error: 'Interval minutes must be between 1 and 1440.' }
+    }
+    return {
+      scheduleJson: JSON.stringify({
+        type: 'interval' satisfies ScheduleDef['type'],
+        minutes,
+        run_on_app_start: runOnAppStart
+      }),
+      isManual: false,
+      error: null
+    }
+  }
+
+  if (input.type === 'fixed_time') {
+    const hour = Math.floor(input.hour ?? -1)
+    const minute = Math.floor(input.minute ?? -1)
+    if (!Number.isFinite(hour) || hour < 0 || hour > 23) {
+      return { scheduleJson: null, isManual: false, error: 'Hour must be between 0 and 23.' }
+    }
+    if (!Number.isFinite(minute) || minute < 0 || minute > 59) {
+      return { scheduleJson: null, isManual: false, error: 'Minute must be between 0 and 59.' }
+    }
+    return {
+      scheduleJson: JSON.stringify({ type: 'fixed_time' satisfies ScheduleDef['type'], hour, minute }),
+      isManual: false,
+      error: null
+    }
+  }
+
+  return { scheduleJson: null, isManual: false, error: 'Unsupported schedule type.' }
+}
+
+function computeIsStale(
+  schedule: string | null,
+  lastSuccessFinishedAt: number | null,
+  now: number
+): boolean {
+  if (!schedule) return false
+  if (lastSuccessFinishedAt === null) return false
+  let def: ScheduleDef
+  try {
+    def = JSON.parse(schedule) as ScheduleDef
+  } catch {
+    return false
+  }
+  if (def.type === 'interval' && def.minutes) {
+    return now - lastSuccessFinishedAt > def.minutes * 60 * 2
+  }
+  if (def.type === 'fixed_time') {
+    return now - lastSuccessFinishedAt > 25 * 3600
+  }
+  return false
+}
+
 export function registerIpcHandlers(): void {
+  // Wire script output emitter
+  function emitScriptsOutput(chunk: ScriptOutputChunk): void {
+    for (const win of BrowserWindow.getAllWindows()) {
+      win.webContents.send(IPC.SCRIPTS_OUTPUT, chunk)
+    }
+  }
+  function emitScriptsUpdated(): void {
+    for (const win of BrowserWindow.getAllWindows()) {
+      win.webContents.send(IPC.SCRIPTS_UPDATED)
+    }
+  }
+  function emitScriptsRunComplete(event: ScriptRunCompleteEvent): void {
+    for (const win of BrowserWindow.getAllWindows()) {
+      win.webContents.send(IPC.SCRIPTS_RUN_COMPLETE, event)
+    }
+  }
+  setScriptEmitters(emitScriptsOutput, emitScriptsUpdated, emitScriptsRunComplete)
+
   // youtube:getChannels
   ipcMain.handle(IPC.YOUTUBE_GET_CHANNELS, (): YtChannel[] => {
     const db = getDb()
@@ -885,19 +1000,281 @@ export function registerIpcHandlers(): void {
     return { lastPolledAt, isStale, topicConfigured }
   })
 
-  // scripts:getAll
+  // scripts:getAll — includes is_stale computed from last successful run
   ipcMain.handle(IPC.SCRIPTS_GET_ALL, (): ScriptWithLastRun[] => {
     const db = getDb()
-    return db
+    syncScriptsFromHomeDir(db)
+    const rows = db
       .prepare(
-        `SELECT s.*, r.started_at, r.finished_at, r.exit_code
+        `SELECT s.*,
+                r.started_at,
+                r.finished_at,
+                r.exit_code,
+                rs.finished_at AS last_success_finished_at
          FROM scripts s
          LEFT JOIN script_runs r ON r.id = (
            SELECT id FROM script_runs WHERE script_id = s.id ORDER BY started_at DESC LIMIT 1
+         )
+         LEFT JOIN script_runs rs ON rs.id = (
+           SELECT id FROM script_runs WHERE script_id = s.id AND exit_code = 0
+           ORDER BY started_at DESC LIMIT 1
          )`
       )
-      .all() as ScriptWithLastRun[]
+      .all() as Array<ScriptWithLastRun & { last_success_finished_at: number | null }>
+
+    const now = Math.floor(Date.now() / 1000)
+    return rows.map(({ last_success_finished_at, ...row }) => ({
+      ...row,
+      is_stale: computeIsStale(row.schedule, last_success_finished_at, now)
+    }))
   })
+
+  // scripts:update
+  ipcMain.handle(IPC.SCRIPTS_UPDATE, (_event, input: ScriptUpdateInput): IpcMutationResult => {
+    if (!Number.isInteger(input.id) || input.id <= 0) {
+      return { ok: false, error: 'Invalid script ID.' }
+    }
+
+    const normalizedName = input.name.trim()
+    const normalizedPath = input.file_path.trim()
+    const normalizedInterpreter = input.interpreter.trim()
+    const normalizedDescription = input.description?.trim() || null
+    const normalizedArgs = input.args?.trim() || null
+
+    if (!normalizedName) {
+      return { ok: false, error: 'Name is required.' }
+    }
+    if (!normalizedPath) {
+      return { ok: false, error: 'File path is required.' }
+    }
+    if (!normalizedInterpreter) {
+      return { ok: false, error: 'Interpreter is required.' }
+    }
+
+    const schedule = normalizeScriptSchedule(input.schedule)
+    if (schedule.error) {
+      return { ok: false, error: schedule.error }
+    }
+
+    if (schedule.isManual && input.enabled) {
+      return { ok: false, error: 'Manual schedule cannot have auto-run enabled.' }
+    }
+
+    const db = getDb()
+    const result = db
+      .prepare(
+        `UPDATE scripts
+         SET name = ?, description = ?, file_path = ?, interpreter = ?, args = ?, schedule = ?, enabled = ?
+         WHERE id = ?`
+      )
+      .run(
+        normalizedName,
+        normalizedDescription,
+        normalizedPath,
+        normalizedInterpreter,
+        normalizedArgs,
+        schedule.scheduleJson,
+        input.enabled ? 1 : 0,
+        input.id
+      )
+
+    if (result.changes === 0) {
+      return { ok: false, error: 'Script not found.' }
+    }
+
+    refreshScriptSchedule(db, input.id, { runOnAppStart: false })
+    emitScriptsUpdated()
+    return { ok: true, error: null }
+  })
+
+  // scripts:setSchedule
+  ipcMain.handle(
+    IPC.SCRIPTS_SET_SCHEDULE,
+    (_event, scriptId: number, scheduleInput: ScriptScheduleInput): IpcMutationResult => {
+      if (!Number.isInteger(scriptId) || scriptId <= 0) {
+        return { ok: false, error: 'Invalid script ID.' }
+      }
+
+      const schedule = normalizeScriptSchedule(scheduleInput)
+      if (schedule.error) {
+        return { ok: false, error: schedule.error }
+      }
+
+      const db = getDb()
+      const existing = db.prepare('SELECT enabled FROM scripts WHERE id = ?').get(scriptId) as
+        | { enabled: number }
+        | undefined
+
+      if (!existing) {
+        return { ok: false, error: 'Script not found.' }
+      }
+
+      if (schedule.isManual && existing.enabled === 1) {
+        return { ok: false, error: 'Manual schedule cannot have auto-run enabled.' }
+      }
+
+      const result = db
+        .prepare('UPDATE scripts SET schedule = ? WHERE id = ?')
+        .run(schedule.scheduleJson, scriptId)
+
+      if (result.changes === 0) {
+        return { ok: false, error: 'Script not found.' }
+      }
+
+      refreshScriptSchedule(db, scriptId, { runOnAppStart: false })
+      emitScriptsUpdated()
+      return { ok: true, error: null }
+    }
+  )
+
+  // scripts:setEnabled
+  ipcMain.handle(IPC.SCRIPTS_SET_ENABLED, (_event, scriptId: number, enabled: boolean): IpcMutationResult => {
+    if (!Number.isInteger(scriptId) || scriptId <= 0) {
+      return { ok: false, error: 'Invalid script ID.' }
+    }
+
+    const db = getDb()
+    const existing = db.prepare('SELECT schedule FROM scripts WHERE id = ?').get(scriptId) as
+      | { schedule: string | null }
+      | undefined
+
+    if (!existing) {
+      return { ok: false, error: 'Script not found.' }
+    }
+
+    if (!existing.schedule && enabled) {
+      return { ok: false, error: 'Cannot enable auto-run when schedule is manual.' }
+    }
+
+    const result = db
+      .prepare('UPDATE scripts SET enabled = ? WHERE id = ?')
+      .run(enabled ? 1 : 0, scriptId)
+
+    if (result.changes === 0) {
+      return { ok: false, error: 'Script not found.' }
+    }
+
+    refreshScriptSchedule(db, scriptId, { runOnAppStart: false })
+    emitScriptsUpdated()
+    return { ok: true, error: null }
+  })
+
+  // scripts:run
+  ipcMain.handle(IPC.SCRIPTS_RUN, async (_event, scriptId: number): Promise<{ ok: boolean; error: string | null }> => {
+    if (!Number.isInteger(scriptId) || scriptId <= 0) {
+      return { ok: false, error: 'Invalid script ID.' }
+    }
+    if (activeRuns.has(scriptId)) {
+      return { ok: false, error: 'Script is already running.' }
+    }
+    const db = getDb()
+    syncScriptsFromHomeDir(db)
+    const script = db
+      .prepare(
+        `SELECT s.*, r.started_at, r.finished_at, r.exit_code, 0 AS is_stale
+         FROM scripts s
+         LEFT JOIN script_runs r ON r.id = (
+           SELECT id FROM script_runs WHERE script_id = s.id ORDER BY started_at DESC LIMIT 1
+         )
+         WHERE s.id = ?`
+      )
+      .get(scriptId) as ScriptWithLastRun | undefined
+    if (!script) {
+      return { ok: false, error: `Script ${scriptId} not found.` }
+    }
+    runScriptById(db, script).catch((err: Error) => {
+      console.error(`[IPC] scripts:run error for script ${scriptId}:`, err)
+    })
+    return { ok: true, error: null }
+  })
+
+  // scripts:cancel
+  ipcMain.handle(IPC.SCRIPTS_CANCEL, (_event, scriptId: number): { ok: boolean; error: string | null } => {
+    if (!Number.isInteger(scriptId) || scriptId <= 0) {
+      return { ok: false, error: 'Invalid script ID.' }
+    }
+    const run = activeRuns.get(scriptId)
+    if (!run) {
+      return { ok: false, error: 'Script is not running.' }
+    }
+    try {
+      run.child.kill()
+    } catch (err) {
+      return { ok: false, error: `Failed to kill process: ${(err as Error).message}` }
+    }
+    return { ok: true, error: null }
+  })
+
+  // scripts:getRunHistory
+  ipcMain.handle(IPC.SCRIPTS_GET_RUN_HISTORY, (_event, scriptId: number): ScriptRunRecord[] => {
+    if (!Number.isInteger(scriptId) || scriptId <= 0) {
+      return []
+    }
+    const db = getDb()
+    return db
+      .prepare(
+        `SELECT id, script_id, started_at, finished_at, exit_code, stdout, stderr
+         FROM script_runs
+         WHERE script_id = ?
+         ORDER BY started_at DESC
+         LIMIT 50`
+      )
+      .all(scriptId) as ScriptRunRecord[]
+  })
+
+  // scripts:getNotifications
+  ipcMain.handle(IPC.SCRIPTS_GET_NOTIFICATIONS, (_event, limit?: number): ScriptNotification[] => {
+    const db = getDb()
+    const safeLimit = Number.isInteger(limit) ? Math.min(Math.max(limit as number, 1), 200) : 100
+    return db
+      .prepare(
+        `SELECT id, script_id, run_id, severity, message, is_read, created_at, read_at
+         FROM script_notifications
+         ORDER BY created_at DESC
+         LIMIT ?`
+      )
+      .all(safeLimit) as ScriptNotification[]
+  })
+
+  // scripts:markNotificationsRead
+  ipcMain.handle(
+    IPC.SCRIPTS_MARK_NOTIFICATIONS_READ,
+    (_event, ids?: number[]): ScriptNotificationsReadResult => {
+      const db = getDb()
+      const now = Math.floor(Date.now() / 1000)
+
+      if (typeof ids === 'undefined') {
+        const result = db
+          .prepare(
+            `UPDATE script_notifications
+             SET is_read = 1, read_at = ?
+             WHERE is_read = 0`
+          )
+          .run(now)
+        return { ok: true, error: null, updatedCount: result.changes }
+      }
+
+      if (ids.length === 0) {
+        return { ok: true, error: null, updatedCount: 0 }
+      }
+
+      const validIds = [...new Set(ids.filter((id) => Number.isInteger(id) && id > 0))]
+      if (validIds.length === 0) {
+        return { ok: false, error: 'No valid notification IDs provided.', updatedCount: 0 }
+      }
+
+      const placeholders = validIds.map(() => '?').join(', ')
+      const result = db
+        .prepare(
+          `UPDATE script_notifications
+           SET is_read = 1, read_at = ?
+           WHERE is_read = 0 AND id IN (${placeholders})`
+        )
+        .run(now, ...validIds)
+
+      return { ok: true, error: null, updatedCount: result.changes }
+    }
+  )
 
   // settings:getWidgetLayout
   ipcMain.handle(IPC.SETTINGS_GET_WIDGET_LAYOUT, (): WidgetLayout => {
@@ -1060,11 +1437,34 @@ export function registerIpcHandlers(): void {
 
   // settings:set (generic)
   ipcMain.handle(IPC.SETTINGS_SET, (_event, key: string, value: string): void => {
+    const previousValue = key === 'script_home_dir' ? getSetting(key) : null
     setSetting(key, value)
+    if (key === 'script_home_dir' && previousValue !== value) {
+      const db = getDb()
+      db.prepare('DELETE FROM scripts').run()
+      syncScriptsFromHomeDir(db)
+      for (const win of BrowserWindow.getAllWindows()) {
+        win.webContents.send(IPC.SCRIPTS_UPDATED)
+      }
+    }
   })
 
   // shell:openExternal
   ipcMain.handle(IPC.SHELL_OPEN_EXTERNAL, (_event, url: string): void => {
     shell.openExternal(url)
+  })
+
+  // shell:openPath
+  ipcMain.handle(IPC.SHELL_OPEN_PATH, (_event, folderPath: string): Promise<string> => {
+    return shell.openPath(folderPath)
+  })
+
+  // dialog:showOpenFolder
+  ipcMain.handle(IPC.DIALOG_SHOW_OPEN_FOLDER, async (): Promise<string | null> => {
+    const win = BrowserWindow.getFocusedWindow()
+    const result = await dialog.showOpenDialog(win ?? new BrowserWindow({ show: false }), {
+      properties: ['openDirectory']
+    })
+    return result.canceled || result.filePaths.length === 0 ? null : result.filePaths[0]
   })
 }

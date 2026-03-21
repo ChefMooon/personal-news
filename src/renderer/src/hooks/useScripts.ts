@@ -1,19 +1,191 @@
-import { useState, useEffect } from 'react'
-import type { ScriptWithLastRun } from '../../../shared/ipc-types'
+import { useState, useEffect, useCallback } from 'react'
+import type {
+  ScriptWithLastRun,
+  ScriptRunRecord,
+  ScriptOutputChunk,
+  ScriptRunCompleteEvent,
+  ScriptUpdateInput,
+  ScriptScheduleInput,
+  IpcMutationResult
+} from '../../../shared/ipc-types'
+import { IPC } from '../../../shared/ipc-types'
 
-export function useScripts(): { scripts: ScriptWithLastRun[]; loading: boolean } {
+interface UseScriptsReturn {
+  scripts: ScriptWithLastRun[]
+  loading: boolean
+  refreshing: boolean
+  runningIds: Set<number>
+  outputLines: Map<number, ScriptOutputChunk[]>
+  runScript: (id: number) => Promise<void>
+  cancelScript: (id: number) => Promise<void>
+  updateScript: (input: ScriptUpdateInput) => Promise<IpcMutationResult>
+  setScriptSchedule: (id: number, schedule: ScriptScheduleInput) => Promise<IpcMutationResult>
+  setScriptEnabled: (id: number, enabled: boolean) => Promise<IpcMutationResult>
+  getRunHistory: (id: number) => Promise<ScriptRunRecord[]>
+  refresh: () => Promise<void>
+}
+
+export function useScripts(): UseScriptsReturn {
   const [scripts, setScripts] = useState<ScriptWithLastRun[]>([])
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [runningIds, setRunningIds] = useState<Set<number>>(new Set())
+  const [outputLines, setOutputLines] = useState<Map<number, ScriptOutputChunk[]>>(new Map())
 
-  useEffect(() => {
-    window.api
-      .invoke('scripts:getAll')
-      .then((data) => {
-        setScripts(data as ScriptWithLastRun[])
-        setLoading(false)
-      })
-      .catch(console.error)
+  const fetchScripts = useCallback(async (): Promise<void> => {
+    setLoading(true)
+    try {
+      const data = await window.api.invoke(IPC.SCRIPTS_GET_ALL)
+      setScripts(data as ScriptWithLastRun[])
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
-  return { scripts, loading }
+  useEffect(() => {
+    void fetchScripts()
+  }, [fetchScripts])
+
+  // Subscribe to push updates after a run completes — also clears runningIds
+  useEffect(() => {
+    const unsub = window.api.on(IPC.SCRIPTS_UPDATED, () => {
+      void fetchScripts()
+      // Clear all running status on refresh; backend is the source of truth
+      setRunningIds(new Set())
+    })
+    return unsub
+  }, [fetchScripts])
+
+  // Additive listener for run completion/warning events (future notification UX hook point)
+  useEffect(() => {
+    const unsub = window.api.on(IPC.SCRIPTS_RUN_COMPLETE, (...args: unknown[]) => {
+      const event = args[0] as ScriptRunCompleteEvent
+      if (event.kind !== 'run_complete') {
+        return
+      }
+      setRunningIds((prev) => {
+        const next = new Set(prev)
+        next.delete(event.scriptId)
+        return next
+      })
+    })
+    return unsub
+  }, [])
+
+  // Subscribe to live output chunks (capped to last 50 run IDs to prevent unbounded growth)
+  useEffect(() => {
+    const MAX_TRACKED_RUNS = 50
+    const unsub = window.api.on(IPC.SCRIPTS_OUTPUT, (...args: unknown[]) => {
+      const chunk = args[0] as ScriptOutputChunk
+      setOutputLines((prev) => {
+        const next = new Map(prev)
+        next.set(chunk.runId, [...(next.get(chunk.runId) ?? []), chunk])
+        if (next.size > MAX_TRACKED_RUNS) {
+          const oldest = [...next.keys()].sort((a, b) => a - b)[0]
+          next.delete(oldest)
+        }
+        return next
+      })
+    })
+    return unsub
+  }, [])
+
+  const runScript = useCallback(async (id: number): Promise<void> => {
+    setRunningIds((prev) => new Set(prev).add(id))
+    try {
+      await window.api.invoke(IPC.SCRIPTS_RUN, id)
+      // runningIds will be cleared when SCRIPTS_UPDATED fires after the run completes
+    } catch (err) {
+      // If the IPC call itself fails, clear the spinner immediately
+      console.error('[useScripts] runScript error:', err)
+      setRunningIds((prev) => {
+        const next = new Set(prev)
+        next.delete(id)
+        return next
+      })
+    }
+  }, [])
+
+  const cancelScript = useCallback(async (id: number): Promise<void> => {
+    try {
+      await window.api.invoke(IPC.SCRIPTS_CANCEL, id)
+    } catch (err) {
+      console.error('[useScripts] cancelScript error:', err)
+    }
+  }, [])
+
+  const updateScript = useCallback(async (input: ScriptUpdateInput): Promise<IpcMutationResult> => {
+    try {
+      const result = (await window.api.invoke(IPC.SCRIPTS_UPDATE, input)) as IpcMutationResult
+      if (result.ok) {
+        await fetchScripts()
+      }
+      return result
+    } catch (err) {
+      console.error('[useScripts] updateScript error:', err)
+      return { ok: false, error: 'Failed to update script.' }
+    }
+  }, [fetchScripts])
+
+  const setScriptSchedule = useCallback(async (id: number, schedule: ScriptScheduleInput): Promise<IpcMutationResult> => {
+    try {
+      const result = (await window.api.invoke(IPC.SCRIPTS_SET_SCHEDULE, id, schedule)) as IpcMutationResult
+      if (result.ok) {
+        await fetchScripts()
+      }
+      return result
+    } catch (err) {
+      console.error('[useScripts] setScriptSchedule error:', err)
+      return { ok: false, error: 'Failed to update script schedule.' }
+    }
+  }, [fetchScripts])
+
+  const setScriptEnabled = useCallback(async (id: number, enabled: boolean): Promise<IpcMutationResult> => {
+    try {
+      const result = (await window.api.invoke(IPC.SCRIPTS_SET_ENABLED, id, enabled)) as IpcMutationResult
+      if (result.ok) {
+        await fetchScripts()
+      }
+      return result
+    } catch (err) {
+      console.error('[useScripts] setScriptEnabled error:', err)
+      return { ok: false, error: 'Failed to update script auto-run setting.' }
+    }
+  }, [fetchScripts])
+
+  const getRunHistory = useCallback(async (id: number): Promise<ScriptRunRecord[]> => {
+    try {
+      return (await window.api.invoke(IPC.SCRIPTS_GET_RUN_HISTORY, id)) as ScriptRunRecord[]
+    } catch (err) {
+      console.error('[useScripts] getRunHistory error:', err)
+      return []
+    }
+  }, [])
+
+  const refresh = useCallback(async (): Promise<void> => {
+    setRefreshing(true)
+    try {
+      await fetchScripts()
+    } finally {
+      setRefreshing(false)
+    }
+  }, [fetchScripts])
+
+  return {
+    scripts,
+    loading,
+    refreshing,
+    runningIds,
+    outputLines,
+    runScript,
+    cancelScript,
+    updateScript,
+    setScriptSchedule,
+    setScriptEnabled,
+    getRunHistory,
+    refresh
+  }
 }
+

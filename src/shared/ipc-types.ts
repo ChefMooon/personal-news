@@ -21,6 +21,17 @@ export const IPC = {
   REDDIT_NTFY_INGEST_COMPLETE: 'reddit:ntfyIngestComplete',
   REDDIT_CLEAR_SAVED_POSTS: 'reddit:clearSavedPosts',
   SCRIPTS_GET_ALL: 'scripts:getAll',
+  SCRIPTS_RUN: 'scripts:run',
+  SCRIPTS_CANCEL: 'scripts:cancel',
+  SCRIPTS_UPDATE: 'scripts:update',
+  SCRIPTS_SET_SCHEDULE: 'scripts:setSchedule',
+  SCRIPTS_SET_ENABLED: 'scripts:setEnabled',
+  SCRIPTS_GET_RUN_HISTORY: 'scripts:getRunHistory',
+  SCRIPTS_GET_NOTIFICATIONS: 'scripts:getNotifications',
+  SCRIPTS_MARK_NOTIFICATIONS_READ: 'scripts:markNotificationsRead',
+  SCRIPTS_OUTPUT: 'scripts:output',
+  SCRIPTS_RUN_COMPLETE: 'scripts:runComplete',
+  SCRIPTS_UPDATED: 'scripts:updated',
   SETTINGS_GET_WIDGET_LAYOUT: 'settings:getWidgetLayout',
   SETTINGS_SET_WIDGET_LAYOUT: 'settings:setWidgetLayout',
   SETTINGS_GET_THEME: 'settings:getTheme',
@@ -34,7 +45,9 @@ export const IPC = {
   SETTINGS_SET_YOUTUBE_VIEW_CONFIG: 'settings:setYouTubeViewConfig',
   SETTINGS_GET: 'settings:get',
   SETTINGS_SET: 'settings:set',
-  SHELL_OPEN_EXTERNAL: 'shell:openExternal'
+  SHELL_OPEN_EXTERNAL: 'shell:openExternal',
+  SHELL_OPEN_PATH: 'shell:openPath',
+  DIALOG_SHOW_OPEN_FOLDER: 'dialog:showOpenFolder'
 } as const
 
 export interface YtChannel {
@@ -86,6 +99,7 @@ export interface SavedPostSummary {
 export interface ScriptWithLastRun {
   id: number
   name: string
+  description: string | null
   file_path: string
   interpreter: string
   args: string | null
@@ -95,6 +109,74 @@ export interface ScriptWithLastRun {
   started_at: number | null
   finished_at: number | null
   exit_code: number | null
+  is_stale: boolean
+}
+
+export interface ScriptRunRecord {
+  id: number
+  script_id: number
+  started_at: number
+  finished_at: number | null
+  exit_code: number | null
+  stdout: string | null
+  stderr: string | null
+}
+
+export interface ScriptOutputChunk {
+  runId: number
+  stream: 'stdout' | 'stderr'
+  text: string
+}
+
+export type ScriptRunTrigger = 'manual' | 'scheduled' | 'on_app_start' | 'catch_up' | 'startup_warning'
+
+export interface ScriptRunCompleteEvent {
+  kind: 'run_complete' | 'startup_warning'
+  scriptId: number
+  scriptName: string
+  runId: number | null
+  startedAt: number | null
+  finishedAt: number
+  exitCode: number | null
+  trigger: ScriptRunTrigger
+  severity: 'info' | 'warning' | 'error'
+  message: string
+  missedRuns: number | null
+  downtimeSeconds: number | null
+}
+
+export interface ScriptNotification {
+  id: number
+  script_id: number
+  run_id: number | null
+  severity: 'info' | 'warning' | 'error'
+  message: string
+  is_read: number
+  created_at: number
+  read_at: number | null
+}
+
+export interface ScriptNotificationsReadResult extends IpcMutationResult {
+  updatedCount: number
+}
+
+export interface ScriptScheduleInput {
+  type: 'manual' | 'on_app_start' | 'interval' | 'fixed_time'
+  minutes?: number
+  runOnAppStart?: boolean
+  hour?: number
+  minute?: number
+}
+
+export interface ScriptUpdateInput {
+  id: number
+  name: string
+  description: string | null
+  file_path: string
+  interpreter: string
+  args: string | null
+  schedule: ScriptScheduleInput
+  enabled: boolean
 }
 
 export interface WidgetInstance {

@@ -28,11 +28,11 @@ If you cloned this repo fresh and just run `npm install` and it succeeds without
 npm run dev
 ```
 
-The Electron window opens automatically. No external services, network connections, or API keys are required — all data is seeded from the SQLite database on first launch.
+The Electron window opens automatically. No external services, network connections, or API keys are required to explore the seeded dashboard data — Script Manager reads local Python scripts from the configured **Script Home Directory**.
 
 ## What to Expect
 
-The app opens a 1280x800 window (minimum 900x600) with a collapsible sidebar on the left and the main content on the right. The **Dashboard** loads by default showing three widgets: the YouTube widget (two seeded channels with video carousels and one upcoming stream), the Reddit Digest widget (four seeded posts from r/programming and r/rust with sort and layout controls), and the Saved Posts widget (three seeded saved posts). Clicking "Edit Layout" enables drag-and-drop reordering of widgets and eye-icon visibility toggles. The **Script Manager** route shows two seeded scripts — one stale (Reddit Digest, last ran 3 days ago) and one healthy (Backup Notes, last ran recently). The **Settings** screen has working tabs: API Keys (no-op save), YouTube (channel enable toggles update local state only), and Appearance (System/Light/Dark theme switcher that actually applies). Links in video cards and post rows open in your default browser.
+The app opens a 1280x800 window (minimum 900x600) with a collapsible sidebar on the left and the main content on the right. The **Dashboard** loads by default showing three widgets: the YouTube widget (two seeded channels with video carousels and one upcoming stream), the Reddit Digest widget (four seeded posts from r/programming and r/rust with sort and layout controls), and the Saved Posts widget (three seeded saved posts). Clicking "Edit Layout" enables drag-and-drop reordering of widgets and eye-icon visibility toggles. The **Script Manager** route reads Python scripts from the configured **Script Home Directory** and lets you open that folder or jump to the Scripts settings tab. The **Settings** screen has working tabs: API Keys (no-op save), YouTube (channel enable toggles update local state only), and Appearance (System/Light/Dark theme switcher that actually applies). Links in video cards and post rows open in your default browser.
 
 ## Known Limitations
 
@@ -43,7 +43,7 @@ The following are intentionally not implemented in this prototype:
 - ntfy.sh polling — no ntfy ingestion; saved posts are seeded statically
 - Saved Posts full-page view — the `/saved-posts` route is a placeholder
 - ntfy onboarding flow — not present
-- Script execution — "Run Now" logs to console only; no child process is spawned
+- Script execution — the Script Manager executes configured Python scripts, but it is still limited to scripts registered from the home directory
 - node-cron scheduling — no cron jobs; scripts are display-only
 - safeStorage for API key — the key input does not persist anything
 - Tag management — not implemented

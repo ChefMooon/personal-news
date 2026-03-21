@@ -38,10 +38,10 @@ Each item links to the relevant architecture doc for the full spec.
 
 ## Script Manager
 
-- [ ] **Child process execution** — implement `scripts:run(id)` IPC handler: spawn the script's interpreter + path + args as a child process, stream stdout/stderr lines back to the renderer via `scripts:output` push events, write a `script_runs` row on start and update it on exit. See `docs/architecture/data-sources.md §4`.
-- [ ] **node-cron scheduling** — on app startup, register a cron job for each script with a schedule. When the app was closed during a scheduled window, run the overdue script immediately on next launch (or warn the user). See `docs/architecture/data-sources.md §4.3`.
-- [ ] **Live output streaming** — in the Script Manager detail panel, subscribe to `scripts:output` push events and render stdout/stderr lines in real time while the script is running.
-- [ ] **Script detail panel** — implement the expand/detail view for a script: full run history table, stale callout block, live output area. Currently only the list row exists.
+- [x] **Child process execution** — implement `scripts:run(id)` IPC handler: spawn the script's interpreter + path + args as a child process, stream stdout/stderr lines back to the renderer via `scripts:output` push events, write a `script_runs` row on start and update it on exit. See `docs/architecture/data-sources.md §4`.
+- [x] **node-cron scheduling** — on app startup, register a cron job for each script with a schedule. When the app was closed during a scheduled window, run the overdue script immediately on next launch (or warn the user). See `docs/architecture/data-sources.md §4.3`.
+- [x] **Live output streaming** — in the Script Manager detail panel, subscribe to `scripts:output` push events and render stdout/stderr lines in real time while the script is running.
+- [x] **Script detail panel** — implement the expand/detail view for a script: full run history table, stale callout block, live output area. Currently only the list row exists.
 
 ---
 
