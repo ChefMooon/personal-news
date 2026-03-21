@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs'
 import { Input } from '../components/ui/input'
 import { Button } from '../components/ui/button'
@@ -520,6 +521,60 @@ function PlaceholderTab({ name }: { name: string }): React.ReactElement {
   )
 }
 
+function ScriptsTab(): React.ReactElement {
+  const [dir, setDir] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [message, setMessage] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    window.api
+      .invoke(IPC.SETTINGS_GET, 'script_home_dir')
+      .then((v) => { setDir(typeof v === 'string' ? v : '') })
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : 'Failed to load script home directory.')
+      })
+  }, [])
+
+  const saveDir = async (): Promise<void> => {
+    setSaving(true)
+    setMessage(null)
+    setError(null)
+    try {
+      await window.api.invoke(IPC.SETTINGS_SET, 'script_home_dir', dir)
+      setMessage('Script home directory saved.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save script home directory.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="space-y-4 max-w-md">
+      <div>
+        <h3 className="text-sm font-medium mb-1">Script Home Directory</h3>
+        <p className="text-xs text-muted-foreground mb-2">
+          Base directory shown when opening the scripts folder.
+        </p>
+        <div className="flex gap-2">
+          <Input
+            value={dir}
+            onChange={(e) => setDir(e.target.value)}
+            placeholder="/path/to/scripts"
+            className="flex-1"
+          />
+          <Button onClick={() => { void saveDir() }} disabled={saving}>
+            {saving ? 'Saving...' : 'Save'}
+          </Button>
+        </div>
+        {message ? <p className="text-xs text-emerald-600 mt-2">{message}</p> : null}
+        {error ? <p className="text-xs text-red-600 mt-2">{error}</p> : null}
+      </div>
+    </div>
+  )
+}
+
 function SavedPostsTab(): React.ReactElement {
   const [intervalValue, setIntervalValue] = useState('60')
   const [savingInterval, setSavingInterval] = useState(false)
@@ -773,16 +828,18 @@ function SavedPostsTab(): React.ReactElement {
 }
 
 export default function Settings(): React.ReactElement {
+  const [searchParams] = useSearchParams()
   return (
     <div className="flex flex-col h-full px-6 py-4">
       <h1 className="text-xl font-semibold mb-4">Settings</h1>
-      <Tabs defaultValue="api-keys" className="flex-1">
+      <Tabs defaultValue={searchParams.get('tab') ?? 'api-keys'} className="flex-1">
         <TabsList>
           <TabsTrigger value="api-keys">API Keys</TabsTrigger>
           <TabsTrigger value="youtube">YouTube</TabsTrigger>
           <TabsTrigger value="reddit-digest">Reddit Digest</TabsTrigger>
           <TabsTrigger value="saved-posts">Saved Posts</TabsTrigger>
           <TabsTrigger value="appearance">Appearance</TabsTrigger>
+          <TabsTrigger value="scripts">Scripts</TabsTrigger>
         </TabsList>
         <TabsContent value="api-keys" className="mt-4">
           <ApiKeysTab />
@@ -798,6 +855,9 @@ export default function Settings(): React.ReactElement {
         </TabsContent>
         <TabsContent value="appearance" className="mt-4">
           <AppearanceTab />
+        </TabsContent>
+        <TabsContent value="scripts" className="mt-4">
+          <ScriptsTab />
         </TabsContent>
       </Tabs>
     </div>

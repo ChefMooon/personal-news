@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useScripts } from '../hooks/useScripts'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
 import { ScrollArea } from '../components/ui/scroll-area'
 import { formatRelativeTime } from '../lib/time'
-import { AlertTriangle, Play, Square, ChevronDown, ChevronRight, Clock } from 'lucide-react'
+import { AlertTriangle, Play, Square, ChevronDown, ChevronRight, Clock, FolderOpen, Settings } from 'lucide-react'
+import { IPC } from '../../../shared/ipc-types'
 import type { ScriptWithLastRun, ScriptRunRecord, ScriptOutputChunk } from '../../../shared/ipc-types'
 
 function getScheduleDescription(schedule: string | null): string {
@@ -47,6 +49,7 @@ function ScriptDetailPanel({
 }: ScriptDetailPanelProps): React.ReactElement {
   const [history, setHistory] = useState<ScriptRunRecord[] | null>(null)
   const [historyLoading, setHistoryLoading] = useState(false)
+  const [selectedRunId, setSelectedRunId] = useState<number | null>(null)
   const outputEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -98,6 +101,7 @@ function ScriptDetailPanel({
             <table className="w-full text-xs">
               <thead>
                 <tr className="bg-muted/50 border-b">
+                  <th className="text-left px-3 py-1.5 font-medium text-muted-foreground w-4"></th>
                   <th className="text-left px-3 py-1.5 font-medium text-muted-foreground">Started</th>
                   <th className="text-left px-3 py-1.5 font-medium text-muted-foreground">Duration</th>
                   <th className="text-left px-3 py-1.5 font-medium text-muted-foreground">Exit</th>
@@ -105,42 +109,52 @@ function ScriptDetailPanel({
               </thead>
               <tbody>
                 {history.slice(0, 10).map((run) => (
-                  <tr key={run.id} className="border-b last:border-0">
-                    <td className="px-3 py-1.5 text-muted-foreground">
-                      {formatRelativeTime(run.started_at)}
-                    </td>
-                    <td className="px-3 py-1.5 font-mono text-muted-foreground">
-                      {formatDuration(run.started_at, run.finished_at)}
-                    </td>
-                    <td className="px-3 py-1.5">
-                      {run.exit_code === null ? (
-                        <Badge variant="secondary" className="text-[10px]">Running</Badge>
-                      ) : run.exit_code === 0 ? (
-                        <Badge variant="success" className="text-[10px]">0</Badge>
-                      ) : (
-                        <Badge variant="destructive" className="text-[10px]">{run.exit_code}</Badge>
-                      )}
-                    </td>
-                  </tr>
+                  <React.Fragment key={run.id}>
+                    <tr
+                      className="border-b last:border-0 cursor-pointer hover:bg-muted/30"
+                      onClick={() => setSelectedRunId((prev) => (prev === run.id ? null : run.id))}
+                    >
+                      <td className="px-3 py-1.5 text-muted-foreground">
+                        {selectedRunId === run.id
+                          ? <ChevronDown className="h-3 w-3" />
+                          : <ChevronRight className="h-3 w-3" />}
+                      </td>
+                      <td className="px-3 py-1.5 text-muted-foreground">
+                        {formatRelativeTime(run.started_at)}
+                      </td>
+                      <td className="px-3 py-1.5 font-mono text-muted-foreground">
+                        {formatDuration(run.started_at, run.finished_at)}
+                      </td>
+                      <td className="px-3 py-1.5">
+                        {run.exit_code === null ? (
+                          <Badge variant="secondary" className="text-[10px]">Running</Badge>
+                        ) : run.exit_code === 0 ? (
+                          <Badge variant="success" className="text-[10px]">0</Badge>
+                        ) : (
+                          <Badge variant="destructive" className="text-[10px]">{run.exit_code}</Badge>
+                        )}
+                      </td>
+                    </tr>
+                    {selectedRunId === run.id && (
+                      <tr className="border-b last:border-0 bg-muted/20">
+                        <td colSpan={4} className="px-3 py-2">
+                          {run.stdout || run.stderr ? (
+                            <ScrollArea className="h-32 rounded-md border bg-muted/40 p-2">
+                              <pre className="text-[11px] font-mono whitespace-pre-wrap break-all">
+                                {[run.stdout, run.stderr].filter(Boolean).join('\n--- stderr ---\n')}
+                              </pre>
+                            </ScrollArea>
+                          ) : (
+                            <p className="text-xs text-muted-foreground">No output captured.</p>
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>
           </div>
-        )}
-      </div>
-
-      {/* Action buttons */}
-      <div className="flex gap-2">
-        {isRunning ? (
-          <Button size="sm" variant="destructive" onClick={onCancel} className="gap-1">
-            <Square className="h-3.5 w-3.5" />
-            Cancel
-          </Button>
-        ) : (
-          <Button size="sm" variant="outline" onClick={onRun} className="gap-1">
-            <Play className="h-3.5 w-3.5" />
-            Run Now
-          </Button>
         )}
       </div>
     </div>
@@ -261,8 +275,26 @@ function ScriptRow({
 }
 
 export default function ScriptManager(): React.ReactElement {
+  const navigate = useNavigate()
   const { scripts, loading, runningIds, outputLines, runScript, cancelScript, getRunHistory } =
     useScripts()
+  const [scriptHomeDir, setScriptHomeDir] = useState<string>('')
+  const [openFolderError, setOpenFolderError] = useState<string | null>(null)
+
+  useEffect(() => {
+    window.api
+      .invoke(IPC.SETTINGS_GET, 'script_home_dir')
+      .then((v) => { setScriptHomeDir(typeof v === 'string' ? v : '') })
+      .catch(() => {})
+  }, [])
+
+  const openScriptFolder = async (): Promise<void> => {
+    setOpenFolderError(null)
+    const errMsg = (await window.api.invoke(IPC.SHELL_OPEN_PATH, scriptHomeDir)) as string
+    if (errMsg) {
+      setOpenFolderError(`Could not open folder: ${errMsg}`)
+    }
+  }
 
   const staleCount = scripts.filter((s) => s.is_stale).length
 
@@ -270,12 +302,34 @@ export default function ScriptManager(): React.ReactElement {
     <div className="flex flex-col h-full px-6 py-4">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-semibold">Script Manager</h1>
-        {staleCount > 0 && (
-          <Badge variant="warning" className="text-xs">
-            {staleCount} stale {staleCount === 1 ? 'script' : 'scripts'}
-          </Badge>
-        )}
+        <div className="flex items-center gap-2">
+          {staleCount > 0 && (
+            <Badge variant="warning" className="text-xs">
+              {staleCount} stale {staleCount === 1 ? 'script' : 'scripts'}
+            </Badge>
+          )}
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!scriptHomeDir}
+            onClick={() => { void openScriptFolder() }}
+          >
+            <FolderOpen className="h-3.5 w-3.5 mr-1" />
+            Open Folder
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => navigate('/settings?tab=scripts')}
+          >
+            <Settings className="h-3.5 w-3.5 mr-1" />
+            Script Settings
+          </Button>
+        </div>
       </div>
+      {openFolderError && (
+        <p className="text-xs text-red-600 mb-2">{openFolderError}</p>
+      )}
 
       {loading ? (
         <p className="text-sm text-muted-foreground">Loading scripts…</p>

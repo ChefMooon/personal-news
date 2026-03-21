@@ -39,7 +39,8 @@ export const IPC = {
   SETTINGS_SET_YOUTUBE_VIEW_CONFIG: 'settings:setYouTubeViewConfig',
   SETTINGS_GET: 'settings:get',
   SETTINGS_SET: 'settings:set',
-  SHELL_OPEN_EXTERNAL: 'shell:openExternal'
+  SHELL_OPEN_EXTERNAL: 'shell:openExternal',
+  SHELL_OPEN_PATH: 'shell:openPath'
 } as const
 
 export interface YtChannel {

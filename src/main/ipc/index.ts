@@ -1192,4 +1192,9 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC.SHELL_OPEN_EXTERNAL, (_event, url: string): void => {
     shell.openExternal(url)
   })
+
+  // shell:openPath
+  ipcMain.handle(IPC.SHELL_OPEN_PATH, (_event, folderPath: string): Promise<string> => {
+    return shell.openPath(folderPath)
+  })
 }
