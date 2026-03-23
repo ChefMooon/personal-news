@@ -1,11 +1,12 @@
 import React from 'react'
 import type { YtVideo } from '../../../../shared/ipc-types'
-import { formatAbsoluteTime, formatDuration, formatRelativeTime } from '../../lib/time'
+import { formatAbsoluteTime, formatDuration, formatFutureTime, formatRelativeTime } from '../../lib/time'
 import { cn } from '../../lib/utils'
 
 interface VideoCardProps {
   video: YtVideo
   density?: 'compact' | 'detailed'
+  channelName?: string
 }
 
 function getMediaLabel(video: YtVideo): string {
@@ -25,7 +26,11 @@ function getMediaLabel(video: YtVideo): string {
   return 'VIDEO'
 }
 
-export function VideoCard({ video, density = 'detailed' }: VideoCardProps): React.ReactElement {
+export function VideoCard({
+  video,
+  density = 'detailed',
+  channelName
+}: VideoCardProps): React.ReactElement {
   const handleClick = (): void => {
     const url = `https://www.youtube.com/watch?v=${video.video_id}`
     window.api.invoke('shell:openExternal', url).catch(console.error)
@@ -35,8 +40,13 @@ export function VideoCard({ video, density = 'detailed' }: VideoCardProps): Reac
   const duration = formatDuration(video.duration_sec)
   const publishedRelative = formatRelativeTime(video.published_at)
   const publishedAbsolute = formatAbsoluteTime(video.published_at)
+  const scheduledRelative =
+    video.scheduled_start != null ? formatFutureTime(video.scheduled_start) : 'Scheduled'
+  const scheduledAbsolute =
+    video.scheduled_start != null ? formatAbsoluteTime(video.scheduled_start) : null
   const syncedRelative = formatRelativeTime(video.fetched_at)
   const mediaLabel = getMediaLabel(video)
+  const isUpcoming = video.broadcast_status === 'upcoming' || video.media_type === 'upcoming_stream'
 
   const cardWidth = isCompact ? 'w-[140px]' : 'w-[180px]'
   const thumbHeight = isCompact ? 'h-[79px]' : 'h-[101px]'
@@ -79,14 +89,28 @@ export function VideoCard({ video, density = 'detailed' }: VideoCardProps): Reac
         {video.title}
       </p>
 
+      {channelName ? <p className="mt-0.5 text-[11px] text-muted-foreground truncate">{channelName}</p> : null}
+
       {/* Date info — full in detailed mode, condensed in compact */}
       {isCompact ? (
-        <p className="mt-0.5 text-[10px] text-muted-foreground">{publishedRelative}</p>
+        isUpcoming ? (
+          <p className="mt-0.5 text-[10px] text-muted-foreground" title={scheduledAbsolute ?? undefined}>
+            {scheduledRelative}
+          </p>
+        ) : (
+          <p className="mt-0.5 text-[10px] text-muted-foreground">{publishedRelative}</p>
+        )
       ) : (
         <>
-          <p className="mt-0.5 text-xs text-muted-foreground" title={publishedAbsolute}>
-            Published {publishedRelative}
-          </p>
+          {isUpcoming ? (
+            <p className="mt-0.5 text-xs text-muted-foreground" title={scheduledAbsolute ?? undefined}>
+              {scheduledRelative}
+            </p>
+          ) : (
+            <p className="mt-0.5 text-xs text-muted-foreground" title={publishedAbsolute}>
+              Published {publishedRelative}
+            </p>
+          )}
           <p className="text-[10px] text-muted-foreground/80">Synced {syncedRelative}</p>
         </>
       )}

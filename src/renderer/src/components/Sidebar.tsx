@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, Bookmark, Terminal, Settings, ChevronLeft, ChevronRight } from 'lucide-react'
+import { LayoutDashboard, Bookmark, Terminal, Settings, ChevronLeft, ChevronRight, Youtube } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { useScripts } from '../hooks/useScripts'
 
@@ -26,6 +26,11 @@ export function Sidebar(): React.ReactElement {
       to: '/saved-posts',
       label: 'Saved Posts',
       icon: <Bookmark className="h-5 w-5 shrink-0" />
+    },
+    {
+      to: '/youtube',
+      label: 'YouTube',
+      icon: <Youtube className="h-5 w-5 shrink-0" />
     },
     {
       to: '/scripts',

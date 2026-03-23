@@ -26,9 +26,12 @@ import type {
   YouTubeCacheClearResult,
   YouTubeApiKeyStatus,
   YouTubeViewConfig,
+  YouTubeVideosFilterOptions,
+  YouTubeVideosFilterResult,
   ScriptScheduleInput,
   ScriptUpdateInput,
-  ScriptRunCompleteEvent
+  ScriptRunCompleteEvent,
+  MediaType
 } from '../../shared/ipc-types'
 import {
   applyYouTubePollInterval,
@@ -750,6 +753,29 @@ function computeIsStale(
   return false
 }
 
+function normalizeYouTubeVideosFilterOptions(
+  options: YouTubeVideosFilterOptions | undefined
+): Required<Pick<YouTubeVideosFilterOptions, 'sortDir' | 'limit' | 'offset'>> &
+  Pick<YouTubeVideosFilterOptions, 'channelId' | 'search'> & { mediaTypes: MediaType[] } {
+  const validMediaTypes = new Set<MediaType>(['video', 'short', 'upcoming_stream', 'live'])
+  const normalizedMediaTypes = Array.isArray(options?.mediaTypes)
+    ? options.mediaTypes.filter((mediaType): mediaType is MediaType => validMediaTypes.has(mediaType))
+    : []
+
+  const rawSortDir = options?.sortDir === 'asc' ? 'asc' : 'desc'
+  const rawLimit = Number.isFinite(options?.limit) ? Math.floor(options?.limit ?? 50) : 50
+  const rawOffset = Number.isFinite(options?.offset) ? Math.floor(options?.offset ?? 0) : 0
+
+  return {
+    channelId: options?.channelId?.trim() || undefined,
+    search: options?.search?.trim() || undefined,
+    mediaTypes: normalizedMediaTypes,
+    sortDir: rawSortDir,
+    limit: Math.min(Math.max(rawLimit, 1), 200),
+    offset: Math.max(rawOffset, 0)
+  }
+}
+
 export function registerIpcHandlers(): void {
   // Wire script output emitter
   function emitScriptsOutput(chunk: ScriptOutputChunk): void {
@@ -784,6 +810,51 @@ export function registerIpcHandlers(): void {
       )
       .all(channelId) as YtVideo[]
   })
+
+  // youtube:getVideosFiltered
+  ipcMain.handle(
+    IPC.YOUTUBE_GET_VIDEOS_FILTERED,
+    (_event, options?: YouTubeVideosFilterOptions): YouTubeVideosFilterResult => {
+      const db = getDb()
+      const normalized = normalizeYouTubeVideosFilterOptions(options)
+      const whereClauses: string[] = []
+      const whereParams: Array<string> = []
+
+      if (normalized.channelId) {
+        whereClauses.push('channel_id = ?')
+        whereParams.push(normalized.channelId)
+      }
+
+      if (normalized.mediaTypes.length > 0) {
+        const placeholders = normalized.mediaTypes.map(() => '?').join(', ')
+        whereClauses.push(`media_type IN (${placeholders})`)
+        whereParams.push(...normalized.mediaTypes)
+      }
+
+      if (normalized.search) {
+        whereClauses.push('LOWER(title) LIKE ?')
+        whereParams.push(`%${normalized.search.toLowerCase()}%`)
+      }
+
+      const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : ''
+      const orderSql = normalized.sortDir === 'asc' ? 'ASC' : 'DESC'
+
+      const totalRow = db
+        .prepare(`SELECT COUNT(*) AS total FROM yt_videos ${whereSql}`)
+        .get(...whereParams) as { total: number }
+
+      const videos = db
+        .prepare(
+          `SELECT * FROM yt_videos ${whereSql} ORDER BY published_at ${orderSql} LIMIT ? OFFSET ?`
+        )
+        .all(...whereParams, normalized.limit, normalized.offset) as YtVideo[]
+
+      return {
+        videos,
+        total: totalRow.total
+      }
+    }
+  )
 
   // youtube:setChannelEnabled
   ipcMain.handle(

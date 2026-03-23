@@ -3,6 +3,7 @@
 export const IPC = {
   YOUTUBE_GET_CHANNELS: 'youtube:getChannels',
   YOUTUBE_GET_VIDEOS: 'youtube:getVideos',
+  YOUTUBE_GET_VIDEOS_FILTERED: 'youtube:getVideosFiltered',
   YOUTUBE_SET_CHANNEL_ENABLED: 'youtube:setChannelEnabled',
   YOUTUBE_ADD_CHANNEL: 'youtube:addChannel',
   YOUTUBE_REMOVE_CHANNEL: 'youtube:removeChannel',
@@ -74,6 +75,20 @@ export interface YtVideo {
   broadcast_status: 'none' | 'upcoming' | 'live' | null
   scheduled_start: number | null
   fetched_at: number
+}
+
+export interface YouTubeVideosFilterOptions {
+  channelId?: string
+  mediaTypes?: MediaType[]
+  search?: string
+  sortDir?: 'asc' | 'desc'
+  limit?: number
+  offset?: number
+}
+
+export interface YouTubeVideosFilterResult {
+  videos: YtVideo[]
+  total: number
 }
 
 export interface DigestPost {
