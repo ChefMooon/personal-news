@@ -1,5 +1,5 @@
-import React from 'react'
-import { GripVertical, ArrowUp, ArrowDown } from 'lucide-react'
+import React, { useEffect, useMemo, useState } from 'react'
+import { ArrowDown, ArrowUp, Check, ChevronDown, ChevronRight, GripVertical } from 'lucide-react'
 import {
   Select,
   SelectContent,
@@ -10,6 +10,9 @@ import {
 import { Switch } from '../../components/ui/switch'
 import { Separator } from '../../components/ui/separator'
 import { ScrollArea } from '../../components/ui/scroll-area'
+import { Button } from '../../components/ui/button'
+import { cn } from '../../lib/utils'
+import { useWidgetInstance } from '../../contexts/WidgetInstanceContext'
 import type { SavedPostsViewConfig, LinkSource } from '../../../../shared/ipc-types'
 
 const ALL_SOURCES: { value: LinkSource; label: string }[] = [
@@ -26,6 +29,34 @@ const SOURCE_LABEL_MAP: Record<LinkSource, string> = {
   generic: 'Other Links'
 }
 
+function SectionHeader({ title }: { title: string }): React.ReactElement {
+  return (
+    <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+      {title}
+    </h3>
+  )
+}
+
+function SettingRow({
+  label,
+  description,
+  children
+}: {
+  label: string
+  description?: string
+  children: React.ReactNode
+}): React.ReactElement {
+  return (
+    <div className="flex items-center justify-between gap-4 py-1.5">
+      <div className="min-w-0">
+        <p className="text-sm">{label}</p>
+        {description && <p className="text-xs text-muted-foreground">{description}</p>}
+      </div>
+      <div className="shrink-0 pr-1">{children}</div>
+    </div>
+  )
+}
+
 interface SavedPostsSettingsPanelProps {
   config: SavedPostsViewConfig
   availableSubreddits: string[]
@@ -39,338 +70,647 @@ export function SavedPostsSettingsPanel({
   availableTags,
   onChange
 }: SavedPostsSettingsPanelProps): React.ReactElement {
-  const toggleSubreddit = (subreddit: string): void => {
-    const current = config.subreddit_filter ?? []
-    const updated = current.includes(subreddit)
-      ? current.filter((s) => s !== subreddit)
-      : [...current, subreddit]
-    onChange({
-      ...config,
-      subreddit_filter: updated.length === 0 ? null : updated
-    })
+  const { instanceId } = useWidgetInstance()
+  const [draft, setDraft] = useState<SavedPostsViewConfig>(config)
+  const [subredditsExpanded, setSubredditsExpanded] = useState(true)
+  const [subredditsExpandedLoaded, setSubredditsExpandedLoaded] = useState(false)
+  const [tagsExpanded, setTagsExpanded] = useState(true)
+  const [tagsExpandedLoaded, setTagsExpandedLoaded] = useState(false)
+
+  const subredditsKey = `saved-posts:settings:subredditsExpanded:${instanceId}`
+  const tagsKey = `saved-posts:settings:tagsExpanded:${instanceId}`
+
+  useEffect(() => {
+    setDraft(config)
+  }, [config]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Load subredditsExpanded from localStorage
+  useEffect(() => {
+    if (!instanceId) {
+      setSubredditsExpanded(true)
+      setSubredditsExpandedLoaded(true)
+      return
+    }
+    try {
+      const raw = window.localStorage.getItem(subredditsKey)
+      setSubredditsExpanded(raw === 'false' ? false : true)
+    } catch (error) {
+      console.error('Failed to load saved posts subreddits panel state', error)
+      setSubredditsExpanded(true)
+    } finally {
+      setSubredditsExpandedLoaded(true)
+    }
+  }, [instanceId, subredditsKey])
+
+  // Save subredditsExpanded to localStorage
+  useEffect(() => {
+    if (!subredditsExpandedLoaded || !instanceId) return
+    try {
+      window.localStorage.setItem(subredditsKey, String(subredditsExpanded))
+    } catch (error) {
+      console.error('Failed to persist saved posts subreddits panel state', error)
+    }
+  }, [instanceId, subredditsExpanded, subredditsExpandedLoaded, subredditsKey])
+
+  // Load tagsExpanded from localStorage
+  useEffect(() => {
+    if (!instanceId) {
+      setTagsExpanded(true)
+      setTagsExpandedLoaded(true)
+      return
+    }
+    try {
+      const raw = window.localStorage.getItem(tagsKey)
+      setTagsExpanded(raw === 'false' ? false : true)
+    } catch (error) {
+      console.error('Failed to load saved posts tags panel state', error)
+      setTagsExpanded(true)
+    } finally {
+      setTagsExpandedLoaded(true)
+    }
+  }, [instanceId, tagsKey])
+
+  // Save tagsExpanded to localStorage
+  useEffect(() => {
+    if (!tagsExpandedLoaded || !instanceId) return
+    try {
+      window.localStorage.setItem(tagsKey, String(tagsExpanded))
+    } catch (error) {
+      console.error('Failed to persist saved posts tags panel state', error)
+    }
+  }, [instanceId, tagsExpanded, tagsExpandedLoaded, tagsKey])
+
+  const applyUpdate = (next: SavedPostsViewConfig): void => {
+    setDraft(next)
+    onChange(next)
   }
 
-  const toggleTag = (tag: string): void => {
-    const current = config.tag_filter ?? []
-    const updated = current.includes(tag) ? current.filter((t) => t !== tag) : [...current, tag]
-    onChange({
-      ...config,
-      tag_filter: updated.length === 0 ? null : updated
-    })
-  }
+  // ── Sources ──────────────────────────────────────────────────────────────
+  const sourceMode = draft.source_filter === null ? 'all' : 'selected'
+  const selectedSourceCount =
+    sourceMode === 'all' ? ALL_SOURCES.length : (draft.source_filter?.length ?? 0)
 
   const toggleSource = (source: LinkSource): void => {
-    const current = config.source_filter ?? []
+    const current =
+      draft.source_filter !== null ? draft.source_filter : ALL_SOURCES.map((s) => s.value)
     const updated = current.includes(source)
       ? current.filter((s) => s !== source)
       : [...current, source]
-    onChange({
-      ...config,
-      source_filter: updated.length === 0 ? null : updated
-    })
+    applyUpdate({ ...draft, source_filter: updated })
   }
 
+  // ── Subreddits ────────────────────────────────────────────────────────────
+  const visibleSelectedSubreddits = useMemo(
+    () => (draft.subreddit_filter ?? []).filter((s) => availableSubreddits.includes(s)),
+    [draft.subreddit_filter, availableSubreddits]
+  )
+  const subredditMode = draft.subreddit_filter === null ? 'all' : 'selected'
+  const selectedSubredditCount =
+    subredditMode === 'all' ? availableSubreddits.length : visibleSelectedSubreddits.length
+
+  const toggleSubreddit = (subreddit: string): void => {
+    const current =
+      draft.subreddit_filter !== null ? draft.subreddit_filter : [...availableSubreddits]
+    const updated = current.includes(subreddit)
+      ? current.filter((s) => s !== subreddit)
+      : [...current, subreddit]
+    applyUpdate({ ...draft, subreddit_filter: updated })
+  }
+
+  // ── Tags ──────────────────────────────────────────────────────────────────
+  const visibleSelectedTags = useMemo(
+    () => (draft.tag_filter ?? []).filter((t) => availableTags.includes(t)),
+    [draft.tag_filter, availableTags]
+  )
+  const tagMode = draft.tag_filter === null ? 'all' : 'selected'
+  const selectedTagCount = tagMode === 'all' ? availableTags.length : visibleSelectedTags.length
+
+  const toggleTag = (tag: string): void => {
+    const current = draft.tag_filter !== null ? draft.tag_filter : [...availableTags]
+    const updated = current.includes(tag) ? current.filter((t) => t !== tag) : [...current, tag]
+    applyUpdate({ ...draft, tag_filter: updated })
+  }
+
+  // ── Source reorder ────────────────────────────────────────────────────────
   const moveSource = (source: LinkSource, direction: 'up' | 'down'): void => {
-    const order = [...config.sourceOrder]
+    const order = [...draft.sourceOrder]
     const idx = order.indexOf(source)
     if (idx === -1) return
     const newIdx = direction === 'up' ? idx - 1 : idx + 1
     if (newIdx < 0 || newIdx >= order.length) return
     ;[order[idx], order[newIdx]] = [order[newIdx], order[idx]]
-    onChange({ ...config, sourceOrder: order })
+    applyUpdate({ ...draft, sourceOrder: order })
   }
 
   return (
     <div className="flex flex-col h-full w-full min-w-0 flex-1">
       <ScrollArea className="h-full w-full">
         <div className="space-y-5 pb-2 pl-2 pr-4">
+
+          {/* ── Sources ── */}
           <div>
-            <h3 className="text-sm font-semibold mb-3">Sources</h3>
-            <div className="space-y-2">
-              {ALL_SOURCES.map(({ value, label }) => (
-                <label
-                  key={value}
-                  className="flex items-center gap-2 text-sm cursor-pointer"
+            <SectionHeader title="Sources" />
+
+            <div className="flex gap-2 mb-3">
+              <Button
+                size="sm"
+                variant={sourceMode === 'all' ? 'default' : 'outline'}
+                onClick={() => applyUpdate({ ...draft, source_filter: null })}
+              >
+                All Sources
+              </Button>
+              <Button
+                size="sm"
+                variant={sourceMode === 'selected' ? 'default' : 'outline'}
+                onClick={() => {
+                  if (sourceMode !== 'selected') {
+                    applyUpdate({
+                      ...draft,
+                      source_filter: draft.source_filter ?? ALL_SOURCES.map((s) => s.value)
+                    })
+                  }
+                }}
+              >
+                Selected Only
+              </Button>
+            </div>
+
+            <div className="flex items-center justify-between gap-3 mb-2">
+              <p className="text-xs text-muted-foreground">
+                {selectedSourceCount} of {ALL_SOURCES.length} shown
+              </p>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  className="text-xs text-primary hover:underline"
+                  onClick={() => applyUpdate({ ...draft, source_filter: null })}
                 >
-                  <input
-                    type="checkbox"
-                    checked={!config.source_filter || config.source_filter.includes(value)}
-                    onChange={() => toggleSource(value)}
-                    className="rounded border-input"
-                  />
-                  <span>{label}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          <Separator />
-
-          <div>
-            <h3 className="text-sm font-semibold mb-3">Subreddits</h3>
-            {availableSubreddits.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No subreddits yet</p>
-            ) : (
-              <div className="space-y-2 max-h-32 overflow-y-auto">
-                {availableSubreddits.map((subreddit) => (
-                  <label
-                    key={subreddit}
-                    className="flex items-center gap-2 text-sm cursor-pointer"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={!config.subreddit_filter || config.subreddit_filter.includes(subreddit)}
-                      onChange={() => toggleSubreddit(subreddit)}
-                      className="rounded border-input"
-                    />
-                    <span>r/{subreddit}</span>
-                  </label>
-                ))}
+                  Select all
+                </button>
+                <button
+                  type="button"
+                  className="text-xs text-primary hover:underline"
+                  onClick={() => applyUpdate({ ...draft, source_filter: [] })}
+                >
+                  Deselect all
+                </button>
               </div>
-            )}
-          </div>
+            </div>
 
-          <Separator />
-
-          <div>
-            <h3 className="text-sm font-semibold mb-3">Tags</h3>
-            {availableTags.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No tags yet</p>
-            ) : (
-              <div className="space-y-2 max-h-32 overflow-y-auto">
-                {availableTags.map((tag) => (
-                  <label
-                    key={tag}
-                    className="flex items-center gap-2 text-sm cursor-pointer"
+            <div className="border rounded-md overflow-hidden">
+              {ALL_SOURCES.map(({ value, label }) => {
+                const isSelected =
+                  sourceMode === 'all' || (draft.source_filter?.includes(value) ?? false)
+                return (
+                  <div
+                    key={value}
+                    className="flex items-center gap-2 px-2 py-2 hover:bg-accent/40 border-b last:border-0"
                   >
-                    <input
-                      type="checkbox"
-                      checked={!config.tag_filter || config.tag_filter.includes(tag)}
-                      onChange={() => toggleTag(tag)}
-                      className="rounded border-input"
-                    />
-                    <span>{tag}</span>
-                  </label>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <Separator />
-
-          <div className="space-y-4">
-            <h3 className="text-sm font-semibold">Sorting</h3>
-
-            <div>
-              <label className="text-sm block mb-2">Sort By</label>
-              <Select
-                value={config.sort_by}
-                onValueChange={(val) => {
-                  onChange({
-                    ...config,
-                    sort_by: val as 'saved_at' | 'score'
-                  })
-                }}
-              >
-                <SelectTrigger className="h-8">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="saved_at">Date Saved</SelectItem>
-                  <SelectItem value="score">Score</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <label className="text-sm block mb-2">Sort Direction</label>
-              <Select
-                value={config.sort_dir}
-                onValueChange={(val) => {
-                  onChange({
-                    ...config,
-                    sort_dir: val as 'asc' | 'desc'
-                  })
-                }}
-              >
-                <SelectTrigger className="h-8">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="desc">
-                    {config.sort_by === 'saved_at' ? 'Newest First' : 'Highest First'}
-                  </SelectItem>
-                  <SelectItem value="asc">
-                    {config.sort_by === 'saved_at' ? 'Oldest First' : 'Lowest First'}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <label className="text-sm block mb-2">Max Posts</label>
-              <Select
-                value={config.max_posts.toString()}
-                onValueChange={(val) => {
-                  onChange({
-                    ...config,
-                    max_posts: parseInt(val, 10)
-                  })
-                }}
-              >
-                <SelectTrigger className="h-8">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="5">5</SelectItem>
-                  <SelectItem value="10">10</SelectItem>
-                  <SelectItem value="20">20</SelectItem>
-                  <SelectItem value="50">50</SelectItem>
-                </SelectContent>
-              </Select>
+                    <span className="text-sm flex-1">{label}</span>
+                    <button
+                      onClick={() => toggleSource(value)}
+                      className={cn(
+                        'w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors',
+                        isSelected
+                          ? 'bg-primary border-primary'
+                          : 'border-input bg-background hover:border-primary/50'
+                      )}
+                      aria-label={isSelected ? `Deselect ${label}` : `Select ${label}`}
+                    >
+                      {isSelected && <Check className="h-3 w-3 text-primary-foreground" />}
+                    </button>
+                  </div>
+                )
+              })}
             </div>
           </div>
 
           <Separator />
 
-          <div className="space-y-4">
-            <h3 className="text-sm font-semibold">Grouping</h3>
+          {/* ── Subreddits ── */}
+          <div>
+            <button
+              className="mb-2 flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+              onClick={() => setSubredditsExpanded((prev) => !prev)}
+              aria-expanded={subredditsExpanded}
+              aria-controls="saved-posts-settings-subreddits"
+            >
+              {subredditsExpanded ? (
+                <ChevronDown className="h-4 w-4" />
+              ) : (
+                <ChevronRight className="h-4 w-4" />
+              )}
+              Subreddits
+            </button>
 
-            <div>
-              <label className="text-sm block mb-2">Group By</label>
-              <Select
-                value={config.group_by}
-                onValueChange={(val) => {
-                  onChange({
-                    ...config,
-                    group_by: val as 'none' | 'source'
-                  })
-                }}
-              >
-                <SelectTrigger className="h-8">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No Grouping</SelectItem>
-                  <SelectItem value="source">Group by Source</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {config.group_by === 'source' && (
-              <>
-                <div className="flex items-center justify-between">
-                  <label className="text-sm">Show group headers</label>
-                  <Switch
-                    checked={config.showGroupHeaders}
-                    onCheckedChange={(checked) => {
-                      onChange({ ...config, showGroupHeaders: checked })
-                    }}
-                  />
-                </div>
-
-                <div>
-                  <label className="text-sm block mb-2">Source Order</label>
-                  <div className="space-y-1">
-                    {config.sourceOrder.map((source, idx) => (
-                      <div
-                        key={source}
-                        className="flex items-center gap-2 px-2 py-1.5 rounded border bg-muted/30 text-sm"
+            {subredditsExpanded && (
+              <div id="saved-posts-settings-subreddits">
+                {availableSubreddits.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">No subreddits yet</p>
+                ) : (
+                  <>
+                    <div className="flex gap-2 mb-3">
+                      <Button
+                        size="sm"
+                        variant={subredditMode === 'all' ? 'default' : 'outline'}
+                        onClick={() => applyUpdate({ ...draft, subreddit_filter: null })}
                       >
-                        <GripVertical className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                        <span className="flex-1">{SOURCE_LABEL_MAP[source]}</span>
+                        All Subreddits
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={subredditMode === 'selected' ? 'default' : 'outline'}
+                        onClick={() => {
+                          if (subredditMode !== 'selected') {
+                            applyUpdate({
+                              ...draft,
+                              subreddit_filter:
+                                visibleSelectedSubreddits.length > 0
+                                  ? visibleSelectedSubreddits
+                                  : [...availableSubreddits]
+                            })
+                          }
+                        }}
+                      >
+                        Selected Only
+                      </Button>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-3 mb-2">
+                      <p className="text-xs text-muted-foreground">
+                        {selectedSubredditCount} of {availableSubreddits.length} shown
+                      </p>
+                      <div className="flex items-center gap-3">
                         <button
                           type="button"
-                          disabled={idx === 0}
-                          onClick={() => moveSource(source, 'up')}
-                          className="p-0.5 hover:bg-muted rounded disabled:opacity-30"
+                          className="text-xs text-primary hover:underline"
+                          onClick={() => applyUpdate({ ...draft, subreddit_filter: null })}
                         >
-                          <ArrowUp className="h-3.5 w-3.5" />
+                          Select all
                         </button>
                         <button
                           type="button"
-                          disabled={idx === config.sourceOrder.length - 1}
-                          onClick={() => moveSource(source, 'down')}
-                          className="p-0.5 hover:bg-muted rounded disabled:opacity-30"
+                          className="text-xs text-primary hover:underline"
+                          onClick={() => applyUpdate({ ...draft, subreddit_filter: [] })}
                         >
-                          <ArrowDown className="h-3.5 w-3.5" />
+                          Deselect all
                         </button>
                       </div>
-                    ))}
-                  </div>
-                </div>
-              </>
+                    </div>
+
+                    <div className="border rounded-md overflow-hidden">
+                      {availableSubreddits.map((subreddit) => {
+                        const isSelected =
+                          subredditMode === 'all' ||
+                          visibleSelectedSubreddits.includes(subreddit)
+                        return (
+                          <div
+                            key={subreddit}
+                            className="flex items-center gap-2 px-2 py-2 hover:bg-accent/40 border-b last:border-0"
+                          >
+                            <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center shrink-0">
+                              <span className="text-[10px] font-medium text-muted-foreground">
+                                r/
+                              </span>
+                            </div>
+                            <span className="text-sm flex-1 truncate min-w-0">
+                              r/{subreddit}
+                            </span>
+                            <button
+                              onClick={() => toggleSubreddit(subreddit)}
+                              className={cn(
+                                'w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors',
+                                isSelected
+                                  ? 'bg-primary border-primary'
+                                  : 'border-input bg-background hover:border-primary/50'
+                              )}
+                              aria-label={
+                                isSelected
+                                  ? `Deselect r/${subreddit}`
+                                  : `Select r/${subreddit}`
+                              }
+                            >
+                              {isSelected && (
+                                <Check className="h-3 w-3 text-primary-foreground" />
+                              )}
+                            </button>
+                          </div>
+                        )
+                      })}
+                    </div>
+
+                    <p className="text-xs text-muted-foreground mt-1.5">
+                      Filter posts by subreddit · Pinned sources appear first
+                    </p>
+                  </>
+                )}
+              </div>
             )}
           </div>
 
           <Separator />
 
-          <div className="space-y-4">
-            <h3 className="text-sm font-semibold">Display</h3>
+          {/* ── Tags ── */}
+          <div>
+            <button
+              className="mb-2 flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+              onClick={() => setTagsExpanded((prev) => !prev)}
+              aria-expanded={tagsExpanded}
+              aria-controls="saved-posts-settings-tags"
+            >
+              {tagsExpanded ? (
+                <ChevronDown className="h-4 w-4" />
+              ) : (
+                <ChevronRight className="h-4 w-4" />
+              )}
+              Tags
+            </button>
 
-            <div className="flex items-center justify-between">
-              <label className="text-sm">Show metadata</label>
-              <Switch
-                checked={config.showMetadata}
-                onCheckedChange={(checked) => {
-                  onChange({ ...config, showMetadata: checked })
-                }}
-              />
-            </div>
+            {tagsExpanded && (
+              <div id="saved-posts-settings-tags">
+                {availableTags.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">No tags yet</p>
+                ) : (
+                  <>
+                    <div className="flex gap-2 mb-3">
+                      <Button
+                        size="sm"
+                        variant={tagMode === 'all' ? 'default' : 'outline'}
+                        onClick={() => applyUpdate({ ...draft, tag_filter: null })}
+                      >
+                        All Tags
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={tagMode === 'selected' ? 'default' : 'outline'}
+                        onClick={() => {
+                          if (tagMode !== 'selected') {
+                            applyUpdate({
+                              ...draft,
+                              tag_filter:
+                                visibleSelectedTags.length > 0
+                                  ? visibleSelectedTags
+                                  : [...availableTags]
+                            })
+                          }
+                        }}
+                      >
+                        Selected Only
+                      </Button>
+                    </div>
 
-            <div className="flex items-center justify-between">
-              <label className="text-sm">Show source badge</label>
-              <Switch
-                checked={config.showSourceBadge}
-                onCheckedChange={(checked) => {
-                  onChange({ ...config, showSourceBadge: checked })
-                }}
-              />
-            </div>
+                    <div className="flex items-center justify-between gap-3 mb-2">
+                      <p className="text-xs text-muted-foreground">
+                        {selectedTagCount} of {availableTags.length} shown
+                      </p>
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          className="text-xs text-primary hover:underline"
+                          onClick={() => applyUpdate({ ...draft, tag_filter: null })}
+                        >
+                          Select all
+                        </button>
+                        <button
+                          type="button"
+                          className="text-xs text-primary hover:underline"
+                          onClick={() => applyUpdate({ ...draft, tag_filter: [] })}
+                        >
+                          Deselect all
+                        </button>
+                      </div>
+                    </div>
 
-            <div className="flex items-center justify-between">
-              <label className="text-sm">Show link URL</label>
-              <Switch
-                checked={config.showUrl}
-                onCheckedChange={(checked) => {
-                  onChange({ ...config, showUrl: checked })
-                }}
-              />
-            </div>
+                    <div className="border rounded-md overflow-hidden">
+                      {availableTags.map((tag) => {
+                        const isSelected =
+                          tagMode === 'all' || visibleSelectedTags.includes(tag)
+                        return (
+                          <div
+                            key={tag}
+                            className="flex items-center gap-2 px-2 py-2 hover:bg-accent/40 border-b last:border-0"
+                          >
+                            <span className="text-sm flex-1 truncate min-w-0">{tag}</span>
+                            <button
+                              onClick={() => toggleTag(tag)}
+                              className={cn(
+                                'w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors',
+                                isSelected
+                                  ? 'bg-primary border-primary'
+                                  : 'border-input bg-background hover:border-primary/50'
+                              )}
+                              aria-label={isSelected ? `Deselect ${tag}` : `Select ${tag}`}
+                            >
+                              {isSelected && (
+                                <Check className="h-3 w-3 text-primary-foreground" />
+                              )}
+                            </button>
+                          </div>
+                        )
+                      })}
+                    </div>
 
-            <div className="flex items-center justify-between">
-              <label className="text-sm">Show body preview</label>
-              <Switch
-                checked={config.showBodyPreview}
-                onCheckedChange={(checked) => {
-                  onChange({ ...config, showBodyPreview: checked })
-                }}
-              />
-            </div>
+                    <p className="text-xs text-muted-foreground mt-1.5">
+                      Filter posts by tag
+                    </p>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
 
-            <div className="flex items-center justify-between">
-              <label className="text-sm">Compact view</label>
-              <Switch
-                checked={config.cardDensity === 'compact'}
-                onCheckedChange={(checked) => {
-                  onChange({
-                    ...config,
-                    cardDensity: checked ? 'compact' : 'detailed'
-                  })
-                }}
-              />
-            </div>
+          <Separator />
 
-            <div className="flex items-center justify-between">
-              <label className="text-sm">Show "View All" link</label>
-              <Switch
-                checked={config.showViewAllLink}
-                onCheckedChange={(checked) => {
-                  onChange({ ...config, showViewAllLink: checked })
-                }}
-              />
+          {/* ── Sorting ── */}
+          <div>
+            <SectionHeader title="Sorting" />
+            <div className="space-y-0.5">
+              <SettingRow label="Sort by">
+                <Select
+                  value={draft.sort_by}
+                  onValueChange={(val) =>
+                    applyUpdate({ ...draft, sort_by: val as 'saved_at' | 'score' })
+                  }
+                >
+                  <SelectTrigger className="w-[130px] h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="saved_at">Date Saved</SelectItem>
+                    <SelectItem value="score">Score</SelectItem>
+                  </SelectContent>
+                </Select>
+              </SettingRow>
+
+              <SettingRow label="Sort direction">
+                <Select
+                  value={draft.sort_dir}
+                  onValueChange={(val) =>
+                    applyUpdate({ ...draft, sort_dir: val as 'asc' | 'desc' })
+                  }
+                >
+                  <SelectTrigger className="w-[130px] h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="desc">
+                      {draft.sort_by === 'saved_at' ? 'Newest first' : 'Highest first'}
+                    </SelectItem>
+                    <SelectItem value="asc">
+                      {draft.sort_by === 'saved_at' ? 'Oldest first' : 'Lowest first'}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </SettingRow>
+
+              <SettingRow label="Max posts">
+                <Select
+                  value={draft.max_posts.toString()}
+                  onValueChange={(val) => applyUpdate({ ...draft, max_posts: parseInt(val, 10) })}
+                >
+                  <SelectTrigger className="w-[80px] h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="5">5</SelectItem>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="20">20</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                  </SelectContent>
+                </Select>
+              </SettingRow>
             </div>
           </div>
+
+          <Separator />
+
+          {/* ── Grouping ── */}
+          <div>
+            <SectionHeader title="Grouping" />
+            <div className="space-y-0.5">
+              <SettingRow label="Group by">
+                <Select
+                  value={draft.group_by}
+                  onValueChange={(val) =>
+                    applyUpdate({ ...draft, group_by: val as 'none' | 'source' })
+                  }
+                >
+                  <SelectTrigger className="w-[150px] h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No Grouping</SelectItem>
+                    <SelectItem value="source">Group by Source</SelectItem>
+                  </SelectContent>
+                </Select>
+              </SettingRow>
+
+              {draft.group_by === 'source' && (
+                <>
+                  <SettingRow label="Show group headers">
+                    <Switch
+                      checked={draft.showGroupHeaders}
+                      onCheckedChange={(checked) =>
+                        applyUpdate({ ...draft, showGroupHeaders: checked })
+                      }
+                    />
+                  </SettingRow>
+
+                  <div className="pt-1">
+                    <p className="text-xs text-muted-foreground mb-2">Source order</p>
+                    <div className="space-y-1">
+                      {draft.sourceOrder.map((source, idx) => (
+                        <div
+                          key={source}
+                          className="flex items-center gap-2 px-2 py-1.5 rounded border bg-muted/30 text-sm"
+                        >
+                          <GripVertical className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                          <span className="flex-1">{SOURCE_LABEL_MAP[source]}</span>
+                          <button
+                            type="button"
+                            disabled={idx === 0}
+                            onClick={() => moveSource(source, 'up')}
+                            className="p-0.5 hover:bg-muted rounded disabled:opacity-30"
+                            aria-label={`Move ${SOURCE_LABEL_MAP[source]} up`}
+                          >
+                            <ArrowUp className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={idx === draft.sourceOrder.length - 1}
+                            onClick={() => moveSource(source, 'down')}
+                            className="p-0.5 hover:bg-muted rounded disabled:opacity-30"
+                            aria-label={`Move ${SOURCE_LABEL_MAP[source]} down`}
+                          >
+                            <ArrowDown className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* ── Display ── */}
+          <div>
+            <SectionHeader title="Display" />
+            <div className="space-y-0.5">
+              <SettingRow label="Show metadata">
+                <Switch
+                  checked={draft.showMetadata}
+                  onCheckedChange={(checked) => applyUpdate({ ...draft, showMetadata: checked })}
+                />
+              </SettingRow>
+
+              <SettingRow label="Show source badge">
+                <Switch
+                  checked={draft.showSourceBadge}
+                  onCheckedChange={(checked) =>
+                    applyUpdate({ ...draft, showSourceBadge: checked })
+                  }
+                />
+              </SettingRow>
+
+              <SettingRow label="Show link URL">
+                <Switch
+                  checked={draft.showUrl}
+                  onCheckedChange={(checked) => applyUpdate({ ...draft, showUrl: checked })}
+                />
+              </SettingRow>
+
+              <SettingRow label="Show body preview">
+                <Switch
+                  checked={draft.showBodyPreview}
+                  onCheckedChange={(checked) =>
+                    applyUpdate({ ...draft, showBodyPreview: checked })
+                  }
+                />
+              </SettingRow>
+
+              <SettingRow label="Compact view">
+                <Switch
+                  checked={draft.cardDensity === 'compact'}
+                  onCheckedChange={(checked) =>
+                    applyUpdate({ ...draft, cardDensity: checked ? 'compact' : 'detailed' })
+                  }
+                />
+              </SettingRow>
+
+              <SettingRow label='Show "View All" link'>
+                <Switch
+                  checked={draft.showViewAllLink}
+                  onCheckedChange={(checked) =>
+                    applyUpdate({ ...draft, showViewAllLink: checked })
+                  }
+                />
+              </SettingRow>
+            </div>
+          </div>
+
         </div>
       </ScrollArea>
     </div>

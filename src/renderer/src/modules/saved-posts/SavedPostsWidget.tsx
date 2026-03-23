@@ -118,6 +118,8 @@ function SavedPostsWidget(): React.ReactElement {
   const [snapshotConfig, setSnapshotConfig] = useState<SavedPostsViewConfig | null>(null)
   const [editContentHeight, setEditContentHeight] = useState<number | null>(null)
   const cardContentRef = useRef<HTMLDivElement | null>(null)
+  const measurementRef = useRef<HTMLDivElement | null>(null)
+  const measuredRowCountRef = useRef<number | null>(null)
 
   // Fetch posts with the widget's configured filters
   const { posts, loading, refetch } = useSavedPosts({
@@ -182,6 +184,34 @@ function SavedPostsWidget(): React.ReactElement {
       .map((source) => ({ source, posts: groups.get(source)! }))
   }, [posts, config.group_by, config.sourceOrder])
 
+  const renderedRowCount = useMemo(() => {
+    if (loading || posts.length === 0) return 0
+    const headerRows = groupedPosts && config.showGroupHeaders ? groupedPosts.length : 0
+    return posts.length + headerRows
+  }, [loading, posts.length, groupedPosts, config.showGroupHeaders])
+
+  useEffect(() => {
+    if (!isEditing || loading) return
+    if (measuredRowCountRef.current === renderedRowCount) return
+
+    const measurementNode = measurementRef.current
+    const cardContent = cardContentRef.current
+    if (!measurementNode || !cardContent) return
+
+    const frame = window.requestAnimationFrame(() => {
+      const styles = window.getComputedStyle(cardContent)
+      const paddingTop = parseFloat(styles.paddingTop) || 0
+      const paddingBottom = parseFloat(styles.paddingBottom) || 0
+      const nextHeight = Math.ceil(measurementNode.scrollHeight + paddingTop + paddingBottom)
+      if (nextHeight > 0) {
+        setEditContentHeight(nextHeight)
+        measuredRowCountRef.current = renderedRowCount
+      }
+    })
+
+    return () => window.cancelAnimationFrame(frame)
+  }, [isEditing, loading, renderedRowCount])
+
   if (!staleness.loading && !staleness.topicConfigured) {
     return (
       <Card>
@@ -222,6 +252,7 @@ function SavedPostsWidget(): React.ReactElement {
     if (currentHeight && currentHeight > 0) {
       setEditContentHeight(currentHeight)
     }
+    measuredRowCountRef.current = renderedRowCount
     setSnapshotConfig(config)
     setIsEditing(true)
   }
@@ -230,6 +261,7 @@ function SavedPostsWidget(): React.ReactElement {
     setIsEditing(false)
     setSnapshotConfig(null)
     setEditContentHeight(null)
+    measuredRowCountRef.current = null
   }
 
   function handleReset(): void {
@@ -263,6 +295,35 @@ function SavedPostsWidget(): React.ReactElement {
       ))}
     </div>
   )
+
+  const renderPreviewContent = (): React.ReactNode => {
+    if (loading) {
+      return <p className="text-sm text-muted-foreground">Loading...</p>
+    }
+
+    if (posts.length === 0) {
+      return <p className="text-sm text-muted-foreground">No saved posts yet.</p>
+    }
+
+    if (groupedPosts) {
+      return (
+        <div className="space-y-4">
+          {groupedPosts.map(({ source, posts: groupPosts }) => (
+            <div key={source}>
+              {config.showGroupHeaders && (
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                  {SOURCE_LABELS[source]}
+                </h4>
+              )}
+              {renderPostList(groupPosts)}
+            </div>
+          ))}
+        </div>
+      )
+    }
+
+    return renderPostList(posts)
+  }
 
   return (
     <Card>
@@ -337,30 +398,21 @@ function SavedPostsWidget(): React.ReactElement {
       </CardHeader>
       <CardContent
         ref={cardContentRef}
+        className="relative"
         style={isEditing && editContentHeight ? { height: editContentHeight, overflow: 'hidden' } : undefined}
       >
+        {isEditing && (
+          <div
+            ref={measurementRef}
+            aria-hidden="true"
+            className="absolute left-0 top-0 w-full invisible pointer-events-none"
+          >
+            {renderPreviewContent()}
+          </div>
+        )}
         <div className={isEditing ? 'saved-posts-card-edit' : undefined}>
           <div className={isEditing ? 'saved-posts-card-edit__preview' : undefined}>
-            {loading ? (
-              <p className="text-sm text-muted-foreground">Loading...</p>
-            ) : posts.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No saved posts yet.</p>
-            ) : groupedPosts ? (
-              <div className="space-y-4">
-                {groupedPosts.map(({ source, posts: groupPosts }) => (
-                  <div key={source}>
-                    {config.showGroupHeaders && (
-                      <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-                        {SOURCE_LABELS[source]}
-                      </h4>
-                    )}
-                    {renderPostList(groupPosts)}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              renderPostList(posts)
-            )}
+            {renderPreviewContent()}
           </div>
           {isEditing && (
             <div className="saved-posts-card-edit__panel">
