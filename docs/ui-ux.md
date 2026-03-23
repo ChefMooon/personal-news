@@ -491,16 +491,17 @@ The flow is presented as a **multi-step modal or full-pane wizard** with forward
 |  ( ) Android                                              |
 |                                                            |
 |  -- iOS Instructions --                                   |
-|  1. Open the Shortcuts app.                               |
-|  2. Create a new Shortcut.                                |
-|  3. Add action: "Get Clipboard" (or "URL" if using the   |
-|     Reddit share sheet).                                  |
-|  4. Add action: "Get Contents of URL" with:              |
-|     URL:     https://ntfy.sh/xK9mQr4vLpTw8nZj2cY [Copy] |
-|     Method:  POST                                         |
-|     Body:    Shortcut Input (the shared URL)              |
-|  5. Add the Shortcut to your Share Sheet.                 |
-|  6. On any Reddit post, tap Share -> your shortcut.       |
+|  1. Open the Shortcuts app on your iPhone.                |
+|  2. Create a new shortcut and choose one input option:    |
+|     Ask for Input (line 1 URL, line 2 notes) OR          |
+|     Get Clipboard (URL only, no notes).                   |
+|  3. Add action: "Get Contents of URL".                    |
+|  4. Set "Get contents of" to:                            |
+|     https://ntfy.sh/xK9mQr4vLpTw8nZj2cY [Copy]           |
+|  5. Set Method: POST.                                     |
+|  6. Add Header: content-type = text/plain.                |
+|  7. Set Request Body to Ask for Input or Clipboard        |
+|     (raw text only, no key required).                     |
 |                                                            |
 |  [Switch to Android]                                      |
 |                                                            |

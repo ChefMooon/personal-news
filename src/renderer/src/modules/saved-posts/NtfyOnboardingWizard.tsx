@@ -242,26 +242,40 @@ export function NtfyOnboardingWizard({
                     iPhone.
                   </li>
                   <li>
-                    Create a new shortcut → choose{' '}
-                    <span className="font-medium">Receive</span> input from the Share
-                    Sheet (URLs).
+                    Create a new shortcut and choose one input option:{' '}
+                    <span className="font-medium">Ask for Input</span> (line 1 = URL,
+                    line 2 = notes) or <span className="font-medium">Get Clipboard</span>{' '}
+                    (URL only, no notes).
                   </li>
                   <li>
                     Add a <span className="font-medium">Get Contents of URL</span>{' '}
                     action.
                   </li>
                   <li>
-                    Set the URL to:
+                    Set <span className="font-medium">Get contents of</span> to your ntfy
+                    topic URL:
                     <code className="block bg-muted rounded p-1.5 mt-1 select-all">
                       {topicUrl}
                     </code>
                   </li>
-                  <li>Set Method to POST, Request Body to &quot;Shortcut Input&quot;.</li>
-                  <li>Name it &quot;Save to Personal News&quot; and tap Done.</li>
+                  <li>
+                    Set <span className="font-medium">Method</span> to{' '}
+                    <span className="font-medium">POST</span>.
+                  </li>
+                  <li>
+                    Add a header: <span className="font-medium">content-type</span> ={' '}
+                    <span className="font-medium">text/plain</span>.
+                  </li>
+                  <li>
+                    Set <span className="font-medium">Request Body</span> to your chosen
+                    input (<span className="font-medium">Ask for Input</span> or{' '}
+                    <span className="font-medium">Clipboard</span>). Use raw text only (no
+                    key required).
+                  </li>
                 </ol>
                 <p className="text-xs mt-2">
-                  To add a note: put the Reddit URL on the first line and your note on
-                  the following lines.
+                  Tip: when using Ask for Input, enter the Reddit URL on line 1 and your
+                  note on line 2.
                 </p>
               </div>
             ) : (

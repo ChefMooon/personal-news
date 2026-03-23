@@ -187,8 +187,9 @@ This approach was chosen because:
 
 **iOS:**
 1. User opens a Reddit post in Safari or the Reddit app.
-2. Taps Share → runs a pre-configured iOS Shortcut.
-3. The Shortcut sends an HTTP POST to `https://ntfy.sh/{TOPIC}` with the post URL as the message body.
+2. Uses a pre-configured iOS Shortcut with either Ask for Input (URL on line 1, optional notes on line 2) or Get Clipboard (URL-only).
+3. The Shortcut uses Get Contents of URL to POST to `https://ntfy.sh/{TOPIC}`.
+4. Request details are plain text: header `content-type: text/plain`, request body from Ask for Input or Clipboard (no key/value wrapper).
 
 **Android:**
 1. User opens a Reddit post.
