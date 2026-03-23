@@ -29,6 +29,7 @@ import type {
   ScriptScheduleInput,
   ScriptUpdateInput
 } from '../../../shared/ipc-types'
+import { useRedditDigestEnabled } from '../contexts/RedditDigestEnabledContext'
 
 type ScriptScheduleType = ScriptScheduleInput['type']
 
@@ -877,6 +878,7 @@ export default function ScriptManager(): React.ReactElement {
   } = useScripts()
   const [scriptHomeDir, setScriptHomeDir] = useState<string>('')
   const [openFolderError, setOpenFolderError] = useState<string | null>(null)
+  const { enabled: redditDigestEnabled } = useRedditDigestEnabled()
 
   useEffect(() => {
     window.api
@@ -895,7 +897,11 @@ export default function ScriptManager(): React.ReactElement {
     }
   }
 
-  const staleCount = scripts.filter((s) => s.is_stale).length
+  const visibleScripts = redditDigestEnabled
+    ? scripts
+    : scripts.filter((s) => !s.file_path.toLowerCase().includes('reddit_digest'))
+
+  const staleCount = visibleScripts.filter((s) => s.is_stale).length
 
   return (
     <div className="flex flex-col h-full px-6 py-4">
@@ -940,11 +946,11 @@ export default function ScriptManager(): React.ReactElement {
 
       {loading ? (
         <p className="text-sm text-muted-foreground">Loading scripts...</p>
-      ) : scripts.length === 0 ? (
+      ) : visibleScripts.length === 0 ? (
         <p className="text-sm text-muted-foreground">No scripts found in the configured Script Home Directory.</p>
       ) : (
         <div>
-          {scripts.map((script) => (
+          {visibleScripts.map((script) => (
             <ScriptRow
               key={script.id}
               script={script}

@@ -6,6 +6,7 @@ import { Button } from '../components/ui/button'
 import { Switch } from '../components/ui/switch'
 import { useTheme } from '../providers/ThemeProvider'
 import { useYouTubeChannels } from '../hooks/useYouTubeChannels'
+import { useRedditDigestEnabled } from '../contexts/RedditDigestEnabledContext'
 import { Eye, EyeOff, ExternalLink } from 'lucide-react'
 import {
   IPC,
@@ -843,6 +844,26 @@ function RedditDigestTab(): React.ReactElement {
   )
 }
 
+function FeaturesTab(): React.ReactElement {
+  const { enabled, setEnabled } = useRedditDigestEnabled()
+
+  return (
+    <div className="space-y-4 max-w-lg">
+      <div>
+        <h3 className="text-sm font-medium mb-1">Reddit Digest</h3>
+        <p className="text-xs text-muted-foreground mb-3">
+          Enable or disable the Reddit Digest feature. When disabled, the dashboard widget,
+          dedicated page, and associated scripts are hidden.
+        </p>
+        <div className="flex items-center justify-between rounded-md border px-3 py-2 max-w-sm">
+          <span className="text-sm">Enable Reddit Digest</span>
+          <Switch checked={enabled} onCheckedChange={setEnabled} />
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function ScriptsTab(): React.ReactElement {
   const [dir, setDir] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -1146,27 +1167,34 @@ function SavedPostsTab(): React.ReactElement {
 
 export default function Settings(): React.ReactElement {
   const [searchParams] = useSearchParams()
+  const { enabled: redditDigestEnabled } = useRedditDigestEnabled()
   return (
     <div className="flex flex-col h-full px-6 py-4">
       <h1 className="text-xl font-semibold mb-4">Settings</h1>
       <Tabs defaultValue={searchParams.get('tab') ?? 'api-keys'} className="flex-1">
         <TabsList>
+          <TabsTrigger value="features">Features</TabsTrigger>
           <TabsTrigger value="api-keys">API Keys</TabsTrigger>
           <TabsTrigger value="youtube">YouTube</TabsTrigger>
-          <TabsTrigger value="reddit-digest">Reddit Digest</TabsTrigger>
+          {redditDigestEnabled && <TabsTrigger value="reddit-digest">Reddit Digest</TabsTrigger>}
           <TabsTrigger value="saved-posts">Saved Posts</TabsTrigger>
           <TabsTrigger value="appearance">Appearance</TabsTrigger>
           <TabsTrigger value="scripts">Scripts</TabsTrigger>
         </TabsList>
+        <TabsContent value="features" className="mt-4">
+          <FeaturesTab />
+        </TabsContent>
         <TabsContent value="api-keys" className="mt-4">
           <ApiKeysTab />
         </TabsContent>
         <TabsContent value="youtube" className="mt-4">
           <YouTubeTab />
         </TabsContent>
-        <TabsContent value="reddit-digest" className="mt-4">
-          <RedditDigestTab />
-        </TabsContent>
+        {redditDigestEnabled && (
+          <TabsContent value="reddit-digest" className="mt-4">
+            <RedditDigestTab />
+          </TabsContent>
+        )}
         <TabsContent value="saved-posts" className="mt-4">
           <SavedPostsTab />
         </TabsContent>

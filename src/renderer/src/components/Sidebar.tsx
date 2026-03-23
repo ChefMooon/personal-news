@@ -1,8 +1,9 @@
 import React, { useState } from 'react'
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, Bookmark, Terminal, Settings, ChevronLeft, ChevronRight, Youtube } from 'lucide-react'
+import { LayoutDashboard, Bookmark, Terminal, Settings, ChevronLeft, ChevronRight, Youtube, Newspaper } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { useScripts } from '../hooks/useScripts'
+import { useRedditDigestEnabled } from '../contexts/RedditDigestEnabledContext'
 
 interface NavItem {
   to: string
@@ -15,6 +16,7 @@ export function Sidebar(): React.ReactElement {
   const [collapsed, setCollapsed] = useState(false)
   const { scripts } = useScripts()
   const hasStaleScripts = scripts.some((s) => s.is_stale)
+  const { enabled: redditDigestEnabled } = useRedditDigestEnabled()
 
   const navItems: NavItem[] = [
     {
@@ -22,6 +24,15 @@ export function Sidebar(): React.ReactElement {
       label: 'Dashboard',
       icon: <LayoutDashboard className="h-5 w-5 shrink-0" />
     },
+    ...(redditDigestEnabled
+      ? [
+          {
+            to: '/reddit-digest',
+            label: 'Reddit Digest',
+            icon: <Newspaper className="h-5 w-5 shrink-0" />
+          }
+        ]
+      : []),
     {
       to: '/saved-posts',
       label: 'Saved Posts',
