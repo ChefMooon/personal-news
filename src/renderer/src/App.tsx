@@ -9,9 +9,19 @@ import ScriptManager from './routes/ScriptManager'
 import Settings from './routes/Settings'
 import { RedditDigestEnabledProvider } from './contexts/RedditDigestEnabledContext'
 import { SavedPostsEnabledProvider } from './contexts/SavedPostsEnabledContext'
-import { Toaster } from 'sonner'
+import { Toaster, toast } from 'sonner'
+import { IPC } from '../../shared/ipc-types'
 
 export default function App(): React.ReactElement {
+  React.useEffect(() => {
+    return window.api.on(IPC.APP_SHOW_TRAY_HINT, () => {
+      toast.info('Personal News is still running in the system tray.', {
+        description: 'Use the tray icon to reopen the app or quit it completely.',
+        duration: 5000
+      })
+    })
+  }, [])
+
   return (
     <RedditDigestEnabledProvider>
       <SavedPostsEnabledProvider>

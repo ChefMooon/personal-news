@@ -1,4 +1,4 @@
-import { BrowserWindow, dialog, ipcMain, safeStorage, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } from 'electron'
 import { XMLParser } from 'fast-xml-parser'
 import { getDb } from '../db/database'
 import { deleteSetting, getSetting, setSetting } from '../settings/store'
@@ -2059,6 +2059,12 @@ export function registerIpcHandlers(): void {
         refreshScriptSchedule(db, scriptId, { runOnAppStart: false })
       }
       emitScriptsUpdated()
+    }
+
+    if (key === 'app_launch_at_login') {
+      app.setLoginItemSettings({
+        openAtLogin: value === '1' || value === 'true'
+      })
     }
   })
 

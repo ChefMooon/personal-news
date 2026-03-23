@@ -5,6 +5,18 @@
   "main": "./out/main/index.js",
   "author": "",
   "homepage": "https://electron-vite.org",
+  "build": {
+    "icon": "resources/icon.png",
+    "extraResources": [
+      "resources/**"
+    ],
+    "win": {
+      "icon": "resources/icon.ico"
+    },
+    "linux": {
+      "icon": "resources/icon.png"
+    }
+  },
   "scripts": {
     "format": "prettier --write .",
     "lint": "eslint . --ext .js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix --ignore-path .gitignore",

@@ -1,6 +1,7 @@
 // IPC channel name constants and payload types
 
 export const IPC = {
+  APP_SHOW_TRAY_HINT: 'app:showTrayHint',
   YOUTUBE_GET_CHANNELS: 'youtube:getChannels',
   YOUTUBE_GET_VIDEOS: 'youtube:getVideos',
   YOUTUBE_GET_VIDEOS_FILTERED: 'youtube:getVideosFiltered',

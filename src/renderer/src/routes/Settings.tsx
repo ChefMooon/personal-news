@@ -840,6 +840,145 @@ function FeaturesTab(): React.ReactElement {
   )
 }
 
+function AppBehaviorTab(): React.ReactElement {
+  const [closeToTray, setCloseToTray] = useState(true)
+  const [startMinimized, setStartMinimized] = useState(false)
+  const [minimizeToTray, setMinimizeToTray] = useState(false)
+  const [launchAtLogin, setLaunchAtLogin] = useState(false)
+
+  useEffect(() => {
+    const loadFlag = (key: string, setter: (value: boolean) => void, fallback: boolean): void => {
+      window.api
+        .invoke(IPC.SETTINGS_GET, key)
+        .then((raw) => {
+          if (typeof raw !== 'string') {
+            setter(fallback)
+            return
+          }
+          setter(raw === '1' || raw === 'true')
+        })
+        .catch((err) => {
+          setter(fallback)
+          toast.error(err instanceof Error ? err.message : `Failed to load ${key} setting.`)
+        })
+    }
+
+    loadFlag('app_close_to_tray', setCloseToTray, true)
+    loadFlag('app_start_minimized', setStartMinimized, false)
+    loadFlag('app_minimize_to_tray', setMinimizeToTray, false)
+    loadFlag('app_launch_at_login', setLaunchAtLogin, false)
+  }, [])
+
+  const saveFlag = async (
+    key: string,
+    value: boolean,
+    setter: (value: boolean) => void,
+    label: string
+  ): Promise<void> => {
+    const previous =
+      key === 'app_close_to_tray'
+        ? closeToTray
+        : key === 'app_start_minimized'
+          ? startMinimized
+          : key === 'app_minimize_to_tray'
+            ? minimizeToTray
+            : launchAtLogin
+
+    setter(value)
+    try {
+      await window.api.invoke(IPC.SETTINGS_SET, key, value ? '1' : '0')
+      toast.success(`${label} updated.`)
+    } catch (err) {
+      setter(previous)
+      toast.error(err instanceof Error ? err.message : `Failed to save ${label.toLowerCase()}.`)
+    }
+  }
+
+  return (
+    <div className="space-y-4 max-w-lg">
+      <div>
+        <h3 className="text-sm font-medium mb-1">Window & Tray</h3>
+        <p className="text-xs text-muted-foreground mb-3">
+          Control how Personal News behaves when minimized or closed.
+        </p>
+        <div className="space-y-2 max-w-md">
+          <div className="flex items-center justify-between rounded-md border px-3 py-2">
+            <div>
+              <p className="text-sm">Hide to tray when closing window</p>
+              <p className="text-xs text-muted-foreground">Keeps background polling active after clicking X.</p>
+            </div>
+            <Switch
+              checked={closeToTray}
+              onCheckedChange={(checked) => {
+                void saveFlag(
+                  'app_close_to_tray',
+                  checked,
+                  setCloseToTray,
+                  'Close-to-tray behavior'
+                )
+              }}
+            />
+          </div>
+
+          <div className="flex items-center justify-between rounded-md border px-3 py-2">
+            <div>
+              <p className="text-sm">Hide to tray when minimizing</p>
+              <p className="text-xs text-muted-foreground">Prevents a taskbar window while the app runs in background.</p>
+            </div>
+            <Switch
+              checked={minimizeToTray}
+              onCheckedChange={(checked) => {
+                void saveFlag(
+                  'app_minimize_to_tray',
+                  checked,
+                  setMinimizeToTray,
+                  'Minimize-to-tray behavior'
+                )
+              }}
+            />
+          </div>
+
+          <div className="flex items-center justify-between rounded-md border px-3 py-2">
+            <div>
+              <p className="text-sm">Start app minimized</p>
+              <p className="text-xs text-muted-foreground">Useful when launching automatically at sign-in.</p>
+            </div>
+            <Switch
+              checked={startMinimized}
+              onCheckedChange={(checked) => {
+                void saveFlag(
+                  'app_start_minimized',
+                  checked,
+                  setStartMinimized,
+                  'Start minimized behavior'
+                )
+              }}
+            />
+          </div>
+
+          <div className="flex items-center justify-between rounded-md border px-3 py-2">
+            <div>
+              <p className="text-sm">Launch at login</p>
+              <p className="text-xs text-muted-foreground">Starts Personal News when you sign in.</p>
+            </div>
+            <Switch
+              checked={launchAtLogin}
+              onCheckedChange={(checked) => {
+                void saveFlag(
+                  'app_launch_at_login',
+                  checked,
+                  setLaunchAtLogin,
+                  'Launch-at-login behavior'
+                )
+              }}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function ScriptsTab(): React.ReactElement {
   const [dir, setDir] = useState('')
 
@@ -1463,6 +1602,7 @@ export default function Settings(): React.ReactElement {
       <Tabs defaultValue={searchParams.get('tab') ?? 'features'} className="flex-1">
         <TabsList>
           <TabsTrigger value="features">Features</TabsTrigger>
+          <TabsTrigger value="app-behavior">App Behavior</TabsTrigger>
           <TabsTrigger value="api-keys">API Keys</TabsTrigger>
           <TabsTrigger value="youtube">YouTube</TabsTrigger>
           {redditDigestEnabled && <TabsTrigger value="reddit-digest">Reddit Digest</TabsTrigger>}
@@ -1473,6 +1613,9 @@ export default function Settings(): React.ReactElement {
         </TabsList>
         <TabsContent value="features" className="mt-4">
           <FeaturesTab />
+        </TabsContent>
+        <TabsContent value="app-behavior" className="mt-4">
+          <AppBehaviorTab />
         </TabsContent>
         <TabsContent value="api-keys" className="mt-4">
           <ApiKeysTab />
