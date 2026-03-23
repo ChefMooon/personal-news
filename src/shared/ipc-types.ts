@@ -10,8 +10,10 @@ export const IPC = {
   YOUTUBE_CLEAR_VIDEOS_CACHE: 'youtube:clearVideosCache',
   YOUTUBE_UPDATED: 'youtube:updated',
   REDDIT_GET_DIGEST_POSTS: 'reddit:getDigestPosts',
+  REDDIT_GET_DIGEST_WEEKS: 'reddit:getDigestWeeks',
   REDDIT_GET_SAVED_POSTS_SUMMARY: 'reddit:getSavedPostsSummary',
   REDDIT_GET_SAVED_POSTS: 'reddit:getSavedPosts',
+  REDDIT_PRUNE_DIGEST_POSTS: 'reddit:pruneDigestPosts',
   REDDIT_UPDATE_POST_TAGS: 'reddit:updatePostTags',
   REDDIT_GET_ALL_TAGS: 'reddit:getAllTags',
   REDDIT_RENAME_TAG: 'reddit:renameTag',
@@ -76,6 +78,7 @@ export interface YtVideo {
 
 export interface DigestPost {
   post_id: string
+  week_start_date: string
   subreddit: string
   title: string
   url: string
@@ -85,6 +88,20 @@ export interface DigestPost {
   num_comments: number | null
   created_utc: number
   fetched_at: number
+}
+
+export interface DigestWeekSummary {
+  week_start_date: string
+  post_count: number
+}
+
+export interface RedditDigestPostsRequest {
+  week_start_date?: string | null
+}
+
+export interface PruneDigestOptions {
+  keep_weeks?: number
+  delete_week?: string
 }
 
 export type LinkSource = 'reddit' | 'x' | 'bsky' | 'generic'
@@ -327,7 +344,14 @@ export interface DigestViewConfig {
   sort_dir: 'asc' | 'desc'
   group_by: 'subreddit' | 'none'
   layout_mode: 'columns' | 'tabs'
-  subreddit_filter: string[] | null
+  subreddit_mode: 'all' | 'selected'
+  selected_subreddits: string[]
+  subreddit_order: string[]
+  pinned_subreddits: string[]
+  week_mode: 'latest' | 'range' | 'specific'
+  week_range_count: number
+  selected_week: string | null
+  max_posts_per_group: number
 }
 
 export interface SavedPostsViewConfig {

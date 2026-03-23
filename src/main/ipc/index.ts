@@ -7,6 +7,9 @@ import type {
   YtChannel,
   YtVideo,
   DigestPost,
+  DigestWeekSummary,
+  RedditDigestPostsRequest,
+  PruneDigestOptions,
   SavedPostSummary,
   SavedPost,
   NtfyStaleness,
@@ -886,12 +889,75 @@ export function registerIpcHandlers(): void {
   })
 
   // reddit:getDigestPosts
-  ipcMain.handle(IPC.REDDIT_GET_DIGEST_POSTS, (): DigestPost[] => {
+  ipcMain.handle(IPC.REDDIT_GET_DIGEST_POSTS, (_event, options?: RedditDigestPostsRequest): DigestPost[] => {
+    const db = getDb()
+    if (options?.week_start_date) {
+      return db
+        .prepare('SELECT * FROM reddit_digest_posts WHERE week_start_date = ? ORDER BY fetched_at DESC')
+        .all(options.week_start_date) as DigestPost[]
+    }
+
+    return db.prepare('SELECT * FROM reddit_digest_posts ORDER BY week_start_date DESC, fetched_at DESC').all() as DigestPost[]
+  })
+
+  // reddit:getDigestWeeks
+  ipcMain.handle(IPC.REDDIT_GET_DIGEST_WEEKS, (): DigestWeekSummary[] => {
     const db = getDb()
     return db
-      .prepare('SELECT * FROM reddit_digest_posts ORDER BY fetched_at DESC')
-      .all() as DigestPost[]
+      .prepare(
+        `SELECT week_start_date, COUNT(*) AS post_count
+         FROM reddit_digest_posts
+         GROUP BY week_start_date
+         ORDER BY week_start_date DESC`
+      )
+      .all() as DigestWeekSummary[]
   })
+
+  // reddit:pruneDigestPosts
+  ipcMain.handle(
+    IPC.REDDIT_PRUNE_DIGEST_POSTS,
+    (_event, options?: PruneDigestOptions): { ok: boolean; error: string | null; deletedCount: number } => {
+      const db = getDb()
+
+      if (options?.delete_week) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(options.delete_week)) {
+          return { ok: false, error: 'Invalid week_start_date.', deletedCount: 0 }
+        }
+        const result = db.prepare('DELETE FROM reddit_digest_posts WHERE week_start_date = ?').run(options.delete_week)
+        emitRedditUpdated()
+        return { ok: true, error: null, deletedCount: result.changes }
+      }
+
+      if (typeof options?.keep_weeks === 'number') {
+        const keepWeeks = Math.floor(options.keep_weeks)
+        if (!Number.isFinite(keepWeeks) || keepWeeks < 1) {
+          return { ok: false, error: 'keep_weeks must be at least 1.', deletedCount: 0 }
+        }
+
+        const weeks = db
+          .prepare(
+            `SELECT DISTINCT week_start_date
+             FROM reddit_digest_posts
+             ORDER BY week_start_date DESC`
+          )
+          .all() as Array<{ week_start_date: string }>
+
+        if (weeks.length <= keepWeeks) {
+          return { ok: true, error: null, deletedCount: 0 }
+        }
+
+        const weeksToKeep = weeks.slice(0, keepWeeks).map((row) => row.week_start_date)
+        const placeholders = weeksToKeep.map(() => '?').join(', ')
+        const result = db
+          .prepare(`DELETE FROM reddit_digest_posts WHERE week_start_date NOT IN (${placeholders})`)
+          .run(...weeksToKeep)
+        emitRedditUpdated()
+        return { ok: true, error: null, deletedCount: result.changes }
+      }
+
+      return { ok: false, error: 'No prune operation was specified.', deletedCount: 0 }
+    }
+  )
 
   // reddit:getSavedPostsSummary
   ipcMain.handle(IPC.REDDIT_GET_SAVED_POSTS_SUMMARY, (): SavedPostSummary[] => {

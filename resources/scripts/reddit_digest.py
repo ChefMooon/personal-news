@@ -1,4 +1,5 @@
 import argparse
+import datetime as dt
 import json
 import sqlite3
 import sys
@@ -10,6 +11,7 @@ from urllib import error, parse, request
 USER_AGENT = "personal-news-digest/1.0"
 DEFAULT_LIMIT = 25
 DEFAULT_TIME_WINDOW = "week"
+DEFAULT_WEEK_START = 1
 SETTINGS_KEY = "reddit_digest_subreddits"
 
 
@@ -49,7 +51,20 @@ def fetch_top_posts(subreddit: str, time_window: str, limit: int) -> List[Dict[s
 	return payload.get("data", {}).get("children", [])
 
 
-def normalize_post(subreddit: str, child: Dict[str, Any]) -> Dict[str, Any]:
+def get_week_start_date(week_start_day: int, timestamp: int | None = None) -> str:
+	if week_start_day not in (0, 1):
+		raise RuntimeError("week_start must be 0 (Sunday) or 1 (Monday)")
+
+	anchor = dt.datetime.fromtimestamp(timestamp or time.time(), tz=dt.timezone.utc).date()
+	python_weekday = anchor.weekday()
+	if week_start_day == 1:
+		days_since_start = python_weekday
+	else:
+		days_since_start = (python_weekday + 1) % 7
+	return (anchor - dt.timedelta(days=days_since_start)).isoformat()
+
+
+def normalize_post(subreddit: str, child: Dict[str, Any], week_start_date: str) -> Dict[str, Any]:
 	data = child.get("data", {})
 	now = int(time.time())
 	permalink = data.get("permalink") or ""
@@ -58,6 +73,7 @@ def normalize_post(subreddit: str, child: Dict[str, Any]) -> Dict[str, Any]:
 
 	return {
 		"post_id": str(data.get("id", "")).strip(),
+		"week_start_date": week_start_date,
 		"subreddit": subreddit,
 		"title": str(data.get("title", "")).strip(),
 		"url": str(data.get("url", "")).strip() or permalink,
@@ -84,6 +100,7 @@ def main() -> int:
 	parser.add_argument("--db-path", required=True, help="Absolute path to the Personal News SQLite database.")
 	parser.add_argument("--time-window", default=DEFAULT_TIME_WINDOW, choices=["day", "week", "month", "year", "all"])
 	parser.add_argument("--limit", type=int, default=DEFAULT_LIMIT)
+	parser.add_argument("--week-start", type=int, default=DEFAULT_WEEK_START, choices=[0, 1])
 	args = parser.parse_args()
 
 	conn = sqlite3.connect(args.db_path)
@@ -92,6 +109,7 @@ def main() -> int:
 		if not subreddits:
 			raise RuntimeError("No Reddit Digest subreddits are configured yet.")
 
+		week_start_date = get_week_start_date(args.week_start)
 		posts: List[Dict[str, Any]] = []
 		for subreddit in subreddits:
 			eprint(f"Fetching r/{subreddit}...")
@@ -102,11 +120,12 @@ def main() -> int:
 			except error.URLError as exc:
 				raise RuntimeError(f"Network error while fetching r/{subreddit}: {exc.reason}") from exc
 
-			posts.extend(validate_posts([normalize_post(subreddit, child) for child in children]))
+			posts.extend(validate_posts([normalize_post(subreddit, child, week_start_date) for child in children]))
 			time.sleep(1)
 
 		payload = {
 			"generated_at": int(time.time()),
+			"week_start_date": week_start_date,
 			"subreddits": subreddits,
 			"posts": posts,
 		}

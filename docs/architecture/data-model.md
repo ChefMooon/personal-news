@@ -179,7 +179,8 @@ Top posts per subreddit collected by the Reddit digest script.
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
-| `post_id` | TEXT | PRIMARY KEY | Reddit post ID (the `t3_xxxxx` base36 ID, stored without the `t3_` prefix) |
+| `post_id` | TEXT | PK part | Reddit post ID (the `t3_xxxxx` base36 ID, stored without the `t3_` prefix) |
+| `week_start_date` | TEXT | PK part, NOT NULL | ISO date for the start of the ingest week, based on the user's configured week-start day |
 | `subreddit` | TEXT | NOT NULL | Subreddit name (without `r/` prefix) |
 | `title` | TEXT | NOT NULL | Post title |
 | `url` | TEXT | NOT NULL | Linked URL (or permalink for text posts) |
@@ -190,6 +191,8 @@ Top posts per subreddit collected by the Reddit digest script.
 | `created_utc` | INTEGER | NOT NULL | Unix timestamp of original post creation |
 | `fetched_at` | INTEGER | NOT NULL | Unix timestamp when the script collected this post |
 
+**Primary key:** `(post_id, week_start_date)`
+
 **Indexes:**
 
 ```sql
@@ -198,6 +201,9 @@ CREATE INDEX idx_reddit_digest_subreddit_score
 
 CREATE INDEX idx_reddit_digest_fetched_at
     ON reddit_digest_posts (fetched_at DESC);
+
+CREATE INDEX idx_reddit_digest_week_start
+    ON reddit_digest_posts (week_start_date DESC);
 ```
 
 ---

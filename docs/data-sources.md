@@ -132,9 +132,12 @@ This separation means:
 
 The bundled Reddit digest script:
 - Accepts a list of subreddits and a time window (default: `week`) as configuration.
+- Buckets each ingest run under a `week_start_date` derived from the user's configured week-start day (`Sunday` or `Monday`).
 - Uses the Reddit public JSON API (`https://www.reddit.com/r/{subreddit}/top.json?t=week&limit=25`) — no OAuth required for public subreddits.
 - Writes results to the `reddit_digest_posts` table.
-- Is idempotent: re-running does not duplicate posts (upsert by post ID).
+- Is idempotent within a week: re-running during the same week updates the same `(post_id, week_start_date)` row instead of duplicating it.
+
+This means the same Reddit post can appear in multiple weekly snapshots if it remains a top post across multiple weeks.
 
 **Access method:** The public Reddit JSON API is used — no OAuth and no user login required. This is sufficient for top posts on public subreddits, which is the intended scope. Private subreddits and NSFW content are explicitly out of scope for v1 and are not supported by this approach.
 
@@ -144,16 +147,18 @@ The bundled Reddit digest script:
 
 ```sql
 CREATE TABLE reddit_digest_posts (
-    post_id      TEXT PRIMARY KEY,
-    subreddit    TEXT NOT NULL,
-    title        TEXT NOT NULL,
-    url          TEXT NOT NULL,
-    permalink    TEXT NOT NULL,
-    author       TEXT,
-    score        INTEGER,
-    num_comments INTEGER,
-    created_utc  INTEGER NOT NULL,  -- Unix timestamp
-    fetched_at   INTEGER NOT NULL
+    post_id         TEXT NOT NULL,
+    week_start_date TEXT NOT NULL,   -- ISO date for the start of the ingest week, e.g. 2026-03-16
+    subreddit       TEXT NOT NULL,
+    title           TEXT NOT NULL,
+    url             TEXT NOT NULL,
+    permalink       TEXT NOT NULL,
+    author          TEXT,
+    score           INTEGER,
+    num_comments    INTEGER,
+    created_utc     INTEGER NOT NULL,  -- Unix timestamp
+    fetched_at      INTEGER NOT NULL,
+    PRIMARY KEY (post_id, week_start_date)
 );
 ```
 

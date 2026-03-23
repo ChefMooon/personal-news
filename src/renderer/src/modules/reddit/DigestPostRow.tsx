@@ -14,10 +14,10 @@ export function DigestPostRow({ post }: DigestPostRowProps): React.ReactElement 
   }
 
   return (
-    <div className="py-2 border-b last:border-0">
+    <div className="h-20 py-1 border-b last:border-0 overflow-hidden flex flex-col">
       <button
         onClick={handleClick}
-        className="text-left w-full group cursor-pointer"
+        className="text-left w-full group cursor-pointer flex-1 flex flex-col justify-between"
       >
         <p className="text-sm font-medium group-hover:text-primary transition-colors line-clamp-2 leading-snug">
           {post.title}

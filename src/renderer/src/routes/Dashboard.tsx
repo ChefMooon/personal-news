@@ -133,7 +133,10 @@ export default function Dashboard(): React.ReactElement {
         sort_dir: 'desc',
         group_by: 'subreddit',
         layout_mode: 'columns',
-        subreddit_filter: config.subredditFilter
+        subreddit_mode: 'selected',
+        selected_subreddits: config.subredditFilter,
+        subreddit_order: [],
+        pinned_subreddits: []
       }
       window.api
         .invoke('settings:set', storageKey, JSON.stringify(initialConfig))

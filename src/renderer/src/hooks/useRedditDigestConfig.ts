@@ -1,12 +1,50 @@
 import { useState, useEffect } from 'react'
 import type { DigestViewConfig } from '../../../shared/ipc-types'
 
-const DEFAULT_CONFIG: DigestViewConfig = {
+type LegacyDigestViewConfig = Partial<DigestViewConfig> & {
+  subreddit_filter?: string[] | null
+}
+
+export const DEFAULT_DIGEST_VIEW_CONFIG: DigestViewConfig = {
   sort_by: 'score',
   sort_dir: 'desc',
   group_by: 'subreddit',
   layout_mode: 'columns',
-  subreddit_filter: null
+  subreddit_mode: 'all',
+  selected_subreddits: [],
+  subreddit_order: [],
+  pinned_subreddits: [],
+  week_mode: 'latest',
+  week_range_count: 4,
+  selected_week: null,
+  max_posts_per_group: 5
+}
+
+function normalizeDigestViewConfig(raw: LegacyDigestViewConfig): DigestViewConfig {
+  const merged = { ...DEFAULT_DIGEST_VIEW_CONFIG, ...raw }
+  if (
+    raw.subreddit_mode === 'all' ||
+    raw.subreddit_mode === 'selected' ||
+    Array.isArray(raw.selected_subreddits) ||
+    Array.isArray(raw.subreddit_order) ||
+    Array.isArray(raw.pinned_subreddits)
+  ) {
+    return {
+      ...merged,
+      subreddit_mode: raw.subreddit_mode === 'selected' ? 'selected' : 'all',
+      selected_subreddits: Array.isArray(raw.selected_subreddits) ? raw.selected_subreddits : [],
+      subreddit_order: Array.isArray(raw.subreddit_order) ? raw.subreddit_order : [],
+      pinned_subreddits: Array.isArray(raw.pinned_subreddits) ? raw.pinned_subreddits : []
+    }
+  }
+
+  return {
+    ...merged,
+    subreddit_mode: raw.subreddit_filter === null || raw.subreddit_filter === undefined ? 'all' : 'selected',
+    selected_subreddits: Array.isArray(raw.subreddit_filter) ? raw.subreddit_filter : [],
+    subreddit_order: [],
+    pinned_subreddits: []
+  }
 }
 
 /**
@@ -19,7 +57,7 @@ export function useRedditDigestConfig(instanceId: string): {
   config: DigestViewConfig
   setConfig: (newConfig: DigestViewConfig) => void
 } {
-  const [config, setConfigState] = useState<DigestViewConfig>(DEFAULT_CONFIG)
+  const [config, setConfigState] = useState<DigestViewConfig>(DEFAULT_DIGEST_VIEW_CONFIG)
   const storageKey = `reddit_digest_view_config:${instanceId}`
 
   useEffect(() => {
@@ -29,14 +67,14 @@ export function useRedditDigestConfig(instanceId: string): {
       .then((raw) => {
         if (raw) {
           try {
-            setConfigState({ ...DEFAULT_CONFIG, ...(JSON.parse(raw as string) as Partial<DigestViewConfig>) })
+            setConfigState(normalizeDigestViewConfig(JSON.parse(raw as string) as LegacyDigestViewConfig))
             return
           } catch { /* fall through to legacy */ }
         }
         return window.api.invoke('settings:get', 'reddit_digest_view_config').then((legacyRaw) => {
           if (legacyRaw) {
             try {
-              setConfigState({ ...DEFAULT_CONFIG, ...(JSON.parse(legacyRaw as string) as Partial<DigestViewConfig>) })
+              setConfigState(normalizeDigestViewConfig(JSON.parse(legacyRaw as string) as LegacyDigestViewConfig))
             } catch { /* use default */ }
           }
         })

@@ -172,3 +172,27 @@
   border-left: 1px solid hsl(var(--border));
   padding-left: 1rem;
 }
+
+.reddit-digest-card-edit {
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  gap: 1rem;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+}
+
+.reddit-digest-card-edit__preview {
+  overflow-y: auto;
+  overflow-x: auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+.reddit-digest-card-edit__panel {
+  display: flex;
+  overflow: hidden;
+  min-height: 0;
+  border-left: 1px solid hsl(var(--border));
+  padding-left: 1rem;
+}

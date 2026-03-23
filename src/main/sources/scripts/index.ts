@@ -17,6 +17,7 @@ import { deleteSetting, getSetting, setSetting } from '../../settings/store'
 export const activeRuns = new Map<number, ActiveRun>()
 const SCRIPT_HOME_DIR_SETTING = 'script_home_dir'
 const REDDIT_DIGEST_SUBREDDITS_SETTING = 'reddit_digest_subreddits'
+const REDDIT_DIGEST_WEEK_START_SETTING = 'reddit_digest_week_start'
 const REDDIT_DIGEST_AUTO_DISABLED_SETTING = 'reddit_digest_script_auto_disabled'
 const REDDIT_DIGEST_SCRIPT_ID_SETTING = 'reddit_digest_script_id'
 const DEFAULT_REDDIT_DIGEST_SCHEDULE = JSON.stringify({
@@ -203,10 +204,14 @@ function buildExtraArgs(db: Database.Database, script: ScriptWithLastRun): strin
     return []
   }
 
-  return ['--db-path', dbPath]
+  const weekStart = getSetting(REDDIT_DIGEST_WEEK_START_SETTING)
+  const normalizedWeekStart = weekStart === '0' ? '0' : '1'
+
+  return ['--db-path', dbPath, '--week-start', normalizedWeekStart]
 }
 
 interface RedditDigestPayload {
+  week_start_date?: string
   posts: DigestPost[]
 }
 
@@ -228,6 +233,9 @@ function parseRedditDigestPayload(stdout: string): DigestPost[] {
   if (!parsed.posts || !Array.isArray(parsed.posts)) {
     throw new Error('The Reddit Digest script output is missing a posts array.')
   }
+  if (parsed.week_start_date && !/^\d{4}-\d{2}-\d{2}$/.test(parsed.week_start_date)) {
+    throw new Error('The Reddit Digest script output has an invalid week_start_date.')
+  }
 
   return parsed.posts.map((post, index) => {
     if (!post || typeof post !== 'object') {
@@ -236,12 +244,17 @@ function parseRedditDigestPayload(stdout: string): DigestPost[] {
     if (!post.post_id || !post.subreddit || !post.title || !post.url || !post.permalink) {
       throw new Error(`Digest post ${index + 1} is missing required fields.`)
     }
+    const weekStartDate = post.week_start_date ?? parsed.week_start_date
+    if (!weekStartDate || !/^\d{4}-\d{2}-\d{2}$/.test(weekStartDate)) {
+      throw new Error(`Digest post ${index + 1} is missing a valid week_start_date.`)
+    }
     if (!Number.isInteger(post.created_utc) || !Number.isInteger(post.fetched_at)) {
       throw new Error(`Digest post ${index + 1} has invalid timestamps.`)
     }
 
     return {
       post_id: post.post_id,
+      week_start_date: weekStartDate,
       subreddit: post.subreddit,
       title: post.title,
       url: post.url,
@@ -262,9 +275,9 @@ function upsertRedditDigestPosts(db: Database.Database, posts: DigestPost[]): nu
 
   const upsert = db.prepare(
     `INSERT INTO reddit_digest_posts
-       (post_id, subreddit, title, url, permalink, author, score, num_comments, created_utc, fetched_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT(post_id) DO UPDATE SET
+       (post_id, week_start_date, subreddit, title, url, permalink, author, score, num_comments, created_utc, fetched_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(post_id, week_start_date) DO UPDATE SET
        subreddit = excluded.subreddit,
        title = excluded.title,
        url = excluded.url,
@@ -280,6 +293,7 @@ function upsertRedditDigestPosts(db: Database.Database, posts: DigestPost[]): nu
     for (const post of rows) {
       upsert.run(
         post.post_id,
+        post.week_start_date,
         post.subreddit,
         post.title,
         post.url,

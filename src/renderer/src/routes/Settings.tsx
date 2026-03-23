@@ -11,7 +11,8 @@ import {
   IPC,
   type IpcMutationResult,
   type YouTubeCacheClearResult,
-  type YouTubeApiKeyStatus
+  type YouTubeApiKeyStatus,
+  type DigestWeekSummary
 } from '../../../shared/ipc-types'
 import {
   Select,
@@ -526,8 +527,12 @@ function normalizeSubredditInput(value: string): string | null {
 
 function RedditDigestTab(): React.ReactElement {
   const [subreddits, setSubreddits] = useState<string[]>([])
+  const [weekStart, setWeekStart] = useState<'0' | '1'>('1')
+  const [weeks, setWeeks] = useState<DigestWeekSummary[]>([])
+  const [keepWeeks, setKeepWeeks] = useState('4')
   const [draft, setDraft] = useState('')
   const [saving, setSaving] = useState(false)
+  const [pruning, setPruning] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -557,6 +562,24 @@ function RedditDigestTab(): React.ReactElement {
       })
       .catch((err) => {
         setError(err instanceof Error ? err.message : 'Failed to load Reddit Digest settings.')
+      })
+
+    window.api
+      .invoke(IPC.SETTINGS_GET, 'reddit_digest_week_start')
+      .then((raw) => {
+        setWeekStart(raw === '0' ? '0' : '1')
+      })
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : 'Failed to load Reddit Digest week start setting.')
+      })
+
+    window.api
+      .invoke(IPC.REDDIT_GET_DIGEST_WEEKS)
+      .then((data) => {
+        setWeeks(data as DigestWeekSummary[])
+      })
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : 'Failed to load Reddit Digest records.')
       })
   }
 
@@ -618,8 +641,103 @@ function RedditDigestTab(): React.ReactElement {
     await persist(next, `Removed r/${subreddit}.`)
   }
 
+  const saveWeekStart = async (nextWeekStart: '0' | '1'): Promise<void> => {
+    setSaving(true)
+    setMessage(null)
+    setError(null)
+    try {
+      await window.api.invoke(IPC.SETTINGS_SET, 'reddit_digest_week_start', nextWeekStart)
+      setWeekStart(nextWeekStart)
+      setMessage('Week start preference saved. It will apply on the next Reddit Digest run.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save week start preference.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const deleteWeek = async (weekStartDate: string): Promise<void> => {
+    if (!window.confirm(`Delete all Reddit Digest posts for the week of ${weekStartDate}?`)) {
+      return
+    }
+
+    setPruning(true)
+    setMessage(null)
+    setError(null)
+    try {
+      const result = (await window.api.invoke(IPC.REDDIT_PRUNE_DIGEST_POSTS, {
+        delete_week: weekStartDate
+      })) as { ok: boolean; error: string | null; deletedCount: number }
+      if (!result.ok) {
+        setError(result.error ?? 'Failed to delete Reddit Digest week.')
+        return
+      }
+      load()
+      setMessage(`Deleted ${result.deletedCount} posts for the week of ${weekStartDate}.`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete Reddit Digest week.')
+    } finally {
+      setPruning(false)
+    }
+  }
+
+  const pruneOldWeeks = async (): Promise<void> => {
+    const parsed = Number.parseInt(keepWeeks, 10)
+    if (!Number.isFinite(parsed) || parsed < 1) {
+      setError('Keep last N weeks must be at least 1.')
+      return
+    }
+    if (!window.confirm(`Delete all Reddit Digest posts older than the most recent ${parsed} weeks?`)) {
+      return
+    }
+
+    setPruning(true)
+    setMessage(null)
+    setError(null)
+    try {
+      const result = (await window.api.invoke(IPC.REDDIT_PRUNE_DIGEST_POSTS, {
+        keep_weeks: parsed
+      })) as { ok: boolean; error: string | null; deletedCount: number }
+      if (!result.ok) {
+        setError(result.error ?? 'Failed to prune Reddit Digest posts.')
+        return
+      }
+      load()
+      setMessage(result.deletedCount === 0 ? 'No old Reddit Digest weeks needed pruning.' : `Pruned ${result.deletedCount} Reddit Digest posts.`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to prune Reddit Digest posts.')
+    } finally {
+      setPruning(false)
+    }
+  }
+
   return (
-    <div className="space-y-4 max-w-lg">
+    <div className="space-y-4 max-w-lg pb-8">
+      <div>
+        <h3 className="text-sm font-medium mb-1">Week starts on</h3>
+        <p className="text-xs text-muted-foreground mb-3">
+          Choose which day starts a new Reddit Digest week bucket. This takes effect on the next script run.
+        </p>
+        <div className="flex gap-2">
+          <Button
+            variant={weekStart === '0' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => void saveWeekStart('0')}
+            disabled={saving}
+          >
+            Sunday
+          </Button>
+          <Button
+            variant={weekStart === '1' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => void saveWeekStart('1')}
+            disabled={saving}
+          >
+            Monday
+          </Button>
+        </div>
+      </div>
+
       <div>
         <h3 className="text-sm font-medium mb-1">Tracked subreddits</h3>
         <p className="text-xs text-muted-foreground mb-3">
@@ -665,6 +783,58 @@ function RedditDigestTab(): React.ReactElement {
       <div className="rounded-md border bg-muted/20 px-3 py-3 text-xs text-muted-foreground space-y-1">
         <p>The first saved subreddit auto-registers the bundled Reddit Digest script in Script Manager with a weekly Monday 09:00 schedule.</p>
         <p>Use Script Manager to run it immediately, view live output, or adjust the schedule.</p>
+      </div>
+
+      <div className="pt-6 border-t space-y-3">
+        <div>
+          <h3 className="text-sm font-medium mb-1">Records Management</h3>
+          <p className="text-xs text-muted-foreground">
+            Browse and prune stored weekly Reddit Digest snapshots.
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          {weeks.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No weekly digest records yet.</p>
+          ) : (
+            weeks.map((week) => (
+              <div key={week.week_start_date} className="flex items-center justify-between rounded-md border px-3 py-2 gap-3">
+                <div>
+                  <p className="text-sm font-medium">Week of {week.week_start_date}</p>
+                  <p className="text-xs text-muted-foreground">{week.post_count} post{week.post_count === 1 ? '' : 's'}</p>
+                </div>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => void deleteWeek(week.week_start_date)}
+                  disabled={pruning}
+                >
+                  Delete
+                </Button>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="rounded-md border px-3 py-3 space-y-3">
+          <div>
+            <h4 className="text-sm font-medium mb-1">Prune old weeks</h4>
+            <p className="text-xs text-muted-foreground">
+              Keep the most recent N weekly snapshots and delete anything older.
+            </p>
+          </div>
+          <div className="flex gap-2 items-center">
+            <Input
+              value={keepWeeks}
+              onChange={(e) => setKeepWeeks(e.target.value)}
+              inputMode="numeric"
+              className="w-28"
+            />
+            <Button variant="outline" onClick={() => void pruneOldWeeks()} disabled={pruning}>
+              {pruning ? 'Pruning...' : 'Keep Last N Weeks'}
+            </Button>
+          </div>
+        </div>
       </div>
 
       {message ? <p className="text-xs text-emerald-600">{message}</p> : null}

@@ -221,16 +221,16 @@ Returns the ntfy polling staleness state. The renderer uses this to decide wheth
 
 #### `reddit:getDigestPosts`
 
-Returns all digest posts. The handler returns raw data sorted by `fetched_at DESC` within each subreddit — the renderer applies the user's chosen sort/group/layout config client-side via `useRedditDigestConfig`.
+Returns digest posts, optionally filtered to a specific weekly snapshot. The handler returns raw data sorted by `week_start_date DESC, fetched_at DESC` — the renderer applies the user's chosen sort/group/layout config client-side via `useRedditDigestConfig`.
 
-- **Args:** `[options?: { subreddits?: string[]; limit?: number }]`
-  - `subreddits`: if provided, limits results to those subreddits. Defaults to all.
-  - `limit`: max posts per subreddit. Defaults to 25.
+- **Args:** `[options?: { week_start_date?: string | null }]`
+  - `week_start_date`: if provided, returns only posts for that weekly snapshot. Defaults to all stored weeks.
 - **Returns:** `DigestPost[]` — flat array; grouping by subreddit is done in the renderer.
 
 ```typescript
 interface DigestPost {
   postId: string;
+  weekStartDate: string;
   subreddit: string;
   title: string;
   url: string;
@@ -244,6 +244,33 @@ interface DigestPost {
 ```
 
 Note: the previous return type was `{ [subreddit: string]: DigestPost[] }`. This is changed to a flat `DigestPost[]` array because the renderer's grouping logic is now owned by `RedditDigestWidget` (which applies `group_by` from the view config). The main process does not need to know about the grouping preference.
+
+---
+
+#### `reddit:getDigestWeeks`
+
+Returns the list of stored weekly Reddit Digest snapshots.
+
+- **Args:** none
+- **Returns:** `DigestWeekSummary[]`
+
+```typescript
+interface DigestWeekSummary {
+  weekStartDate: string;
+  postCount: number;
+}
+```
+
+---
+
+#### `reddit:pruneDigestPosts`
+
+Deletes Reddit Digest records either by a specific week bucket or by keeping only the most recent N weekly buckets.
+
+- **Args:** `[options: { delete_week?: string; keep_weeks?: number }]`
+  - `delete_week`: delete all rows for one `week_start_date`
+  - `keep_weeks`: keep the newest N week buckets and delete older ones
+- **Returns:** `{ ok: boolean; error: string | null; deletedCount: number }`
 
 ---
 

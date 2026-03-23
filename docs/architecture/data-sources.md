@@ -486,7 +486,7 @@ Collects top posts for configured subreddits and writes a JSON payload to stdout
 ### 4.2 Configuration
 
 The script reads its configuration from two sources (in priority order):
-1. Command-line arguments: `--db-path`, `--time-window`, `--limit`
+1. Command-line arguments: `--db-path`, `--time-window`, `--limit`, `--week-start`
 2. The `settings` table in the SQLite database at `--db-path`
 
 Required args:
@@ -495,6 +495,7 @@ Required args:
 Optional args:
 - `--time-window <week|month|all>`: Default `week`
 - `--limit <n>`: Posts per subreddit. Default `25`.
+- `--week-start <0|1>`: Week boundary used for snapshot bucketing. `0 = Sunday`, `1 = Monday` (default).
 
 Required settings:
 - `reddit_digest_subreddits`: JSON array of subreddit names, e.g. `["programming", "rust"]`
@@ -507,6 +508,7 @@ def fetch_top_posts(subreddit, time_window, limit):
 
 payload = {
   "generated_at": int(time.time()),
+  "week_start_date": "2026-03-16",
   "subreddits": subreddits,
   "posts": normalized_posts,
 }
@@ -514,7 +516,7 @@ print(json.dumps(payload))
 ```
 
 - Rate limiting: 1-second `time.sleep` between subreddit requests.
-- Idempotent: the Electron main process uses `ON CONFLICT DO UPDATE` (upsert).
+- Idempotent within a week: the Electron main process upserts on `(post_id, week_start_date)`.
 - Exits with code `0` on success, non-zero on failure.
 - Prints progress to stderr (visible in Script Manager live output) and reserves stdout for the final JSON payload.
 
