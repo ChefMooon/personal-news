@@ -149,6 +149,20 @@ export default function RedditDigest(): React.ReactElement {
     refreshAnalytics()
   }, [refreshAnalytics])
 
+  useEffect(() => {
+    const unsubscribeViewedChanged = window.api.on(IPC.REDDIT_DIGEST_VIEWED_CHANGED, () => {
+      refreshAnalytics()
+    })
+    const unsubscribeRedditUpdated = window.api.on(IPC.REDDIT_UPDATED, () => {
+      refreshAnalytics()
+    })
+
+    return () => {
+      unsubscribeViewedChanged()
+      unsubscribeRedditUpdated()
+    }
+  }, [refreshAnalytics])
+
   const handleBulkMarkViewed = (): void => {
     setBulkLoading(true)
     window.api
@@ -160,6 +174,7 @@ export default function RedditDigest(): React.ReactElement {
           return
         }
         toast.success(`Marked ${payload.updatedCount} posts as viewed.`)
+        refreshAnalytics()
       })
       .catch((err) => {
         toast.error(err instanceof Error ? err.message : 'Failed to mark posts viewed.')
@@ -331,18 +346,27 @@ export default function RedditDigest(): React.ReactElement {
         </div>
       </div>
 
-      <div className="px-6 py-2 border-b bg-muted/20">
-        {analyticsLoading || !analytics ? (
-          <p className="text-xs text-muted-foreground">Loading analytics...</p>
+      <div className="px-6 py-2 border-b bg-muted/20 min-h-11">
+        {!analytics ? (
+          <div className="flex items-center gap-3 text-xs h-7">
+            <span className="px-2 py-1 rounded bg-background border w-24" />
+            <span className="px-2 py-1 rounded bg-background border w-24" />
+            <span className="px-2 py-1 rounded bg-background border w-24" />
+            <span className="px-2 py-1 rounded bg-background border w-28" />
+            <span className="text-muted-foreground">Loading analytics...</span>
+          </div>
         ) : (
-          <div className="flex items-center gap-4 flex-wrap text-xs">
-            <span className="px-2 py-1 rounded bg-background border">Total: {analytics.total}</span>
-            <span className="px-2 py-1 rounded bg-background border">Viewed: {analytics.viewed}</span>
-            <span className="px-2 py-1 rounded bg-background border">Unviewed: {analytics.unviewed}</span>
-            <span className="px-2 py-1 rounded bg-background border">
-              Viewed Rate: {(analytics.viewed_rate * 100).toFixed(1)}%
+          <div
+            className={`flex items-center gap-3 text-xs h-7 transition-opacity ${analyticsLoading ? 'opacity-80' : 'opacity-100'}`}
+            aria-busy={analyticsLoading}
+          >
+            <span className="px-2 py-1 rounded bg-background border w-24 tabular-nums">Total: {analytics.total}</span>
+            <span className="px-2 py-1 rounded bg-background border w-24 tabular-nums">Viewed: {analytics.viewed}</span>
+            <span className="px-2 py-1 rounded bg-background border w-24 tabular-nums">Unviewed: {analytics.unviewed}</span>
+            <span className="px-2 py-1 rounded bg-background border w-28 tabular-nums">
+              Rate: {(analytics.viewed_rate * 100).toFixed(1)}%
             </span>
-            <span className="text-muted-foreground">
+            <span className="text-muted-foreground flex-1 min-w-0 whitespace-nowrap overflow-hidden text-ellipsis">
               7d trend: {analytics.trend.map((point) => `${point.day.slice(5)} ${point.viewed_count}`).join(' | ') || 'No viewed activity'}
             </span>
           </div>
