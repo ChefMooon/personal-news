@@ -10,6 +10,10 @@ import {
 } from '../../../shared/ipc-types'
 import type { DataSourceModule } from '../registry'
 import { getSetting, setSetting } from '../../settings/store'
+import {
+  notifyYoutubeNewVideos,
+  notifyYoutubeLiveStart
+} from '../../notifications/notification-service'
 
 let activePollIntervalMinutes = 15
 let dbRef: Database.Database | null = null
@@ -581,8 +585,8 @@ async function pollAllEnabledChannels(): Promise<void> {
   const pollCycleId = generatePollCycleId()
   const startedAt = Math.floor(Date.now() / 1000)
   const channels = dbRef
-    .prepare('SELECT channel_id, name, thumbnail_url FROM yt_channels WHERE enabled = 1 ORDER BY sort_order')
-    .all() as Array<{ channel_id: string; name: string; thumbnail_url: string | null }>
+    .prepare('SELECT channel_id, name, thumbnail_url, notify_new_videos, notify_live_start FROM yt_channels WHERE enabled = 1 ORDER BY sort_order')
+    .all() as Array<{ channel_id: string; name: string; thumbnail_url: string | null; notify_new_videos: number; notify_live_start: number }>
 
   if (channels.length === 0) {
     saveDebugSnapshot({
@@ -745,6 +749,8 @@ async function pollAllEnabledChannels(): Promise<void> {
   let insertedCount = 0
   let updatedCount = 0
   let skippedRemainingBatches = false
+  const allNewVideoEntries: Array<{ videoId: string; channelId: string; title: string }> = []
+  const allLiveStartEntries: Array<{ videoId: string; channelId: string; title: string }> = []
 
   for (let batchIndex = 0; batchIndex < batches.length; batchIndex += 1) {
     const ids = batches[batchIndex]
@@ -1000,7 +1006,7 @@ async function pollAllEnabledChannels(): Promise<void> {
     normalizedPreviewEntries.push(...normalizedBatch)
 
     const ingestTx = dbRef.transaction(() => {
-      const existsStmt = dbRef!.prepare('SELECT video_id FROM yt_videos WHERE video_id = ?')
+      const existsStmt = dbRef!.prepare('SELECT video_id, broadcast_status FROM yt_videos WHERE video_id = ?')
       const upsertStmt = dbRef!.prepare(
         `INSERT INTO yt_videos (
           video_id,
@@ -1029,6 +1035,8 @@ async function pollAllEnabledChannels(): Promise<void> {
       const now = Math.floor(Date.now() / 1000)
       let batchInserted = 0
       let batchUpdated = 0
+      const newVideoEntries: Array<{ videoId: string; channelId: string; title: string }> = []
+      const liveStartEntries: Array<{ videoId: string; channelId: string; title: string }> = []
 
       for (const entry of normalizedBatch) {
         const primaryChannelId = entry.channelId?.trim() ?? ''
@@ -1050,7 +1058,7 @@ async function pollAllEnabledChannels(): Promise<void> {
           continue
         }
 
-        const alreadyExists = existsStmt.get(entry.id) as { video_id: string } | undefined
+        const alreadyExists = existsStmt.get(entry.id) as { video_id: string; broadcast_status: string | null } | undefined
         const scheduledStartUnix = parseUnixSeconds(
           apiItems.find((item) => item.id === entry.id)?.liveStreamingDetails?.scheduledStartTime
         )
@@ -1070,17 +1078,24 @@ async function pollAllEnabledChannels(): Promise<void> {
 
         if (alreadyExists) {
           batchUpdated += 1
+          // Detect live-start transition: was not 'live', now is 'live'.
+          if (alreadyExists.broadcast_status !== 'live' && toBroadcastStatus(entry.mediaType) === 'live') {
+            liveStartEntries.push({ videoId: entry.id, channelId, title: entry.title })
+          }
         } else {
           batchInserted += 1
+          newVideoEntries.push({ videoId: entry.id, channelId, title: entry.title })
         }
       }
 
-      return { batchInserted, batchUpdated }
+      return { batchInserted, batchUpdated, newVideoEntries, liveStartEntries }
     })
 
     const ingestResult = ingestTx()
     insertedCount += ingestResult.batchInserted
     updatedCount += ingestResult.batchUpdated
+    allNewVideoEntries.push(...ingestResult.newVideoEntries)
+    allLiveStartEntries.push(...ingestResult.liveStartEntries)
   }
 
   const finishedAt = Math.floor(Date.now() / 1000)
@@ -1144,6 +1159,39 @@ async function pollAllEnabledChannels(): Promise<void> {
 
   if (insertedCount > 0 || updatedCount > 0 || channelThumbUpdated > 0) {
     emitYoutubeUpdated()
+  }
+
+  // Fire desktop notifications for new videos and live-start transitions.
+  if (allNewVideoEntries.length > 0 || allLiveStartEntries.length > 0) {
+    const channelByIdMap = new Map(channels.map((c) => [c.channel_id, c]))
+    if (allNewVideoEntries.length > 0) {
+      notifyYoutubeNewVideos(
+        allNewVideoEntries.map((v) => {
+          const ch = channelByIdMap.get(v.channelId)
+          return {
+            title: v.title,
+            channelId: v.channelId,
+            channelName: ch?.name ?? v.channelId,
+            notifyNewVideos: (ch?.notify_new_videos ?? 1) !== 0,
+            notifyLiveStart: (ch?.notify_live_start ?? 1) !== 0
+          }
+        })
+      )
+    }
+    if (allLiveStartEntries.length > 0) {
+      notifyYoutubeLiveStart(
+        allLiveStartEntries.map((v) => {
+          const ch = channelByIdMap.get(v.channelId)
+          return {
+            title: v.title,
+            channelId: v.channelId,
+            channelName: ch?.name ?? v.channelId,
+            notifyNewVideos: (ch?.notify_new_videos ?? 1) !== 0,
+            notifyLiveStart: (ch?.notify_live_start ?? 1) !== 0
+          }
+        })
+      )
+    }
   }
 }
 

@@ -13,6 +13,10 @@ import type {
 import { runScript, type ActiveRun, type ScriptRunCompletion } from './executor'
 import { ScriptScheduler, type ScriptScheduleRunContext, type ScriptStartupWarning } from './scheduler'
 import { deleteSetting, getSetting, setSetting } from '../../settings/store'
+import {
+  notifyRedditDigest,
+  notifyScriptAutoRun
+} from '../../notifications/notification-service'
 
 export const activeRuns = new Map<number, ActiveRun>()
 const SCRIPT_HOME_DIR_SETTING = 'script_home_dir'
@@ -530,6 +534,13 @@ export function runScriptById(
     } finally {
       emitRunComplete?.(event)
       emitUpdated?.()
+      if (event.trigger !== 'manual' && event.kind === 'run_complete') {
+        if (isBundledRedditDigestScript(script)) {
+          notifyRedditDigest(event.severity, event.message)
+        } else {
+          notifyScriptAutoRun(event.scriptName, event.trigger, event.severity, event.message)
+        }
+      }
     }
   })
 }
@@ -579,6 +590,7 @@ export const ScriptManagerModule: DataSourceModule = {
         } finally {
           emitRunComplete?.(event)
           emitUpdated?.()
+          notifyScriptAutoRun(event.scriptName, 'startup_warning', event.severity, event.message)
         }
       }
     )

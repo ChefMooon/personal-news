@@ -15,7 +15,8 @@ import {
   type IpcMutationResult,
   type YouTubeCacheClearResult,
   type YouTubeApiKeyStatus,
-  type DigestWeekSummary
+  type DigestWeekSummary,
+  type NotificationPreferences
 } from '../../../shared/ipc-types'
 import {
   Select,
@@ -1144,6 +1145,314 @@ function SavedPostsTab(): React.ReactElement {
   )
 }
 
+function NotifyRow({
+  label,
+  description,
+  checked,
+  onCheckedChange
+}: {
+  label: string
+  description: string
+  checked: boolean
+  onCheckedChange: (checked: boolean) => void
+}): React.ReactElement {
+  return (
+    <div className="flex items-start justify-between gap-4 rounded-md border px-3 py-2.5">
+      <div className="min-w-0">
+        <p className="text-sm">{label}</p>
+        <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
+      </div>
+      <Switch
+        checked={checked}
+        onCheckedChange={onCheckedChange}
+        className="mt-0.5 flex-shrink-0"
+      />
+    </div>
+  )
+}
+
+function NotificationsTab(): React.ReactElement {
+  const [prefs, setPrefs] = React.useState<NotificationPreferences | null>(null)
+  const { channels } = useYouTubeChannels()
+  const [channelNotifyPending, setChannelNotifyPending] = React.useState<
+    Record<string, { newVideos?: boolean; liveStart?: boolean }>
+  >({})
+
+  React.useEffect(() => {
+    window.api
+      .invoke(IPC.SETTINGS_GET_NOTIFICATION_PREFS)
+      .then((data) => setPrefs(data as NotificationPreferences))
+      .catch((err) => {
+        toast.error(err instanceof Error ? err.message : 'Failed to load notification settings.')
+      })
+  }, [])
+
+  const updatePrefs = async (
+    updater: (draft: NotificationPreferences) => NotificationPreferences
+  ): Promise<void> => {
+    if (!prefs) return
+    const next = updater(prefs)
+    setPrefs(next)
+    try {
+      const result = (await window.api.invoke(
+        IPC.SETTINGS_SET_NOTIFICATION_PREFS,
+        next
+      )) as IpcMutationResult
+      if (!result.ok) {
+        toast.error(result.error ?? 'Failed to save notification settings.')
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save notification settings.')
+    }
+  }
+
+  const setChannelNotify = async (
+    channelId: string,
+    notifyNewVideos: boolean,
+    notifyLiveStart: boolean
+  ): Promise<void> => {
+    setChannelNotifyPending((prev) => ({
+      ...prev,
+      [channelId]: { newVideos: notifyNewVideos, liveStart: notifyLiveStart }
+    }))
+    try {
+      const result = (await window.api.invoke(
+        IPC.YOUTUBE_SET_CHANNEL_NOTIFY,
+        channelId,
+        notifyNewVideos,
+        notifyLiveStart
+      )) as IpcMutationResult
+      if (!result.ok) {
+        toast.error(result.error ?? 'Failed to update channel notification setting.')
+      }
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : 'Failed to update channel notification setting.'
+      )
+    } finally {
+      setChannelNotifyPending((prev) => {
+        const next = { ...prev }
+        delete next[channelId]
+        return next
+      })
+    }
+  }
+
+  if (!prefs) {
+    return <p className="text-sm text-muted-foreground">Loading notification settings...</p>
+  }
+
+  return (
+    <div className="space-y-6 max-w-lg pb-8">
+      {/* ── Global ─────────────────────────────────────────────────── */}
+      <div className="flex items-start justify-between gap-4 rounded-md border px-3 py-2.5">
+        <div className="min-w-0">
+          <p className="text-sm font-medium">Enable Desktop Notifications</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Master switch. When off, no desktop notifications are shown regardless of per-category
+            settings. Notifications only appear when the app window is not focused.
+          </p>
+        </div>
+        <Switch
+          checked={prefs.desktopNotificationsEnabled}
+          onCheckedChange={(checked) =>
+            void updatePrefs((p) => ({ ...p, desktopNotificationsEnabled: checked }))
+          }
+          className="mt-0.5 flex-shrink-0"
+        />
+      </div>
+
+      <div
+        className={!prefs.desktopNotificationsEnabled ? 'opacity-50 pointer-events-none' : undefined}
+      >
+        {/* ── YouTube ──────────────────────────────────────────────── */}
+        <div className="space-y-2">
+          <div>
+            <h3 className="text-sm font-medium">YouTube</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Control which YouTube activity triggers desktop notifications. Per-channel overrides
+              are listed below the global category toggles.
+            </p>
+          </div>
+          <NotifyRow
+            label="New video available"
+            description="Notify when a new video is detected for a subscribed channel during an RSS poll. Multiple new videos in one poll are grouped into a single notification."
+            checked={prefs.youtube.newVideo}
+            onCheckedChange={(checked) =>
+              void updatePrefs((p) => ({ ...p, youtube: { ...p.youtube, newVideo: checked } }))
+            }
+          />
+          <NotifyRow
+            label="Live stream started"
+            description="Notify when a subscribed channel's video transitions from Upcoming to Live. Fires one notification per live-start event."
+            checked={prefs.youtube.liveStart}
+            onCheckedChange={(checked) =>
+              void updatePrefs((p) => ({ ...p, youtube: { ...p.youtube, liveStart: checked } }))
+            }
+          />
+
+          {channels.length > 0 && (
+            <div className="mt-3">
+              <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
+                Per-channel notification overrides
+              </h4>
+              <div className="rounded-md border overflow-hidden">
+                <div className="grid grid-cols-[1fr_6rem_6rem] px-3 py-1.5 text-xs text-muted-foreground border-b">
+                  <span>Channel</span>
+                  <span className="text-center">New videos</span>
+                  <span className="text-center">Live starts</span>
+                </div>
+                {channels.map((ch) => {
+                  const pending = channelNotifyPending[ch.channel_id]
+                  const notifyNew = pending?.newVideos ?? ch.notify_new_videos === 1
+                  const notifyLive = pending?.liveStart ?? ch.notify_live_start === 1
+                  return (
+                    <div
+                      key={ch.channel_id}
+                      className="grid grid-cols-[1fr_6rem_6rem] px-3 py-2 items-center border-b last:border-0"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        {ch.thumbnail_url ? (
+                          <img
+                            src={ch.thumbnail_url}
+                            alt=""
+                            className="w-6 h-6 rounded-full bg-muted flex-shrink-0"
+                          />
+                        ) : (
+                          <div className="w-6 h-6 rounded-full bg-muted flex-shrink-0" />
+                        )}
+                        <span className="text-sm truncate">{ch.name}</span>
+                      </div>
+                      <div className="flex justify-center">
+                        <Switch
+                          checked={notifyNew}
+                          onCheckedChange={(checked) =>
+                            void setChannelNotify(ch.channel_id, checked, notifyLive)
+                          }
+                        />
+                      </div>
+                      <div className="flex justify-center">
+                        <Switch
+                          checked={notifyLive}
+                          onCheckedChange={(checked) =>
+                            void setChannelNotify(ch.channel_id, notifyNew, checked)
+                          }
+                        />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1.5">
+                When a channel toggle is off, notifications for that channel type are suppressed even
+                if the global category toggle is on.
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* ── Saved Posts ──────────────────────────────────────────── */}
+        <div className="space-y-2 mt-6 pt-4 border-t">
+          <div>
+            <h3 className="text-sm font-medium">Saved Posts</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Notifications for ntfy.sh sync activity. Requires a configured ntfy topic.
+            </p>
+          </div>
+          <NotifyRow
+            label="Sync completed with new posts"
+            description="Notify when an ntfy.sh poll successfully ingests at least one new saved post. Polls that return zero new posts are silent."
+            checked={prefs.savedPosts.syncSuccess}
+            onCheckedChange={(checked) =>
+              void updatePrefs((p) => ({
+                ...p,
+                savedPosts: { ...p.savedPosts, syncSuccess: checked }
+              }))
+            }
+          />
+        </div>
+
+        {/* ── Reddit Digest ─────────────────────────────────────────── */}
+        <div className="space-y-2 mt-6 pt-4 border-t">
+          <div>
+            <h3 className="text-sm font-medium">Reddit Digest</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Notifications for the bundled Reddit Digest script. Applies to both scheduled
+              and on-app-start runs.
+            </p>
+          </div>
+          <NotifyRow
+            label="Script run completed successfully"
+            description="Notify when the Reddit Digest script finishes with exit code 0. The notification includes the number of posts ingested."
+            checked={prefs.redditDigest.runSuccess}
+            onCheckedChange={(checked) =>
+              void updatePrefs((p) => ({
+                ...p,
+                redditDigest: { ...p.redditDigest, runSuccess: checked }
+              }))
+            }
+          />
+          <NotifyRow
+            label="Script run failed"
+            description="Notify when the Reddit Digest script exits with a non-zero exit code or a JSON parse error."
+            checked={prefs.redditDigest.runFailure}
+            onCheckedChange={(checked) =>
+              void updatePrefs((p) => ({
+                ...p,
+                redditDigest: { ...p.redditDigest, runFailure: checked }
+              }))
+            }
+          />
+        </div>
+
+        {/* ── Script Manager ────────────────────────────────────────── */}
+        <div className="space-y-2 mt-6 pt-4 border-t">
+          <div>
+            <h3 className="text-sm font-medium">Script Manager</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Notifications for auto-triggered script runs. Manual runs from the Script Manager UI
+              are never notified regardless of these toggles.
+            </p>
+          </div>
+          <NotifyRow
+            label="Auto-run completed successfully"
+            description="Notify when a scheduled, on-app-start, or catch-up script run exits with code 0."
+            checked={prefs.scriptManager.autoRunSuccess}
+            onCheckedChange={(checked) =>
+              void updatePrefs((p) => ({
+                ...p,
+                scriptManager: { ...p.scriptManager, autoRunSuccess: checked }
+              }))
+            }
+          />
+          <NotifyRow
+            label="Auto-run failed"
+            description="Notify when a scheduled, on-app-start, or catch-up script run exits with a non-zero code."
+            checked={prefs.scriptManager.autoRunFailure}
+            onCheckedChange={(checked) =>
+              void updatePrefs((p) => ({
+                ...p,
+                scriptManager: { ...p.scriptManager, autoRunFailure: checked }
+              }))
+            }
+          />
+          <NotifyRow
+            label="Missed runs warning"
+            description="Notify on app startup when a script missed more than one scheduled run while the app was closed."
+            checked={prefs.scriptManager.startupWarning}
+            onCheckedChange={(checked) =>
+              void updatePrefs((p) => ({
+                ...p,
+                scriptManager: { ...p.scriptManager, startupWarning: checked }
+              }))
+            }
+          />
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function Settings(): React.ReactElement {
   const [searchParams] = useSearchParams()
   const { enabled: redditDigestEnabled } = useRedditDigestEnabled()
@@ -1160,6 +1469,7 @@ export default function Settings(): React.ReactElement {
           {savedPostsEnabled && <TabsTrigger value="saved-posts">Saved Posts</TabsTrigger>}
           <TabsTrigger value="appearance">Appearance</TabsTrigger>
           <TabsTrigger value="scripts">Scripts</TabsTrigger>
+          <TabsTrigger value="notifications">Notifications</TabsTrigger>
         </TabsList>
         <TabsContent value="features" className="mt-4">
           <FeaturesTab />
@@ -1185,6 +1495,9 @@ export default function Settings(): React.ReactElement {
         </TabsContent>
         <TabsContent value="scripts" className="mt-4">
           <ScriptsTab />
+        </TabsContent>
+        <TabsContent value="notifications" className="mt-4">
+          <NotificationsTab />
         </TabsContent>
       </Tabs>
     </div>

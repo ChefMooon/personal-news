@@ -7,6 +7,7 @@ import { registerModule, initializeAll, shutdownAll } from './sources/registry'
 import { YouTubeModule } from './sources/youtube/index'
 import { RedditModule } from './sources/reddit/index'
 import { ScriptManagerModule } from './sources/scripts/index'
+import { attachWindowListeners } from './notifications/notification-service'
 
 function createWindow(): BrowserWindow {
   const mainWindow = new BrowserWindow({
@@ -68,10 +69,14 @@ app.whenReady().then(() => {
   console.log('[Main] IPC handlers registered')
 
   // 5. Create window
-  createWindow()
+  const mainWindow = createWindow()
+  attachWindowListeners(mainWindow)
 
   app.on('activate', function () {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    if (BrowserWindow.getAllWindows().length === 0) {
+      const win = createWindow()
+      attachWindowListeners(win)
+    }
   })
 })
 

@@ -39,7 +39,8 @@ function runMigrations(database: Database.Database): void {
     10: '010_add_script_notifications.sql',
     11: '011_remove_reddit_digest_seed.sql',
     12: '012_reddit_digest_weekly_snapshot.sql',
-    13: '013_add_yt_video_watched.sql'
+    13: '013_add_yt_video_watched.sql',
+    14: '014_add_notification_settings.sql'
   }
 
   // Ensure meta table exists first
@@ -78,6 +79,28 @@ function runMigrations(database: Database.Database): void {
     // Migration 013 adds yt_videos.watched_at. Guard it so older databases that
     // were migrated without schema_version tracking do not fail on rerun.
     if (nextVersion === 13 && columnExists(database, 'yt_videos', 'watched_at')) {
+      database
+        .prepare(
+          `
+            INSERT INTO meta (key, value)
+            VALUES ('schema_version', ?)
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value
+          `
+        )
+        .run(String(nextVersion))
+      appliedAny = true
+      console.log(`[DB] Migration ${String(nextVersion).padStart(3, '0')} skipped (already applied)`)
+      nextVersion += 1
+      continue
+    }
+
+    // Migration 014 adds yt_channels.notify_new_videos and notify_live_start. Guard
+    // in case both columns already exist from a manual schema edit.
+    if (
+      nextVersion === 14 &&
+      columnExists(database, 'yt_channels', 'notify_new_videos') &&
+      columnExists(database, 'yt_channels', 'notify_live_start')
+    ) {
       database
         .prepare(
           `

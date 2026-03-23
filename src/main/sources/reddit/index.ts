@@ -5,6 +5,7 @@ import { IPC } from '../../../shared/ipc-types'
 import type { DataSourceModule } from '../registry'
 import { getSetting } from '../../settings/store'
 import { pollNtfy } from './ntfy'
+import { notifySavedPostsSync } from '../../notifications/notification-service'
 
 const DEFAULT_NTFY_POLL_INTERVAL_MINUTES = 60
 
@@ -70,6 +71,7 @@ async function runNtfyPoll(options: {
   try {
     const result = await pollNtfy(dbRef)
     emitNtfyIngestComplete(result.postsIngested)
+    notifySavedPostsSync(result.postsIngested)
     return result
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error)

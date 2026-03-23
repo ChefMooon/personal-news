@@ -31,7 +31,8 @@ import type {
   ScriptScheduleInput,
   ScriptUpdateInput,
   ScriptRunCompleteEvent,
-  MediaType
+  MediaType,
+  NotificationPreferences
 } from '../../shared/ipc-types'
 import {
   applyYouTubePollInterval,
@@ -46,6 +47,10 @@ import {
   setScriptEmitters,
   syncScriptsFromHomeDir
 } from '../sources/scripts/index'
+import {
+  getNotificationPreferences,
+  setNotificationPreferences
+} from '../notifications/notification-service'
 
 const YOUTUBE_API_KEY_SETTING = 'youtube_api_key_encrypted'
 const YOUTUBE_VIEW_CONFIG_KEY_PREFIX = 'youtube_view_config:'
@@ -274,7 +279,9 @@ async function fetchChannelById(apiKey: string, channelId: string): Promise<YtCh
     thumbnail_url: thumb,
     added_at: Math.floor(Date.now() / 1000),
     enabled: 1,
-    sort_order: 0
+    sort_order: 0,
+    notify_new_videos: 1,
+    notify_live_start: 1
   }
 }
 
@@ -318,7 +325,9 @@ async function fetchChannelFromRss(channelId: string): Promise<YtChannel | null>
     thumbnail_url: thumbnailUrl,
     added_at: Math.floor(Date.now() / 1000),
     enabled: 1,
-    sort_order: 0
+    sort_order: 0,
+    notify_new_videos: 1,
+    notify_live_start: 1
   }
 }
 
@@ -473,7 +482,9 @@ async function resolveChannelWithoutApiKey(
       thumbnail_url: pageResolved.thumbnailUrl,
       added_at: Math.floor(Date.now() / 1000),
       enabled: 1,
-      sort_order: 0
+      sort_order: 0,
+      notify_new_videos: 1,
+      notify_live_start: 1
     }
   }
 
@@ -591,7 +602,9 @@ async function resolveChannelFromInput(input: string): Promise<YtChannel> {
     thumbnail_url: pageResolved.thumbnailUrl,
     added_at: Math.floor(Date.now() / 1000),
     enabled: 1,
-    sort_order: 0
+    sort_order: 0,
+    notify_new_videos: 1,
+    notify_live_start: 1
   }
 }
 
@@ -1705,6 +1718,49 @@ export function registerIpcHandlers(): void {
       }
       setSetting('ntfy_poll_interval_minutes', String(minutes))
       applyNtfyPollInterval(minutes)
+      return { ok: true, error: null }
+    }
+  )
+
+  // settings:getNotificationPrefs
+  ipcMain.handle(IPC.SETTINGS_GET_NOTIFICATION_PREFS, (): NotificationPreferences => {
+    return getNotificationPreferences()
+  })
+
+  // settings:setNotificationPrefs
+  ipcMain.handle(
+    IPC.SETTINGS_SET_NOTIFICATION_PREFS,
+    (_event, prefs: NotificationPreferences): IpcMutationResult => {
+      try {
+        setNotificationPreferences(prefs)
+        return { ok: true, error: null }
+      } catch (err) {
+        return {
+          ok: false,
+          error: err instanceof Error ? err.message : 'Failed to save notification preferences.'
+        }
+      }
+    }
+  )
+
+  // youtube:setChannelNotify
+  ipcMain.handle(
+    IPC.YOUTUBE_SET_CHANNEL_NOTIFY,
+    (
+      _event,
+      channelId: string,
+      notifyNewVideos: boolean,
+      notifyLiveStart: boolean
+    ): IpcMutationResult => {
+      const db = getDb()
+      const result = db
+        .prepare(
+          'UPDATE yt_channels SET notify_new_videos = ?, notify_live_start = ? WHERE channel_id = ?'
+        )
+        .run(notifyNewVideos ? 1 : 0, notifyLiveStart ? 1 : 0, channelId)
+      if ((result.changes as number) === 0) {
+        return { ok: false, error: 'Channel not found.' }
+      }
       return { ok: true, error: null }
     }
   )

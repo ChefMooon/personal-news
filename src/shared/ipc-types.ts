@@ -5,6 +5,7 @@ export const IPC = {
   YOUTUBE_GET_VIDEOS: 'youtube:getVideos',
   YOUTUBE_GET_VIDEOS_FILTERED: 'youtube:getVideosFiltered',
   YOUTUBE_SET_CHANNEL_ENABLED: 'youtube:setChannelEnabled',
+  YOUTUBE_SET_CHANNEL_NOTIFY: 'youtube:setChannelNotify',
   YOUTUBE_ADD_CHANNEL: 'youtube:addChannel',
   YOUTUBE_REMOVE_CHANNEL: 'youtube:removeChannel',
   YOUTUBE_POLL_NOW: 'youtube:pollNow',
@@ -52,6 +53,8 @@ export const IPC = {
   SETTINGS_SET_YOUTUBE_VIEW_CONFIG: 'settings:setYouTubeViewConfig',
   SETTINGS_GET: 'settings:get',
   SETTINGS_SET: 'settings:set',
+  SETTINGS_GET_NOTIFICATION_PREFS: 'settings:getNotificationPrefs',
+  SETTINGS_SET_NOTIFICATION_PREFS: 'settings:setNotificationPrefs',
   SHELL_OPEN_EXTERNAL: 'shell:openExternal',
   SHELL_OPEN_PATH: 'shell:openPath',
   DIALOG_SHOW_OPEN_FOLDER: 'dialog:showOpenFolder'
@@ -64,6 +67,28 @@ export interface YtChannel {
   added_at: number
   enabled: number
   sort_order: number
+  notify_new_videos: number
+  notify_live_start: number
+}
+
+export interface NotificationPreferences {
+  desktopNotificationsEnabled: boolean
+  youtube: {
+    newVideo: boolean
+    liveStart: boolean
+  }
+  savedPosts: {
+    syncSuccess: boolean
+  }
+  redditDigest: {
+    runSuccess: boolean
+    runFailure: boolean
+  }
+  scriptManager: {
+    autoRunSuccess: boolean
+    autoRunFailure: boolean
+    startupWarning: boolean
+  }
 }
 
 export interface YtVideo {
