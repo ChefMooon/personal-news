@@ -51,8 +51,10 @@ export function DigestPostRow({ post }: DigestPostRowProps): React.ReactElement 
     <div className="h-20 py-1 border-b last:border-0 overflow-hidden flex flex-col">
       <div className="flex items-start gap-2 flex-1">
       <button
+        type="button"
         onClick={handleClick}
         className="text-left w-full group cursor-pointer flex-1 flex flex-col justify-between"
+        aria-label={`Open post: ${post.title}`}
       >
         <p
           className={`text-sm font-medium group-hover:text-primary transition-colors line-clamp-2 leading-snug ${
@@ -74,12 +76,24 @@ export function DigestPostRow({ post }: DigestPostRowProps): React.ReactElement 
         </div>
       </button>
       <button
+        type="button"
         onClick={() => setViewed(!isViewed)}
         className="mt-0.5 p-1 rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
         aria-label={isViewed ? 'Mark post as unviewed' : 'Mark post as viewed'}
+        aria-pressed={isViewed}
         title={isViewed ? 'Viewed - click to mark unviewed' : 'Unviewed - click to mark viewed'}
       >
-        {isViewed ? <CircleCheck className="h-4 w-4 text-emerald-400" /> : <Circle className="h-4 w-4" />}
+        {isViewed ? (
+          <>
+            <CircleCheck className="h-4 w-4 text-emerald-400" aria-hidden="true" />
+            <span className="sr-only">Viewed</span>
+          </>
+        ) : (
+          <>
+            <Circle className="h-4 w-4" aria-hidden="true" />
+            <span className="sr-only">Unviewed</span>
+          </>
+        )}
       </button>
       </div>
     </div>

@@ -567,4 +567,10 @@ Key components expected:
 - All interactive elements are keyboard-focusable.
 - Color is not the sole means of conveying status (e.g., "LIVE NOW" badge uses both color and text).
 - Font sizes follow Tailwind defaults (minimum 14px for body text).
-- WCAG AA compliance is a stated v1 goal. Not formally audited, but targeted throughout. shadcn/ui Radix primitives provide the baseline (focus rings, ARIA roles, keyboard navigation). Color contrast for all text/background pairings must meet the 4.5:1 ratio minimum. Theme token values must be checked against this ratio before shipping any custom palette.
+- WCAG AA accessibility audit completed (v1 scope).
+- Keyboard-only coverage verified across route-level views and major interactive components.
+- Live update surfaces include assistive announcements (`aria-live` / `role="log"`) for script output and analytics refresh states.
+- Toast notifications are exposed through an accessible Sonner container (`containerAriaLabel`) with an explicit close-button aria label.
+- Contrast-sensitive hardcoded status colors were replaced or adjusted to use theme-driven semantic tokens / higher-contrast variants.
+- Form controls in Settings and modal workflows were audited for accessible labels (`label` + `id` or explicit `aria-label`).
+- Color contrast for normal text remains held to WCAG AA 4.5:1 minimum; theme token changes must continue to be checked before shipping custom palettes.

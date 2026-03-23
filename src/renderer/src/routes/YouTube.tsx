@@ -426,7 +426,7 @@ export default function YouTubePage(): React.ReactElement {
     <div className="flex h-full flex-col px-6 py-4">
       <div className="mb-4 flex items-center justify-between gap-3">
         <h1 className="flex items-center gap-2 text-xl font-semibold">
-          <Youtube className="h-5 w-5 text-red-500" />
+          <Youtube className="h-5 w-5 text-destructive" />
           YouTube
           {viewMode === 'flat' && total > 0 ? (
             <span className="text-sm font-normal text-muted-foreground">({total})</span>
@@ -468,8 +468,10 @@ export default function YouTubePage(): React.ReactElement {
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="relative min-w-[220px] flex-1 max-w-md">
+          <label htmlFor="youtube-search" className="sr-only">Search videos</label>
           <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
+            id="youtube-search"
             value={search}
             onChange={(e) => handleSearchChange(e.target.value)}
             placeholder="Search videos..."
@@ -478,7 +480,7 @@ export default function YouTubePage(): React.ReactElement {
         </div>
 
         <Select value={channelId ?? '_all'} onValueChange={handleChannelChange}>
-          <SelectTrigger className="h-9 w-[240px]">
+          <SelectTrigger className="h-9 w-[240px]" aria-label="Filter by channel">
             <SelectValue placeholder="All channels" />
           </SelectTrigger>
           <SelectContent>
@@ -492,7 +494,7 @@ export default function YouTubePage(): React.ReactElement {
         </Select>
 
         <Select value={sortDir} onValueChange={handleSortChange}>
-          <SelectTrigger className="h-9 w-[140px]">
+          <SelectTrigger className="h-9 w-[140px]" aria-label="Sort order">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -502,7 +504,7 @@ export default function YouTubePage(): React.ReactElement {
         </Select>
 
         <Select value={densityByMode[viewMode]} onValueChange={handleDensityChange}>
-          <SelectTrigger className="h-9 w-[140px]">
+          <SelectTrigger className="h-9 w-[140px]" aria-label="Card density">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -521,6 +523,7 @@ export default function YouTubePage(): React.ReactElement {
             setHideWatched(!hideWatched)
             setOffset(0)
           }}
+          aria-pressed={hideWatched}
         >
           Hide watched
         </Button>
@@ -550,7 +553,7 @@ export default function YouTubePage(): React.ReactElement {
             {loading && videos.length === 0 ? (
               <p className="py-8 text-center text-sm text-muted-foreground">Loading videos...</p>
             ) : error ? (
-              <p className="py-8 text-center text-sm text-red-500">{error}</p>
+              <p className="py-8 text-center text-sm text-destructive">{error}</p>
             ) : videos.length === 0 ? (
               <p className="py-8 text-center text-sm text-muted-foreground">No videos found.</p>
             ) : (

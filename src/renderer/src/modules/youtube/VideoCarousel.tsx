@@ -111,12 +111,32 @@ export function VideoCarousel({
     viewport.scrollTo({ left: targetLeft, behavior: 'smooth' })
   }, [])
 
+  const handleCarouselKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>): void => {
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault()
+        scrollByPage('left')
+      }
+      if (event.key === 'ArrowRight') {
+        event.preventDefault()
+        scrollByPage('right')
+      }
+    },
+    [scrollByPage]
+  )
+
   if (displayVideos.length === 0) {
     return <p className="text-xs text-muted-foreground py-2">No recent videos.</p>
   }
 
   return (
-    <div className="relative">
+    <div
+      className="relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      tabIndex={0}
+      role="region"
+      aria-label="Video carousel. Use left and right arrow keys to scroll videos."
+      onKeyDown={handleCarouselKeyDown}
+    >
       {canScrollLeft && (
         <div className="pointer-events-none absolute left-0 top-0 bottom-4 z-[5] w-10 bg-gradient-to-r from-background to-transparent" />
       )}

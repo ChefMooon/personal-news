@@ -409,7 +409,7 @@ function ScriptDetailPanel({
               value={draft.interpreter}
               onValueChange={(value) => setDraft((prev) => ({ ...prev, interpreter: value }))}
             >
-              <SelectTrigger>
+              <SelectTrigger aria-label="Interpreter">
                 <SelectValue placeholder="Select interpreter" />
               </SelectTrigger>
               <SelectContent>
@@ -445,7 +445,7 @@ function ScriptDetailPanel({
                 }))
               }}
             >
-              <SelectTrigger>
+              <SelectTrigger aria-label="Schedule type">
                 <SelectValue placeholder="Select schedule" />
               </SelectTrigger>
               <SelectContent>
@@ -486,6 +486,7 @@ function ScriptDetailPanel({
                   <p className="text-[11px] text-muted-foreground">Also run once when app starts</p>
                   <Switch
                     checked={draft.intervalRunOnAppStart}
+                    aria-label="Also run once when app starts"
                     onCheckedChange={(checked) => setDraft((prev) => ({ ...prev, intervalRunOnAppStart: checked }))}
                   />
                 </div>
@@ -645,7 +646,13 @@ function ScriptDetailPanel({
       {liveChunks.length > 0 && (
         <div>
           <p className="text-xs font-medium text-muted-foreground mb-1">Live output</p>
-          <ScrollArea className="h-32 rounded-md border bg-muted/40 p-2">
+          <ScrollArea
+            className="h-32 rounded-md border bg-muted/40 p-2"
+            role="log"
+            aria-live="polite"
+            aria-relevant="additions text"
+            aria-label="Live script output"
+          >
             <pre className="text-[11px] font-mono whitespace-pre-wrap break-all">
               {liveChunks.map((c) => c.text).join('')}
             </pre>
@@ -758,7 +765,13 @@ function ScriptRow({
         onClick={() => setExpanded((e) => !e)}
         role="button"
         tabIndex={0}
-        onKeyDown={(e) => e.key === 'Enter' && setExpanded((prev) => !prev)}
+        aria-label={`Toggle details for script ${script.name}`}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            setExpanded((prev) => !prev)
+          }
+        }}
       >
         <span className="text-muted-foreground">
           {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
@@ -770,7 +783,7 @@ function ScriptRow({
               <Badge variant="secondary" className="text-[10px] animate-pulse">Running...</Badge>
             )}
             {script.is_stale && !isRunning && (
-              <span title="Script may be overdue" className="text-amber-500">
+              <span title="Script may be overdue" className="text-amber-700 dark:text-amber-300">
                 <AlertTriangle className="h-3.5 w-3.5" />
               </span>
             )}
@@ -818,6 +831,7 @@ function ScriptRow({
               <Switch
                 checked={script.enabled === 1}
                 disabled={isManual}
+                aria-label={`Auto-run for ${script.name}`}
                 onCheckedChange={(checked) => {
                   void handleEnabledToggle(checked)
                 }}

@@ -45,6 +45,7 @@ export function SubredditColumn({ label, posts, maxPosts }: SubredditColumnProps
       {totalPages > 1 && (
         <div className="flex items-center justify-center gap-2 mt-3 pt-2 border-t text-xs text-muted-foreground">
           <button
+            type="button"
             onClick={handlePrev}
             disabled={currentPage === 0}
             className="p-1.5 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-accent rounded transition-colors"
@@ -56,6 +57,7 @@ export function SubredditColumn({ label, posts, maxPosts }: SubredditColumnProps
             {currentPage + 1} / {totalPages}
           </span>
           <button
+            type="button"
             onClick={handleNext}
             disabled={currentPage === totalPages - 1}
             className="p-1.5 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-accent rounded transition-colors"

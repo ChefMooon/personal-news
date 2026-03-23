@@ -101,9 +101,13 @@ function ApiKeysTab(): React.ReactElement {
         <p className="text-xs text-muted-foreground mb-2">
           Required for fetching video metadata. Get yours at console.cloud.google.com.
         </p>
+        <label htmlFor="youtube-api-key" className="text-xs text-muted-foreground mb-2 block">
+          API key
+        </label>
         <div className="flex gap-2">
           <div className="relative flex-1">
             <Input
+              id="youtube-api-key"
               type={showKey ? 'text' : 'password'}
               value={key}
               onChange={(e) => setKey(e.target.value)}
@@ -114,6 +118,8 @@ function ApiKeysTab(): React.ReactElement {
               type="button"
               onClick={() => setShowKey((s) => !s)}
               className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              aria-label={showKey ? 'Hide API key' : 'Show API key'}
+              aria-pressed={showKey}
             >
               {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
@@ -351,7 +357,9 @@ function YouTubeTab(): React.ReactElement {
       <div>
         <h3 className="text-sm font-medium mb-2">RSS Poll Interval (minutes)</h3>
         <div className="flex gap-2 items-center">
+          <label htmlFor="youtube-rss-poll-interval" className="sr-only">YouTube RSS poll interval in minutes</label>
           <Input
+            id="youtube-rss-poll-interval"
             value={intervalValue}
             onChange={(e) => setIntervalValue(e.target.value)}
             inputMode="numeric"
@@ -383,7 +391,7 @@ function YouTubeTab(): React.ReactElement {
               <div key={ch.channel_id} className="flex items-center justify-between py-2 border-b last:border-0 gap-3">
                 <div className="flex items-center gap-2">
                   {ch.thumbnail_url ? (
-                    <img src={ch.thumbnail_url} alt="" className="w-7 h-7 rounded-full bg-muted" />
+                    <img src={ch.thumbnail_url} alt={`${ch.name} channel thumbnail`} className="w-7 h-7 rounded-full bg-muted" />
                   ) : (
                     <div className="w-7 h-7 rounded-full bg-muted" />
                   )}
@@ -398,6 +406,7 @@ function YouTubeTab(): React.ReactElement {
                     onCheckedChange={(checked) => {
                       void setChannelEnabled(ch.channel_id, checked)
                     }}
+                    aria-label={`Enable channel ${ch.name}`}
                   />
                   <Button
                     variant="destructive"
@@ -419,7 +428,9 @@ function YouTubeTab(): React.ReactElement {
       <div>
         <h3 className="text-sm font-medium mb-2">Add Channel</h3>
         <div className="flex gap-2">
+          <label htmlFor="youtube-add-channel" className="sr-only">YouTube channel ID, handle, or URL</label>
           <Input
+            id="youtube-add-channel"
             ref={addInputRef}
             placeholder="Channel ID, @handle, or full YouTube URL..."
             value={addInput}
@@ -479,7 +490,7 @@ function AppearanceTab(): React.ReactElement {
             })
           }}
         >
-          <SelectTrigger className="w-[200px]">
+          <SelectTrigger className="w-[200px]" aria-label="Theme selection">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -712,7 +723,9 @@ function RedditDigestTab(): React.ReactElement {
           The bundled Reddit Digest script will fetch top posts for these subreddits and ingest them into the dashboard.
         </p>
         <div className="flex gap-2">
+          <label htmlFor="reddit-digest-add-subreddit" className="sr-only">Subreddit name</label>
           <Input
+            id="reddit-digest-add-subreddit"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder="programming"
@@ -792,7 +805,9 @@ function RedditDigestTab(): React.ReactElement {
             </p>
           </div>
           <div className="flex gap-2 items-center">
+            <label htmlFor="reddit-digest-keep-weeks" className="sr-only">Number of most recent weeks to keep</label>
             <Input
+              id="reddit-digest-keep-weeks"
               value={keepWeeks}
               onChange={(e) => setKeepWeeks(e.target.value)}
               inputMode="numeric"
@@ -822,7 +837,7 @@ function FeaturesTab(): React.ReactElement {
         </p>
         <div className="flex items-center justify-between rounded-md border px-3 py-2 max-w-sm">
           <span className="text-sm">Enable Reddit Digest</span>
-          <Switch checked={enabled} onCheckedChange={setEnabled} />
+          <Switch checked={enabled} onCheckedChange={setEnabled} aria-label="Enable Reddit Digest" />
         </div>
       </div>
       <div>
@@ -833,7 +848,7 @@ function FeaturesTab(): React.ReactElement {
         </p>
         <div className="flex items-center justify-between rounded-md border px-3 py-2 max-w-sm">
           <span className="text-sm">Enable Saved Posts</span>
-          <Switch checked={savedPostsEnabled} onCheckedChange={setSavedPostsEnabled} />
+          <Switch checked={savedPostsEnabled} onCheckedChange={setSavedPostsEnabled} aria-label="Enable Saved Posts" />
         </div>
       </div>
     </div>
@@ -917,6 +932,7 @@ function AppBehaviorTab(): React.ReactElement {
                   'Close-to-tray behavior'
                 )
               }}
+              aria-label="Hide to tray when closing window"
             />
           </div>
 
@@ -935,6 +951,7 @@ function AppBehaviorTab(): React.ReactElement {
                   'Minimize-to-tray behavior'
                 )
               }}
+              aria-label="Hide to tray when minimizing"
             />
           </div>
 
@@ -953,6 +970,7 @@ function AppBehaviorTab(): React.ReactElement {
                   'Start minimized behavior'
                 )
               }}
+              aria-label="Start app minimized"
             />
           </div>
 
@@ -971,6 +989,7 @@ function AppBehaviorTab(): React.ReactElement {
                   'Launch-at-login behavior'
                 )
               }}
+              aria-label="Launch at login"
             />
           </div>
         </div>
@@ -999,7 +1018,9 @@ function ScriptsTab(): React.ReactElement {
           Base directory shown when opening the scripts folder.
         </p>
         <div className="flex gap-2">
+          <label htmlFor="script-home-directory" className="sr-only">Script home directory</label>
           <Input
+            id="script-home-directory"
             value={dir}
             readOnly
             placeholder="No folder selected"
@@ -1146,7 +1167,9 @@ function SavedPostsTab(): React.ReactElement {
       <div>
         <h3 className="text-sm font-medium mb-2">Sync Poll Interval (minutes)</h3>
         <div className="flex gap-2 items-center">
+          <label htmlFor="saved-posts-poll-interval" className="sr-only">Saved Posts sync poll interval in minutes</label>
           <Input
+            id="saved-posts-poll-interval"
             value={intervalValue}
             onChange={(e) => setIntervalValue(e.target.value)}
             inputMode="numeric"
@@ -1164,13 +1187,15 @@ function SavedPostsTab(): React.ReactElement {
           <p className="flex items-center gap-1">
             <span className="text-muted-foreground">Topic:</span>{' '}
             <button
-              className="font-mono underline underline-offset-2 decoration-muted-foreground/50 hover:text-blue-400 transition-colors inline-flex items-center gap-1"
+              type="button"
+              className="font-mono underline underline-offset-2 decoration-muted-foreground/50 hover:text-primary transition-colors inline-flex items-center gap-1"
               onClick={() => {
                 const base = server.replace(/\/+$/, '')
                 window.api.invoke('shell:openExternal', `${base}/${topic}`).catch((err) => {
                   toast.error(err instanceof Error ? err.message : 'Failed to open ntfy topic URL.')
                 })
               }}
+              aria-label="Open ntfy topic URL"
             >
               {topic}
               <ExternalLink className="h-3 w-3" />
@@ -1182,7 +1207,7 @@ function SavedPostsTab(): React.ReactElement {
           </p>
           <p>
             <span className="text-muted-foreground">Last synced:</span>{' '}
-            <span className={isStale ? 'text-amber-500 font-medium' : ''}>
+            <span className={isStale ? 'text-amber-700 dark:text-amber-300 font-medium' : ''}>
               {lastPolledText}
             </span>
           </p>
@@ -1305,6 +1330,7 @@ function NotifyRow({
         checked={checked}
         onCheckedChange={onCheckedChange}
         className="mt-0.5 flex-shrink-0"
+        aria-label={label}
       />
     </div>
   )
@@ -1398,6 +1424,7 @@ function NotificationsTab(): React.ReactElement {
             void updatePrefs((p) => ({ ...p, desktopNotificationsEnabled: checked }))
           }
           className="mt-0.5 flex-shrink-0"
+          aria-label="Enable desktop notifications"
         />
       </div>
 
@@ -1454,7 +1481,7 @@ function NotificationsTab(): React.ReactElement {
                         {ch.thumbnail_url ? (
                           <img
                             src={ch.thumbnail_url}
-                            alt=""
+                            alt={`${ch.name} channel thumbnail`}
                             className="w-6 h-6 rounded-full bg-muted flex-shrink-0"
                           />
                         ) : (
@@ -1468,6 +1495,7 @@ function NotificationsTab(): React.ReactElement {
                           onCheckedChange={(checked) =>
                             void setChannelNotify(ch.channel_id, checked, notifyLive)
                           }
+                          aria-label={`Notify new videos for ${ch.name}`}
                         />
                       </div>
                       <div className="flex justify-center">
@@ -1476,6 +1504,7 @@ function NotificationsTab(): React.ReactElement {
                           onCheckedChange={(checked) =>
                             void setChannelNotify(ch.channel_id, notifyNew, checked)
                           }
+                          aria-label={`Notify live starts for ${ch.name}`}
                         />
                       </div>
                     </div>

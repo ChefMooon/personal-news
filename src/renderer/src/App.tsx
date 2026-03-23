@@ -38,7 +38,12 @@ export default function App(): React.ReactElement {
             </Routes>
           </main>
         </div>
-        <Toaster position="bottom-right" richColors />
+        <Toaster
+          position="bottom-right"
+          richColors
+          containerAriaLabel="Notifications"
+          toastOptions={{ closeButtonAriaLabel: 'Close notification' }}
+        />
       </SavedPostsEnabledProvider>
     </RedditDigestEnabledProvider>
   )

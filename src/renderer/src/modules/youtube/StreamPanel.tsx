@@ -32,6 +32,7 @@ export function StreamPanel({ streams }: StreamPanelProps): React.ReactElement {
         {upcomingStreams.map((stream) => (
           <button
             key={stream.video_id}
+            type="button"
             onClick={() => {
               const url = `https://www.youtube.com/watch?v=${stream.video_id}`
               window.api.invoke('shell:openExternal', url).catch((err) => {

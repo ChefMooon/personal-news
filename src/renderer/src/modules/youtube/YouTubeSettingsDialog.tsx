@@ -75,6 +75,7 @@ function SortableChannelRow({
     >
       {/* Drag handle */}
       <button
+        type="button"
         {...attributes}
         {...listeners}
         className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground hover:text-foreground shrink-0"
@@ -88,7 +89,7 @@ function SortableChannelRow({
       {channel.thumbnail_url ? (
         <img
           src={channel.thumbnail_url}
-          alt=""
+          alt={`${channel.name} channel thumbnail`}
           className="w-6 h-6 rounded-full bg-muted object-cover shrink-0"
           onError={(e) => {
             ;(e.target as HTMLImageElement).style.display = 'none'
@@ -110,14 +111,17 @@ function SortableChannelRow({
 
       {/* Pin toggle */}
       <button
+        type="button"
         onClick={onTogglePin}
         className={cn(
           'p-1 rounded transition-colors shrink-0',
           isPinned
-            ? 'text-amber-500 hover:text-amber-600'
+            ? 'text-amber-700 hover:text-amber-800 dark:text-amber-300 dark:hover:text-amber-200'
             : 'text-muted-foreground hover:text-foreground'
         )}
         title={isPinned ? 'Unpin channel' : 'Pin to top'}
+        aria-label={isPinned ? `Unpin ${channel.name}` : `Pin ${channel.name} to top`}
+        aria-pressed={isPinned}
       >
         <Pin className="h-3.5 w-3.5" />
       </button>
@@ -125,6 +129,7 @@ function SortableChannelRow({
       {/* Select checkbox (only when mode is 'selected') */}
       {showSelect && (
         <button
+          type="button"
           onClick={onToggleSelect}
           className={cn(
             'w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors',
@@ -133,6 +138,7 @@ function SortableChannelRow({
               : 'border-input bg-background hover:border-primary/50'
           )}
           aria-label={isSelected ? 'Deselect channel' : 'Select channel'}
+          aria-pressed={isSelected}
         >
           {isSelected && <Check className="h-3 w-3 text-primary-foreground" />}
         </button>
@@ -212,6 +218,7 @@ function PerChannelOverrides({
   return (
     <div>
       <button
+        type="button"
         className="flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
         onClick={() => setExpanded((p) => !p)}
       >
@@ -235,7 +242,7 @@ function PerChannelOverrides({
                     {ch.thumbnail_url ? (
                       <img
                         src={ch.thumbnail_url}
-                        alt=""
+                        alt={`${ch.name} channel thumbnail`}
                         className="w-5 h-5 rounded-full bg-muted shrink-0"
                       />
                     ) : (
@@ -245,6 +252,7 @@ function PerChannelOverrides({
                   </div>
                   <Switch
                     checked={hasOverride}
+                    aria-label={hasOverride ? `Disable overrides for ${ch.name}` : `Enable overrides for ${ch.name}`}
                     onCheckedChange={(checked) => {
                       if (checked) {
                         setChannelOverride(ch.channel_id, {
@@ -268,6 +276,7 @@ function PerChannelOverrides({
                         <span className="text-xs">{label}</span>
                         <Switch
                           checked={channelOverride[key] ?? true}
+                          aria-label={`${label} for ${ch.name}`}
                           onCheckedChange={(value) => {
                             setChannelOverride(ch.channel_id, { ...channelOverride, [key]: value })
                           }}
@@ -458,7 +467,7 @@ export function YouTubeSettingsDialog({
               </div>
               <p className="text-xs text-muted-foreground mt-1.5">
                 Drag to reorder · Pinned channels (
-                <Pin className="inline h-3 w-3 text-amber-500" />) appear first
+                <Pin className="inline h-3 w-3 text-amber-700 dark:text-amber-300" />) appear first
               </p>
             </div>
 
@@ -471,6 +480,7 @@ export function YouTubeSettingsDialog({
                 <SettingRow label="Hide watched videos">
                   <Switch
                     checked={draft.hideWatched}
+                    aria-label="Hide watched videos"
                     onCheckedChange={(value) =>
                       setDraft((p) => ({ ...p, hideWatched: value }))
                     }
@@ -480,6 +490,7 @@ export function YouTubeSettingsDialog({
                   <SettingRow key={key} label={label}>
                     <Switch
                       checked={draft[key] as boolean}
+                      aria-label={label}
                       onCheckedChange={(value) =>
                         setDraft((p) => ({ ...p, [key]: value }))
                       }
@@ -500,6 +511,7 @@ export function YouTubeSettingsDialog({
               >
                 <Switch
                   checked={draft.showUpcomingPanel}
+                  aria-label="Show upcoming streams card"
                   onCheckedChange={(v) => setDraft((p) => ({ ...p, showUpcomingPanel: v }))}
                 />
               </SettingRow>
@@ -518,7 +530,7 @@ export function YouTubeSettingsDialog({
                       setDraft((p) => ({ ...p, maxVideosPerChannel: Number(v) }))
                     }
                   >
-                    <SelectTrigger className="w-[80px] h-8 text-xs">
+                    <SelectTrigger className="w-[80px] h-8 text-xs" aria-label="Max videos per channel">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -538,7 +550,7 @@ export function YouTubeSettingsDialog({
                       setDraft((p) => ({ ...p, videoSortDirection: v as 'newest' | 'oldest' }))
                     }
                   >
-                    <SelectTrigger className="w-[120px] h-8 text-xs">
+                    <SelectTrigger className="w-[120px] h-8 text-xs" aria-label="Sort videos by">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -555,7 +567,7 @@ export function YouTubeSettingsDialog({
                       setDraft((p) => ({ ...p, cardDensity: v as 'compact' | 'detailed' }))
                     }
                   >
-                    <SelectTrigger className="w-[110px] h-8 text-xs">
+                    <SelectTrigger className="w-[110px] h-8 text-xs" aria-label="Card density">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -568,6 +580,7 @@ export function YouTubeSettingsDialog({
                 <SettingRow label="Show channel headers">
                   <Switch
                     checked={draft.showChannelHeaders}
+                    aria-label="Show channel headers"
                     onCheckedChange={(v) => setDraft((p) => ({ ...p, showChannelHeaders: v }))}
                   />
                 </SettingRow>
@@ -578,6 +591,7 @@ export function YouTubeSettingsDialog({
                 >
                   <Switch
                     checked={draft.collapseChannelsByDefault}
+                    aria-label="Collapse channels by default"
                     onCheckedChange={(v) =>
                       setDraft((p) => ({ ...p, collapseChannelsByDefault: v }))
                     }

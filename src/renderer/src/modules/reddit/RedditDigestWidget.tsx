@@ -223,6 +223,7 @@ function RedditDigestWidget(): React.ReactElement {
           {isEditing ? (
             <div className="flex items-center gap-0.5">
               <button
+                type="button"
                 className="p-1 rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
                 onClick={handleReset}
                 title="Reset to when you opened this"
@@ -233,6 +234,7 @@ function RedditDigestWidget(): React.ReactElement {
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <button
+                    type="button"
                     className="p-1 rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
                     title="Restore defaults"
                     aria-label="Restore default settings"
@@ -254,6 +256,7 @@ function RedditDigestWidget(): React.ReactElement {
                 </AlertDialogContent>
               </AlertDialog>
               <button
+                type="button"
                 className="p-1 rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
                 onClick={handleClose}
                 title="Close settings"
@@ -264,6 +267,7 @@ function RedditDigestWidget(): React.ReactElement {
             </div>
           ) : (
             <button
+              type="button"
               className="p-1 rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
               aria-label="Reddit Digest widget settings"
               onClick={handleOpenEdit}

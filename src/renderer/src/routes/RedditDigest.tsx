@@ -234,6 +234,7 @@ export default function RedditDigest(): React.ReactElement {
             variant={config.hide_viewed ? 'default' : 'outline'}
             size="sm"
             onClick={() => setConfig({ ...config, hide_viewed: !config.hide_viewed })}
+            aria-pressed={config.hide_viewed}
           >
             {config.hide_viewed ? 'Showing Unviewed Only' : 'Hide Viewed'}
           </Button>
@@ -249,7 +250,7 @@ export default function RedditDigest(): React.ReactElement {
               setConfig({ ...config, week_mode: val as DigestViewConfig['week_mode'] })
             }
           >
-            <SelectTrigger className="w-36">
+            <SelectTrigger className="w-36" aria-label="Week mode">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -266,7 +267,7 @@ export default function RedditDigest(): React.ReactElement {
                 setConfig({ ...config, week_range_count: Number.parseInt(val, 10) })
               }
             >
-              <SelectTrigger className="w-28">
+              <SelectTrigger className="w-28" aria-label="Week range count">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -284,7 +285,7 @@ export default function RedditDigest(): React.ReactElement {
               value={config.selected_week ?? latestWeek ?? ''}
               onValueChange={(val) => setConfig({ ...config, selected_week: val })}
             >
-              <SelectTrigger className="w-40">
+              <SelectTrigger className="w-40" aria-label="Specific week">
                 <SelectValue placeholder="Select week" />
               </SelectTrigger>
               <SelectContent>
@@ -304,7 +305,7 @@ export default function RedditDigest(): React.ReactElement {
               setConfig({ ...config, sort_by: val as DigestViewConfig['sort_by'] })
             }
           >
-            <SelectTrigger className="w-36">
+            <SelectTrigger className="w-36" aria-label="Sort field">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -323,6 +324,7 @@ export default function RedditDigest(): React.ReactElement {
               setConfig({ ...config, sort_dir: config.sort_dir === 'desc' ? 'asc' : 'desc' })
             }
             title={config.sort_dir === 'desc' ? 'Descending' : 'Ascending'}
+            aria-label={config.sort_dir === 'desc' ? 'Sort descending' : 'Sort ascending'}
           >
             {config.sort_dir === 'desc' ? '↓' : '↑'}
           </Button>
@@ -332,7 +334,10 @@ export default function RedditDigest(): React.ReactElement {
             {(['columns', 'tabs', 'flat'] as PageViewMode[]).map((mode) => (
               <button
                 key={mode}
+                type="button"
                 onClick={() => saveViewMode(mode)}
+                aria-pressed={pageViewMode === mode}
+                aria-label={`Switch to ${mode} view`}
                 className={`px-3 py-1.5 text-xs font-medium transition-colors ${
                   pageViewMode === mode
                     ? 'bg-primary text-primary-foreground'
@@ -359,6 +364,8 @@ export default function RedditDigest(): React.ReactElement {
           <div
             className={`flex items-center gap-3 text-xs h-7 transition-opacity ${analyticsLoading ? 'opacity-80' : 'opacity-100'}`}
             aria-busy={analyticsLoading}
+            aria-live="polite"
+            role="status"
           >
             <span className="px-2 py-1 rounded bg-background border w-24 tabular-nums">Total: {analytics.total}</span>
             <span className="px-2 py-1 rounded bg-background border w-24 tabular-nums">Viewed: {analytics.viewed}</span>
@@ -376,7 +383,9 @@ export default function RedditDigest(): React.ReactElement {
       {/* Flat mode filter bar */}
       {pageViewMode === 'flat' && (
         <div className="flex items-center gap-2 px-6 py-3 border-b flex-wrap">
+          <label htmlFor="reddit-digest-search" className="sr-only">Search posts</label>
           <Input
+            id="reddit-digest-search"
             placeholder="Search posts..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}

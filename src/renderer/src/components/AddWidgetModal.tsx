@@ -35,15 +35,15 @@ interface AddWidgetModalProps {
 const MODULE_META: Record<string, { description: string; icon: React.ReactNode }> = {
   youtube: {
     description: 'Recent videos and live streams from your subscribed channels.',
-    icon: <Youtube className="h-7 w-7 text-red-500" />
+    icon: <Youtube className="h-7 w-7 text-destructive" />
   },
   reddit_digest: {
     description: 'Top posts from your subreddits, with per-instance filters.',
-    icon: <Newspaper className="h-7 w-7 text-orange-400" />
+    icon: <Newspaper className="h-7 w-7 text-amber-700 dark:text-amber-300" />
   },
   saved_posts: {
     description: 'Posts saved from Reddit via your ntfy mobile flow.',
-    icon: <Bookmark className="h-7 w-7 text-blue-400" />
+    icon: <Bookmark className="h-7 w-7 text-primary" />
   }
 }
 
@@ -145,6 +145,7 @@ export function AddWidgetModal({ layout, onAdd, onClose }: AddWidgetModalProps):
           <div className="flex items-center gap-2">
             {phase === 'configure' && (
               <button
+                type="button"
                 onClick={() => setPhase('pick')}
                 className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
                 aria-label="Back to widget list"
@@ -157,6 +158,7 @@ export function AddWidgetModal({ layout, onAdd, onClose }: AddWidgetModalProps):
             </h2>
           </div>
           <button
+            type="button"
             onClick={onClose}
             className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
             aria-label="Close"
@@ -216,6 +218,7 @@ function WidgetPicker({ onSelect, savedPostsEnabled }: { onSelect: (id: string) 
         const meta = MODULE_META[mod.id]
         return (
           <button
+            type="button"
             key={mod.id}
             onClick={() => onSelect(mod.id)}
             className={cn(
@@ -276,8 +279,9 @@ function ConfigureForm({
 
       {/* Name */}
       <div className="space-y-1.5">
-        <label className="text-sm font-medium">Name</label>
+        <label htmlFor="add-widget-name" className="text-sm font-medium">Name</label>
         <Input
+          id="add-widget-name"
           value={name}
           onChange={(e) => onNameChange(e.target.value)}
           placeholder={defaultName}
@@ -289,9 +293,9 @@ function ConfigureForm({
 
       {/* Position */}
       <div className="space-y-1.5">
-        <label className="text-sm font-medium">Position</label>
+        <label htmlFor="add-widget-position" className="text-sm font-medium">Position</label>
         <Select value={position} onValueChange={onPositionChange}>
-          <SelectTrigger>
+          <SelectTrigger id="add-widget-position" aria-label="Widget position">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -311,6 +315,7 @@ function ConfigureForm({
             <label className="text-sm font-medium">Subreddit Filter</label>
             {subredditFilter !== null && (
               <button
+                type="button"
                 onClick={onResetFilter}
                 className="text-xs text-muted-foreground hover:text-foreground transition-colors"
               >
@@ -336,9 +341,11 @@ function ConfigureForm({
                   return (
                     <label
                       key={sub}
+                      htmlFor={`subreddit-filter-${sub}`}
                       className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-accent transition-colors"
                     >
                       <input
+                        id={`subreddit-filter-${sub}`}
                         type="checkbox"
                         checked={checked}
                         onChange={() => onToggleSubreddit(sub)}

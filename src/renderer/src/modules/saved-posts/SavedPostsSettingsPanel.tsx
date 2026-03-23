@@ -269,6 +269,7 @@ export function SavedPostsSettingsPanel({
                   >
                     <span className="text-sm flex-1">{label}</span>
                     <button
+                      type="button"
                       onClick={() => toggleSource(value)}
                       className={cn(
                         'w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors',
@@ -277,6 +278,7 @@ export function SavedPostsSettingsPanel({
                           : 'border-input bg-background hover:border-primary/50'
                       )}
                       aria-label={isSelected ? `Deselect ${label}` : `Select ${label}`}
+                      aria-pressed={isSelected}
                     >
                       {isSelected && <Check className="h-3 w-3 text-primary-foreground" />}
                     </button>
@@ -291,6 +293,7 @@ export function SavedPostsSettingsPanel({
           {/* ── Subreddits ── */}
           <div>
             <button
+              type="button"
               className="mb-2 flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
               onClick={() => setSubredditsExpanded((prev) => !prev)}
               aria-expanded={subredditsExpanded}
@@ -378,6 +381,7 @@ export function SavedPostsSettingsPanel({
                               r/{subreddit}
                             </span>
                             <button
+                              type="button"
                               onClick={() => toggleSubreddit(subreddit)}
                               className={cn(
                                 'w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors',
@@ -390,6 +394,7 @@ export function SavedPostsSettingsPanel({
                                   ? `Deselect r/${subreddit}`
                                   : `Select r/${subreddit}`
                               }
+                              aria-pressed={isSelected}
                             >
                               {isSelected && (
                                 <Check className="h-3 w-3 text-primary-foreground" />
@@ -414,6 +419,7 @@ export function SavedPostsSettingsPanel({
           {/* ── Tags ── */}
           <div>
             <button
+              type="button"
               className="mb-2 flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
               onClick={() => setTagsExpanded((prev) => !prev)}
               aria-expanded={tagsExpanded}
@@ -493,6 +499,7 @@ export function SavedPostsSettingsPanel({
                           >
                             <span className="text-sm flex-1 truncate min-w-0">{tag}</span>
                             <button
+                              type="button"
                               onClick={() => toggleTag(tag)}
                               className={cn(
                                 'w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors',
@@ -501,6 +508,7 @@ export function SavedPostsSettingsPanel({
                                   : 'border-input bg-background hover:border-primary/50'
                               )}
                               aria-label={isSelected ? `Deselect ${tag}` : `Select ${tag}`}
+                              aria-pressed={isSelected}
                             >
                               {isSelected && (
                                 <Check className="h-3 w-3 text-primary-foreground" />
@@ -533,7 +541,7 @@ export function SavedPostsSettingsPanel({
                     applyUpdate({ ...draft, sort_by: val as 'saved_at' | 'score' })
                   }
                 >
-                  <SelectTrigger className="w-[130px] h-8 text-xs">
+                  <SelectTrigger className="w-[130px] h-8 text-xs" aria-label="Sort by">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -550,7 +558,7 @@ export function SavedPostsSettingsPanel({
                     applyUpdate({ ...draft, sort_dir: val as 'asc' | 'desc' })
                   }
                 >
-                  <SelectTrigger className="w-[130px] h-8 text-xs">
+                  <SelectTrigger className="w-[130px] h-8 text-xs" aria-label="Sort direction">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -569,7 +577,7 @@ export function SavedPostsSettingsPanel({
                   value={draft.max_posts.toString()}
                   onValueChange={(val) => applyUpdate({ ...draft, max_posts: parseInt(val, 10) })}
                 >
-                  <SelectTrigger className="w-[80px] h-8 text-xs">
+                  <SelectTrigger className="w-[80px] h-8 text-xs" aria-label="Max posts">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -596,7 +604,7 @@ export function SavedPostsSettingsPanel({
                     applyUpdate({ ...draft, group_by: val as 'none' | 'source' })
                   }
                 >
-                  <SelectTrigger className="w-[150px] h-8 text-xs">
+                  <SelectTrigger className="w-[150px] h-8 text-xs" aria-label="Group by">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -611,6 +619,7 @@ export function SavedPostsSettingsPanel({
                   <SettingRow label="Show group headers">
                     <Switch
                       checked={draft.showGroupHeaders}
+                      aria-label="Show group headers"
                       onCheckedChange={(checked) =>
                         applyUpdate({ ...draft, showGroupHeaders: checked })
                       }
@@ -663,6 +672,7 @@ export function SavedPostsSettingsPanel({
               <SettingRow label="Show metadata">
                 <Switch
                   checked={draft.showMetadata}
+                  aria-label="Show metadata"
                   onCheckedChange={(checked) => applyUpdate({ ...draft, showMetadata: checked })}
                 />
               </SettingRow>
@@ -670,6 +680,7 @@ export function SavedPostsSettingsPanel({
               <SettingRow label="Show source badge">
                 <Switch
                   checked={draft.showSourceBadge}
+                  aria-label="Show source badge"
                   onCheckedChange={(checked) =>
                     applyUpdate({ ...draft, showSourceBadge: checked })
                   }
@@ -679,6 +690,7 @@ export function SavedPostsSettingsPanel({
               <SettingRow label="Show link URL">
                 <Switch
                   checked={draft.showUrl}
+                  aria-label="Show link URL"
                   onCheckedChange={(checked) => applyUpdate({ ...draft, showUrl: checked })}
                 />
               </SettingRow>
@@ -686,6 +698,7 @@ export function SavedPostsSettingsPanel({
               <SettingRow label="Show body preview">
                 <Switch
                   checked={draft.showBodyPreview}
+                  aria-label="Show body preview"
                   onCheckedChange={(checked) =>
                     applyUpdate({ ...draft, showBodyPreview: checked })
                   }
@@ -695,6 +708,7 @@ export function SavedPostsSettingsPanel({
               <SettingRow label="Compact view">
                 <Switch
                   checked={draft.cardDensity === 'compact'}
+                  aria-label="Compact view"
                   onCheckedChange={(checked) =>
                     applyUpdate({ ...draft, cardDensity: checked ? 'compact' : 'detailed' })
                   }
@@ -704,6 +718,7 @@ export function SavedPostsSettingsPanel({
               <SettingRow label='Show "View All" link'>
                 <Switch
                   checked={draft.showViewAllLink}
+                  aria-label="Show View All link"
                   onCheckedChange={(checked) =>
                     applyUpdate({ ...draft, showViewAllLink: checked })
                   }
@@ -716,6 +731,7 @@ export function SavedPostsSettingsPanel({
               >
                 <Switch
                   checked={draft.hideViewed}
+                  aria-label="Hide viewed posts"
                   onCheckedChange={(checked) =>
                     applyUpdate({ ...draft, hideViewed: checked })
                   }

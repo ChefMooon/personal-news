@@ -81,12 +81,14 @@ export function Sidebar(): React.ReactElement {
           <span className="text-sm font-semibold text-foreground truncate">Personal News</span>
         )}
         <button
+          type="button"
           onClick={() => setCollapsed((c) => !c)}
           className={cn(
             'flex items-center justify-center px-3 py-2 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground transition-colors',
             collapsed ? 'flex-1 mx-1' : 'ml-auto'
           )}
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          aria-pressed={collapsed}
         >
           {collapsed ? (
             <ChevronRight className="h-5 w-5 shrink-0" />

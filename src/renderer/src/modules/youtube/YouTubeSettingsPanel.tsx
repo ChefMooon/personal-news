@@ -67,6 +67,7 @@ function SortableChannelRow({
       className="flex items-center gap-2 px-2 py-2 hover:bg-accent/40 border-b last:border-0"
     >
       <button
+        type="button"
         {...attributes}
         {...listeners}
         className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground hover:text-foreground shrink-0"
@@ -79,7 +80,7 @@ function SortableChannelRow({
       {channel.thumbnail_url ? (
         <img
           src={channel.thumbnail_url}
-          alt=""
+          alt={`${channel.name} channel thumbnail`}
           className="w-6 h-6 rounded-full bg-muted object-cover shrink-0"
           onError={(e) => {
             ;(e.target as HTMLImageElement).style.display = 'none'
@@ -99,20 +100,24 @@ function SortableChannelRow({
       </span>
 
       <button
+        type="button"
         onClick={onTogglePin}
         className={cn(
           'p-1 rounded transition-colors shrink-0',
           isPinned
-            ? 'text-amber-500 hover:text-amber-600'
+            ? 'text-amber-700 hover:text-amber-800 dark:text-amber-300 dark:hover:text-amber-200'
             : 'text-muted-foreground hover:text-foreground'
         )}
         title={isPinned ? 'Unpin channel' : 'Pin to top'}
+        aria-label={isPinned ? `Unpin ${channel.name}` : `Pin ${channel.name} to top`}
+        aria-pressed={isPinned}
       >
         <Pin className="h-3.5 w-3.5" />
       </button>
 
       {showSelect && (
         <button
+          type="button"
           onClick={onToggleSelect}
           className={cn(
             'w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors',
@@ -121,6 +126,7 @@ function SortableChannelRow({
               : 'border-input bg-background hover:border-primary/50'
           )}
           aria-label={isSelected ? 'Deselect channel' : 'Select channel'}
+          aria-pressed={isSelected}
         >
           {isSelected && <Check className="h-3 w-3 text-primary-foreground" />}
         </button>
@@ -194,6 +200,7 @@ function PerChannelOverrides({
   return (
     <div>
       <button
+        type="button"
         className="flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
         onClick={() => setExpanded((p) => !p)}
       >
@@ -217,7 +224,7 @@ function PerChannelOverrides({
                     {ch.thumbnail_url ? (
                       <img
                         src={ch.thumbnail_url}
-                        alt=""
+                        alt={`${ch.name} channel thumbnail`}
                         className="w-5 h-5 rounded-full bg-muted shrink-0"
                       />
                     ) : (
@@ -227,6 +234,7 @@ function PerChannelOverrides({
                   </div>
                   <Switch
                     checked={hasOverride}
+                    aria-label={hasOverride ? `Disable overrides for ${ch.name}` : `Enable overrides for ${ch.name}`}
                     onCheckedChange={(checked) => {
                       if (checked) {
                         setChannelOverride(ch.channel_id, {
@@ -250,6 +258,7 @@ function PerChannelOverrides({
                         <span className="text-xs">{label}</span>
                         <Switch
                           checked={channelOverride[key] ?? true}
+                          aria-label={`${label} for ${ch.name}`}
                           onCheckedChange={(value) => {
                             setChannelOverride(ch.channel_id, { ...channelOverride, [key]: value })
                           }}
@@ -389,6 +398,7 @@ export function YouTubeSettingsPanel({
 
           <div>
             <button
+              type="button"
               className="mb-2 flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
               onClick={() => setChannelsExpanded((prev) => !prev)}
               aria-expanded={channelsExpanded}
@@ -486,6 +496,7 @@ export function YouTubeSettingsPanel({
               <SettingRow label="Hide watched videos">
                 <Switch
                   checked={draft.hideWatched}
+                  aria-label="Hide watched videos"
                   onCheckedChange={(value) => applyUpdate({ ...draft, hideWatched: value })}
                 />
               </SettingRow>
@@ -493,6 +504,7 @@ export function YouTubeSettingsPanel({
                 <SettingRow key={key} label={label}>
                   <Switch
                     checked={draft[key] as boolean}
+                    aria-label={label}
                     onCheckedChange={(value) => applyUpdate({ ...draft, [key]: value })}
                   />
                 </SettingRow>
@@ -510,6 +522,7 @@ export function YouTubeSettingsPanel({
             >
               <Switch
                 checked={draft.showUpcomingPanel}
+                aria-label="Show upcoming streams card"
                 onCheckedChange={(v) => applyUpdate({ ...draft, showUpcomingPanel: v })}
               />
             </SettingRow>
@@ -527,7 +540,7 @@ export function YouTubeSettingsPanel({
                     applyUpdate({ ...draft, maxVideosPerChannel: Number(v) })
                   }
                 >
-                  <SelectTrigger className="w-[80px] h-8 text-xs">
+                  <SelectTrigger className="w-[80px] h-8 text-xs" aria-label="Max videos per channel">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -547,7 +560,7 @@ export function YouTubeSettingsPanel({
                     applyUpdate({ ...draft, videoSortDirection: v as 'newest' | 'oldest' })
                   }
                 >
-                  <SelectTrigger className="w-[120px] h-8 text-xs">
+                  <SelectTrigger className="w-[120px] h-8 text-xs" aria-label="Sort videos by">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -564,7 +577,7 @@ export function YouTubeSettingsPanel({
                     applyUpdate({ ...draft, cardDensity: v as 'compact' | 'detailed' })
                   }
                 >
-                  <SelectTrigger className="w-[110px] h-8 text-xs">
+                  <SelectTrigger className="w-[110px] h-8 text-xs" aria-label="Card density">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -577,6 +590,7 @@ export function YouTubeSettingsPanel({
               <SettingRow label="Show channel headers">
                 <Switch
                   checked={draft.showChannelHeaders}
+                  aria-label="Show channel headers"
                   onCheckedChange={(v) => applyUpdate({ ...draft, showChannelHeaders: v })}
                 />
               </SettingRow>
@@ -587,6 +601,7 @@ export function YouTubeSettingsPanel({
               >
                 <Switch
                   checked={draft.collapseChannelsByDefault}
+                  aria-label="Collapse channels by default"
                   onCheckedChange={(v) =>
                     applyUpdate({ ...draft, collapseChannelsByDefault: v })
                   }

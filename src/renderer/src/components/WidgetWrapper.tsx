@@ -75,6 +75,7 @@ export function WidgetWrapper({
         <div className="flex items-center gap-1 mb-1 px-1">
           {/* Drag handle */}
           <button
+            type="button"
             {...attributes}
             {...listeners}
             className="cursor-grab active:cursor-grabbing p-1 rounded text-muted-foreground hover:text-foreground hover:bg-accent"
@@ -85,6 +86,7 @@ export function WidgetWrapper({
 
           {/* Move up */}
           <button
+            type="button"
             onClick={() => onMoveUp(id)}
             disabled={isFirst}
             className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-30 disabled:cursor-not-allowed"
@@ -95,6 +97,7 @@ export function WidgetWrapper({
 
           {/* Move down */}
           <button
+            type="button"
             onClick={() => onMoveDown(id)}
             disabled={isLast}
             className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-30 disabled:cursor-not-allowed"
@@ -105,9 +108,11 @@ export function WidgetWrapper({
 
           {/* Visibility toggle */}
           <button
+            type="button"
             onClick={() => onToggleVisibility(id)}
             className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-accent"
             aria-label={visible ? 'Hide widget' : 'Show widget'}
+            aria-pressed={!visible}
           >
             {visible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
           </button>
@@ -127,6 +132,7 @@ export function WidgetWrapper({
             />
           ) : (
             <button
+              type="button"
               onClick={startRename}
               className="flex-1 text-left flex items-center gap-1.5 px-1 py-0.5 rounded text-xs text-muted-foreground hover:text-foreground hover:bg-accent group"
               title="Click to rename"
@@ -138,6 +144,7 @@ export function WidgetWrapper({
 
           {/* Remove */}
           <button
+            type="button"
             onClick={() => onRemove(id)}
             className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-accent"
             aria-label="Remove widget"

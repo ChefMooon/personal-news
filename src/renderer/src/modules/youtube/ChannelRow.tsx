@@ -76,6 +76,7 @@ export function ChannelRow({
       {viewConfig.showChannelHeaders && (
         <div className="mb-3 flex items-center gap-2">
           <button
+            type="button"
             className="flex items-center gap-2 min-w-0 flex-1 text-left group/header"
             onClick={onToggleCollapse}
             aria-expanded={!isCollapsed}

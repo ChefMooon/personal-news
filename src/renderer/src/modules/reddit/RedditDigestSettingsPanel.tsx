@@ -93,6 +93,7 @@ function SortableSubredditRow({
       className="flex items-center gap-2 px-2 py-2 hover:bg-accent/40 border-b last:border-0"
     >
       <button
+        type="button"
         {...attributes}
         {...listeners}
         className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground hover:text-foreground shrink-0"
@@ -109,21 +110,24 @@ function SortableSubredditRow({
       <span className="text-sm flex-1 truncate min-w-0">r/{subreddit}</span>
 
       <button
+        type="button"
         onClick={onTogglePin}
         className={cn(
           'p-1 rounded transition-colors shrink-0',
           isPinned
-            ? 'text-amber-500 hover:text-amber-600'
+            ? 'text-amber-700 hover:text-amber-800 dark:text-amber-300 dark:hover:text-amber-200'
             : 'text-muted-foreground hover:text-foreground'
         )}
         title={isPinned ? 'Unpin subreddit' : 'Pin to top'}
         aria-label={isPinned ? `Unpin r/${subreddit}` : `Pin r/${subreddit} to top`}
+        aria-pressed={isPinned}
       >
         <Pin className="h-3.5 w-3.5" />
       </button>
 
       {showSelect && (
         <button
+          type="button"
           onClick={onToggleSelect}
           className={cn(
             'w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors',
@@ -132,6 +136,7 @@ function SortableSubredditRow({
               : 'border-input bg-background hover:border-primary/50'
           )}
           aria-label={isSelected ? `Deselect r/${subreddit}` : `Select r/${subreddit}`}
+          aria-pressed={isSelected}
         >
           {isSelected && <Check className="h-3 w-3 text-primary-foreground" />}
         </button>
@@ -308,6 +313,7 @@ export function RedditDigestSettingsPanel({
         <div className="space-y-5 pb-2 pl-2 pr-4">
           <div>
             <button
+              type="button"
               className="mb-2 flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
               onClick={() => setSubredditsExpanded((prev) => !prev)}
               aria-expanded={subredditsExpanded}
@@ -405,7 +411,7 @@ export function RedditDigestSettingsPanel({
               <div>
                 <label className="text-sm block mb-2">Week Mode</label>
                 <Select value={config.week_mode} onValueChange={(value) => handleWeekModeChange(value as DigestViewConfig['week_mode'])}>
-                  <SelectTrigger className="h-8 text-sm">
+                  <SelectTrigger className="h-8 text-sm" aria-label="Week mode">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -426,7 +432,7 @@ export function RedditDigestSettingsPanel({
                     value={String(draft.week_range_count)}
                     onValueChange={(value) => updateConfig({ week_range_count: Number.parseInt(value, 10) })}
                   >
-                    <SelectTrigger className="h-8 text-sm">
+                    <SelectTrigger className="h-8 text-sm" aria-label="Weeks to show">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -450,7 +456,7 @@ export function RedditDigestSettingsPanel({
                       value={draft.selected_week ?? availableWeeks[0]?.week_start_date}
                       onValueChange={(value) => updateConfig({ selected_week: value })}
                     >
-                      <SelectTrigger className="h-8 text-sm">
+                      <SelectTrigger className="h-8 text-sm" aria-label="Specific week">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -532,7 +538,7 @@ export function RedditDigestSettingsPanel({
                   value={String(draft.max_posts_per_group)}
                   onValueChange={(value) => updateConfig({ max_posts_per_group: Number.parseInt(value, 10) })}
                 >
-                  <SelectTrigger className="h-8 text-sm">
+                  <SelectTrigger className="h-8 text-sm" aria-label="Posts per group">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -557,6 +563,7 @@ export function RedditDigestSettingsPanel({
                 </div>
                 <Switch
                   checked={draft.hide_viewed}
+                  aria-label="Hide viewed posts"
                   onCheckedChange={(checked) => updateConfig({ hide_viewed: checked })}
                 />
               </div>
@@ -574,7 +581,7 @@ export function RedditDigestSettingsPanel({
                   value={draft.sort_by}
                   onValueChange={(value) => updateConfig({ sort_by: value as DigestViewConfig['sort_by'] })}
                 >
-                  <SelectTrigger className="h-8 text-sm">
+                  <SelectTrigger className="h-8 text-sm" aria-label="Sort by">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -593,7 +600,7 @@ export function RedditDigestSettingsPanel({
                   value={draft.sort_dir}
                   onValueChange={(value) => updateConfig({ sort_dir: value as DigestViewConfig['sort_dir'] })}
                 >
-                  <SelectTrigger className="h-8 text-sm">
+                  <SelectTrigger className="h-8 text-sm" aria-label="Sort direction">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>

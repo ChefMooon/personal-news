@@ -56,8 +56,10 @@ function PostTagEditor({
         <Badge key={tag} variant="secondary" className="text-xs gap-1">
           {tag}
           <button
+            type="button"
             onClick={() => void handleRemoveTag(tag)}
-            className="hover:text-red-500"
+            className="hover:text-destructive"
+            aria-label={`Remove tag ${tag}`}
           >
             <X className="h-3 w-3" />
           </button>
@@ -70,6 +72,7 @@ function PostTagEditor({
             onChange={(e) => setNewTag(e.target.value)}
             className="h-6 w-24 text-xs"
             placeholder="tag name"
+            aria-label="New tag name"
             list="tag-suggestions"
             onKeyDown={(e) => {
               if (e.key === 'Enter') void handleAddTag()
@@ -84,14 +87,22 @@ function PostTagEditor({
                 <option key={t} value={t} />
               ))}
           </datalist>
-          <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => void handleAddTag()}>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-6 w-6 p-0"
+            onClick={() => void handleAddTag()}
+            aria-label="Add tag"
+          >
             <Plus className="h-3 w-3" />
           </Button>
         </div>
       ) : (
         <button
+          type="button"
           onClick={() => setAdding(true)}
           className="text-xs text-muted-foreground hover:text-foreground"
+          aria-pressed={adding}
         >
           + tag
         </button>
@@ -318,9 +329,9 @@ function SavedPostsContent(): React.ReactElement {
 
       <div className="mb-3 p-2 rounded-md border bg-muted/20 text-xs">
         {analyticsLoading || !analytics ? (
-          <span className="text-muted-foreground">Loading analytics...</span>
+          <span className="text-muted-foreground" role="status" aria-live="polite">Loading analytics...</span>
         ) : (
-          <div className="flex items-center gap-4 flex-wrap">
+          <div className="flex items-center gap-4 flex-wrap" role="status" aria-live="polite">
             <span>Total: {analytics.total}</span>
             <span>Viewed: {analytics.viewed}</span>
             <span>Unviewed: {analytics.unviewed}</span>
@@ -345,8 +356,10 @@ function SavedPostsContent(): React.ReactElement {
       {/* Filters */}
       <div className="flex items-center gap-3 mb-4">
         <div className="relative flex-1 max-w-xs">
+          <label htmlFor="saved-posts-search" className="sr-only">Search posts</label>
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
+            id="saved-posts-search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search posts..."
@@ -357,7 +370,7 @@ function SavedPostsContent(): React.ReactElement {
           value={subreddit ?? '_all'}
           onValueChange={(val) => setSubreddit(val === '_all' ? null : val)}
         >
-          <SelectTrigger className="w-[160px] h-9">
+          <SelectTrigger className="w-[160px] h-9" aria-label="Filter by subreddit">
             <SelectValue placeholder="All subreddits" />
           </SelectTrigger>
           <SelectContent>
@@ -373,7 +386,7 @@ function SavedPostsContent(): React.ReactElement {
           value={tag ?? '_all'}
           onValueChange={(val) => setTag(val === '_all' ? null : val)}
         >
-          <SelectTrigger className="w-[140px] h-9">
+          <SelectTrigger className="w-[140px] h-9" aria-label="Filter by tag">
             <SelectValue placeholder="All tags" />
           </SelectTrigger>
           <SelectContent>
@@ -389,7 +402,7 @@ function SavedPostsContent(): React.ReactElement {
           value={source ?? '_all'}
           onValueChange={(val) => setSource(val === '_all' ? null : val)}
         >
-          <SelectTrigger className="w-[140px] h-9">
+          <SelectTrigger className="w-[140px] h-9" aria-label="Filter by source">
             <SelectValue placeholder="All sources" />
           </SelectTrigger>
           <SelectContent>
@@ -451,6 +464,7 @@ function SavedPostsContent(): React.ReactElement {
                     </span>
                   </div>
                   <button
+                    type="button"
                     onClick={() => {
                       if (post.viewed_at === null) {
                         setPostViewed(post.post_id, true)
@@ -463,6 +477,7 @@ function SavedPostsContent(): React.ReactElement {
                     className={`text-sm font-medium text-left hover:text-primary transition-colors line-clamp-2 w-full ${
                       post.viewed_at ? 'text-foreground/70' : ''
                     }`}
+                    aria-label={`Open saved post: ${post.title}`}
                   >
                     {post.title}
                   </button>
@@ -480,9 +495,11 @@ function SavedPostsContent(): React.ReactElement {
                   </div>
                 </div>
                 <button
+                  type="button"
                   onClick={() => setPostViewed(post.post_id, post.viewed_at === null)}
                   className="mt-0.5 p-1 rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
                   aria-label={post.viewed_at ? 'Mark post as unviewed' : 'Mark post as viewed'}
+                  aria-pressed={post.viewed_at !== null}
                   title={post.viewed_at ? 'Viewed - click to mark unviewed' : 'Unviewed - click to mark viewed'}
                 >
                   {post.viewed_at ? <CircleCheck className="h-4 w-4 text-emerald-400" /> : <Circle className="h-4 w-4" />}

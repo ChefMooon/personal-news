@@ -23,10 +23,10 @@ export function StaleWarning({
   const lastSyncText = lastPolledAt ? formatRelativeTime(lastPolledAt) : 'never'
 
   return (
-    <div className="flex items-center gap-3 rounded-md border border-amber-500/50 bg-amber-500/10 px-4 py-3 mb-4">
-      <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0" />
+    <div className="flex items-center gap-3 rounded-md border border-amber-600/50 bg-amber-600/10 dark:border-amber-400/50 dark:bg-amber-400/10 px-4 py-3 mb-4">
+      <AlertTriangle className="h-5 w-5 text-amber-700 dark:text-amber-300 shrink-0" />
       <div className="flex-1 text-sm">
-        <span className="font-medium text-amber-600 dark:text-amber-400">
+        <span className="font-medium text-amber-800 dark:text-amber-200">
           Last synced: {lastSyncText}.
         </span>{' '}
         Messages on ntfy.sh expire after 24 hours — some saved posts may have been lost.

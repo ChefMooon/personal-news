@@ -120,9 +120,10 @@ export function NtfyOnboardingWizard({
         {step === 2 && (
           <div className="space-y-4">
             <div>
-              <label className="text-sm font-medium mb-1 block">Topic Name</label>
+              <label htmlFor="ntfy-topic-name" className="text-sm font-medium mb-1 block">Topic Name</label>
               <div className="flex gap-2">
                 <Input
+                  id="ntfy-topic-name"
                   value={topic}
                   onChange={(e) => setTopic(e.target.value)}
                   placeholder="my-saved-posts"
@@ -140,10 +141,11 @@ export function NtfyOnboardingWizard({
               </p>
             </div>
             <div>
-              <label className="text-sm font-medium mb-1 block">
+              <label htmlFor="ntfy-server-url" className="text-sm font-medium mb-1 block">
                 Server URL (optional)
               </label>
               <Input
+                id="ntfy-server-url"
                 value={serverUrl}
                 onChange={(e) => setServerUrl(e.target.value)}
                 placeholder="https://ntfy.sh"

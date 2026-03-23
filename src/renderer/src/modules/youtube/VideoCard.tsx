@@ -124,6 +124,7 @@ export function VideoCard({
         <button
           type="button"
           aria-label={isWatched ? 'Mark as unwatched' : 'Mark as watched'}
+          aria-pressed={isWatched}
           title={isWatched ? 'Watched - click to mark unwatched' : 'Unwatched - click to mark watched'}
           onClick={handleWatchedToggle}
           className={cn(

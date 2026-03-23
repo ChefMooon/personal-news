@@ -104,6 +104,7 @@ export function TagManagementModal({
                         value={editValue}
                         onChange={(e) => setEditValue(e.target.value)}
                         className="h-8 text-sm"
+                        aria-label={`Rename tag ${tag}`}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') void handleRename()
                           if (e.key === 'Escape') setEditingTag(null)
@@ -143,7 +144,7 @@ export function TagManagementModal({
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="text-red-500 hover:text-red-600"
+                          className="text-destructive hover:text-destructive/80"
                           onClick={() => setDeletingTag(tag)}
                         >
                           Delete

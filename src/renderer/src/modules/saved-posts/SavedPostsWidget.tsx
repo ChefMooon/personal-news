@@ -65,6 +65,7 @@ function PostCard({
       }
     >
       <button
+        type="button"
         onClick={() => onOpen(post)}
         className="flex-1 text-left hover:opacity-80 transition-opacity"
       >
@@ -112,9 +113,11 @@ function PostCard({
       </div>
       </button>
       <button
+        type="button"
         onClick={() => onToggleViewed(post, !isViewed)}
         className="mt-0.5 p-1 rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
         aria-label={isViewed ? 'Mark post as unviewed' : 'Mark post as viewed'}
+        aria-pressed={isViewed}
         title={isViewed ? 'Viewed - click to mark unviewed' : 'Unviewed - click to mark viewed'}
       >
         {isViewed ? <CircleCheck className="h-4 w-4 text-emerald-400" /> : <Circle className="h-4 w-4" />}
@@ -381,6 +384,7 @@ function SavedPostsWidget(): React.ReactElement {
           <div className="flex items-center gap-2">
             {config.showViewAllLink && (
               <button
+                type="button"
                 onClick={() => navigate('/saved-posts')}
                 className="text-xs text-primary hover:underline"
               >
@@ -390,6 +394,7 @@ function SavedPostsWidget(): React.ReactElement {
             {isEditing ? (
               <div className="flex items-center gap-0.5">
                 <button
+                  type="button"
                   className="p-1 rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
                   onClick={handleReset}
                   title="Reset to when you opened this"
@@ -400,6 +405,7 @@ function SavedPostsWidget(): React.ReactElement {
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
                     <button
+                      type="button"
                       className="p-1 rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
                       title="Restore defaults"
                       aria-label="Restore default settings"
@@ -421,6 +427,7 @@ function SavedPostsWidget(): React.ReactElement {
                   </AlertDialogContent>
                 </AlertDialog>
                 <button
+                  type="button"
                   className="p-1 rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
                   onClick={handleClose}
                   title="Close settings"
@@ -431,6 +438,7 @@ function SavedPostsWidget(): React.ReactElement {
               </div>
             ) : (
               <button
+                type="button"
                 className="p-1 rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
                 aria-label="Saved posts widget settings"
                 onClick={handleOpenEdit}

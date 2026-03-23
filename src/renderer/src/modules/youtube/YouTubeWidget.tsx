@@ -159,12 +159,13 @@ function YouTubeWidget(): React.ReactElement {
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <CardTitle className="text-base flex items-center gap-2">
-            <Youtube className="h-5 w-5 text-red-500" />
+            <Youtube className="h-5 w-5 text-destructive" />
             {widgetTitle}
           </CardTitle>
           {isEditing ? (
             <div className="flex items-center gap-0.5">
               <button
+                type="button"
                 className="p-1 rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
                 onClick={handleReset}
                 title="Reset to when you opened this"
@@ -175,6 +176,7 @@ function YouTubeWidget(): React.ReactElement {
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <button
+                    type="button"
                     className="p-1 rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
                     title="Restore defaults"
                     aria-label="Restore default settings"
@@ -196,6 +198,7 @@ function YouTubeWidget(): React.ReactElement {
                 </AlertDialogContent>
               </AlertDialog>
               <button
+                type="button"
                 className="p-1 rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
                 onClick={handleClose}
                 title="Close settings"
@@ -206,6 +209,7 @@ function YouTubeWidget(): React.ReactElement {
             </div>
           ) : (
             <button
+              type="button"
               className="p-1 rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
               aria-label="YouTube widget settings"
               onClick={handleOpenEdit}
