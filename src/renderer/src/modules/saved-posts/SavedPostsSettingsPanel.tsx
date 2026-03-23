@@ -709,6 +709,18 @@ export function SavedPostsSettingsPanel({
                   }
                 />
               </SettingRow>
+
+              <SettingRow
+                label="Hide viewed posts"
+                description="Only show posts that are not marked viewed"
+              >
+                <Switch
+                  checked={draft.hideViewed}
+                  onCheckedChange={(checked) =>
+                    applyUpdate({ ...draft, hideViewed: checked })
+                  }
+                />
+              </SettingRow>
             </div>
           </div>
 

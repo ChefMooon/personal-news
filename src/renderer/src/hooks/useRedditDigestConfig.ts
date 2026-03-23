@@ -18,7 +18,8 @@ export const DEFAULT_DIGEST_VIEW_CONFIG: DigestViewConfig = {
   week_mode: 'latest',
   week_range_count: 4,
   selected_week: null,
-  max_posts_per_group: 5
+  max_posts_per_group: 5,
+  hide_viewed: false
 }
 
 function normalizeDigestViewConfig(raw: LegacyDigestViewConfig): DigestViewConfig {

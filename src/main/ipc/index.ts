@@ -9,9 +9,15 @@ import type {
   DigestPost,
   DigestWeekSummary,
   RedditDigestPostsRequest,
+  RedditDigestBulkSetViewedRequest,
+  RedditDigestViewedAnalyticsRequest,
   PruneDigestOptions,
   SavedPostSummary,
   SavedPost,
+  SavedPostsBulkSetViewedRequest,
+  SavedPostsViewedAnalyticsRequest,
+  ViewedAnalytics,
+  ViewedTrendPoint,
   NtfyStaleness,
   NtfyPollResult,
   ScriptWithLastRun,
@@ -32,7 +38,8 @@ import type {
   ScriptUpdateInput,
   ScriptRunCompleteEvent,
   MediaType,
-  NotificationPreferences
+  NotificationPreferences,
+  DigestViewedChangedEvent
 } from '../../shared/ipc-types'
 import {
   applyYouTubePollInterval,
@@ -115,6 +122,121 @@ function emitYoutubeUpdated(): void {
 function emitRedditUpdated(): void {
   for (const win of BrowserWindow.getAllWindows()) {
     win.webContents.send(IPC.REDDIT_UPDATED)
+  }
+}
+
+function emitDigestViewedChanged(event: DigestViewedChangedEvent): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    win.webContents.send(IPC.REDDIT_DIGEST_VIEWED_CHANGED, event)
+  }
+}
+
+function buildDigestWhereClause(options?: {
+  week_start_date?: string | null
+  week_start_dates?: string[]
+  subreddit_filter?: string[]
+  search?: string
+  hide_viewed?: boolean
+}): { whereClause: string; params: unknown[] } {
+  const conditions: string[] = []
+  const params: unknown[] = []
+
+  if (options?.week_start_date) {
+    conditions.push('week_start_date = ?')
+    params.push(options.week_start_date)
+  }
+
+  if (options?.week_start_dates && options.week_start_dates.length > 0) {
+    const placeholders = options.week_start_dates.map(() => '?').join(', ')
+    conditions.push(`week_start_date IN (${placeholders})`)
+    params.push(...options.week_start_dates)
+  }
+
+  if (options?.subreddit_filter && options.subreddit_filter.length > 0) {
+    const placeholders = options.subreddit_filter.map(() => '?').join(', ')
+    conditions.push(`subreddit IN (${placeholders})`)
+    params.push(...options.subreddit_filter)
+  }
+
+  if (options?.search && options.search.trim().length > 0) {
+    conditions.push('LOWER(title) LIKE ?')
+    params.push(`%${options.search.trim().toLowerCase()}%`)
+  }
+
+  if (options?.hide_viewed) {
+    conditions.push('viewed_at IS NULL')
+  }
+
+  return {
+    whereClause: conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '',
+    params
+  }
+}
+
+function buildSavedPostsQueryParts(options?: {
+  search?: string
+  subreddit_filter?: string[]
+  tag_filter?: string[]
+  source_filter?: string[]
+  hide_viewed?: boolean
+}): { fromClause: string; whereClause: string; params: unknown[] } {
+  const conditions: string[] = []
+  const params: unknown[] = []
+  const joinFts = Boolean(options?.search)
+
+  if (options?.search) {
+    conditions.push('saved_posts_fts MATCH ?')
+    params.push(options.search)
+  }
+
+  if (options?.subreddit_filter && options.subreddit_filter.length > 0) {
+    const placeholders = options.subreddit_filter.map(() => '?').join(', ')
+    conditions.push(`sp.subreddit IN (${placeholders})`)
+    params.push(...options.subreddit_filter)
+  }
+
+  if (options?.source_filter && options.source_filter.length > 0) {
+    const placeholders = options.source_filter.map(() => '?').join(', ')
+    conditions.push(`sp.source IN (${placeholders})`)
+    params.push(...options.source_filter)
+  }
+
+  if (options?.tag_filter && options.tag_filter.length > 0) {
+    const tagConditions = options.tag_filter
+      .map(() => 'EXISTS (SELECT 1 FROM json_each(sp.tags) WHERE value = ?)')
+      .join(' OR ')
+    conditions.push(`(${tagConditions})`)
+    params.push(...options.tag_filter)
+  }
+
+  if (options?.hide_viewed) {
+    conditions.push('sp.viewed_at IS NULL')
+  }
+
+  const fromClause = joinFts
+    ? 'FROM saved_posts sp JOIN saved_posts_fts ON sp.rowid = saved_posts_fts.rowid'
+    : 'FROM saved_posts sp'
+
+  return {
+    fromClause,
+    whereClause: conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '',
+    params
+  }
+}
+
+function buildViewedAnalytics(
+  total: number,
+  viewed: number,
+  trendRows: Array<{ day: string; viewed_count: number }>
+): ViewedAnalytics {
+  const unviewed = Math.max(0, total - viewed)
+  const viewedRate = total > 0 ? viewed / total : 0
+  return {
+    total,
+    viewed,
+    unviewed,
+    viewed_rate: viewedRate,
+    trend: trendRows as ViewedTrendPoint[]
   }
 }
 
@@ -1012,14 +1134,83 @@ export function registerIpcHandlers(): void {
   // reddit:getDigestPosts
   ipcMain.handle(IPC.REDDIT_GET_DIGEST_POSTS, (_event, options?: RedditDigestPostsRequest): DigestPost[] => {
     const db = getDb()
-    if (options?.week_start_date) {
-      return db
-        .prepare('SELECT * FROM reddit_digest_posts WHERE week_start_date = ? ORDER BY fetched_at DESC')
-        .all(options.week_start_date) as DigestPost[]
-    }
-
-    return db.prepare('SELECT * FROM reddit_digest_posts ORDER BY week_start_date DESC, fetched_at DESC').all() as DigestPost[]
+    const { whereClause, params } = buildDigestWhereClause(options)
+    return db
+      .prepare(`SELECT * FROM reddit_digest_posts ${whereClause} ORDER BY week_start_date DESC, fetched_at DESC`)
+      .all(...params) as DigestPost[]
   })
+
+  // reddit:setDigestPostViewed
+  ipcMain.handle(
+    IPC.REDDIT_SET_DIGEST_POST_VIEWED,
+    (_event, postId: string, weekStartDate: string, viewed: boolean): IpcMutationResult => {
+      const db = getDb()
+      const viewedAt = viewed ? Math.floor(Date.now() / 1000) : null
+      const result = db
+        .prepare('UPDATE reddit_digest_posts SET viewed_at = ? WHERE post_id = ? AND week_start_date = ?')
+        .run(viewedAt, postId, weekStartDate)
+      if (result.changes === 0) {
+        return { ok: false, error: 'Post not found.' }
+      }
+      emitDigestViewedChanged({
+        post_id: postId,
+        week_start_date: weekStartDate,
+        viewed_at: viewedAt
+      })
+      return { ok: true, error: null }
+    }
+  )
+
+  // reddit:bulkSetDigestViewed
+  ipcMain.handle(
+    IPC.REDDIT_BULK_SET_DIGEST_VIEWED,
+    (
+      _event,
+      options: RedditDigestBulkSetViewedRequest
+    ): { ok: boolean; error: string | null; updatedCount: number } => {
+      const db = getDb()
+      const viewedAt = options.viewed ? Math.floor(Date.now() / 1000) : null
+      const { whereClause, params } = buildDigestWhereClause(options)
+      const stateClause = options.viewed ? 'viewed_at IS NULL' : 'viewed_at IS NOT NULL'
+      const mergeWhere = whereClause ? `${whereClause} AND ${stateClause}` : `WHERE ${stateClause}`
+      const result = db
+        .prepare(`UPDATE reddit_digest_posts SET viewed_at = ? ${mergeWhere}`)
+        .run(viewedAt, ...params)
+      emitRedditUpdated()
+      return { ok: true, error: null, updatedCount: result.changes }
+    }
+  )
+
+  // reddit:getDigestViewedAnalytics
+  ipcMain.handle(
+    IPC.REDDIT_GET_DIGEST_VIEWED_ANALYTICS,
+    (_event, options?: RedditDigestViewedAnalyticsRequest): ViewedAnalytics => {
+      const db = getDb()
+      const { whereClause, params } = buildDigestWhereClause(options)
+
+      const totals = db
+        .prepare(
+          `SELECT
+             COUNT(*) AS total,
+             SUM(CASE WHEN viewed_at IS NOT NULL THEN 1 ELSE 0 END) AS viewed
+           FROM reddit_digest_posts ${whereClause}`
+        )
+        .get(...params) as { total: number; viewed: number | null }
+
+      const trend = db
+        .prepare(
+          `SELECT date(viewed_at, 'unixepoch') AS day, COUNT(*) AS viewed_count
+           FROM reddit_digest_posts
+           ${whereClause ? `${whereClause} AND viewed_at IS NOT NULL` : 'WHERE viewed_at IS NOT NULL'}
+           AND viewed_at >= strftime('%s', 'now', '-6 days')
+           GROUP BY day
+           ORDER BY day ASC`
+        )
+        .all(...params) as Array<{ day: string; viewed_count: number }>
+
+      return buildViewedAnalytics(totals.total ?? 0, totals.viewed ?? 0, trend)
+    }
+  )
 
   // reddit:getDigestWeeks
   ipcMain.handle(IPC.REDDIT_GET_DIGEST_WEEKS, (): DigestWeekSummary[] => {
@@ -1102,6 +1293,7 @@ export function registerIpcHandlers(): void {
         tag?: string
         tag_filter?: string[]
         source_filter?: string[]
+        hide_viewed?: boolean
         sort_by?: 'saved_at' | 'score'
         sort_dir?: 'asc' | 'desc'
         limit?: number
@@ -1109,56 +1301,17 @@ export function registerIpcHandlers(): void {
       }
     ): { posts: SavedPost[]; total: number } => {
       const db = getDb()
-      const conditions: string[] = []
-      const params: unknown[] = []
-      let joinFts = false
-
-      // Search (FTS)
-      if (options?.search) {
-        joinFts = true
-        conditions.push('saved_posts_fts MATCH ?')
-        params.push(options.search)
-      }
-
-      // Subreddit filter (support both old single and new multi format)
-      if (options?.subreddit_filter && options.subreddit_filter.length > 0) {
-        const placeholders = options.subreddit_filter.map(() => '?').join(', ')
-        conditions.push(`sp.subreddit IN (${placeholders})`)
-        params.push(...options.subreddit_filter)
-      } else if (options?.subreddit) {
-        // Backward compatibility with old single-subreddit format
-        conditions.push('sp.subreddit = ?')
-        params.push(options.subreddit)
-      }
-
-      // Source filter
-      if (options?.source_filter && options.source_filter.length > 0) {
-        const placeholders = options.source_filter.map(() => '?').join(', ')
-        conditions.push(`sp.source IN (${placeholders})`)
-        params.push(...options.source_filter)
-      }
-
-      // Tag filter (support both old single and new multi format)
-      if (options?.tag_filter && options.tag_filter.length > 0) {
-        // Filter to posts that have at least one of the requested tags
-        const tagConditions = options.tag_filter
-          .map(() => 'EXISTS (SELECT 1 FROM json_each(sp.tags) WHERE value = ?)')
-          .join(' OR ')
-        conditions.push(`(${tagConditions})`)
-        params.push(...options.tag_filter)
-      } else if (options?.tag) {
-        // Backward compatibility with old single-tag format
-        conditions.push('EXISTS (SELECT 1 FROM json_each(sp.tags) WHERE value = ?)')
-        params.push(options.tag)
-      }
-
-      const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
+      const subredditFilter = options?.subreddit_filter ?? (options?.subreddit ? [options.subreddit] : undefined)
+      const tagFilter = options?.tag_filter ?? (options?.tag ? [options.tag] : undefined)
+      const { fromClause, whereClause, params } = buildSavedPostsQueryParts({
+        search: options?.search,
+        subreddit_filter: subredditFilter,
+        tag_filter: tagFilter,
+        source_filter: options?.source_filter,
+        hide_viewed: options?.hide_viewed
+      })
       const limit = Math.min(options?.limit ?? 50, 500) // Cap at 500
       const offset = options?.offset ?? 0
-
-      const fromClause = joinFts
-        ? 'FROM saved_posts sp JOIN saved_posts_fts ON sp.rowid = saved_posts_fts.rowid'
-        : 'FROM saved_posts sp'
 
       // Build ORDER BY clause
       const sortBy = options?.sort_by ?? 'saved_at'
@@ -1184,6 +1337,7 @@ export function registerIpcHandlers(): void {
         body: string | null
         source: string
         saved_at: number
+        viewed_at: number | null
         note: string | null
         tags: string | null
       }>
@@ -1195,6 +1349,88 @@ export function registerIpcHandlers(): void {
       }))
 
       return { posts, total: countRow.cnt }
+    }
+  )
+
+  // reddit:setSavedPostViewed
+  ipcMain.handle(
+    IPC.REDDIT_SET_SAVED_POST_VIEWED,
+    (_event, postId: string, viewed: boolean): IpcMutationResult => {
+      const db = getDb()
+      const viewedAt = viewed ? Math.floor(Date.now() / 1000) : null
+      const result = db.prepare('UPDATE saved_posts SET viewed_at = ? WHERE post_id = ?').run(viewedAt, postId)
+      if (result.changes === 0) {
+        return { ok: false, error: 'Saved post not found.' }
+      }
+      emitRedditUpdated()
+      return { ok: true, error: null }
+    }
+  )
+
+  // reddit:bulkSetSavedViewed
+  ipcMain.handle(
+    IPC.REDDIT_BULK_SET_SAVED_VIEWED,
+    (
+      _event,
+      options: SavedPostsBulkSetViewedRequest
+    ): { ok: boolean; error: string | null; updatedCount: number } => {
+      const db = getDb()
+      const viewedAt = options.viewed ? Math.floor(Date.now() / 1000) : null
+      const { fromClause, whereClause, params } = buildSavedPostsQueryParts(options)
+      const stateClause = options.viewed ? 'sp.viewed_at IS NULL' : 'sp.viewed_at IS NOT NULL'
+      const mergeWhere = whereClause ? `${whereClause} AND ${stateClause}` : `WHERE ${stateClause}`
+      const ids = db
+        .prepare(`SELECT sp.post_id ${fromClause} ${mergeWhere}`)
+        .all(...params) as Array<{ post_id: string }>
+
+      if (ids.length === 0) {
+        return { ok: true, error: null, updatedCount: 0 }
+      }
+
+      const update = db.prepare('UPDATE saved_posts SET viewed_at = ? WHERE post_id = ?')
+      const tx = db.transaction(() => {
+        let updatedCount = 0
+        for (const row of ids) {
+          const result = update.run(viewedAt, row.post_id)
+          updatedCount += result.changes
+        }
+        return updatedCount
+      })
+
+      const updatedCount = tx()
+      emitRedditUpdated()
+      return { ok: true, error: null, updatedCount }
+    }
+  )
+
+  // reddit:getSavedViewedAnalytics
+  ipcMain.handle(
+    IPC.REDDIT_GET_SAVED_VIEWED_ANALYTICS,
+    (_event, options?: SavedPostsViewedAnalyticsRequest): ViewedAnalytics => {
+      const db = getDb()
+      const { fromClause, whereClause, params } = buildSavedPostsQueryParts(options)
+
+      const totals = db
+        .prepare(
+          `SELECT
+             COUNT(*) AS total,
+             SUM(CASE WHEN sp.viewed_at IS NOT NULL THEN 1 ELSE 0 END) AS viewed
+           ${fromClause} ${whereClause}`
+        )
+        .get(...params) as { total: number; viewed: number | null }
+
+      const trend = db
+        .prepare(
+          `SELECT date(sp.viewed_at, 'unixepoch') AS day, COUNT(*) AS viewed_count
+           ${fromClause}
+           ${whereClause ? `${whereClause} AND sp.viewed_at IS NOT NULL` : 'WHERE sp.viewed_at IS NOT NULL'}
+           AND sp.viewed_at >= strftime('%s', 'now', '-6 days')
+           GROUP BY day
+           ORDER BY day ASC`
+        )
+        .all(...params) as Array<{ day: string; viewed_count: number }>
+
+      return buildViewedAnalytics(totals.total ?? 0, totals.viewed ?? 0, trend)
     }
   )
 

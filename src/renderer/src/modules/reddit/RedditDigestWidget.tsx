@@ -52,7 +52,7 @@ function RedditDigestWidget(): React.ReactElement {
     : config.week_mode === 'specific'
       ? selectedSpecificWeek
       : null
-  const { posts, loading } = useRedditDigest(requestWeek)
+  const { posts, loading } = useRedditDigest(requestWeek, config.hide_viewed)
 
   const rangeWeekSet = useMemo(() => {
     if (config.week_mode !== 'range') {

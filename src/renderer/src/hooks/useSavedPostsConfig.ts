@@ -17,7 +17,8 @@ export const DEFAULT_SAVED_POSTS_VIEW_CONFIG: SavedPostsViewConfig = {
   showUrl: false,
   cardDensity: 'compact',
   showBodyPreview: false,
-  showViewAllLink: true
+  showViewAllLink: true,
+  hideViewed: false
 }
 
 /**

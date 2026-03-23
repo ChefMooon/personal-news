@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react'
+import React, { useMemo, useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useRedditDigestEnabled } from '../contexts/RedditDigestEnabledContext'
@@ -18,7 +18,7 @@ import {
   SelectValue
 } from '../components/ui/select'
 import { IPC } from '../../../shared/ipc-types'
-import type { DigestPost, DigestViewConfig } from '../../../shared/ipc-types'
+import type { DigestPost, DigestViewConfig, ViewedAnalytics } from '../../../shared/ipc-types'
 
 type PageViewMode = 'columns' | 'tabs' | 'flat'
 
@@ -28,6 +28,9 @@ export default function RedditDigest(): React.ReactElement {
   const [viewModeLoaded, setViewModeLoaded] = useState(false)
   const [search, setSearch] = useState('')
   const [flatSubreddits, setFlatSubreddits] = useState<string[]>([])
+  const [analytics, setAnalytics] = useState<ViewedAnalytics | null>(null)
+  const [analyticsLoading, setAnalyticsLoading] = useState(false)
+  const [bulkLoading, setBulkLoading] = useState(false)
 
   const { config, setConfig } = useRedditDigestConfig('reddit_digest_page')
   const { weeks, loading: weeksLoading } = useRedditDigestWeeks()
@@ -39,7 +42,7 @@ export default function RedditDigest(): React.ReactElement {
     return null // range mode: fetch all, then filter by rangeWeekSet
   }, [config.week_mode, config.selected_week, latestWeek])
 
-  const { posts, loading: postsLoading } = useRedditDigest(requestWeek)
+  const { posts, loading: postsLoading } = useRedditDigest(requestWeek, config.hide_viewed)
 
   useEffect(() => {
     window.api
@@ -97,6 +100,73 @@ export default function RedditDigest(): React.ReactElement {
     return map
   }, [sortedPosts])
 
+  const scopedSubreddits = useMemo(() => {
+    if (pageViewMode === 'flat' && flatSubreddits.length > 0) {
+      return flatSubreddits
+    }
+    if (config.subreddit_mode === 'selected' && config.selected_subreddits.length > 0) {
+      return config.selected_subreddits
+    }
+    return [] as string[]
+  }, [config.selected_subreddits, config.subreddit_mode, flatSubreddits, pageViewMode])
+
+  const analyticsScope = useMemo(() => {
+    const base: {
+      week_start_date?: string | null
+      week_start_dates?: string[]
+      subreddit_filter?: string[]
+      search?: string
+    } = {}
+
+    if (config.week_mode === 'latest' || config.week_mode === 'specific') {
+      base.week_start_date = requestWeek
+    }
+    if (config.week_mode === 'range' && rangeWeekSet) {
+      base.week_start_dates = Array.from(rangeWeekSet)
+    }
+    if (scopedSubreddits.length > 0) {
+      base.subreddit_filter = scopedSubreddits
+    }
+    if (pageViewMode === 'flat' && search.trim()) {
+      base.search = search.trim()
+    }
+
+    return base
+  }, [config.week_mode, pageViewMode, rangeWeekSet, requestWeek, scopedSubreddits, search])
+
+  const refreshAnalytics = useCallback(() => {
+    setAnalyticsLoading(true)
+    window.api
+      .invoke(IPC.REDDIT_GET_DIGEST_VIEWED_ANALYTICS, analyticsScope)
+      .then((data) => setAnalytics(data as ViewedAnalytics))
+      .catch((err) => {
+        toast.error(err instanceof Error ? err.message : 'Failed to load Reddit Digest analytics.')
+      })
+      .finally(() => setAnalyticsLoading(false))
+  }, [analyticsScope])
+
+  useEffect(() => {
+    refreshAnalytics()
+  }, [refreshAnalytics])
+
+  const handleBulkMarkViewed = (): void => {
+    setBulkLoading(true)
+    window.api
+      .invoke(IPC.REDDIT_BULK_SET_DIGEST_VIEWED, { ...analyticsScope, viewed: true })
+      .then((result) => {
+        const payload = result as { ok: boolean; error: string | null; updatedCount: number }
+        if (!payload.ok) {
+          toast.error(payload.error ?? 'Failed to mark posts viewed.')
+          return
+        }
+        toast.success(`Marked ${payload.updatedCount} posts as viewed.`)
+      })
+      .catch((err) => {
+        toast.error(err instanceof Error ? err.message : 'Failed to mark posts viewed.')
+      })
+      .finally(() => setBulkLoading(false))
+  }
+
   const groupKeys = useMemo(() => [...groups.keys()].sort(), [groups])
 
   const flatPosts = useMemo(() => {
@@ -145,6 +215,18 @@ export default function RedditDigest(): React.ReactElement {
       <div className="flex items-center justify-between px-6 py-4 border-b sticky top-0 bg-background z-10 gap-3 flex-wrap">
         <h1 className="text-xl font-semibold">Reddit Digest</h1>
         <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            variant={config.hide_viewed ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setConfig({ ...config, hide_viewed: !config.hide_viewed })}
+          >
+            {config.hide_viewed ? 'Showing Unviewed Only' : 'Hide Viewed'}
+          </Button>
+
+          <Button variant="outline" size="sm" onClick={handleBulkMarkViewed} disabled={bulkLoading}>
+            {bulkLoading ? 'Marking...' : 'Mark All Viewed'}
+          </Button>
+
           {/* Week mode */}
           <Select
             value={config.week_mode}
@@ -247,6 +329,24 @@ export default function RedditDigest(): React.ReactElement {
             ))}
           </div>
         </div>
+      </div>
+
+      <div className="px-6 py-2 border-b bg-muted/20">
+        {analyticsLoading || !analytics ? (
+          <p className="text-xs text-muted-foreground">Loading analytics...</p>
+        ) : (
+          <div className="flex items-center gap-4 flex-wrap text-xs">
+            <span className="px-2 py-1 rounded bg-background border">Total: {analytics.total}</span>
+            <span className="px-2 py-1 rounded bg-background border">Viewed: {analytics.viewed}</span>
+            <span className="px-2 py-1 rounded bg-background border">Unviewed: {analytics.unviewed}</span>
+            <span className="px-2 py-1 rounded bg-background border">
+              Viewed Rate: {(analytics.viewed_rate * 100).toFixed(1)}%
+            </span>
+            <span className="text-muted-foreground">
+              7d trend: {analytics.trend.map((point) => `${point.day.slice(5)} ${point.viewed_count}`).join(' | ') || 'No viewed activity'}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Flat mode filter bar */}

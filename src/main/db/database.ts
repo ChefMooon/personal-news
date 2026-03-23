@@ -40,7 +40,8 @@ function runMigrations(database: Database.Database): void {
     11: '011_remove_reddit_digest_seed.sql',
     12: '012_reddit_digest_weekly_snapshot.sql',
     13: '013_add_yt_video_watched.sql',
-    14: '014_add_notification_settings.sql'
+    14: '014_add_notification_settings.sql',
+    15: '015_add_reddit_saved_viewed.sql'
   }
 
   // Ensure meta table exists first
@@ -100,6 +101,28 @@ function runMigrations(database: Database.Database): void {
       nextVersion === 14 &&
       columnExists(database, 'yt_channels', 'notify_new_videos') &&
       columnExists(database, 'yt_channels', 'notify_live_start')
+    ) {
+      database
+        .prepare(
+          `
+            INSERT INTO meta (key, value)
+            VALUES ('schema_version', ?)
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value
+          `
+        )
+        .run(String(nextVersion))
+      appliedAny = true
+      console.log(`[DB] Migration ${String(nextVersion).padStart(3, '0')} skipped (already applied)`)
+      nextVersion += 1
+      continue
+    }
+
+    // Migration 015 adds viewed_at to reddit_digest_posts and saved_posts.
+    // Guard in case these columns were introduced manually before version bump.
+    if (
+      nextVersion === 15 &&
+      columnExists(database, 'reddit_digest_posts', 'viewed_at') &&
+      columnExists(database, 'saved_posts', 'viewed_at')
     ) {
       database
         .prepare(

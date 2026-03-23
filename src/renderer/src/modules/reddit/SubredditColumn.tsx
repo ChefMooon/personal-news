@@ -11,11 +11,13 @@ interface SubredditColumnProps {
 
 export function SubredditColumn({ label, posts, maxPosts }: SubredditColumnProps): React.ReactElement {
   const [currentPage, setCurrentPage] = useState(0)
+  const postIdentitySignature = posts.map((post) => `${post.post_id}-${post.week_start_date}`).join('|')
 
-  // Reset page to 0 when posts reference changes (from sorting/filtering)
+  // Reset page only when the list identity/order changes (sort/filter/week changes),
+  // not when per-item metadata (like viewed_at) updates.
   useEffect(() => {
     setCurrentPage(0)
-  }, [posts])
+  }, [postIdentitySignature])
 
   // Compute pagination
   const itemsPerPage = maxPosts ?? posts.length
@@ -37,7 +39,7 @@ export function SubredditColumn({ label, posts, maxPosts }: SubredditColumnProps
       </div>
       <div>
         {pagedPosts.map((post) => (
-          <DigestPostRow key={post.post_id} post={post} />
+          <DigestPostRow key={`${post.post_id}-${post.week_start_date}`} post={post} />
         ))}
       </div>
       {totalPages > 1 && (

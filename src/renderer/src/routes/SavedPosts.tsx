@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { IPC } from '../../../shared/ipc-types'
-import type { SavedPost, LinkSource } from '../../../shared/ipc-types'
+import type { SavedPost, LinkSource, ViewedAnalytics } from '../../../shared/ipc-types'
 import { useSavedPosts } from '../hooks/useSavedPosts'
 import { useNtfyStaleness } from '../hooks/useNtfyStaleness'
 import { useSavedPostsEnabled } from '../contexts/SavedPostsEnabledContext'
@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue
 } from '../components/ui/select'
-import { Bookmark, Search, Tags, RefreshCw, Plus, X } from 'lucide-react'
+import { Bookmark, Search, Tags, RefreshCw, Plus, X, Circle, CircleCheck } from 'lucide-react'
 import { formatRelativeTime } from '../lib/time'
 
 function PostTagEditor({
@@ -134,6 +134,10 @@ export default function SavedPosts(): React.ReactElement {
 
 function SavedPostsContent(): React.ReactElement {
   const [source, setSource] = useState<string | null>(null)
+  const [hideViewed, setHideViewed] = useState(false)
+  const [analytics, setAnalytics] = useState<ViewedAnalytics | null>(null)
+  const [analyticsLoading, setAnalyticsLoading] = useState(false)
+  const [bulkLoading, setBulkLoading] = useState(false)
   const {
     posts,
     total,
@@ -148,7 +152,8 @@ function SavedPostsContent(): React.ReactElement {
     setOffset,
     refetch
   } = useSavedPosts({
-    source_filter: source ? [source as LinkSource] : undefined
+    source_filter: source ? [source as LinkSource] : undefined,
+    hide_viewed: hideViewed
   })
   const staleness = useNtfyStaleness()
   const [showOnboarding, setShowOnboarding] = useState(false)
@@ -157,6 +162,26 @@ function SavedPostsContent(): React.ReactElement {
   const [syncing, setSyncing] = useState(false)
   const [allTags, setAllTags] = useState<string[]>([])
   const [subreddits, setSubreddits] = useState<string[]>([])
+
+  const analyticsScope = useMemo(() => {
+    return {
+      search: search || undefined,
+      subreddit_filter: subreddit ? [subreddit] : undefined,
+      tag_filter: tag ? [tag] : undefined,
+      source_filter: source ? [source as LinkSource] : undefined
+    }
+  }, [search, subreddit, tag, source])
+
+  const refreshAnalytics = useCallback((): void => {
+    setAnalyticsLoading(true)
+    window.api
+      .invoke(IPC.REDDIT_GET_SAVED_VIEWED_ANALYTICS, analyticsScope)
+      .then((data) => setAnalytics(data as ViewedAnalytics))
+      .catch((err) => {
+        toast.error(err instanceof Error ? err.message : 'Failed to load Saved Posts analytics.')
+      })
+      .finally(() => setAnalyticsLoading(false))
+  }, [analyticsScope])
 
   useEffect(() => {
     if (!staleness.loading && !staleness.topicConfigured) {
@@ -182,6 +207,10 @@ function SavedPostsContent(): React.ReactElement {
     setSubreddits(Array.from(subs).sort())
   }, [posts])
 
+  useEffect(() => {
+    refreshAnalytics()
+  }, [refreshAnalytics])
+
   const handleSyncNow = async (): Promise<void> => {
     setSyncing(true)
     try {
@@ -206,6 +235,46 @@ function SavedPostsContent(): React.ReactElement {
   const limit = 50
   const hasMore = offset + limit < total
 
+  const setPostViewed = (postId: string, viewed: boolean): void => {
+    window.api
+      .invoke(IPC.REDDIT_SET_SAVED_POST_VIEWED, postId, viewed)
+      .then((result) => {
+        const payload = result as { ok: boolean; error: string | null }
+        if (!payload.ok) {
+          toast.error(payload.error ?? 'Failed to update viewed state.')
+          return
+        }
+        void refetch()
+        refreshAnalytics()
+      })
+      .catch((err) => {
+        toast.error(err instanceof Error ? err.message : 'Failed to update viewed state.')
+      })
+  }
+
+  const handleBulkMarkViewed = (): void => {
+    setBulkLoading(true)
+    window.api
+      .invoke(IPC.REDDIT_BULK_SET_SAVED_VIEWED, {
+        ...analyticsScope,
+        viewed: true
+      })
+      .then((result) => {
+        const payload = result as { ok: boolean; error: string | null; updatedCount: number }
+        if (!payload.ok) {
+          toast.error(payload.error ?? 'Failed to mark posts as viewed.')
+          return
+        }
+        toast.success(`Marked ${payload.updatedCount} posts as viewed.`)
+        void refetch()
+        refreshAnalytics()
+      })
+      .catch((err) => {
+        toast.error(err instanceof Error ? err.message : 'Failed to mark posts as viewed.')
+      })
+      .finally(() => setBulkLoading(false))
+  }
+
   return (
     <div className="flex flex-col h-full px-6 py-4">
       <div className="flex items-center justify-between mb-4">
@@ -217,6 +286,16 @@ function SavedPostsContent(): React.ReactElement {
           )}
         </h1>
         <div className="flex gap-2">
+          <Button
+            variant={hideViewed ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setHideViewed((prev) => !prev)}
+          >
+            {hideViewed ? 'Showing Unviewed Only' : 'Hide Viewed'}
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleBulkMarkViewed} disabled={bulkLoading}>
+            {bulkLoading ? 'Marking...' : 'Mark All Viewed'}
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -235,6 +314,22 @@ function SavedPostsContent(): React.ReactElement {
             Sync
           </Button>
         </div>
+      </div>
+
+      <div className="mb-3 p-2 rounded-md border bg-muted/20 text-xs">
+        {analyticsLoading || !analytics ? (
+          <span className="text-muted-foreground">Loading analytics...</span>
+        ) : (
+          <div className="flex items-center gap-4 flex-wrap">
+            <span>Total: {analytics.total}</span>
+            <span>Viewed: {analytics.viewed}</span>
+            <span>Unviewed: {analytics.unviewed}</span>
+            <span>Viewed Rate: {(analytics.viewed_rate * 100).toFixed(1)}%</span>
+            <span className="text-muted-foreground">
+              7d trend: {analytics.trend.map((point) => `${point.day.slice(5)} ${point.viewed_count}`).join(' | ') || 'No viewed activity'}
+            </span>
+          </div>
+        )}
       </div>
 
       {!dismissedStale && (
@@ -357,12 +452,17 @@ function SavedPostsContent(): React.ReactElement {
                   </div>
                   <button
                     onClick={() => {
+                      if (post.viewed_at === null) {
+                        setPostViewed(post.post_id, true)
+                      }
                       const url = post.source === 'reddit' ? `https://reddit.com${post.permalink}` : post.url
                       window.api.invoke('shell:openExternal', url).catch((err) => {
                         toast.error(err instanceof Error ? err.message : 'Failed to open link.')
                       })
                     }}
-                    className="text-sm font-medium text-left hover:text-primary transition-colors line-clamp-2 w-full"
+                    className={`text-sm font-medium text-left hover:text-primary transition-colors line-clamp-2 w-full ${
+                      post.viewed_at ? 'text-foreground/70' : ''
+                    }`}
                   >
                     {post.title}
                   </button>
@@ -379,6 +479,14 @@ function SavedPostsContent(): React.ReactElement {
                     />
                   </div>
                 </div>
+                <button
+                  onClick={() => setPostViewed(post.post_id, post.viewed_at === null)}
+                  className="mt-0.5 p-1 rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                  aria-label={post.viewed_at ? 'Mark post as unviewed' : 'Mark post as viewed'}
+                  title={post.viewed_at ? 'Viewed - click to mark unviewed' : 'Unviewed - click to mark viewed'}
+                >
+                  {post.viewed_at ? <CircleCheck className="h-4 w-4 text-emerald-400" /> : <Circle className="h-4 w-4" />}
+                </button>
               </div>
             ))}
 

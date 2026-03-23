@@ -11,6 +11,7 @@ interface UseSavedPostsOptions {
   tag?: string | null
   tag_filter?: string[] | null
   source_filter?: LinkSource[] | null
+  hide_viewed?: boolean
   sort_by?: 'saved_at' | 'score'
   sort_dir?: 'asc' | 'desc'
 }
@@ -48,6 +49,7 @@ export function useSavedPosts(options?: UseSavedPostsOptions): UseSavedPostsResu
   const sortBy = options?.sort_by ?? 'saved_at'
   const sortDir = options?.sort_dir ?? 'desc'
   const limit = options?.limit ?? 50
+  const hideViewed = options?.hide_viewed ?? false
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -80,6 +82,8 @@ export function useSavedPosts(options?: UseSavedPostsOptions): UseSavedPostsResu
         request.source_filter = sourceFilter
       }
 
+      request.hide_viewed = hideViewed
+
       const result = (await window.api.invoke(IPC.REDDIT_GET_SAVED_POSTS, request)) as {
         posts: SavedPost[]
         total: number
@@ -91,7 +95,19 @@ export function useSavedPosts(options?: UseSavedPostsOptions): UseSavedPostsResu
     } finally {
       setLoading(false)
     }
-  }, [search, subreddit, subredditFilter, tag, tagFilter, sourceFilter, sortBy, sortDir, limit, offset])
+  }, [
+    hideViewed,
+    limit,
+    offset,
+    search,
+    sortBy,
+    sortDir,
+    sourceFilter,
+    subreddit,
+    subredditFilter,
+    tag,
+    tagFilter
+  ])
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
@@ -109,6 +125,13 @@ export function useSavedPosts(options?: UseSavedPostsOptions): UseSavedPostsResu
       void fetchPosts()
     }
     return window.api.on(IPC.REDDIT_NTFY_INGEST_COMPLETE, listener)
+  }, [fetchPosts])
+
+  useEffect(() => {
+    const listener = (): void => {
+      void fetchPosts()
+    }
+    return window.api.on(IPC.REDDIT_UPDATED, listener)
   }, [fetchPosts])
 
   return {

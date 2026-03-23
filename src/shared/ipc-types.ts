@@ -15,8 +15,15 @@ export const IPC = {
   YOUTUBE_UPDATED: 'youtube:updated',
   REDDIT_GET_DIGEST_POSTS: 'reddit:getDigestPosts',
   REDDIT_GET_DIGEST_WEEKS: 'reddit:getDigestWeeks',
+  REDDIT_SET_DIGEST_POST_VIEWED: 'reddit:setDigestPostViewed',
+  REDDIT_BULK_SET_DIGEST_VIEWED: 'reddit:bulkSetDigestViewed',
+  REDDIT_GET_DIGEST_VIEWED_ANALYTICS: 'reddit:getDigestViewedAnalytics',
+  REDDIT_DIGEST_VIEWED_CHANGED: 'reddit:digestViewedChanged',
   REDDIT_GET_SAVED_POSTS_SUMMARY: 'reddit:getSavedPostsSummary',
   REDDIT_GET_SAVED_POSTS: 'reddit:getSavedPosts',
+  REDDIT_SET_SAVED_POST_VIEWED: 'reddit:setSavedPostViewed',
+  REDDIT_BULK_SET_SAVED_VIEWED: 'reddit:bulkSetSavedViewed',
+  REDDIT_GET_SAVED_VIEWED_ANALYTICS: 'reddit:getSavedViewedAnalytics',
   REDDIT_PRUNE_DIGEST_POSTS: 'reddit:pruneDigestPosts',
   REDDIT_UPDATE_POST_TAGS: 'reddit:updatePostTags',
   REDDIT_GET_ALL_TAGS: 'reddit:getAllTags',
@@ -132,6 +139,7 @@ export interface DigestPost {
   num_comments: number | null
   created_utc: number
   fetched_at: number
+  viewed_at: number | null
 }
 
 export interface DigestWeekSummary {
@@ -141,6 +149,22 @@ export interface DigestWeekSummary {
 
 export interface RedditDigestPostsRequest {
   week_start_date?: string | null
+  hide_viewed?: boolean
+}
+
+export interface RedditDigestBulkSetViewedRequest {
+  viewed: boolean
+  week_start_date?: string | null
+  week_start_dates?: string[]
+  subreddit_filter?: string[]
+  search?: string
+}
+
+export interface RedditDigestViewedAnalyticsRequest {
+  week_start_date?: string | null
+  week_start_dates?: string[]
+  subreddit_filter?: string[]
+  search?: string
 }
 
 export interface PruneDigestOptions {
@@ -353,8 +377,43 @@ export interface SavedPost {
   body: string | null
   source: LinkSource
   saved_at: number
+  viewed_at: number | null
   note: string | null
   tags: string[]
+}
+
+export interface SavedPostsBulkSetViewedRequest {
+  viewed: boolean
+  search?: string
+  subreddit_filter?: string[]
+  tag_filter?: string[]
+  source_filter?: LinkSource[]
+}
+
+export interface SavedPostsViewedAnalyticsRequest {
+  search?: string
+  subreddit_filter?: string[]
+  tag_filter?: string[]
+  source_filter?: LinkSource[]
+}
+
+export interface ViewedTrendPoint {
+  day: string
+  viewed_count: number
+}
+
+export interface ViewedAnalytics {
+  total: number
+  viewed: number
+  unviewed: number
+  viewed_rate: number
+  trend: ViewedTrendPoint[]
+}
+
+export interface DigestViewedChangedEvent {
+  post_id: string
+  week_start_date: string
+  viewed_at: number | null
 }
 
 export interface SavedPostInput {
@@ -397,6 +456,7 @@ export interface DigestViewConfig {
   week_range_count: number
   selected_week: string | null
   max_posts_per_group: number
+  hide_viewed: boolean
 }
 
 export interface SavedPostsViewConfig {
@@ -419,6 +479,7 @@ export interface SavedPostsViewConfig {
   cardDensity: 'compact' | 'detailed'
   showBodyPreview: boolean
   showViewAllLink: boolean
+  hideViewed: boolean
 }
 
 export interface GetSavedPostsRequest {
@@ -426,6 +487,7 @@ export interface GetSavedPostsRequest {
   subreddit_filter?: string[]
   tag_filter?: string[]
   source_filter?: LinkSource[]
+  hide_viewed?: boolean
   sort_by?: 'saved_at' | 'score'
   sort_dir?: 'asc' | 'desc'
   limit?: number

@@ -38,6 +38,7 @@ import {
 import { ScrollArea } from '../../components/ui/scroll-area'
 import { Separator } from '../../components/ui/separator'
 import { Button } from '../../components/ui/button'
+import { Switch } from '../../components/ui/switch'
 import { cn } from '../../lib/utils'
 import { useWidgetInstance } from '../../contexts/WidgetInstanceContext'
 import type { DigestViewConfig, DigestWeekSummary } from '../../../../shared/ipc-types'
@@ -545,6 +546,19 @@ export function RedditDigestSettingsPanel({
                 <p className="text-xs text-muted-foreground mt-1.5">
                   Controls how many posts show before pagination appears.
                 </p>
+              </div>
+
+              <div className="flex items-center justify-between gap-4 rounded border px-3 py-2">
+                <div>
+                  <p className="text-sm">Hide viewed posts</p>
+                  <p className="text-xs text-muted-foreground">
+                    Show only unread digest posts in this widget.
+                  </p>
+                </div>
+                <Switch
+                  checked={draft.hide_viewed}
+                  onCheckedChange={(checked) => updateConfig({ hide_viewed: checked })}
+                />
               </div>
             </div>
           </div>

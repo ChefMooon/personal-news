@@ -267,7 +267,8 @@ function parseRedditDigestPayload(stdout: string): DigestPost[] {
       score: typeof post.score === 'number' ? post.score : null,
       num_comments: typeof post.num_comments === 'number' ? post.num_comments : null,
       created_utc: post.created_utc,
-      fetched_at: post.fetched_at
+      fetched_at: post.fetched_at,
+      viewed_at: post.viewed_at ?? null
     }
   })
 }

@@ -12,7 +12,7 @@ import { SavedPostsSettingsPanel } from './SavedPostsSettingsPanel'
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card'
 import { Badge } from '../../components/ui/badge'
 import { Button } from '../../components/ui/button'
-import { Bookmark, ArrowUp, Clock, Settings2, RotateCcw, RefreshCcw, X } from 'lucide-react'
+import { Bookmark, ArrowUp, Clock, Settings2, RotateCcw, RefreshCcw, X, Circle, CircleCheck } from 'lucide-react'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -46,22 +46,28 @@ function formatAuthor(post: SavedPost): string | null {
 function PostCard({
   post,
   config,
-  onOpen
+  onOpen,
+  onToggleViewed
 }: {
   post: SavedPost
   config: { showMetadata: boolean; showSourceBadge: boolean; showUrl: boolean; showBodyPreview: boolean; cardDensity: 'compact' | 'detailed' }
   onOpen: (post: SavedPost) => void
+  onToggleViewed: (post: SavedPost, viewed: boolean) => void
 }): React.ReactElement {
   const author = formatAuthor(post)
+  const isViewed = post.viewed_at !== null
   return (
-    <button
-      onClick={() => onOpen(post)}
+    <div
       className={
         config.cardDensity === 'compact'
-          ? 'flex items-start gap-2 py-1 w-full text-left hover:opacity-75 transition-opacity'
-          : 'flex flex-col gap-1.5 py-2 px-2 rounded bg-muted/30 w-full text-left hover:bg-muted/50 transition-colors'
+          ? 'flex items-start gap-2 py-1 w-full'
+          : 'flex items-start gap-2 py-2 px-2 rounded bg-muted/30 w-full hover:bg-muted/50 transition-colors'
       }
     >
+      <button
+        onClick={() => onOpen(post)}
+        className="flex-1 text-left hover:opacity-80 transition-opacity"
+      >
       <div className="flex items-center gap-1.5 flex-wrap">
         {config.showSourceBadge && (
           <Badge variant="outline" className="text-xs shrink-0">
@@ -80,8 +86,8 @@ function PostCard({
       <div
         className={
           config.cardDensity === 'compact'
-            ? 'text-sm font-medium line-clamp-2 flex-1'
-            : 'text-sm font-medium'
+            ? `text-sm font-medium line-clamp-2 flex-1 ${isViewed ? 'text-foreground/70' : ''}`
+            : `text-sm font-medium ${isViewed ? 'text-foreground/70' : ''}`
         }
       >
         {post.title}
@@ -104,7 +110,16 @@ function PostCard({
           <span>{formatRelativeTime(post.saved_at)}</span>
         </div>
       </div>
-    </button>
+      </button>
+      <button
+        onClick={() => onToggleViewed(post, !isViewed)}
+        className="mt-0.5 p-1 rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+        aria-label={isViewed ? 'Mark post as unviewed' : 'Mark post as viewed'}
+        title={isViewed ? 'Viewed - click to mark unviewed' : 'Unviewed - click to mark viewed'}
+      >
+        {isViewed ? <CircleCheck className="h-4 w-4 text-emerald-400" /> : <Circle className="h-4 w-4" />}
+      </button>
+    </div>
   )
 }
 
@@ -129,6 +144,7 @@ function SavedPostsWidget(): React.ReactElement {
     subreddit_filter: config.subreddit_filter,
     tag_filter: config.tag_filter,
     source_filter: config.source_filter,
+    hide_viewed: config.hideViewed,
     sort_by: config.sort_by,
     sort_dir: config.sort_dir
   })
@@ -246,10 +262,33 @@ function SavedPostsWidget(): React.ReactElement {
   }
 
   const handleOpenExternal = (post: SavedPost): void => {
+    if (post.viewed_at === null) {
+      window.api.invoke(IPC.REDDIT_SET_SAVED_POST_VIEWED, post.post_id, true).then(() => {
+        void refetch()
+      }).catch((err) => {
+        toast.error(err instanceof Error ? err.message : 'Failed to update viewed state.')
+      })
+    }
     const url = post.source === 'reddit' ? `https://reddit.com${post.permalink}` : post.url
     window.api.invoke('shell:openExternal', url).catch((err) => {
       toast.error(err instanceof Error ? err.message : 'Failed to open saved post link.')
     })
+  }
+
+  const handleToggleViewed = (post: SavedPost, viewed: boolean): void => {
+    window.api
+      .invoke(IPC.REDDIT_SET_SAVED_POST_VIEWED, post.post_id, viewed)
+      .then((result) => {
+        const payload = result as { ok: boolean; error: string | null }
+        if (!payload.ok) {
+          toast.error(payload.error ?? 'Failed to update viewed state.')
+          return
+        }
+        void refetch()
+      })
+      .catch((err) => {
+        toast.error(err instanceof Error ? err.message : 'Failed to update viewed state.')
+      })
   }
 
   function handleOpenEdit(): void {
@@ -296,6 +335,7 @@ function SavedPostsWidget(): React.ReactElement {
           post={post}
           config={cardConfig}
           onOpen={handleOpenExternal}
+          onToggleViewed={handleToggleViewed}
         />
       ))}
     </div>
