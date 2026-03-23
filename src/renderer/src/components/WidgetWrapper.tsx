@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { GripVertical, Eye, EyeOff, Trash2, Pencil, ChevronUp, ChevronDown } from 'lucide-react'
+import { WidgetErrorBoundary } from './WidgetErrorBoundary'
 
 interface WidgetWrapperProps {
   id: string
@@ -152,7 +153,14 @@ export function WidgetWrapper({
           <span className="text-sm">Widget hidden — click the eye icon above to show it again.</span>
         </div>
       ) : (
-        visible && children
+        visible && (
+          <WidgetErrorBoundary
+            widgetTitle={label ?? defaultLabel}
+            instanceId={id}
+          >
+            {children}
+          </WidgetErrorBoundary>
+        )
       )}
     </div>
   )
