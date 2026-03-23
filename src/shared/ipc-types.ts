@@ -9,6 +9,8 @@ export const IPC = {
   YOUTUBE_REMOVE_CHANNEL: 'youtube:removeChannel',
   YOUTUBE_POLL_NOW: 'youtube:pollNow',
   YOUTUBE_CLEAR_VIDEOS_CACHE: 'youtube:clearVideosCache',
+  YOUTUBE_SET_VIDEO_WATCHED: 'youtube:setVideoWatched',
+  YOUTUBE_MARK_CHANNEL_WATCHED: 'youtube:markChannelWatched',
   YOUTUBE_UPDATED: 'youtube:updated',
   REDDIT_GET_DIGEST_POSTS: 'reddit:getDigestPosts',
   REDDIT_GET_DIGEST_WEEKS: 'reddit:getDigestWeeks',
@@ -75,6 +77,7 @@ export interface YtVideo {
   broadcast_status: 'none' | 'upcoming' | 'live' | null
   scheduled_start: number | null
   fetched_at: number
+  watched_at: number | null
 }
 
 export interface YouTubeVideosFilterOptions {
@@ -82,6 +85,7 @@ export interface YouTubeVideosFilterOptions {
   mediaTypes?: MediaType[]
   search?: string
   sortDir?: 'asc' | 'desc'
+  hideWatched?: boolean
   limit?: number
   offset?: number
 }
@@ -265,6 +269,7 @@ export interface YouTubeViewConfig {
   cardDensity: 'compact' | 'detailed'
   showChannelHeaders: boolean
   collapseChannelsByDefault: boolean
+  hideWatched: boolean
   // Per-channel media type overrides
   perChannelMediaOverrides: Record<string, Partial<ChannelMediaOverrides>>
 }

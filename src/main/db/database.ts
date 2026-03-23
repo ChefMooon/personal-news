@@ -38,7 +38,8 @@ function runMigrations(database: Database.Database): void {
     9: '009_add_script_description.sql',
     10: '010_add_script_notifications.sql',
     11: '011_remove_reddit_digest_seed.sql',
-    12: '012_reddit_digest_weekly_snapshot.sql'
+    12: '012_reddit_digest_weekly_snapshot.sql',
+    13: '013_add_yt_video_watched.sql'
   }
 
   // Ensure meta table exists first

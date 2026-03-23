@@ -8,6 +8,7 @@ interface UseYouTubeVideosFilteredOptions {
   mediaTypes?: MediaType[]
   search?: string
   sortDir?: 'asc' | 'desc'
+  hideWatched?: boolean
 }
 
 interface UseYouTubeVideosFilteredResult {
@@ -24,6 +25,8 @@ interface UseYouTubeVideosFilteredResult {
   setSearch: (search: string) => void
   sortDir: 'asc' | 'desc'
   setSortDir: (sortDir: 'asc' | 'desc') => void
+  hideWatched: boolean
+  setHideWatched: (hideWatched: boolean) => void
   offset: number
   setOffset: (offset: number) => void
 }
@@ -40,6 +43,7 @@ export function useYouTubeVideosFiltered(
   const [mediaTypes, setMediaTypes] = useState<MediaType[]>(options.mediaTypes ?? [])
   const [search, setSearch] = useState(options.search ?? '')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>(options.sortDir ?? 'desc')
+  const [hideWatched, setHideWatched] = useState(options.hideWatched ?? false)
   const [offset, setOffset] = useState(options.offset ?? 0)
   const limit = options.limit ?? 50
 
@@ -52,6 +56,7 @@ export function useYouTubeVideosFiltered(
         mediaTypes,
         search,
         sortDir,
+        hideWatched,
         limit,
         offset
       })) as YouTubeVideosFilterResult
@@ -65,7 +70,7 @@ export function useYouTubeVideosFiltered(
     } finally {
       setLoading(false)
     }
-  }, [channelId, limit, mediaTypes, offset, search, sortDir])
+  }, [channelId, hideWatched, limit, mediaTypes, offset, search, sortDir])
 
   useEffect(() => {
     void fetch()
@@ -92,6 +97,8 @@ export function useYouTubeVideosFiltered(
     setSearch,
     sortDir,
     setSortDir,
+    hideWatched,
+    setHideWatched,
     offset,
     setOffset
   }

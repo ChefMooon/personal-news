@@ -15,10 +15,11 @@ import { useYouTubeVideosFiltered } from '../hooks/useYouTubeVideosFiltered'
 import { StreamPanel } from '../modules/youtube/StreamPanel'
 import { VideoCard } from '../modules/youtube/VideoCard'
 import { VideoCarousel } from '../modules/youtube/VideoCarousel'
-import { RefreshCw, Search, Youtube } from 'lucide-react'
+import { CheckCheck, RefreshCw, Search, Youtube } from 'lucide-react'
 
 const YOUTUBE_PAGE_VIEW_MODE_KEY = 'youtube_page_view_mode'
 const YOUTUBE_PAGE_DENSITY_KEY = 'youtube_page_density_by_mode'
+const YOUTUBE_PAGE_HIDE_WATCHED_KEY = 'youtube_page_hide_watched'
 const FLAT_PAGE_SIZE = 50
 
 type PageViewMode = 'flat' | 'carousel' | 'grouped'
@@ -75,9 +76,13 @@ function matchesSearch(video: YtVideo, searchQuery: string): boolean {
 function filterVideos(
   videos: YtVideo[],
   searchQuery: string,
-  selectedMediaTypes: Set<MediaType>
+  selectedMediaTypes: Set<MediaType>,
+  hideWatched: boolean
 ): YtVideo[] {
   return videos.filter((video) => {
+    if (hideWatched && video.watched_at != null) {
+      return false
+    }
     return matchesMediaTypes(video, selectedMediaTypes) && matchesSearch(video, searchQuery)
   })
 }
@@ -95,19 +100,28 @@ function ChannelCarouselSection({
   selectedMediaTypes,
   searchQuery,
   sortDir,
-  density
+  density,
+  hideWatched
 }: {
   channel: YtChannel
   selectedMediaTypes: Set<MediaType>
   searchQuery: string
   sortDir: 'asc' | 'desc'
   density: CardDensity
+  hideWatched: boolean
 }): React.ReactElement | null {
   const { videos, loading } = useYouTubeVideos(channel.channel_id)
 
+  const watchedCount = videos.filter((video) => video.watched_at != null).length
+  const totalCount = videos.length
+
+  const handleMarkAllWatched = (): void => {
+    window.api.invoke(IPC.YOUTUBE_MARK_CHANNEL_WATCHED, channel.channel_id).catch(console.error)
+  }
+
   const filteredVideos = useMemo(
-    () => filterVideos(videos, searchQuery, selectedMediaTypes),
-    [videos, searchQuery, selectedMediaTypes]
+    () => filterVideos(videos, searchQuery, selectedMediaTypes, hideWatched),
+    [hideWatched, videos, searchQuery, selectedMediaTypes]
   )
 
   const streams = filteredVideos.filter(
@@ -135,6 +149,18 @@ function ChannelCarouselSection({
           />
         ) : null}
         <h2 className="text-sm font-semibold">{channel.name}</h2>
+        <span className="text-xs text-muted-foreground">{watchedCount}/{totalCount} watched</span>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="ml-auto h-7 px-2"
+          onClick={handleMarkAllWatched}
+          title="Mark all videos in this channel as watched"
+        >
+          <CheckCheck className="mr-1 h-3.5 w-3.5" />
+          Mark all
+        </Button>
       </div>
 
       {loading ? (
@@ -161,21 +187,30 @@ function ChannelGroupedSection({
   selectedMediaTypes,
   searchQuery,
   sortDir,
-  density
+  density,
+  hideWatched
 }: {
   channel: YtChannel
   selectedMediaTypes: Set<MediaType>
   searchQuery: string
   sortDir: 'asc' | 'desc'
   density: CardDensity
+  hideWatched: boolean
 }): React.ReactElement | null {
   const { videos, loading } = useYouTubeVideos(channel.channel_id)
 
+  const watchedCount = videos.filter((video) => video.watched_at != null).length
+  const totalCount = videos.length
+
+  const handleMarkAllWatched = (): void => {
+    window.api.invoke(IPC.YOUTUBE_MARK_CHANNEL_WATCHED, channel.channel_id).catch(console.error)
+  }
+
   const filteredVideos = useMemo(() => {
-    const base = filterVideos(videos, searchQuery, selectedMediaTypes)
+    const base = filterVideos(videos, searchQuery, selectedMediaTypes, hideWatched)
     const sorted = [...base].sort((a, b) => a.published_at - b.published_at)
     return sortDir === 'asc' ? sorted : sorted.reverse()
-  }, [videos, searchQuery, selectedMediaTypes, sortDir])
+  }, [videos, searchQuery, selectedMediaTypes, hideWatched, sortDir])
 
   if (!loading && filteredVideos.length === 0) {
     return null
@@ -195,6 +230,18 @@ function ChannelGroupedSection({
           />
         ) : null}
         <h2 className="text-sm font-semibold">{channel.name}</h2>
+        <span className="text-xs text-muted-foreground">{watchedCount}/{totalCount} watched</span>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="ml-auto h-7 px-2"
+          onClick={handleMarkAllWatched}
+          title="Mark all videos in this channel as watched"
+        >
+          <CheckCheck className="mr-1 h-3.5 w-3.5" />
+          Mark all
+        </Button>
       </div>
 
       {loading ? (
@@ -230,11 +277,14 @@ export default function YouTubePage(): React.ReactElement {
     setSearch,
     sortDir,
     setSortDir,
+    hideWatched,
+    setHideWatched,
     offset,
     setOffset
   } = useYouTubeVideosFiltered({
     limit: FLAT_PAGE_SIZE,
-    sortDir: 'desc'
+    sortDir: 'desc',
+    hideWatched: false
   })
 
   const enabledChannels = useMemo(
@@ -295,6 +345,21 @@ export default function YouTubePage(): React.ReactElement {
       .invoke(IPC.SETTINGS_SET, YOUTUBE_PAGE_DENSITY_KEY, JSON.stringify(densityByMode))
       .catch(console.error)
   }, [densityByMode])
+
+  useEffect(() => {
+    window.api
+      .invoke(IPC.SETTINGS_GET, YOUTUBE_PAGE_HIDE_WATCHED_KEY)
+      .then((saved) => {
+        setHideWatched(saved === 'true')
+      })
+      .catch(console.error)
+  }, [setHideWatched])
+
+  useEffect(() => {
+    window.api
+      .invoke(IPC.SETTINGS_SET, YOUTUBE_PAGE_HIDE_WATCHED_KEY, hideWatched ? 'true' : 'false')
+      .catch(console.error)
+  }, [hideWatched])
 
   const hasMore = offset + FLAT_PAGE_SIZE < total
 
@@ -430,6 +495,17 @@ export default function YouTubePage(): React.ReactElement {
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant={hideWatched ? 'default' : 'outline'}
+          onClick={() => {
+            setHideWatched(!hideWatched)
+            setOffset(0)
+          }}
+        >
+          Hide watched
+        </Button>
         {MEDIA_TYPE_OPTIONS.map((option) => {
           const selected = selectedMediaTypeSet.has(option.id)
           return (
@@ -497,6 +573,7 @@ export default function YouTubePage(): React.ReactElement {
                 searchQuery={search}
                 sortDir={sortDir}
                 density={densityByMode.carousel}
+                hideWatched={hideWatched}
               />
             ))}
           </div>
@@ -515,6 +592,7 @@ export default function YouTubePage(): React.ReactElement {
                 searchQuery={search}
                 sortDir={sortDir}
                 density={densityByMode.grouped}
+                hideWatched={hideWatched}
               />
             ))}
           </div>

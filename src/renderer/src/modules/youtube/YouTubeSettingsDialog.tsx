@@ -468,6 +468,14 @@ export function YouTubeSettingsDialog({
             <div>
               <SectionHeader title="Content Filters" />
               <div className="space-y-0.5">
+                <SettingRow label="Hide watched videos">
+                  <Switch
+                    checked={draft.hideWatched}
+                    onCheckedChange={(value) =>
+                      setDraft((p) => ({ ...p, hideWatched: value }))
+                    }
+                  />
+                </SettingRow>
                 {GLOBAL_MEDIA_FILTERS.map(({ key, label }) => (
                   <SettingRow key={key} label={label}>
                     <Switch

@@ -129,6 +129,7 @@ const DEFAULT_YOUTUBE_VIEW_CONFIG: YouTubeViewConfig = {
   cardDensity: 'detailed',
   showChannelHeaders: true,
   collapseChannelsByDefault: false,
+  hideWatched: false,
   perChannelMediaOverrides: {}
 }
 
@@ -756,7 +757,7 @@ function computeIsStale(
 function normalizeYouTubeVideosFilterOptions(
   options: YouTubeVideosFilterOptions | undefined
 ): Required<Pick<YouTubeVideosFilterOptions, 'sortDir' | 'limit' | 'offset'>> &
-  Pick<YouTubeVideosFilterOptions, 'channelId' | 'search'> & { mediaTypes: MediaType[] } {
+  Pick<YouTubeVideosFilterOptions, 'channelId' | 'search' | 'hideWatched'> & { mediaTypes: MediaType[] } {
   const validMediaTypes = new Set<MediaType>(['video', 'short', 'upcoming_stream', 'live'])
   const normalizedMediaTypes = Array.isArray(options?.mediaTypes)
     ? options.mediaTypes.filter((mediaType): mediaType is MediaType => validMediaTypes.has(mediaType))
@@ -769,6 +770,7 @@ function normalizeYouTubeVideosFilterOptions(
   return {
     channelId: options?.channelId?.trim() || undefined,
     search: options?.search?.trim() || undefined,
+    hideWatched: options?.hideWatched === true,
     mediaTypes: normalizedMediaTypes,
     sortDir: rawSortDir,
     limit: Math.min(Math.max(rawLimit, 1), 200),
@@ -834,6 +836,10 @@ export function registerIpcHandlers(): void {
       if (normalized.search) {
         whereClauses.push('LOWER(title) LIKE ?')
         whereParams.push(`%${normalized.search.toLowerCase()}%`)
+      }
+
+      if (normalized.hideWatched) {
+        whereClauses.push('watched_at IS NULL')
       }
 
       const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : ''
@@ -958,6 +964,37 @@ export function registerIpcHandlers(): void {
     emitYoutubeUpdated()
     return { ok: true, error: null, deletedCount: result.changes }
   })
+
+  // youtube:setVideoWatched
+  ipcMain.handle(
+    IPC.YOUTUBE_SET_VIDEO_WATCHED,
+    (_event, videoId: string, watched: boolean): IpcMutationResult => {
+      const db = getDb()
+      const watchedAt = watched ? Math.floor(Date.now() / 1000) : null
+      const result = db
+        .prepare('UPDATE yt_videos SET watched_at = ? WHERE video_id = ?')
+        .run(watchedAt, videoId)
+      if (result.changes === 0) {
+        return { ok: false, error: 'Video not found.' }
+      }
+      return { ok: true, error: null }
+    }
+  )
+
+  // youtube:markChannelWatched
+  ipcMain.handle(
+    IPC.YOUTUBE_MARK_CHANNEL_WATCHED,
+    (_event, channelId: string): IpcMutationResult => {
+      const db = getDb()
+      const watchedAt = Math.floor(Date.now() / 1000)
+      db.prepare('UPDATE yt_videos SET watched_at = ? WHERE channel_id = ? AND watched_at IS NULL').run(
+        watchedAt,
+        channelId
+      )
+      emitYoutubeUpdated()
+      return { ok: true, error: null }
+    }
+  )
 
   // reddit:getDigestPosts
   ipcMain.handle(IPC.REDDIT_GET_DIGEST_POSTS, (_event, options?: RedditDigestPostsRequest): DigestPost[] => {

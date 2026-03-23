@@ -17,6 +17,7 @@ export const DEFAULT_YOUTUBE_VIEW_CONFIG: YouTubeViewConfig = {
   cardDensity: 'detailed',
   showChannelHeaders: true,
   collapseChannelsByDefault: false,
+  hideWatched: false,
   perChannelMediaOverrides: {}
 }
 
