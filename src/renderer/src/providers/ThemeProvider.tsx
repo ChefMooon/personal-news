@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
+import { toast } from 'sonner'
 import type { ThemeInfo } from '../../../shared/ipc-types'
 
 interface ThemeContextValue {
@@ -53,7 +54,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }): Reac
         setThemeState(themeInfo)
         applyTheme(themeInfo)
       })
-      .catch(console.error)
+      .catch((err) => {
+        toast.error(err instanceof Error ? err.message : 'Failed to load theme preference.')
+      })
   }, [])
 
   // Watch system preference changes when using 'system' theme

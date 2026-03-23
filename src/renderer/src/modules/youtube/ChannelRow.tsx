@@ -1,4 +1,5 @@
 import React from 'react'
+import { toast } from 'sonner'
 import { CheckCheck, ChevronDown, ChevronRight } from 'lucide-react'
 import { IPC, type YtChannel, type YtVideo, type YouTubeViewConfig } from '../../../../shared/ipc-types'
 import { useYouTubeVideos } from '../../hooks/useYouTubeVideos'
@@ -54,7 +55,9 @@ export function ChannelRow({
 
   const handleMarkAllWatched = (e: React.MouseEvent<HTMLButtonElement>): void => {
     e.stopPropagation()
-    window.api.invoke(IPC.YOUTUBE_MARK_CHANNEL_WATCHED, channel.channel_id).catch(console.error)
+    window.api.invoke(IPC.YOUTUBE_MARK_CHANNEL_WATCHED, channel.channel_id).catch((err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to mark all channel videos as watched.')
+    })
   }
 
   const streams = filteredVideos.filter(

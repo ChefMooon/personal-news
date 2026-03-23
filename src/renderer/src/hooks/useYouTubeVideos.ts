@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { toast } from 'sonner'
 import type { YtVideo } from '../../../shared/ipc-types'
 
 export function useYouTubeVideos(channelId: string): { videos: YtVideo[]; loading: boolean } {
@@ -11,9 +12,13 @@ export function useYouTubeVideos(channelId: string): { videos: YtVideo[]; loadin
       .invoke('youtube:getVideos', channelId)
       .then((data) => {
         setVideos(data as YtVideo[])
+      })
+      .catch((err) => {
+        toast.error(err instanceof Error ? err.message : 'Failed to load YouTube videos.')
+      })
+      .finally(() => {
         setLoading(false)
       })
-      .catch(console.error)
   }, [channelId])
 
   useEffect(() => {

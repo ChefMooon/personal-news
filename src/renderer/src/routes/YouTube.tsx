@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { toast } from 'sonner'
 import { IPC, type MediaType, type YtChannel, type YtVideo } from '../../../shared/ipc-types'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
@@ -116,7 +117,9 @@ function ChannelCarouselSection({
   const totalCount = videos.length
 
   const handleMarkAllWatched = (): void => {
-    window.api.invoke(IPC.YOUTUBE_MARK_CHANNEL_WATCHED, channel.channel_id).catch(console.error)
+    window.api.invoke(IPC.YOUTUBE_MARK_CHANNEL_WATCHED, channel.channel_id).catch((err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to mark channel videos as watched.')
+    })
   }
 
   const filteredVideos = useMemo(
@@ -203,7 +206,9 @@ function ChannelGroupedSection({
   const totalCount = videos.length
 
   const handleMarkAllWatched = (): void => {
-    window.api.invoke(IPC.YOUTUBE_MARK_CHANNEL_WATCHED, channel.channel_id).catch(console.error)
+    window.api.invoke(IPC.YOUTUBE_MARK_CHANNEL_WATCHED, channel.channel_id).catch((err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to mark channel videos as watched.')
+    })
   }
 
   const filteredVideos = useMemo(() => {
@@ -315,7 +320,9 @@ export default function YouTubePage(): React.ReactElement {
           setViewMode(saved)
         }
       })
-      .catch(console.error)
+      .catch((err) => {
+        toast.error(err instanceof Error ? err.message : 'Failed to load YouTube page view mode.')
+      })
   }, [])
 
   useEffect(() => {
@@ -333,17 +340,23 @@ export default function YouTubePage(): React.ReactElement {
           grouped: parsed.grouped === 'compact' ? 'compact' : 'detailed'
         })
       })
-      .catch(console.error)
+      .catch((err) => {
+        toast.error(err instanceof Error ? err.message : 'Failed to load YouTube card density preference.')
+      })
   }, [])
 
   useEffect(() => {
-    window.api.invoke(IPC.SETTINGS_SET, YOUTUBE_PAGE_VIEW_MODE_KEY, viewMode).catch(console.error)
+    window.api.invoke(IPC.SETTINGS_SET, YOUTUBE_PAGE_VIEW_MODE_KEY, viewMode).catch((err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to save YouTube page view mode.')
+    })
   }, [viewMode])
 
   useEffect(() => {
     window.api
       .invoke(IPC.SETTINGS_SET, YOUTUBE_PAGE_DENSITY_KEY, JSON.stringify(densityByMode))
-      .catch(console.error)
+      .catch((err) => {
+        toast.error(err instanceof Error ? err.message : 'Failed to save YouTube card density preference.')
+      })
   }, [densityByMode])
 
   useEffect(() => {
@@ -352,13 +365,17 @@ export default function YouTubePage(): React.ReactElement {
       .then((saved) => {
         setHideWatched(saved === 'true')
       })
-      .catch(console.error)
+      .catch((err) => {
+        toast.error(err instanceof Error ? err.message : 'Failed to load hide-watched preference.')
+      })
   }, [setHideWatched])
 
   useEffect(() => {
     window.api
       .invoke(IPC.SETTINGS_SET, YOUTUBE_PAGE_HIDE_WATCHED_KEY, hideWatched ? 'true' : 'false')
-      .catch(console.error)
+      .catch((err) => {
+        toast.error(err instanceof Error ? err.message : 'Failed to save hide-watched preference.')
+      })
   }, [hideWatched])
 
   const hasMore = offset + FLAT_PAGE_SIZE < total
@@ -397,8 +414,9 @@ export default function YouTubePage(): React.ReactElement {
     try {
       await window.api.invoke(IPC.YOUTUBE_POLL_NOW)
       await refetch()
+      toast.success('YouTube sync complete.')
     } catch (err) {
-      console.error('YouTube sync failed', err)
+      toast.error(err instanceof Error ? err.message : 'YouTube sync failed.')
     } finally {
       setSyncing(false)
     }

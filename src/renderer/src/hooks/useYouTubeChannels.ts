@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { toast } from 'sonner'
 import type { YtChannel } from '../../../shared/ipc-types'
 
 export function useYouTubeChannels(): { channels: YtChannel[]; loading: boolean } {
@@ -6,13 +7,18 @@ export function useYouTubeChannels(): { channels: YtChannel[]; loading: boolean 
   const [loading, setLoading] = useState(true)
 
   const fetch = useCallback(() => {
+    setLoading(true)
     window.api
       .invoke('youtube:getChannels')
       .then((data) => {
         setChannels(data as YtChannel[])
+      })
+      .catch((err) => {
+        toast.error(err instanceof Error ? err.message : 'Failed to load YouTube channels.')
+      })
+      .finally(() => {
         setLoading(false)
       })
-      .catch(console.error)
   }, [])
 
   useEffect(() => {

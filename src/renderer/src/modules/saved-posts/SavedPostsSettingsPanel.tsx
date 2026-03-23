@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { toast } from 'sonner'
 import { ArrowDown, ArrowUp, Check, ChevronDown, ChevronRight, GripVertical } from 'lucide-react'
 import {
   Select,
@@ -95,7 +96,7 @@ export function SavedPostsSettingsPanel({
       const raw = window.localStorage.getItem(subredditsKey)
       setSubredditsExpanded(raw === 'false' ? false : true)
     } catch (error) {
-      console.error('Failed to load saved posts subreddits panel state', error)
+      toast.error(error instanceof Error ? error.message : 'Failed to load Saved Posts subreddits panel state.')
       setSubredditsExpanded(true)
     } finally {
       setSubredditsExpandedLoaded(true)
@@ -108,7 +109,7 @@ export function SavedPostsSettingsPanel({
     try {
       window.localStorage.setItem(subredditsKey, String(subredditsExpanded))
     } catch (error) {
-      console.error('Failed to persist saved posts subreddits panel state', error)
+      toast.error(error instanceof Error ? error.message : 'Failed to save Saved Posts subreddits panel state.')
     }
   }, [instanceId, subredditsExpanded, subredditsExpandedLoaded, subredditsKey])
 
@@ -123,7 +124,7 @@ export function SavedPostsSettingsPanel({
       const raw = window.localStorage.getItem(tagsKey)
       setTagsExpanded(raw === 'false' ? false : true)
     } catch (error) {
-      console.error('Failed to load saved posts tags panel state', error)
+      toast.error(error instanceof Error ? error.message : 'Failed to load Saved Posts tags panel state.')
       setTagsExpanded(true)
     } finally {
       setTagsExpandedLoaded(true)
@@ -136,7 +137,7 @@ export function SavedPostsSettingsPanel({
     try {
       window.localStorage.setItem(tagsKey, String(tagsExpanded))
     } catch (error) {
-      console.error('Failed to persist saved posts tags panel state', error)
+      toast.error(error instanceof Error ? error.message : 'Failed to save Saved Posts tags panel state.')
     }
   }, [instanceId, tagsExpanded, tagsExpandedLoaded, tagsKey])
 

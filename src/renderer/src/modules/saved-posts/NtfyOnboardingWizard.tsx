@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react'
+import { toast } from 'sonner'
 import { IPC } from '../../../../shared/ipc-types'
 import {
   Dialog,
@@ -38,7 +39,6 @@ export function NtfyOnboardingWizard({
   const [step, setStep] = useState(1)
   const [topic, setTopic] = useState(initialTopic || generateRandomTopic())
   const [serverUrl, setServerUrl] = useState(initialServerUrl || 'https://ntfy.sh')
-  const [testResult, setTestResult] = useState<string | null>(null)
   const [testing, setTesting] = useState(false)
   const [platform, setPlatform] = useState<'ios' | 'android'>('ios')
 
@@ -46,7 +46,6 @@ export function NtfyOnboardingWizard({
 
   const handleClose = (): void => {
     setStep(1)
-    setTestResult(null)
     onClose()
   }
 
@@ -57,13 +56,12 @@ export function NtfyOnboardingWizard({
       handleClose()
       onComplete?.()
     } catch (err) {
-      console.error('Failed to save ntfy settings:', err)
+      toast.error(err instanceof Error ? err.message : 'Failed to save ntfy settings.')
     }
   }
 
   const handleTest = async (): Promise<void> => {
     setTesting(true)
-    setTestResult(null)
     try {
       // Save settings first so the poll uses them
       await window.api.invoke(IPC.SETTINGS_SET, 'ntfy_topic', topic.trim())
@@ -73,14 +71,14 @@ export function NtfyOnboardingWizard({
         messagesReceived: number
       }
       if (result.messagesReceived === 0) {
-        setTestResult(`Connected to ntfy — no messages found. Send a message first, then test again.`)
+        toast.success('Connected to ntfy. No messages were found yet.')
       } else {
-        setTestResult(
-          `Connected — ${result.messagesReceived} ntfy message${result.messagesReceived !== 1 ? 's' : ''} received, ${result.postsIngested} Reddit post${result.postsIngested !== 1 ? 's' : ''} saved.`
+        toast.success(
+          `Connected. Received ${result.messagesReceived} ntfy message${result.messagesReceived !== 1 ? 's' : ''} and saved ${result.postsIngested} Reddit post${result.postsIngested !== 1 ? 's' : ''}.`
         )
       }
-    } catch {
-      setTestResult('Could not reach the ntfy server. Check your topic and server URL.')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to reach the ntfy server. Check your topic and server URL.')
     } finally {
       setTesting(false)
     }
@@ -184,13 +182,6 @@ export function NtfyOnboardingWizard({
             >
               {testing ? 'Testing...' : 'Test Connection'}
             </Button>
-            {testResult && (
-              <p
-                className={`text-xs ${testResult.startsWith('Connected') ? 'text-emerald-600' : 'text-red-600'}`}
-              >
-                {testResult}
-              </p>
-            )}
             <div className="rounded-md bg-muted/50 p-3">
               <p className="text-xs text-muted-foreground mb-2">
                 Send a test message from your terminal:

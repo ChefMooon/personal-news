@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
+import { toast } from 'sonner'
 import { IPC } from '../../../shared/ipc-types'
 
 interface RedditDigestEnabledContextValue {
@@ -26,14 +27,18 @@ export function RedditDigestEnabledProvider({
           setEnabledState(false)
         }
       })
-      .catch(console.error)
+      .catch((err) => {
+        toast.error(err instanceof Error ? err.message : 'Failed to load Reddit Digest feature flag.')
+      })
   }, [])
 
   const setEnabled = (value: boolean): void => {
     setEnabledState(value)
     window.api
       .invoke(IPC.SETTINGS_SET, 'reddit_digest_enabled', String(value))
-      .catch(console.error)
+      .catch((err) => {
+        toast.error(err instanceof Error ? err.message : 'Failed to save Reddit Digest feature flag.')
+      })
   }
 
   return (

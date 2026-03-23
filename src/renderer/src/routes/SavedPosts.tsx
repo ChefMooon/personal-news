@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { toast } from 'sonner'
 import { IPC } from '../../../shared/ipc-types'
 import type { SavedPost, LinkSource } from '../../../shared/ipc-types'
 import { useSavedPosts } from '../hooks/useSavedPosts'
@@ -140,7 +141,9 @@ export default function SavedPosts(): React.ReactElement {
     window.api
       .invoke(IPC.REDDIT_GET_ALL_TAGS)
       .then((result) => setAllTags(result as string[]))
-      .catch(console.error)
+      .catch((err) => {
+        toast.error(err instanceof Error ? err.message : 'Failed to load tags.')
+      })
   }, [posts])
 
   useEffect(() => {
@@ -159,8 +162,9 @@ export default function SavedPosts(): React.ReactElement {
       await refetch()
       staleness.refetch()
       setDismissedStale(true)
+      toast.success('Saved Posts sync completed.')
     } catch (err) {
-      console.error('Sync failed:', err)
+      toast.error(err instanceof Error ? err.message : 'Failed to sync Saved Posts. Check your ntfy settings.')
     } finally {
       setSyncing(false)
     }
@@ -327,7 +331,9 @@ export default function SavedPosts(): React.ReactElement {
                   <button
                     onClick={() => {
                       const url = post.source === 'reddit' ? `https://reddit.com${post.permalink}` : post.url
-                      window.api.invoke('shell:openExternal', url).catch(console.error)
+                      window.api.invoke('shell:openExternal', url).catch((err) => {
+                        toast.error(err instanceof Error ? err.message : 'Failed to open link.')
+                      })
                     }}
                     className="text-sm font-medium text-left hover:text-primary transition-colors line-clamp-2 w-full"
                   >

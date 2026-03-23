@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { toast } from 'sonner'
 import { IPC } from '../../../../shared/ipc-types'
 import {
   Dialog,
@@ -40,7 +41,9 @@ export function TagManagementModal({
     window.api
       .invoke(IPC.REDDIT_GET_ALL_TAGS)
       .then((result) => setTags(result as string[]))
-      .catch(console.error)
+      .catch((err) => {
+        toast.error(err instanceof Error ? err.message : 'Failed to load tags.')
+      })
   }
 
   useEffect(() => {
@@ -56,8 +59,9 @@ export function TagManagementModal({
       setEditValue('')
       fetchTags()
       onTagUpdated()
+      toast.success('Tag renamed.')
     } catch (err) {
-      console.error('Failed to rename tag:', err)
+      toast.error(err instanceof Error ? err.message : 'Failed to rename tag.')
     } finally {
       setLoading(false)
     }
@@ -70,8 +74,9 @@ export function TagManagementModal({
       setDeletingTag(null)
       fetchTags()
       onTagUpdated()
+      toast.success('Tag deleted.')
     } catch (err) {
-      console.error('Failed to delete tag:', err)
+      toast.error(err instanceof Error ? err.message : 'Failed to delete tag.')
     } finally {
       setLoading(false)
     }

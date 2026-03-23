@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { toast } from 'sonner'
 import type { NtfyStaleness } from '../../../shared/ipc-types'
 import { IPC } from '../../../shared/ipc-types'
 
@@ -17,7 +18,9 @@ export function useNtfyStaleness(): NtfyStaleness & { loading: boolean; refetch:
       .then((result) => {
         setData(result as NtfyStaleness)
       })
-      .catch(console.error)
+      .catch((err) => {
+        toast.error(err instanceof Error ? err.message : 'Failed to load ntfy staleness status.')
+      })
       .finally(() => setLoading(false))
   }
 

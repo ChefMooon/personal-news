@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { toast } from 'sonner'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs'
 import { Input } from '../components/ui/input'
 import { Button } from '../components/ui/button'
@@ -39,8 +40,6 @@ function ApiKeysTab(): React.ReactElement {
   const [showKey, setShowKey] = useState(false)
   const [key, setKey] = useState('')
   const [status, setStatus] = useState<YouTubeApiKeyStatus | null>(null)
-  const [message, setMessage] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
   const refreshStatus = (): void => {
@@ -50,7 +49,7 @@ function ApiKeysTab(): React.ReactElement {
         setStatus(data as YouTubeApiKeyStatus)
       })
       .catch((err) => {
-        setError(err instanceof Error ? err.message : 'Failed to load API key status.')
+        toast.error(err instanceof Error ? err.message : 'Failed to load API key status.')
       })
   }
 
@@ -60,22 +59,20 @@ function ApiKeysTab(): React.ReactElement {
 
   const saveKey = async (): Promise<void> => {
     setSaving(true)
-    setMessage(null)
-    setError(null)
     try {
       const result = (await window.api.invoke(
         IPC.SETTINGS_SET_YOUTUBE_API_KEY,
         key
       )) as IpcMutationResult
       if (!result.ok) {
-        setError(result.error ?? 'Failed to save API key.')
+        toast.error(result.error ?? 'Failed to save API key.')
         return
       }
       setKey('')
-      setMessage('API key saved and validated successfully.')
+      toast.success('API key saved and validated successfully.')
       refreshStatus()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save API key.')
+      toast.error(err instanceof Error ? err.message : 'Failed to save API key.')
     } finally {
       setSaving(false)
     }
@@ -83,15 +80,13 @@ function ApiKeysTab(): React.ReactElement {
 
   const clearKey = async (): Promise<void> => {
     setSaving(true)
-    setMessage(null)
-    setError(null)
     try {
       await window.api.invoke(IPC.SETTINGS_CLEAR_YOUTUBE_API_KEY)
       setKey('')
-      setMessage('Saved API key removed.')
+      toast.success('YouTube API key removed.')
       refreshStatus()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to clear API key.')
+      toast.error(err instanceof Error ? err.message : 'Failed to clear API key.')
     } finally {
       setSaving(false)
     }
@@ -138,8 +133,6 @@ function ApiKeysTab(): React.ReactElement {
             Saved key detected (ending in {status.suffix ?? 'n/a'}).
           </p>
         ) : null}
-        {message ? <p className="text-xs text-emerald-600 mt-2">{message}</p> : null}
-        {error ? <p className="text-xs text-red-600 mt-2">{error}</p> : null}
       </div>
     </div>
   )
@@ -152,8 +145,6 @@ function YouTubeTab(): React.ReactElement {
   const [removingByChannel, setRemovingByChannel] = useState<Record<string, boolean>>({})
   const [channelToRemove, setChannelToRemove] = useState<{ id: string; name: string } | null>(null)
   const [addInput, setAddInput] = useState('')
-  const [message, setMessage] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
   const [intervalValue, setIntervalValue] = useState('15')
   const [savingInterval, setSavingInterval] = useState(false)
@@ -170,7 +161,7 @@ function YouTubeTab(): React.ReactElement {
         }
       })
       .catch((err) => {
-        setError(err instanceof Error ? err.message : 'Failed to load RSS poll interval.')
+        toast.error(err instanceof Error ? err.message : 'Failed to load RSS poll interval.')
       })
   }, [])
 
@@ -184,8 +175,6 @@ function YouTubeTab(): React.ReactElement {
   }
 
   const setChannelEnabled = async (channelId: string, checked: boolean): Promise<void> => {
-    setError(null)
-    setMessage(null)
     setPendingByChannel((prev) => ({ ...prev, [channelId]: checked }))
     try {
       const result = (await window.api.invoke(
@@ -194,7 +183,7 @@ function YouTubeTab(): React.ReactElement {
         checked
       )) as IpcMutationResult
       if (!result.ok) {
-        setError(result.error ?? 'Failed to update channel state.')
+        toast.error(result.error ?? 'Failed to update channel state.')
         setPendingByChannel((prev) => {
           const next = { ...prev }
           delete next[channelId]
@@ -202,9 +191,9 @@ function YouTubeTab(): React.ReactElement {
         })
         return
       }
-      setMessage('Channel setting saved.')
+      toast.success('Channel settings saved.')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update channel state.')
+      toast.error(err instanceof Error ? err.message : 'Failed to update channel state.')
       setPendingByChannel((prev) => {
         const next = { ...prev }
         delete next[channelId]
@@ -214,8 +203,6 @@ function YouTubeTab(): React.ReactElement {
   }
 
   const removeChannel = async (channelId: string): Promise<void> => {
-    setMessage(null)
-    setError(null)
     setRemovingByChannel((prev) => ({ ...prev, [channelId]: true }))
     try {
       const result = (await window.api.invoke(
@@ -223,15 +210,15 @@ function YouTubeTab(): React.ReactElement {
         channelId
       )) as IpcMutationResult
       if (!result.ok) {
-        setError(result.error ?? 'Failed to remove channel.')
+        toast.error(result.error ?? 'Failed to remove channel.')
         return
       }
-      setMessage('Channel removed successfully.')
+      toast.success('Channel removed successfully.')
       requestAnimationFrame(() => {
         addInputRef.current?.focus()
       })
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to remove channel.')
+      toast.error(err instanceof Error ? err.message : 'Failed to remove channel.')
     } finally {
       setRemovingByChannel((prev) => {
         const next = { ...prev }
@@ -244,19 +231,17 @@ function YouTubeTab(): React.ReactElement {
 
   const addChannel = async (): Promise<void> => {
     setAdding(true)
-    setMessage(null)
-    setError(null)
     try {
       const result = (await window.api.invoke(IPC.YOUTUBE_ADD_CHANNEL, addInput)) as IpcMutationResult
       if (!result.ok) {
-        setError(result.error ?? 'Failed to add channel.')
+        toast.error(result.error ?? 'Failed to add channel.')
         return
       }
       setAddInput('')
-      setMessage('Channel saved successfully.')
+      toast.success('Channel added successfully.')
       addInputRef.current?.focus()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to add channel.')
+      toast.error(err instanceof Error ? err.message : 'Failed to add channel.')
     } finally {
       setAdding(false)
     }
@@ -264,8 +249,6 @@ function YouTubeTab(): React.ReactElement {
 
   const savePollInterval = async (): Promise<void> => {
     setSavingInterval(true)
-    setMessage(null)
-    setError(null)
     const parsed = Number.parseInt(intervalValue, 10)
     try {
       const result = (await window.api.invoke(
@@ -273,12 +256,12 @@ function YouTubeTab(): React.ReactElement {
         parsed
       )) as IpcMutationResult
       if (!result.ok) {
-        setError(result.error ?? 'Failed to save RSS poll interval.')
+        toast.error(result.error ?? 'Failed to save RSS poll interval.')
         return
       }
-      setMessage('RSS poll interval saved.')
+      toast.success('RSS poll interval saved.')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save RSS poll interval.')
+      toast.error(err instanceof Error ? err.message : 'Failed to save RSS poll interval.')
     } finally {
       setSavingInterval(false)
     }
@@ -286,17 +269,15 @@ function YouTubeTab(): React.ReactElement {
 
   const pollNow = async (): Promise<void> => {
     setPollingNow(true)
-    setMessage(null)
-    setError(null)
     try {
       const result = (await window.api.invoke(IPC.YOUTUBE_POLL_NOW)) as IpcMutationResult
       if (!result.ok) {
-        setError(result.error ?? 'Failed to run YouTube RSS poll.')
+        toast.error(result.error ?? 'Failed to run YouTube RSS poll.')
         return
       }
-      setMessage('YouTube RSS poll completed.')
+      toast.success('YouTube RSS poll completed.')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to run YouTube RSS poll.')
+      toast.error(err instanceof Error ? err.message : 'Failed to run YouTube RSS poll.')
     } finally {
       setPollingNow(false)
     }
@@ -311,17 +292,15 @@ function YouTubeTab(): React.ReactElement {
     }
 
     setClearingVideoCache(true)
-    setMessage(null)
-    setError(null)
     try {
       const result = (await window.api.invoke(IPC.YOUTUBE_CLEAR_VIDEOS_CACHE)) as YouTubeCacheClearResult
       if (!result.ok) {
-        setError(result.error ?? 'Failed to clear YouTube cache.')
+        toast.error(result.error ?? 'Failed to clear YouTube cache.')
         return
       }
-      setMessage(`YouTube cache cleared. Removed ${result.deletedCount} video entries.`)
+      toast.success(`YouTube cache cleared. Removed ${result.deletedCount} video entries.`)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to clear YouTube cache.')
+      toast.error(err instanceof Error ? err.message : 'Failed to clear YouTube cache.')
     } finally {
       setClearingVideoCache(false)
     }
@@ -423,8 +402,6 @@ function YouTubeTab(): React.ReactElement {
                     size="sm"
                     onClick={() => {
                       setChannelToRemove({ id: ch.channel_id, name: ch.name })
-                      setMessage(null)
-                      setError(null)
                     }}
                     disabled={Boolean(removingByChannel[ch.channel_id])}
                   >
@@ -478,9 +455,6 @@ function YouTubeTab(): React.ReactElement {
           Runs a YouTube poll immediately using the current channel list and API key.
         </p>
       </div>
-
-      {message ? <p className="text-xs text-emerald-600">{message}</p> : null}
-      {error ? <p className="text-xs text-red-600">{error}</p> : null}
     </div>
   )
 }
@@ -498,7 +472,9 @@ function AppearanceTab(): React.ReactElement {
         <Select
           value={theme.id}
           onValueChange={(val) => {
-            setTheme(val).catch(console.error)
+            setTheme(val).catch((err) => {
+              toast.error(err instanceof Error ? err.message : 'Failed to apply theme.')
+            })
           }}
         >
           <SelectTrigger className="w-[200px]">
@@ -534,8 +510,6 @@ function RedditDigestTab(): React.ReactElement {
   const [draft, setDraft] = useState('')
   const [saving, setSaving] = useState(false)
   const [pruning, setPruning] = useState(false)
-  const [message, setMessage] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
 
   const load = (): void => {
     window.api
@@ -562,7 +536,7 @@ function RedditDigestTab(): React.ReactElement {
         }
       })
       .catch((err) => {
-        setError(err instanceof Error ? err.message : 'Failed to load Reddit Digest settings.')
+        toast.error(err instanceof Error ? err.message : 'Failed to load Reddit Digest settings.')
       })
 
     window.api
@@ -571,7 +545,7 @@ function RedditDigestTab(): React.ReactElement {
         setWeekStart(raw === '0' ? '0' : '1')
       })
       .catch((err) => {
-        setError(err instanceof Error ? err.message : 'Failed to load Reddit Digest week start setting.')
+        toast.error(err instanceof Error ? err.message : 'Failed to load Reddit Digest week start setting.')
       })
 
     window.api
@@ -580,7 +554,7 @@ function RedditDigestTab(): React.ReactElement {
         setWeeks(data as DigestWeekSummary[])
       })
       .catch((err) => {
-        setError(err instanceof Error ? err.message : 'Failed to load Reddit Digest records.')
+        toast.error(err instanceof Error ? err.message : 'Failed to load Reddit Digest records.')
       })
   }
 
@@ -589,49 +563,42 @@ function RedditDigestTab(): React.ReactElement {
   }, [])
 
   const persist = async (nextSubreddits: string[], successMessage: string): Promise<void> => {
-    setSaving(true)
-    setMessage(null)
-    setError(null)
     try {
       await window.api.invoke(IPC.SETTINGS_SET, 'reddit_digest_subreddits', JSON.stringify(nextSubreddits))
       setSubreddits(nextSubreddits)
-      setMessage(successMessage)
+      toast.success(successMessage)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save Reddit Digest settings.')
-    } finally {
-      setSaving(false)
+      toast.error(err instanceof Error ? err.message : 'Failed to save Reddit Digest settings.')
     }
   }
 
   const addSubreddit = async (): Promise<void> => {
     const normalized = normalizeSubredditInput(draft)
     if (!normalized) {
-      setError('Subreddits may contain letters, numbers, and underscores only.')
+      toast.error('Subreddits may contain letters, numbers, and underscores only.')
       return
     }
     if (subreddits.includes(normalized)) {
-      setError(`r/${normalized} is already configured.`)
+      toast.error(`r/${normalized} is already configured.`)
       return
     }
 
     setSaving(true)
-    setMessage(null)
-    setError(null)
     try {
       const validation = (await window.api.invoke(
         IPC.REDDIT_VALIDATE_DIGEST_SUBREDDIT,
         normalized
       )) as IpcMutationResult
       if (!validation.ok) {
-        setError(validation.error ?? `r/${normalized} could not be added.`)
+        toast.error(validation.error ?? `r/${normalized} could not be added.`)
         return
       }
 
       const next = [...subreddits, normalized].sort()
-      await persist(next, 'Subreddit saved.')
+      await persist(next, 'Subreddit added.')
       setDraft('')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to validate subreddit.')
+      toast.error(err instanceof Error ? err.message : 'Failed to validate subreddit.')
     } finally {
       setSaving(false)
     }
@@ -644,14 +611,12 @@ function RedditDigestTab(): React.ReactElement {
 
   const saveWeekStart = async (nextWeekStart: '0' | '1'): Promise<void> => {
     setSaving(true)
-    setMessage(null)
-    setError(null)
     try {
       await window.api.invoke(IPC.SETTINGS_SET, 'reddit_digest_week_start', nextWeekStart)
       setWeekStart(nextWeekStart)
-      setMessage('Week start preference saved. It will apply on the next Reddit Digest run.')
+      toast.success('Week start preference saved. It will apply on the next Reddit Digest run.')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save week start preference.')
+      toast.error(err instanceof Error ? err.message : 'Failed to save week start preference.')
     } finally {
       setSaving(false)
     }
@@ -663,20 +628,18 @@ function RedditDigestTab(): React.ReactElement {
     }
 
     setPruning(true)
-    setMessage(null)
-    setError(null)
     try {
       const result = (await window.api.invoke(IPC.REDDIT_PRUNE_DIGEST_POSTS, {
         delete_week: weekStartDate
       })) as { ok: boolean; error: string | null; deletedCount: number }
       if (!result.ok) {
-        setError(result.error ?? 'Failed to delete Reddit Digest week.')
+        toast.error(result.error ?? 'Failed to delete Reddit Digest week.')
         return
       }
       load()
-      setMessage(`Deleted ${result.deletedCount} posts for the week of ${weekStartDate}.`)
+      toast.success(`Deleted ${result.deletedCount} posts for the week of ${weekStartDate}.`)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete Reddit Digest week.')
+      toast.error(err instanceof Error ? err.message : 'Failed to delete Reddit Digest week.')
     } finally {
       setPruning(false)
     }
@@ -685,7 +648,7 @@ function RedditDigestTab(): React.ReactElement {
   const pruneOldWeeks = async (): Promise<void> => {
     const parsed = Number.parseInt(keepWeeks, 10)
     if (!Number.isFinite(parsed) || parsed < 1) {
-      setError('Keep last N weeks must be at least 1.')
+      toast.error('Keep last N weeks must be at least 1.')
       return
     }
     if (!window.confirm(`Delete all Reddit Digest posts older than the most recent ${parsed} weeks?`)) {
@@ -693,20 +656,22 @@ function RedditDigestTab(): React.ReactElement {
     }
 
     setPruning(true)
-    setMessage(null)
-    setError(null)
     try {
       const result = (await window.api.invoke(IPC.REDDIT_PRUNE_DIGEST_POSTS, {
         keep_weeks: parsed
       })) as { ok: boolean; error: string | null; deletedCount: number }
       if (!result.ok) {
-        setError(result.error ?? 'Failed to prune Reddit Digest posts.')
+        toast.error(result.error ?? 'Failed to prune Reddit Digest posts.')
         return
       }
       load()
-      setMessage(result.deletedCount === 0 ? 'No old Reddit Digest weeks needed pruning.' : `Pruned ${result.deletedCount} Reddit Digest posts.`)
+      toast.success(
+        result.deletedCount === 0
+          ? 'No old Reddit Digest weeks needed pruning.'
+          : `Pruned ${result.deletedCount} Reddit Digest posts.`
+      )
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to prune Reddit Digest posts.')
+      toast.error(err instanceof Error ? err.message : 'Failed to prune Reddit Digest posts.')
     } finally {
       setPruning(false)
     }
@@ -837,9 +802,6 @@ function RedditDigestTab(): React.ReactElement {
           </div>
         </div>
       </div>
-
-      {message ? <p className="text-xs text-emerald-600">{message}</p> : null}
-      {error ? <p className="text-xs text-red-600">{error}</p> : null}
     </div>
   )
 }
@@ -866,14 +828,13 @@ function FeaturesTab(): React.ReactElement {
 
 function ScriptsTab(): React.ReactElement {
   const [dir, setDir] = useState('')
-  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     window.api
       .invoke(IPC.SETTINGS_GET, 'script_home_dir')
       .then((v) => { setDir(typeof v === 'string' ? v : '') })
       .catch((err) => {
-        setError(err instanceof Error ? err.message : 'Failed to load script home directory.')
+        toast.error(err instanceof Error ? err.message : 'Failed to load script home directory.')
       })
   }, [])
 
@@ -893,21 +854,20 @@ function ScriptsTab(): React.ReactElement {
           />
           <Button
             onClick={async () => {
-              setError(null)
               const picked = await window.api.invoke(IPC.DIALOG_SHOW_OPEN_FOLDER) as string | null
               if (picked === null) return
               try {
                 await window.api.invoke(IPC.SETTINGS_SET, 'script_home_dir', picked)
                 setDir(picked)
+                toast.success('Script home directory saved.')
               } catch (err) {
-                setError(err instanceof Error ? err.message : 'Failed to save script home directory.')
+                toast.error(err instanceof Error ? err.message : 'Failed to save script home directory.')
               }
             }}
           >
             Browse
           </Button>
         </div>
-        {error ? <p className="text-xs text-red-600 mt-2">{error}</p> : null}
       </div>
     </div>
   )
@@ -922,7 +882,6 @@ function SavedPostsTab(): React.ReactElement {
   const [lastPolled, setLastPolled] = useState<number | null>(null)
   const [isStale, setIsStale] = useState(false)
   const [showWizard, setShowWizard] = useState(false)
-  const [testResult, setTestResult] = useState<string | null>(null)
   const [testing, setTesting] = useState(false)
   const [showGuide, setShowGuide] = useState(false)
   const [showClearConfirm, setShowClearConfirm] = useState(false)
@@ -938,7 +897,9 @@ function SavedPostsTab(): React.ReactElement {
         setLastPolled(s.lastPolledAt)
         setIsStale(s.isStale)
       })
-      .catch(console.error)
+      .catch((err) => {
+        toast.error(err instanceof Error ? err.message : 'Failed to load ntfy status.')
+      })
     window.api
       .invoke(IPC.SETTINGS_GET, 'ntfy_poll_interval_minutes')
       .then((v) => {
@@ -951,8 +912,18 @@ function SavedPostsTab(): React.ReactElement {
       .catch(() => {
         setIntervalValue('60')
       })
-    window.api.invoke(IPC.SETTINGS_GET, 'ntfy_topic').then((v) => setTopic((v as string) || '')).catch(console.error)
-    window.api.invoke(IPC.SETTINGS_GET, 'ntfy_server_url').then((v) => setServer((v as string) || 'https://ntfy.sh')).catch(console.error)
+    window.api
+      .invoke(IPC.SETTINGS_GET, 'ntfy_topic')
+      .then((v) => setTopic((v as string) || ''))
+      .catch((err) => {
+        toast.error(err instanceof Error ? err.message : 'Failed to load ntfy topic.')
+      })
+    window.api
+      .invoke(IPC.SETTINGS_GET, 'ntfy_server_url')
+      .then((v) => setServer((v as string) || 'https://ntfy.sh'))
+      .catch((err) => {
+        toast.error(err instanceof Error ? err.message : 'Failed to load ntfy server URL.')
+      })
   }
 
   useEffect(() => {
@@ -961,13 +932,12 @@ function SavedPostsTab(): React.ReactElement {
 
   const handleTest = async (): Promise<void> => {
     setTesting(true)
-    setTestResult(null)
     try {
       const result = (await window.api.invoke(IPC.REDDIT_POLL_NTFY)) as { postsIngested: number }
-      setTestResult(`Connected — ${result.postsIngested} messages received.`)
+      toast.success(`Connected. ${result.postsIngested} messages received.`)
       loadStatus()
-    } catch {
-      setTestResult('Could not reach the ntfy server.')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to reach the ntfy server.')
     } finally {
       setTesting(false)
     }
@@ -975,7 +945,6 @@ function SavedPostsTab(): React.ReactElement {
 
   const savePollInterval = async (): Promise<void> => {
     setSavingInterval(true)
-    setTestResult(null)
     const parsed = Number.parseInt(intervalValue, 10)
     try {
       const result = (await window.api.invoke(
@@ -983,12 +952,12 @@ function SavedPostsTab(): React.ReactElement {
         parsed
       )) as IpcMutationResult
       if (!result.ok) {
-        setTestResult(result.error ?? 'Failed to save ntfy poll interval.')
+        toast.error(result.error ?? 'Failed to save ntfy poll interval.')
         return
       }
-      setTestResult('ntfy poll interval saved.')
+      toast.success('Saved ntfy poll interval.')
     } catch (err) {
-      setTestResult(err instanceof Error ? err.message : 'Failed to save ntfy poll interval.')
+      toast.error(err instanceof Error ? err.message : 'Failed to save ntfy poll interval.')
     } finally {
       setSavingInterval(false)
     }
@@ -1045,7 +1014,9 @@ function SavedPostsTab(): React.ReactElement {
               className="font-mono underline underline-offset-2 decoration-muted-foreground/50 hover:text-blue-400 transition-colors inline-flex items-center gap-1"
               onClick={() => {
                 const base = server.replace(/\/+$/, '')
-                window.api.invoke('shell:openExternal', `${base}/${topic}`).catch(console.error)
+                window.api.invoke('shell:openExternal', `${base}/${topic}`).catch((err) => {
+                  toast.error(err instanceof Error ? err.message : 'Failed to open ntfy topic URL.')
+                })
               }}
             >
               {topic}
@@ -1075,11 +1046,6 @@ function SavedPostsTab(): React.ReactElement {
           Mobile Setup Guide
         </Button>
       </div>
-      {testResult && (
-        <p className={`text-xs ${testResult.startsWith('Connected') ? 'text-emerald-600' : 'text-red-600'}`}>
-          {testResult}
-        </p>
-      )}
       <NtfyOnboardingWizard
         isOpen={showWizard || showGuide}
         onClose={() => {
@@ -1145,10 +1111,10 @@ function SavedPostsTab(): React.ReactElement {
                   .invoke(IPC.REDDIT_CLEAR_SAVED_POSTS)
                   .then((result) => {
                     const r = result as { deletedCount: number }
-                    setTestResult(`Cleared ${r.deletedCount} saved posts.`)
+                    toast.success(`Cleared ${r.deletedCount} Saved Posts entries.`)
                   })
                   .catch((err) => {
-                    setTestResult(err instanceof Error ? err.message : 'Failed to clear database.')
+                    toast.error(err instanceof Error ? err.message : 'Failed to clear database.')
                   })
                   .finally(() => {
                     setClearing(false)

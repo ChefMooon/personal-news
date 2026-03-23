@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { toast } from 'sonner'
 import type { SavedPostSummary } from '../../../shared/ipc-types'
 
 export function useSavedPostsSummary(): { posts: SavedPostSummary[]; loading: boolean } {
@@ -10,9 +11,11 @@ export function useSavedPostsSummary(): { posts: SavedPostSummary[]; loading: bo
       .invoke('reddit:getSavedPostsSummary')
       .then((data) => {
         setPosts(data as SavedPostSummary[])
-        setLoading(false)
       })
-      .catch(console.error)
+      .catch((err) => {
+        toast.error(err instanceof Error ? err.message : 'Failed to load Saved Posts summary.')
+      })
+      .finally(() => setLoading(false))
   }, [])
 
   return { posts, loading }

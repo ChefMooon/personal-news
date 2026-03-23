@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { toast } from 'sonner'
 import type {
   ScriptWithLastRun,
   ScriptRunRecord,
@@ -38,7 +39,8 @@ export function useScripts(): UseScriptsReturn {
       const data = await window.api.invoke(IPC.SCRIPTS_GET_ALL)
       setScripts(data as ScriptWithLastRun[])
     } catch (err) {
-      console.error(err)
+      const message = err instanceof Error ? err.message : 'Failed to load scripts.'
+      toast.error(message)
     } finally {
       setLoading(false)
     }
@@ -58,13 +60,21 @@ export function useScripts(): UseScriptsReturn {
     return unsub
   }, [fetchScripts])
 
-  // Additive listener for run completion/warning events (future notification UX hook point)
+  // Additive listener for run completion/warning events and user toasts
   useEffect(() => {
     const unsub = window.api.on(IPC.SCRIPTS_RUN_COMPLETE, (...args: unknown[]) => {
       const event = args[0] as ScriptRunCompleteEvent
       if (event.kind !== 'run_complete') {
         return
       }
+
+      const scriptName = scripts.find((script) => script.id === event.scriptId)?.name ?? `Script ${event.scriptId}`
+      if (event.exitCode === 0) {
+        toast.success(`${scriptName} completed.`)
+      } else {
+        toast.error(`${scriptName} failed (${event.message}).`)
+      }
+
       setRunningIds((prev) => {
         const next = new Set(prev)
         next.delete(event.scriptId)
@@ -72,7 +82,7 @@ export function useScripts(): UseScriptsReturn {
       })
     })
     return unsub
-  }, [])
+  }, [scripts])
 
   // Subscribe to live output chunks (capped to last 50 run IDs to prevent unbounded growth)
   useEffect(() => {
@@ -99,7 +109,8 @@ export function useScripts(): UseScriptsReturn {
       // runningIds will be cleared when SCRIPTS_UPDATED fires after the run completes
     } catch (err) {
       // If the IPC call itself fails, clear the spinner immediately
-      console.error('[useScripts] runScript error:', err)
+      const message = err instanceof Error ? err.message : 'Failed to start script run.'
+      toast.error(message)
       setRunningIds((prev) => {
         const next = new Set(prev)
         next.delete(id)
@@ -112,7 +123,8 @@ export function useScripts(): UseScriptsReturn {
     try {
       await window.api.invoke(IPC.SCRIPTS_CANCEL, id)
     } catch (err) {
-      console.error('[useScripts] cancelScript error:', err)
+      const message = err instanceof Error ? err.message : 'Failed to cancel script run.'
+      toast.error(message)
     }
   }, [])
 
@@ -124,7 +136,8 @@ export function useScripts(): UseScriptsReturn {
       }
       return result
     } catch (err) {
-      console.error('[useScripts] updateScript error:', err)
+      const message = err instanceof Error ? err.message : 'Failed to update script.'
+      toast.error(message)
       return { ok: false, error: 'Failed to update script.' }
     }
   }, [fetchScripts])
@@ -137,7 +150,8 @@ export function useScripts(): UseScriptsReturn {
       }
       return result
     } catch (err) {
-      console.error('[useScripts] setScriptSchedule error:', err)
+      const message = err instanceof Error ? err.message : 'Failed to update script schedule.'
+      toast.error(message)
       return { ok: false, error: 'Failed to update script schedule.' }
     }
   }, [fetchScripts])
@@ -150,7 +164,8 @@ export function useScripts(): UseScriptsReturn {
       }
       return result
     } catch (err) {
-      console.error('[useScripts] setScriptEnabled error:', err)
+      const message = err instanceof Error ? err.message : 'Failed to update script auto-run setting.'
+      toast.error(message)
       return { ok: false, error: 'Failed to update script auto-run setting.' }
     }
   }, [fetchScripts])
@@ -159,7 +174,8 @@ export function useScripts(): UseScriptsReturn {
     try {
       return (await window.api.invoke(IPC.SCRIPTS_GET_RUN_HISTORY, id)) as ScriptRunRecord[]
     } catch (err) {
-      console.error('[useScripts] getRunHistory error:', err)
+      const message = err instanceof Error ? err.message : 'Failed to load script run history.'
+      toast.error(message)
       return []
     }
   }, [])

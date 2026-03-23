@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { toast } from 'sonner'
 import { Circle, CircleCheck } from 'lucide-react'
 import { IPC, type YtVideo } from '../../../../shared/ipc-types'
 import { formatAbsoluteTime, formatDuration, formatFutureTime, formatRelativeTime } from '../../lib/time'
@@ -41,12 +42,16 @@ export function VideoCard({
   const isWatched = watchedAt != null
 
   const saveWatchedState = (nextWatched: boolean): void => {
-    window.api.invoke(IPC.YOUTUBE_SET_VIDEO_WATCHED, video.video_id, nextWatched).catch(console.error)
+    window.api.invoke(IPC.YOUTUBE_SET_VIDEO_WATCHED, video.video_id, nextWatched).catch((err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to update watched state.')
+    })
   }
 
   const handleClick = (): void => {
     const url = `https://www.youtube.com/watch?v=${video.video_id}`
-    window.api.invoke(IPC.SHELL_OPEN_EXTERNAL, url).catch(console.error)
+    window.api.invoke(IPC.SHELL_OPEN_EXTERNAL, url).catch((err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to open video.')
+    })
 
     if (!isWatched) {
       const now = Math.floor(Date.now() / 1000)

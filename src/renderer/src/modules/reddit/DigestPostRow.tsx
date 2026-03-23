@@ -1,4 +1,5 @@
 import React from 'react'
+import { toast } from 'sonner'
 import type { DigestPost } from '../../../../shared/ipc-types'
 import { formatRelativeTime } from '../../lib/time'
 import { MessageSquare, ArrowUp } from 'lucide-react'
@@ -10,7 +11,9 @@ interface DigestPostRowProps {
 export function DigestPostRow({ post }: DigestPostRowProps): React.ReactElement {
   const handleClick = (): void => {
     const url = `https://reddit.com${post.permalink}`
-    window.api.invoke('shell:openExternal', url).catch(console.error)
+    window.api.invoke('shell:openExternal', url).catch((err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to open Reddit post.')
+    })
   }
 
   return (

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { toast } from 'sonner'
 import type { DigestViewConfig } from '../../../shared/ipc-types'
 
 type LegacyDigestViewConfig = Partial<DigestViewConfig> & {
@@ -79,14 +80,18 @@ export function useRedditDigestConfig(instanceId: string): {
           }
         })
       })
-      .catch(console.error)
+      .catch((err) => {
+        toast.error(err instanceof Error ? err.message : 'Failed to load Reddit Digest view settings.')
+      })
   }, [instanceId])
 
   const setConfig = (newConfig: DigestViewConfig): void => {
     setConfigState(newConfig)
     window.api
       .invoke('settings:set', storageKey, JSON.stringify(newConfig))
-      .catch(console.error)
+      .catch((err) => {
+        toast.error(err instanceof Error ? err.message : 'Failed to save Reddit Digest view settings.')
+      })
   }
 
   return { config, setConfig }

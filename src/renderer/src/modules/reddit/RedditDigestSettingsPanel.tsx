@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { toast } from 'sonner'
 import {
   DndContext,
   closestCenter,
@@ -178,7 +179,11 @@ export function RedditDigestSettingsPanel({
         setSubredditsExpanded(true)
       }
     } catch (error) {
-      console.error('Failed to load Reddit Digest subreddits panel state', error)
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : 'Failed to load Reddit Digest subreddits panel state.'
+      )
       setSubredditsExpanded(true)
     } finally {
       setSubredditsExpandedLoaded(true)
@@ -193,7 +198,11 @@ export function RedditDigestSettingsPanel({
     try {
       window.localStorage.setItem(subredditsExpandedStorageKey, String(subredditsExpanded))
     } catch (error) {
-      console.error('Failed to persist Reddit Digest subreddits panel state', error)
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : 'Failed to save Reddit Digest subreddits panel state.'
+      )
     }
   }, [instanceId, subredditsExpanded, subredditsExpandedLoaded, subredditsExpandedStorageKey])
 

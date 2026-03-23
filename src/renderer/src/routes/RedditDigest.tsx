@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
+import { toast } from 'sonner'
 import { useRedditDigestEnabled } from '../contexts/RedditDigestEnabledContext'
 import { useRedditDigest } from '../hooks/useRedditDigest'
 import { useRedditDigestConfig } from '../hooks/useRedditDigestConfig'
@@ -48,13 +49,17 @@ export default function RedditDigest(): React.ReactElement {
           setPageViewMode(raw as PageViewMode)
         }
       })
-      .catch(console.error)
+      .catch((err) => {
+        toast.error(err instanceof Error ? err.message : 'Failed to load Reddit Digest page view mode.')
+      })
       .finally(() => setViewModeLoaded(true))
   }, [])
 
   const saveViewMode = (mode: PageViewMode): void => {
     setPageViewMode(mode)
-    window.api.invoke(IPC.SETTINGS_SET, 'reddit_digest_page_view_mode', mode).catch(console.error)
+    window.api.invoke(IPC.SETTINGS_SET, 'reddit_digest_page_view_mode', mode).catch((err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to save Reddit Digest page view mode.')
+    })
   }
 
   const rangeWeekSet = useMemo(() => {

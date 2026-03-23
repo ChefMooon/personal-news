@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { toast } from 'sonner'
 import {
   DndContext,
   closestCenter,
@@ -142,7 +143,9 @@ export default function Dashboard(): React.ReactElement {
       }
       window.api
         .invoke('settings:set', storageKey, JSON.stringify(initialConfig))
-        .catch(console.error)
+        .catch((err) => {
+          toast.error(err instanceof Error ? err.message : 'Failed to persist initial Reddit Digest widget settings.')
+        })
     }
 
     setShowAddModal(false)

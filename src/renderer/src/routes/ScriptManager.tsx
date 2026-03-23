@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { toast } from 'sonner'
 import { useScripts } from '../hooks/useScripts'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
@@ -304,8 +305,6 @@ function ScriptDetailPanel({
   const [selectedRunId, setSelectedRunId] = useState<number | null>(null)
   const [initialDraft, setInitialDraft] = useState<ScriptDraft>(() => makeDraft(script))
   const [draft, setDraft] = useState<ScriptDraft>(() => makeDraft(script))
-  const [saveError, setSaveError] = useState<string | null>(null)
-  const [saveSuccess, setSaveSuccess] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const outputEndRef = useRef<HTMLDivElement>(null)
 
@@ -337,8 +336,6 @@ function ScriptDetailPanel({
   }, [draft, initialDraft])
 
   const save = async (): Promise<void> => {
-    setSaveError(null)
-    setSaveSuccess(null)
     setSaving(true)
     const result = await onUpdate({
       id: script.id,
@@ -352,10 +349,10 @@ function ScriptDetailPanel({
     })
     setSaving(false)
     if (!result.ok) {
-      setSaveError(result.error ?? 'Failed to save script settings.')
+      toast.error(result.error ?? 'Failed to save script settings.')
       return
     }
-    setSaveSuccess('Saved')
+    toast.success('Script settings saved.')
   }
 
   return (
@@ -371,7 +368,6 @@ function ScriptDetailPanel({
         <div className="flex items-center justify-between">
           <p className="text-xs font-medium text-muted-foreground">Script configuration</p>
           <div className="flex items-center gap-2">
-            {saveSuccess && <span className="text-xs text-emerald-600">{saveSuccess}</span>}
             <Button
               size="sm"
               variant="outline"
@@ -386,8 +382,6 @@ function ScriptDetailPanel({
             </Button>
           </div>
         </div>
-
-        {saveError && <p className="text-xs text-red-600">{saveError}</p>}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <label className="space-y-1">
@@ -747,15 +741,13 @@ function ScriptRow({
   onUpdate
 }: ScriptRowProps): React.ReactElement {
   const [expanded, setExpanded] = useState(false)
-  const [toggleError, setToggleError] = useState<string | null>(null)
 
   const isManual = !script.schedule
 
   const handleEnabledToggle = async (checked: boolean): Promise<void> => {
-    setToggleError(null)
     const result = await onSetEnabled(script.id, checked)
     if (!result.ok) {
-      setToggleError(result.error ?? 'Failed to update auto-run setting.')
+      toast.error(result.error ?? 'Failed to update auto-run setting.')
     }
   }
 
@@ -846,8 +838,6 @@ function ScriptRow({
         </div>
       </div>
 
-      {toggleError && <p className="text-xs text-red-600 mt-2 pl-7">{toggleError}</p>}
-
       {expanded && (
         <ScriptDetailPanel
           script={script}
@@ -877,7 +867,6 @@ export default function ScriptManager(): React.ReactElement {
     refresh
   } = useScripts()
   const [scriptHomeDir, setScriptHomeDir] = useState<string>('')
-  const [openFolderError, setOpenFolderError] = useState<string | null>(null)
   const { enabled: redditDigestEnabled } = useRedditDigestEnabled()
 
   useEffect(() => {
@@ -890,10 +879,9 @@ export default function ScriptManager(): React.ReactElement {
   }, [])
 
   const openScriptFolder = async (): Promise<void> => {
-    setOpenFolderError(null)
     const errMsg = (await window.api.invoke(IPC.SHELL_OPEN_PATH, scriptHomeDir)) as string
     if (errMsg) {
-      setOpenFolderError(`Could not open folder: ${errMsg}`)
+      toast.error(`Could not open folder: ${errMsg}`)
     }
   }
 
@@ -942,7 +930,6 @@ export default function ScriptManager(): React.ReactElement {
           </Button>
         </div>
       </div>
-      {openFolderError && <p className="text-xs text-red-600 mb-2">{openFolderError}</p>}
 
       {loading ? (
         <p className="text-sm text-muted-foreground">Loading scripts...</p>

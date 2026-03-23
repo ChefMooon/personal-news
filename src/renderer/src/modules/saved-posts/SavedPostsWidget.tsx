@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { toast } from 'sonner'
 import { useSavedPosts } from '../../hooks/useSavedPosts'
 import {
   useSavedPostsConfig,
@@ -146,7 +147,9 @@ function SavedPostsWidget(): React.ReactElement {
     window.api
       .invoke(IPC.REDDIT_GET_ALL_TAGS)
       .then((result) => setAllTags(result as string[]))
-      .catch(console.error)
+      .catch((err) => {
+        toast.error(err instanceof Error ? err.message : 'Failed to load tags for Saved Posts widget.')
+      })
   }, [posts])
 
   // Listen for ntfy ingest complete push events
@@ -244,7 +247,9 @@ function SavedPostsWidget(): React.ReactElement {
 
   const handleOpenExternal = (post: SavedPost): void => {
     const url = post.source === 'reddit' ? `https://reddit.com${post.permalink}` : post.url
-    window.api.invoke('shell:openExternal', url).catch(console.error)
+    window.api.invoke('shell:openExternal', url).catch((err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to open saved post link.')
+    })
   }
 
   function handleOpenEdit(): void {

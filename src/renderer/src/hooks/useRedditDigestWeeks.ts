@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { toast } from 'sonner'
 import { IPC, type DigestWeekSummary } from '../../../shared/ipc-types'
 
 export function useRedditDigestWeeks(): { weeks: DigestWeekSummary[]; loading: boolean } {
@@ -12,7 +13,9 @@ export function useRedditDigestWeeks(): { weeks: DigestWeekSummary[]; loading: b
       .then((data) => {
         setWeeks(data as DigestWeekSummary[])
       })
-      .catch(console.error)
+      .catch((err) => {
+        toast.error(err instanceof Error ? err.message : 'Failed to load Reddit Digest weeks.')
+      })
       .finally(() => setLoading(false))
   }, [])
 

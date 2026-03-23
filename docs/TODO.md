@@ -63,7 +63,7 @@ Each item links to the relevant architecture doc for the full spec.
 
 ## App Polish
 
-- [ ] **Error toasts** — replace `console.error` calls with a toast notification system (shadcn `Sonner` or similar). Surface IPC errors, failed API calls, and script execution errors to the user.
+- [x] **Error toasts** — replace `console.error` calls with a toast notification system (shadcn `Sonner` or similar). Surface IPC errors, failed API calls, and script execution errors to the user.
 - [ ] **Error boundaries** — add React error boundaries around each widget so one failing widget doesn't crash the whole dashboard.
 - [ ] **System tray icon** — add a tray icon so the app can run minimised in the background and still poll on schedule. See `docs/PRD.md` (noted as v2 stretch goal — implement only if background polling is needed).
 - [ ] **WCAG AA accessibility audit** — review all interactive components against the 4.5:1 contrast ratio requirement and keyboard navigation. Targeted for v1 but not formally audited yet. See `docs/ui-ux.md §11`.

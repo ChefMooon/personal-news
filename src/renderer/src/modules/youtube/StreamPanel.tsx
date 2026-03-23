@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { toast } from 'sonner'
 import type { YtVideo } from '../../../../shared/ipc-types'
 import { formatFutureTime } from '../../lib/time'
 
@@ -33,7 +34,9 @@ export function StreamPanel({ streams }: StreamPanelProps): React.ReactElement {
             key={stream.video_id}
             onClick={() => {
               const url = `https://www.youtube.com/watch?v=${stream.video_id}`
-              window.api.invoke('shell:openExternal', url).catch(console.error)
+              window.api.invoke('shell:openExternal', url).catch((err) => {
+                toast.error(err instanceof Error ? err.message : 'Failed to open stream.')
+              })
             }}
             className="w-full text-left px-3 py-2 group cursor-pointer transition-colors hover:bg-accent/40"
           >

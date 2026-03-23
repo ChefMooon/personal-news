@@ -74,8 +74,36 @@ function runMigrations(database: Database.Database): void {
     }
 
     const sql = readFileSync(migrationPath, 'utf-8')
+
+    // Migration 013 adds yt_videos.watched_at. Guard it so older databases that
+    // were migrated without schema_version tracking do not fail on rerun.
+    if (nextVersion === 13 && columnExists(database, 'yt_videos', 'watched_at')) {
+      database
+        .prepare(
+          `
+            INSERT INTO meta (key, value)
+            VALUES ('schema_version', ?)
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value
+          `
+        )
+        .run(String(nextVersion))
+      appliedAny = true
+      console.log(`[DB] Migration ${String(nextVersion).padStart(3, '0')} skipped (already applied)`)
+      nextVersion += 1
+      continue
+    }
+
     const runMigration = database.transaction(() => {
       database.exec(sql)
+      database
+        .prepare(
+          `
+            INSERT INTO meta (key, value)
+            VALUES ('schema_version', ?)
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value
+          `
+        )
+        .run(String(nextVersion))
     })
     runMigration()
 
@@ -87,4 +115,9 @@ function runMigrations(database: Database.Database): void {
   if (!appliedAny) {
     console.log(`[DB] Schema is up to date (version ${currentVersion})`)
   }
+}
+
+function columnExists(database: Database.Database, tableName: string, columnName: string): boolean {
+  const columns = database.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string }>
+  return columns.some((column) => column.name === columnName)
 }

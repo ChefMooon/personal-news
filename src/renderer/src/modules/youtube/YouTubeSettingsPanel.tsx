@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { toast } from 'sonner'
 import {
   DndContext,
   closestCenter,
@@ -313,7 +314,7 @@ export function YouTubeSettingsPanel({
         setChannelsExpanded(true)
       }
     } catch (error) {
-      console.error('Failed to load YouTube channels panel state', error)
+      toast.error(error instanceof Error ? error.message : 'Failed to load YouTube channels panel state.')
       setChannelsExpanded(true)
     } finally {
       setChannelsExpandedLoaded(true)
@@ -326,7 +327,7 @@ export function YouTubeSettingsPanel({
     try {
       window.localStorage.setItem(channelsExpandedStorageKey, String(channelsExpanded))
     } catch (error) {
-      console.error('Failed to persist YouTube channels panel state', error)
+      toast.error(error instanceof Error ? error.message : 'Failed to save YouTube channels panel state.')
     }
   }, [channelsExpanded, channelsExpandedLoaded, instanceId, channelsExpandedStorageKey])
 

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { toast } from 'sonner'
 import type { SavedPostsViewConfig } from '../../../shared/ipc-types'
 
 export const DEFAULT_SAVED_POSTS_VIEW_CONFIG: SavedPostsViewConfig = {
@@ -45,14 +46,18 @@ export function useSavedPostsConfig(instanceId: string): {
           }
         }
       })
-      .catch(console.error)
+      .catch((err) => {
+        toast.error(err instanceof Error ? err.message : 'Failed to load Saved Posts view settings.')
+      })
   }, [instanceId])
 
   const setConfig = (newConfig: SavedPostsViewConfig): void => {
     setConfigState(newConfig)
     window.api
       .invoke('settings:set', storageKey, JSON.stringify(newConfig))
-      .catch(console.error)
+      .catch((err) => {
+        toast.error(err instanceof Error ? err.message : 'Failed to save Saved Posts view settings.')
+      })
   }
 
   return { config, setConfig }

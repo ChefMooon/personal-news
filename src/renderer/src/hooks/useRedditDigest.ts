@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { toast } from 'sonner'
 import { IPC, type DigestPost } from '../../../shared/ipc-types'
 
 export function useRedditDigest(weekStartDate?: string | null): { posts: DigestPost[]; loading: boolean } {
@@ -12,7 +13,9 @@ export function useRedditDigest(weekStartDate?: string | null): { posts: DigestP
       .then((data) => {
         setPosts(data as DigestPost[])
       })
-      .catch(console.error)
+      .catch((err) => {
+        toast.error(err instanceof Error ? err.message : 'Failed to load Reddit Digest posts.')
+      })
       .finally(() => setLoading(false))
   }, [weekStartDate])
 

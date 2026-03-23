@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { toast } from 'sonner'
 import { IPC, type YouTubeViewConfig } from '../../../shared/ipc-types'
 
 export const DEFAULT_YOUTUBE_VIEW_CONFIG: YouTubeViewConfig = {
@@ -42,7 +43,9 @@ export function useYouTubeViewConfig(instanceId: string): {
       .then((value) => {
         setConfigState({ ...DEFAULT_YOUTUBE_VIEW_CONFIG, ...(value as Partial<YouTubeViewConfig>) })
       })
-      .catch(console.error)
+      .catch((err) => {
+        toast.error(err instanceof Error ? err.message : 'Failed to load YouTube view settings.')
+      })
       .finally(() => {
         setLoading(false)
       })
@@ -53,7 +56,11 @@ export function useYouTubeViewConfig(instanceId: string): {
     if (!instanceId) {
       return
     }
-    window.api.invoke(IPC.SETTINGS_SET_YOUTUBE_VIEW_CONFIG, instanceId, newConfig).catch(console.error)
+    window.api
+      .invoke(IPC.SETTINGS_SET_YOUTUBE_VIEW_CONFIG, instanceId, newConfig)
+      .catch((err) => {
+        toast.error(err instanceof Error ? err.message : 'Failed to save YouTube view settings.')
+      })
   }
 
   return { config, setConfig, loading }

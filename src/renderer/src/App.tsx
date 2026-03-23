@@ -8,6 +8,7 @@ import RedditDigest from './routes/RedditDigest'
 import ScriptManager from './routes/ScriptManager'
 import Settings from './routes/Settings'
 import { RedditDigestEnabledProvider } from './contexts/RedditDigestEnabledContext'
+import { Toaster } from 'sonner'
 
 export default function App(): React.ReactElement {
   return (
@@ -25,6 +26,7 @@ export default function App(): React.ReactElement {
           </Routes>
         </main>
       </div>
+      <Toaster position="bottom-right" richColors />
     </RedditDigestEnabledProvider>
   )
 }

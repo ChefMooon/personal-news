@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { toast } from 'sonner'
 import type { WidgetLayout, WidgetInstance } from '../../../shared/ipc-types'
 import { getModule } from '../modules/registry'
 
@@ -129,16 +130,23 @@ export function useWidgetLayout(): {
         setLayoutState(pruned)
         // Persist the clean layout so ghost entries don't re-appear
         if (changed) {
-          window.api.invoke('settings:setWidgetLayout', pruned).catch(console.error)
+          window.api.invoke('settings:setWidgetLayout', pruned).catch((err) => {
+            toast.error(err instanceof Error ? err.message : 'Failed to persist cleaned widget layout.')
+          })
         }
         setLoading(false)
       })
-      .catch(console.error)
+      .catch((err) => {
+        toast.error(err instanceof Error ? err.message : 'Failed to load widget layout.')
+        setLoading(false)
+      })
   }, [])
 
   const setLayout = (newLayout: WidgetLayout): void => {
     setLayoutState(newLayout)
-    window.api.invoke('settings:setWidgetLayout', newLayout).catch(console.error)
+    window.api.invoke('settings:setWidgetLayout', newLayout).catch((err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to save widget layout.')
+    })
   }
 
   return { layout, setLayout, loading }
