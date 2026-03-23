@@ -345,6 +345,14 @@ export function YouTubeSettingsPanel({
     return [...inOrder, ...rest]
   }, [channels, draft.channelOrder])
 
+  const visibleSelectedChannelIds = useMemo(
+    () => draft.selectedChannelIds.filter((id) => channels.some((c) => c.channel_id === id)),
+    [channels, draft.selectedChannelIds]
+  )
+
+  const selectedChannelCount =
+    draft.channelMode === 'all' ? channels.length : visibleSelectedChannelIds.length
+
   const applyUpdate = (next: YouTubeViewConfig): void => {
     setDraft(next)
     onChange(next)
@@ -376,7 +384,7 @@ export function YouTubeSettingsPanel({
   return (
     <div className="flex flex-col h-full">
       <ScrollArea className="h-full">
-        <div className="space-y-5 pb-2 pr-4">
+        <div className="space-y-5 pb-2 pl-2 pr-4">
 
           <div>
             <button
@@ -406,6 +414,29 @@ export function YouTubeSettingsPanel({
                   >
                     Selected Only
                   </Button>
+                </div>
+
+                <SectionHeader title="Selection" />
+                <div className="flex items-center justify-between gap-3 mb-3">
+                  <p className="text-xs text-muted-foreground">
+                    {selectedChannelCount} of {channels.length} shown
+                  </p>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      className="text-xs text-primary hover:underline"
+                      onClick={() => applyUpdate({ ...draft, channelMode: 'selected', selectedChannelIds: channels.map((c) => c.channel_id) })}
+                    >
+                      Select all
+                    </button>
+                    <button
+                      type="button"
+                      className="text-xs text-primary hover:underline"
+                      onClick={() => applyUpdate({ ...draft, channelMode: 'selected', selectedChannelIds: [] })}
+                    >
+                      Deselect all
+                    </button>
+                  </div>
                 </div>
 
                 <div

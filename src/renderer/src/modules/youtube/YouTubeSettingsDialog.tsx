@@ -336,6 +336,14 @@ export function YouTubeSettingsDialog({
     return [...inOrder, ...rest]
   }, [channels, draft.channelOrder])
 
+  const visibleSelectedChannelIds = useMemo(
+    () => draft.selectedChannelIds.filter((id) => channels.some((c) => c.channel_id === id)),
+    [channels, draft.selectedChannelIds]
+  )
+
+  const selectedChannelCount =
+    draft.channelMode === 'all' ? channels.length : visibleSelectedChannelIds.length
+
   function handleChannelDragEnd(event: DragEndEvent): void {
     const { active, over } = event
     if (!over || active.id === over.id) return
@@ -394,6 +402,29 @@ export function YouTubeSettingsDialog({
                 >
                   Selected Only
                 </Button>
+              </div>
+
+              <SectionHeader title="Selection" />
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <p className="text-xs text-muted-foreground">
+                  {selectedChannelCount} of {channels.length} shown
+                </p>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    className="text-xs text-primary hover:underline"
+                    onClick={() => setDraft((p) => ({ ...p, channelMode: 'selected', selectedChannelIds: channels.map((c) => c.channel_id) }))}
+                  >
+                    Select all
+                  </button>
+                  <button
+                    type="button"
+                    className="text-xs text-primary hover:underline"
+                    onClick={() => setDraft((p) => ({ ...p, channelMode: 'selected', selectedChannelIds: [] }))}
+                  >
+                    Deselect all
+                  </button>
+                </div>
               </div>
 
               {/* Channel list with drag reorder */}

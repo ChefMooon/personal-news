@@ -83,7 +83,7 @@ export function SavedPostsSettingsPanel({
   return (
     <div className="flex flex-col h-full w-full min-w-0 flex-1">
       <ScrollArea className="h-full w-full">
-        <div className="space-y-5 pb-2 pr-4">
+        <div className="space-y-5 pb-2 pl-2 pr-4">
           <div>
             <h3 className="text-sm font-semibold mb-3">Sources</h3>
             <div className="space-y-2">

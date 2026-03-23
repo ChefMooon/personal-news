@@ -295,7 +295,7 @@ export function RedditDigestSettingsPanel({
   return (
     <div className="flex flex-col h-full w-full min-w-0 flex-1">
       <ScrollArea className="h-full w-full">
-        <div className="space-y-5 pb-2 pr-4">
+        <div className="space-y-5 pb-2 pl-2 pr-4">
           <div>
             <button
               className="mb-2 flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
