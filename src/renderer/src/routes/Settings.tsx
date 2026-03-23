@@ -1151,7 +1151,7 @@ export default function Settings(): React.ReactElement {
   return (
     <div className="flex flex-col h-full px-6 py-4">
       <h1 className="text-xl font-semibold mb-4">Settings</h1>
-      <Tabs defaultValue={searchParams.get('tab') ?? 'api-keys'} className="flex-1">
+      <Tabs defaultValue={searchParams.get('tab') ?? 'features'} className="flex-1">
         <TabsList>
           <TabsTrigger value="features">Features</TabsTrigger>
           <TabsTrigger value="api-keys">API Keys</TabsTrigger>
