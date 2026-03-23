@@ -1603,19 +1603,22 @@ export default function Settings(): React.ReactElement {
         <TabsList>
           <TabsTrigger value="features">Features</TabsTrigger>
           <TabsTrigger value="app-behavior">App Behavior</TabsTrigger>
+          <TabsTrigger value="notifications">Notifications</TabsTrigger>
           <TabsTrigger value="api-keys">API Keys</TabsTrigger>
           <TabsTrigger value="youtube">YouTube</TabsTrigger>
           {redditDigestEnabled && <TabsTrigger value="reddit-digest">Reddit Digest</TabsTrigger>}
           {savedPostsEnabled && <TabsTrigger value="saved-posts">Saved Posts</TabsTrigger>}
           <TabsTrigger value="appearance">Appearance</TabsTrigger>
           <TabsTrigger value="scripts">Scripts</TabsTrigger>
-          <TabsTrigger value="notifications">Notifications</TabsTrigger>
         </TabsList>
         <TabsContent value="features" className="mt-4">
           <FeaturesTab />
         </TabsContent>
         <TabsContent value="app-behavior" className="mt-4">
           <AppBehaviorTab />
+        </TabsContent>
+        <TabsContent value="notifications" className="mt-4">
+          <NotificationsTab />
         </TabsContent>
         <TabsContent value="api-keys" className="mt-4">
           <ApiKeysTab />
@@ -1638,9 +1641,6 @@ export default function Settings(): React.ReactElement {
         </TabsContent>
         <TabsContent value="scripts" className="mt-4">
           <ScriptsTab />
-        </TabsContent>
-        <TabsContent value="notifications" className="mt-4">
-          <NotificationsTab />
         </TabsContent>
       </Tabs>
     </div>
