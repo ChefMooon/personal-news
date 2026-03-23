@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { IPC, type YouTubeViewConfig } from '../../../shared/ipc-types'
 
-const DEFAULT_CONFIG: YouTubeViewConfig = {
+export const DEFAULT_YOUTUBE_VIEW_CONFIG: YouTubeViewConfig = {
   showVideos: true,
   showShorts: true,
   showUpcomingStreams: true,
@@ -25,12 +25,12 @@ export function useYouTubeViewConfig(instanceId: string): {
   setConfig: (newConfig: YouTubeViewConfig) => void
   loading: boolean
 } {
-  const [config, setConfigState] = useState<YouTubeViewConfig>(DEFAULT_CONFIG)
+  const [config, setConfigState] = useState<YouTubeViewConfig>(DEFAULT_YOUTUBE_VIEW_CONFIG)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     if (!instanceId) {
-      setConfigState(DEFAULT_CONFIG)
+      setConfigState(DEFAULT_YOUTUBE_VIEW_CONFIG)
       setLoading(false)
       return
     }
@@ -39,7 +39,7 @@ export function useYouTubeViewConfig(instanceId: string): {
     window.api
       .invoke(IPC.SETTINGS_GET_YOUTUBE_VIEW_CONFIG, instanceId)
       .then((value) => {
-        setConfigState({ ...DEFAULT_CONFIG, ...(value as Partial<YouTubeViewConfig>) })
+        setConfigState({ ...DEFAULT_YOUTUBE_VIEW_CONFIG, ...(value as Partial<YouTubeViewConfig>) })
       })
       .catch(console.error)
       .finally(() => {

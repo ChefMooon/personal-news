@@ -1,12 +1,23 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useYouTubeChannels } from '../../hooks/useYouTubeChannels'
-import { useYouTubeViewConfig } from '../../hooks/useYouTubeViewConfig'
+import { useYouTubeViewConfig, DEFAULT_YOUTUBE_VIEW_CONFIG } from '../../hooks/useYouTubeViewConfig'
 import { useWidgetInstance } from '../../contexts/WidgetInstanceContext'
 import { ChannelRow } from './ChannelRow'
-import { YouTubeSettingsDialog } from './YouTubeSettingsDialog'
+import { YouTubeSettingsPanel } from './YouTubeSettingsPanel'
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card'
 import { Separator } from '../../components/ui/separator'
-import { Settings2, Youtube } from 'lucide-react'
+import { RefreshCcw, RotateCcw, Settings2, X, Youtube } from 'lucide-react'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger
+} from '../../components/ui/alert-dialog'
 import { registerRendererModule } from '../registry'
 import type { YtChannel, YouTubeViewConfig } from '../../../../shared/ipc-types'
 
@@ -49,13 +60,26 @@ function YouTubeWidget(): React.ReactElement {
   const widgetTitle = label ?? 'YouTube'
   const { channels, loading } = useYouTubeChannels()
   const { config: viewConfig, setConfig } = useYouTubeViewConfig(instanceId)
-  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [isEditing, setIsEditing] = useState(false)
+  const [snapshotConfig, setSnapshotConfig] = useState<YouTubeViewConfig | null>(null)
+  const [editContentHeight, setEditContentHeight] = useState<number | null>(null)
   const [collapsedChannels, setCollapsedChannels] = useState<Record<string, boolean>>({})
+  const cardContentRef = useRef<HTMLDivElement | null>(null)
 
   // Reset per-channel collapse state when the default changes
   useEffect(() => {
     setCollapsedChannels({})
   }, [viewConfig.collapseChannelsByDefault])
+
+  // Close on Escape key
+  useEffect(() => {
+    if (!isEditing) return
+    const handler = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') handleClose()
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [isEditing]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const displayedChannels = useMemo(
     () => computeDisplayedChannels(channels, viewConfig),
@@ -76,59 +100,139 @@ function YouTubeWidget(): React.ReactElement {
 
   const enabledCount = channels.filter((c) => c.enabled).length
 
-  return (
+  function handleOpenEdit(): void {
+    const currentHeight = cardContentRef.current?.getBoundingClientRect().height
+    if (currentHeight && currentHeight > 0) {
+      setEditContentHeight(currentHeight)
+    }
+    setSnapshotConfig(viewConfig)
+    setIsEditing(true)
+  }
+
+  function handleClose(): void {
+    setIsEditing(false)
+    setSnapshotConfig(null)
+    setEditContentHeight(null)
+  }
+
+  function handleReset(): void {
+    if (snapshotConfig) {
+      setConfig(snapshotConfig)
+    }
+  }
+
+  function handleFactoryReset(): void {
+    setConfig(DEFAULT_YOUTUBE_VIEW_CONFIG)
+    setSnapshotConfig(DEFAULT_YOUTUBE_VIEW_CONFIG)
+  }
+
+  const channelList = (
     <>
-      <Card>
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Youtube className="h-5 w-5 text-red-500" />
-              {widgetTitle}
-            </CardTitle>
+      {loading ? (
+        <p className="text-sm text-muted-foreground">Loading channels...</p>
+      ) : displayedChannels.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          {enabledCount === 0
+            ? 'No channels configured.'
+            : 'No channels selected. Open settings to choose channels.'}
+        </p>
+      ) : (
+        <div>
+          {displayedChannels.map((channel, idx) => (
+            <div key={channel.channel_id}>
+              {idx > 0 && <Separator className="my-1" />}
+              <ChannelRow
+                channel={channel}
+                viewConfig={viewConfig}
+                isCollapsed={isChannelCollapsed(channel.channel_id)}
+                onToggleCollapse={() => toggleCollapse(channel.channel_id)}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+    </>
+  )
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Youtube className="h-5 w-5 text-red-500" />
+            {widgetTitle}
+          </CardTitle>
+          {isEditing ? (
+            <div className="flex items-center gap-0.5">
+              <button
+                className="p-1 rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                onClick={handleReset}
+                title="Reset to when you opened this"
+                aria-label="Reset settings"
+              >
+                <RotateCcw className="h-4 w-4" />
+              </button>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <button
+                    className="p-1 rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                    title="Restore defaults"
+                    aria-label="Restore default settings"
+                  >
+                    <RefreshCcw className="h-4 w-4" />
+                  </button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Restore Defaults</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Reset all YouTube widget settings to their defaults? This cannot be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleFactoryReset}>Confirm</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+              <button
+                className="p-1 rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                onClick={handleClose}
+                title="Close settings"
+                aria-label="Close settings"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          ) : (
             <button
               className="p-1 rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
               aria-label="YouTube widget settings"
-              onClick={() => setSettingsOpen(true)}
+              onClick={handleOpenEdit}
             >
               <Settings2 className="h-4 w-4" />
             </button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <p className="text-sm text-muted-foreground">Loading channels...</p>
-          ) : displayedChannels.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              {enabledCount === 0
-                ? 'No channels configured.'
-                : 'No channels selected. Open settings to choose channels.'}
-            </p>
-          ) : (
-            <div>
-              {displayedChannels.map((channel, idx) => (
-                <div key={channel.channel_id}>
-                  {idx > 0 && <Separator className="my-1" />}
-                  <ChannelRow
-                    channel={channel}
-                    viewConfig={viewConfig}
-                    isCollapsed={isChannelCollapsed(channel.channel_id)}
-                    onToggleCollapse={() => toggleCollapse(channel.channel_id)}
-                  />
-                </div>
-              ))}
+          )}
+        </div>
+      </CardHeader>
+      <CardContent
+        ref={cardContentRef}
+        style={isEditing && editContentHeight ? { height: editContentHeight, overflow: 'hidden' } : undefined}
+      >
+        <div className={isEditing ? 'youtube-card-edit' : undefined}>
+          <div className={isEditing ? 'youtube-card-edit__preview' : undefined}>{channelList}</div>
+          {isEditing && (
+            <div className="youtube-card-edit__panel">
+              <YouTubeSettingsPanel
+                channels={channels}
+                config={viewConfig}
+                onChange={setConfig}
+              />
             </div>
           )}
-        </CardContent>
-      </Card>
-
-      <YouTubeSettingsDialog
-        open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-        channels={channels}
-        config={viewConfig}
-        setConfig={setConfig}
-      />
-    </>
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 
