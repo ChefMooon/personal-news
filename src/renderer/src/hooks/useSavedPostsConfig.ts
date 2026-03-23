@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import type { SavedPostsViewConfig } from '../../../shared/ipc-types'
 
-const DEFAULT_CONFIG: SavedPostsViewConfig = {
+export const DEFAULT_SAVED_POSTS_VIEW_CONFIG: SavedPostsViewConfig = {
   subreddit_filter: null,
   tag_filter: null,
   source_filter: null,
@@ -27,7 +27,7 @@ export function useSavedPostsConfig(instanceId: string): {
   config: SavedPostsViewConfig
   setConfig: (newConfig: SavedPostsViewConfig) => void
 } {
-  const [config, setConfigState] = useState<SavedPostsViewConfig>(DEFAULT_CONFIG)
+  const [config, setConfigState] = useState<SavedPostsViewConfig>(DEFAULT_SAVED_POSTS_VIEW_CONFIG)
   const storageKey = `saved_posts_view_config:${instanceId}`
 
   useEffect(() => {
@@ -37,7 +37,7 @@ export function useSavedPostsConfig(instanceId: string): {
         if (raw) {
           try {
             setConfigState({
-              ...DEFAULT_CONFIG,
+              ...DEFAULT_SAVED_POSTS_VIEW_CONFIG,
               ...(JSON.parse(raw as string) as Partial<SavedPostsViewConfig>)
             })
           } catch {

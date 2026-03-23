@@ -1,17 +1,31 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSavedPosts } from '../../hooks/useSavedPosts'
-import { useSavedPostsConfig } from '../../hooks/useSavedPostsConfig'
+import {
+  useSavedPostsConfig,
+  DEFAULT_SAVED_POSTS_VIEW_CONFIG
+} from '../../hooks/useSavedPostsConfig'
 import { useNtfyStaleness } from '../../hooks/useNtfyStaleness'
 import { useWidgetInstance } from '../../contexts/WidgetInstanceContext'
-import { SavedPostsControls } from './SavedPostsControls'
+import { SavedPostsSettingsPanel } from './SavedPostsSettingsPanel'
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card'
 import { Badge } from '../../components/ui/badge'
 import { Button } from '../../components/ui/button'
-import { Bookmark, ArrowUp, Clock } from 'lucide-react'
+import { Bookmark, ArrowUp, Clock, Settings2, RotateCcw, RefreshCcw, X } from 'lucide-react'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger
+} from '../../components/ui/alert-dialog'
 import { formatRelativeTime } from '../../lib/time'
 import { registerRendererModule } from '../registry'
-import { IPC, type SavedPost, type LinkSource } from '../../../../shared/ipc-types'
+import { IPC, type SavedPost, type LinkSource, type SavedPostsViewConfig } from '../../../../shared/ipc-types'
 import { NtfyOnboardingWizard } from './NtfyOnboardingWizard'
 
 const SOURCE_LABELS: Record<LinkSource, string> = {
@@ -100,6 +114,10 @@ function SavedPostsWidget(): React.ReactElement {
   const staleness = useNtfyStaleness()
   const navigate = useNavigate()
   const [showOnboarding, setShowOnboarding] = useState(false)
+  const [isEditing, setIsEditing] = useState(false)
+  const [snapshotConfig, setSnapshotConfig] = useState<SavedPostsViewConfig | null>(null)
+  const [editContentHeight, setEditContentHeight] = useState<number | null>(null)
+  const cardContentRef = useRef<HTMLDivElement | null>(null)
 
   // Fetch posts with the widget's configured filters
   const { posts, loading, refetch } = useSavedPosts({
@@ -136,6 +154,15 @@ function SavedPostsWidget(): React.ReactElement {
     }
     return window.api.on(IPC.REDDIT_NTFY_INGEST_COMPLETE, listener)
   }, [refetch])
+
+  useEffect(() => {
+    if (!isEditing) return
+    const handler = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') handleClose()
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [isEditing]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Group posts by source when configured
   const groupedPosts = useMemo(() => {
@@ -190,6 +217,32 @@ function SavedPostsWidget(): React.ReactElement {
     window.api.invoke('shell:openExternal', url).catch(console.error)
   }
 
+  function handleOpenEdit(): void {
+    const currentHeight = cardContentRef.current?.getBoundingClientRect().height
+    if (currentHeight && currentHeight > 0) {
+      setEditContentHeight(currentHeight)
+    }
+    setSnapshotConfig(config)
+    setIsEditing(true)
+  }
+
+  function handleClose(): void {
+    setIsEditing(false)
+    setSnapshotConfig(null)
+    setEditContentHeight(null)
+  }
+
+  function handleReset(): void {
+    if (snapshotConfig) {
+      setConfig(snapshotConfig)
+    }
+  }
+
+  function handleFactoryReset(): void {
+    setConfig(DEFAULT_SAVED_POSTS_VIEW_CONFIG)
+    setSnapshotConfig(DEFAULT_SAVED_POSTS_VIEW_CONFIG)
+  }
+
   const cardConfig = {
     showMetadata: config.showMetadata,
     showSourceBadge: config.showSourceBadge,
@@ -220,12 +273,6 @@ function SavedPostsWidget(): React.ReactElement {
             {widgetTitle}
           </CardTitle>
           <div className="flex items-center gap-2">
-            <SavedPostsControls
-              config={config}
-              availableSubreddits={availableSubreddits}
-              availableTags={allTags}
-              onConfigChange={setConfig}
-            />
             {config.showViewAllLink && (
               <button
                 onClick={() => navigate('/saved-posts')}
@@ -234,30 +281,98 @@ function SavedPostsWidget(): React.ReactElement {
                 View All
               </button>
             )}
+            {isEditing ? (
+              <div className="flex items-center gap-0.5">
+                <button
+                  className="p-1 rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                  onClick={handleReset}
+                  title="Reset to when you opened this"
+                  aria-label="Reset settings"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                </button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <button
+                      className="p-1 rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                      title="Restore defaults"
+                      aria-label="Restore default settings"
+                    >
+                      <RefreshCcw className="h-4 w-4" />
+                    </button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Restore Defaults</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Reset all Saved Posts widget settings to their defaults? This cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleFactoryReset}>Confirm</AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+                <button
+                  className="p-1 rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                  onClick={handleClose}
+                  title="Close settings"
+                  aria-label="Close settings"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            ) : (
+              <button
+                className="p-1 rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                aria-label="Saved posts widget settings"
+                onClick={handleOpenEdit}
+              >
+                <Settings2 className="h-4 w-4" />
+              </button>
+            )}
           </div>
         </div>
       </CardHeader>
-      <CardContent>
-        {loading ? (
-          <p className="text-sm text-muted-foreground">Loading...</p>
-        ) : posts.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No saved posts yet.</p>
-        ) : groupedPosts ? (
-          <div className="space-y-4">
-            {groupedPosts.map(({ source, posts: groupPosts }) => (
-              <div key={source}>
-                {config.showGroupHeaders && (
-                  <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-                    {SOURCE_LABELS[source]}
-                  </h4>
-                )}
-                {renderPostList(groupPosts)}
+      <CardContent
+        ref={cardContentRef}
+        style={isEditing && editContentHeight ? { height: editContentHeight, overflow: 'hidden' } : undefined}
+      >
+        <div className={isEditing ? 'saved-posts-card-edit' : undefined}>
+          <div className={isEditing ? 'saved-posts-card-edit__preview' : undefined}>
+            {loading ? (
+              <p className="text-sm text-muted-foreground">Loading...</p>
+            ) : posts.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No saved posts yet.</p>
+            ) : groupedPosts ? (
+              <div className="space-y-4">
+                {groupedPosts.map(({ source, posts: groupPosts }) => (
+                  <div key={source}>
+                    {config.showGroupHeaders && (
+                      <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                        {SOURCE_LABELS[source]}
+                      </h4>
+                    )}
+                    {renderPostList(groupPosts)}
+                  </div>
+                ))}
               </div>
-            ))}
+            ) : (
+              renderPostList(posts)
+            )}
           </div>
-        ) : (
-          renderPostList(posts)
-        )}
+          {isEditing && (
+            <div className="saved-posts-card-edit__panel">
+              <SavedPostsSettingsPanel
+                config={config}
+                availableSubreddits={availableSubreddits}
+                availableTags={allTags}
+                onChange={setConfig}
+              />
+            </div>
+          )}
+        </div>
       </CardContent>
       <NtfyOnboardingWizard
         isOpen={showOnboarding}
