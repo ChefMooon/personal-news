@@ -4,6 +4,7 @@ import { LayoutDashboard, Bookmark, Terminal, Settings, ChevronLeft, ChevronRigh
 import { cn } from '../lib/utils'
 import { useScripts } from '../hooks/useScripts'
 import { useRedditDigestEnabled } from '../contexts/RedditDigestEnabledContext'
+import { useSavedPostsEnabled } from '../contexts/SavedPostsEnabledContext'
 
 interface NavItem {
   to: string
@@ -17,6 +18,7 @@ export function Sidebar(): React.ReactElement {
   const { scripts } = useScripts()
   const hasStaleScripts = scripts.some((s) => s.is_stale)
   const { enabled: redditDigestEnabled } = useRedditDigestEnabled()
+  const { enabled: savedPostsEnabled } = useSavedPostsEnabled()
 
   const navItems: NavItem[] = [
     {
@@ -33,11 +35,15 @@ export function Sidebar(): React.ReactElement {
           }
         ]
       : []),
-    {
-      to: '/saved-posts',
-      label: 'Saved Posts',
-      icon: <Bookmark className="h-5 w-5 shrink-0" />
-    },
+    ...(savedPostsEnabled
+      ? [
+          {
+            to: '/saved-posts',
+            label: 'Saved Posts',
+            icon: <Bookmark className="h-5 w-5 shrink-0" />
+          }
+        ]
+      : []),
     {
       to: '/youtube',
       label: 'YouTube',

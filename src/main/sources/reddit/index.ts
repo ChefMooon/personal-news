@@ -91,6 +91,14 @@ export const RedditModule: DataSourceModule = {
     dbRef = db
     console.log('[Reddit] Module initialized')
 
+    // Check if Saved Posts feature is enabled
+    const savedPostsEnabled = getSetting('saved_posts_enabled') !== 'false'
+    
+    if (!savedPostsEnabled) {
+      console.log('[Reddit] Saved Posts feature is disabled, skipping ntfy polling')
+      return
+    }
+
     const configuredInterval = getSetting('ntfy_poll_interval_minutes')
     const parsedInterval = configuredInterval ? parseInt(configuredInterval, 10) : NaN
     if (Number.isInteger(parsedInterval) && parsedInterval >= 1 && parsedInterval <= 1440) {

@@ -22,6 +22,7 @@ import { Button } from '../components/ui/button'
 import { Settings2, Check, Plus } from 'lucide-react'
 import { WidgetInstanceContext } from '../contexts/WidgetInstanceContext'
 import { AddWidgetModal, type AddWidgetConfig } from '../components/AddWidgetModal'
+import { useSavedPostsEnabled } from '../contexts/SavedPostsEnabledContext'
 import { useRedditDigestEnabled } from '../contexts/RedditDigestEnabledContext'
 
 // Import modules to trigger registration
@@ -32,6 +33,7 @@ import '../modules/saved-posts/SavedPostsWidget'
 export default function Dashboard(): React.ReactElement {
   const { layout, setLayout, loading } = useWidgetLayout()
   const { enabled: redditDigestEnabled } = useRedditDigestEnabled()
+  const { enabled: savedPostsEnabled } = useSavedPostsEnabled()
   const [editMode, setEditMode] = useState(false)
   const [showAddModal, setShowAddModal] = useState(false)
 
@@ -211,6 +213,7 @@ export default function Dashboard(): React.ReactElement {
               const instance = layout.widget_instances[instanceId]
               if (!instance) return null
               if (instance.moduleId === 'reddit_digest' && !redditDigestEnabled) return null
+                if (instance.moduleId === 'saved_posts' && !savedPostsEnabled) return null
               const mod = getModule(instance.moduleId)
               if (!mod) return null
               const WidgetComponent = mod.widget

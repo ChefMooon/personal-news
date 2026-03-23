@@ -8,6 +8,7 @@ import { Switch } from '../components/ui/switch'
 import { useTheme } from '../providers/ThemeProvider'
 import { useYouTubeChannels } from '../hooks/useYouTubeChannels'
 import { useRedditDigestEnabled } from '../contexts/RedditDigestEnabledContext'
+import { useSavedPostsEnabled } from '../contexts/SavedPostsEnabledContext'
 import { Eye, EyeOff, ExternalLink } from 'lucide-react'
 import {
   IPC,
@@ -808,6 +809,7 @@ function RedditDigestTab(): React.ReactElement {
 
 function FeaturesTab(): React.ReactElement {
   const { enabled, setEnabled } = useRedditDigestEnabled()
+  const { enabled: savedPostsEnabled, setEnabled: setSavedPostsEnabled } = useSavedPostsEnabled()
 
   return (
     <div className="space-y-4 max-w-lg">
@@ -820,6 +822,17 @@ function FeaturesTab(): React.ReactElement {
         <div className="flex items-center justify-between rounded-md border px-3 py-2 max-w-sm">
           <span className="text-sm">Enable Reddit Digest</span>
           <Switch checked={enabled} onCheckedChange={setEnabled} />
+        </div>
+      </div>
+      <div>
+        <h3 className="text-sm font-medium mb-1">Saved Posts</h3>
+        <p className="text-xs text-muted-foreground mb-3">
+          Enable or disable the Saved Posts feature. When disabled, the dashboard widget,
+          dedicated page, and settings tab are hidden.
+        </p>
+        <div className="flex items-center justify-between rounded-md border px-3 py-2 max-w-sm">
+          <span className="text-sm">Enable Saved Posts</span>
+          <Switch checked={savedPostsEnabled} onCheckedChange={setSavedPostsEnabled} />
         </div>
       </div>
     </div>
@@ -1134,6 +1147,7 @@ function SavedPostsTab(): React.ReactElement {
 export default function Settings(): React.ReactElement {
   const [searchParams] = useSearchParams()
   const { enabled: redditDigestEnabled } = useRedditDigestEnabled()
+  const { enabled: savedPostsEnabled } = useSavedPostsEnabled()
   return (
     <div className="flex flex-col h-full px-6 py-4">
       <h1 className="text-xl font-semibold mb-4">Settings</h1>
@@ -1143,7 +1157,7 @@ export default function Settings(): React.ReactElement {
           <TabsTrigger value="api-keys">API Keys</TabsTrigger>
           <TabsTrigger value="youtube">YouTube</TabsTrigger>
           {redditDigestEnabled && <TabsTrigger value="reddit-digest">Reddit Digest</TabsTrigger>}
-          <TabsTrigger value="saved-posts">Saved Posts</TabsTrigger>
+          {savedPostsEnabled && <TabsTrigger value="saved-posts">Saved Posts</TabsTrigger>}
           <TabsTrigger value="appearance">Appearance</TabsTrigger>
           <TabsTrigger value="scripts">Scripts</TabsTrigger>
         </TabsList>
@@ -1161,9 +1175,11 @@ export default function Settings(): React.ReactElement {
             <RedditDigestTab />
           </TabsContent>
         )}
-        <TabsContent value="saved-posts" className="mt-4">
-          <SavedPostsTab />
-        </TabsContent>
+        {savedPostsEnabled && (
+          <TabsContent value="saved-posts" className="mt-4">
+            <SavedPostsTab />
+          </TabsContent>
+        )}
         <TabsContent value="appearance" className="mt-4">
           <AppearanceTab />
         </TabsContent>

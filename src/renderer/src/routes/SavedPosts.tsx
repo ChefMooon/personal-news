@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { IPC } from '../../../shared/ipc-types'
 import type { SavedPost, LinkSource } from '../../../shared/ipc-types'
 import { useSavedPosts } from '../hooks/useSavedPosts'
 import { useNtfyStaleness } from '../hooks/useNtfyStaleness'
+import { useSavedPostsEnabled } from '../contexts/SavedPostsEnabledContext'
 import { StaleWarning } from '../modules/saved-posts/StaleWarning'
 import { NtfyOnboardingWizard } from '../modules/saved-posts/NtfyOnboardingWizard'
 import { TagManagementModal } from '../modules/saved-posts/TagManagementModal'
@@ -106,6 +108,31 @@ const SOURCE_LABELS: Record<LinkSource, string> = {
 }
 
 export default function SavedPosts(): React.ReactElement {
+  const { enabled } = useSavedPostsEnabled()
+
+  if (!enabled) {
+    return (
+      <div className="flex flex-col h-full px-6 py-4">
+        <h1 className="text-xl font-semibold mb-4">Saved Posts</h1>
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center space-y-3 max-w-sm">
+            <p className="text-muted-foreground">Saved Posts is disabled.</p>
+            <p className="text-sm text-muted-foreground">
+              Enable it in{' '}
+              <Link to="/settings?tab=features" className="underline hover:text-foreground">
+                Settings → Features
+              </Link>
+            </p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return <SavedPostsContent />
+}
+
+function SavedPostsContent(): React.ReactElement {
   const [source, setSource] = useState<string | null>(null)
   const {
     posts,

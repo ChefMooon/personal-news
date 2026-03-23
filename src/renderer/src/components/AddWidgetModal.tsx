@@ -11,6 +11,7 @@ import {
 } from './ui/select'
 import { moduleRegistry } from '../modules/registry'
 import { useRedditDigest } from '../hooks/useRedditDigest'
+import { useSavedPostsEnabled } from '../contexts/SavedPostsEnabledContext'
 import type { WidgetLayout } from '../../../shared/ipc-types'
 import { cn } from '../lib/utils'
 
@@ -56,6 +57,7 @@ export function AddWidgetModal({ layout, onAdd, onClose }: AddWidgetModalProps):
   const [subredditFilter, setSubredditFilter] = useState<string[] | null>(null)
 
   const { posts } = useRedditDigest()
+  const { enabled: savedPostsEnabled } = useSavedPostsEnabled()
   const availableSubreddits = useMemo(
     () => [...new Set(posts.map((p) => p.subreddit))].sort(),
     [posts]
@@ -166,7 +168,7 @@ export function AddWidgetModal({ layout, onAdd, onClose }: AddWidgetModalProps):
         {/* Scrollable content */}
         <div className="flex-1 overflow-auto p-5">
           {phase === 'pick' ? (
-            <WidgetPicker onSelect={selectModule} />
+            <WidgetPicker onSelect={selectModule} savedPostsEnabled={savedPostsEnabled} />
           ) : (
             <ConfigureForm
               moduleId={selectedModuleId!}
@@ -203,10 +205,14 @@ export function AddWidgetModal({ layout, onAdd, onClose }: AddWidgetModalProps):
 
 // ─── Phase 1: Widget picker ───────────────────────────────────────────────────
 
-function WidgetPicker({ onSelect }: { onSelect: (id: string) => void }): React.ReactElement {
+function WidgetPicker({ onSelect, savedPostsEnabled }: { onSelect: (id: string) => void; savedPostsEnabled: boolean }): React.ReactElement {
   return (
     <div className="grid grid-cols-1 gap-3">
       {moduleRegistry.map((mod) => {
+        // Skip saved_posts widget if feature is disabled
+        if (mod.id === 'saved_posts' && !savedPostsEnabled) {
+          return null
+        }
         const meta = MODULE_META[mod.id]
         return (
           <button
