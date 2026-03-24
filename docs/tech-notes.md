@@ -1,8 +1,8 @@
 # Technical Notes — Personal News Dashboard
 
 **Project:** personal-news
-**Status:** Draft
-**Last Updated:** 2026-03-15 (rev 7)
+**Status:** Active reference
+**Last Updated:** 2026-03-24 (rev 8)
 **Related Docs:** [PRD.md](./PRD.md) | [data-sources.md](./data-sources.md) | [ui-ux.md](./ui-ux.md)
 
 ---
@@ -16,7 +16,7 @@
 | Styling | Tailwind CSS | Utility-first, consistent design tokens, pairs well with shadcn/ui. |
 | Component library | shadcn/ui | Radix UI primitives — accessible, composable, and unstyled enough to customize. Owned components (copied into repo) rather than a black-box dependency. |
 | Database | better-sqlite3 | Synchronous SQLite bindings for Node.js. Simpler than async alternatives for this use case. All data is local; no concurrency issues. |
-| Packaging | electron-builder | Mature packaging and auto-update solution. Supports NSIS (Windows), DMG (macOS), AppImage/deb (Linux). |
+| Packaging | electron-builder + electron-updater | Packaging remains cross-platform via electron-builder. The auto-update flow is currently wired through electron-updater for packaged Windows builds only. |
 | Drag-and-drop | @dnd-kit/core | Accessible drag-and-drop primitives for React. Preferred over react-beautiful-dnd (deprecated) and react-dnd (heavier). |
 | Build toolchain | electron-vite | Opinionated Electron + Vite scaffold. Handles main/renderer/preload configuration with minimal setup. Confirmed over manual Vite config. |
 | Scheduling | node-cron | Cron-style scheduling within the Electron main process. Scripts only run when the app is open — this is a known and accepted limitation. |
@@ -41,18 +41,20 @@ All data flows through Electron's `ipcMain` / `ipcRenderer` via the preload brid
 
 ```
 youtube:getChannels        → returns channel list
-youtube:addChannel         → takes channel ID, triggers fetch
-youtube:getVideos          → takes channel ID, returns cached videos
-reddit:getSavedPosts       → returns saved post list
+youtube:addChannel         → takes channel ID or URL, resolves and persists the channel
+youtube:getVideosFiltered  → returns cached videos with media/search/watch filters applied
+youtube:setChannelNotify   → updates per-channel desktop notification preferences
+reddit:getSavedPosts       → returns saved links with search/tag/source/viewed filters
 reddit:pollNtfy            → triggers an immediate ntfy.sh poll (manual refresh)
-reddit:getNtfyStaleness    → returns { lastPolledAt: number | null } so the renderer can compute whether to show the stale warning
+reddit:getNtfyStaleness    → returns { lastPolledAt, isStale, topicConfigured }
 scripts:getAll             → returns registered scripts
 scripts:run                → takes script ID, triggers execution
-scripts:getRunHistory      → takes script ID, returns run records
-settings:getApiKey         → returns the YouTube API key (decrypted from safeStorage; never returns the raw value to the renderer, only a masked confirmation)
-settings:setApiKey         → takes the YouTube API key value, encrypts and stores via safeStorage
-settings:getNtfyConfig     → returns { topic, serverUrl } from the plain settings table
-settings:setNtfyConfig     → takes { topic, serverUrl }, writes plain text to the settings table
+scripts:getNotifications   → returns persisted script notifications for the sidebar flyout
+settings:getWidgetLayout   → returns widget_order, widget_visibility, and widget_instances as one layout object
+settings:setNtfyPollInterval → updates the background ntfy poll schedule
+settings:getNotificationPrefs → returns desktop notification preferences
+updates:status             → pushes auto-update state to the renderer
+app:showTrayHint           → tells the renderer to show the first-close tray hint toast
 ```
 
 IPC calls from the renderer should always be async (invoke/handle pattern, not send/on) so the UI can await results.
@@ -63,7 +65,9 @@ The following run in the main process on timers or events:
 
 - **YouTube RSS poller**: `setInterval` or `node-cron` job per configured channel. Polls the RSS feed, compares against stored video IDs, triggers API v3 fetch if delta detected.
 - **Script scheduler**: `node-cron` jobs per script with a schedule. Spawns the script as a child process.
-- **ntfy.sh startup poll**: Runs once on app launch. Fetches new messages from the user's configured ntfy.sh topic, ingests any valid Reddit URLs as saved posts, and advances the message cursor. No persistent listener or open port is required.
+- **ntfy.sh poller**: Runs once on app launch and then on a user-configurable background cron interval (`ntfy_poll_interval_minutes`, default 60). It can also be triggered manually from the UI. Messages are parsed into URL + optional note and routed through source detection before upsert.
+- **Desktop notification dispatch**: Emits OS notifications for new YouTube videos, live starts, Saved Posts sync success, Reddit Digest results, and Script Manager auto-run results when preferences allow and the app window is not focused.
+- **Tray and updater lifecycle**: Maintains the tray icon/menu, applies close-to-tray behavior, and initializes Windows-only packaged auto-update checks.
 
 These must not block the main process event loop. Long-running work (script execution) runs in child processes. Network calls use async APIs.
 
@@ -133,7 +137,9 @@ See [data-sources.md](./data-sources.md) for per-source table definitions. Addit
 ```sql
 -- Application settings — plain text values only.
 -- Examples: ntfy_topic, ntfy_server_url, ntfy_last_message_id,
---           ntfy_last_polled_at, widget_order, rss_poll_interval_minutes
+--           ntfy_last_polled_at, widget_order, widget_visibility,
+--           widget_instances, rss_poll_interval_minutes,
+--           ntfy_poll_interval_minutes, desktop_notification_prefs
 CREATE TABLE settings (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
@@ -172,7 +178,7 @@ The encrypted bytes are stored in a dedicated column or separate blob (not in th
 
 ## 6. ntfy.sh Ingestion (Saved Posts)
 
-Saved posts are ingested by polling a user-configured ntfy.sh topic at app startup. The app makes only outbound HTTPS requests — no local port is opened.
+Saved links are ingested by polling a user-configured ntfy.sh topic at app startup, on a background schedule, or on a manual sync. The app makes only outbound HTTPS requests — no local port is opened.
 
 ### 6.1 Poll Request
 
@@ -186,7 +192,13 @@ GET https://ntfy.sh/{TOPIC}/json?poll=1&since={LAST_MESSAGE_ID}
 
 ### 6.2 ntfy.sh Message Format
 
-The mobile shortcut sends the Reddit post URL as the plain message body. Example message object:
+The app accepts three message-body shapes:
+
+- plain URL
+- URL on the first line plus a freeform note on subsequent lines
+- small JSON payloads from share-sheet clients, where the first HTTP URL value is extracted
+
+Example message object:
 
 ```json
 {
@@ -194,15 +206,15 @@ The mobile shortcut sends the Reddit post URL as the plain message body. Example
   "time": 1710500000,
   "event": "message",
   "topic": "your-private-topic",
-  "message": "https://www.reddit.com/r/example/comments/abc123/post_title/"
+  "message": "https://www.reddit.com/r/example/comments/abc123/post_title/\nRead this later"
 }
 ```
 
-The app extracts the `message` field and validates it matches a Reddit post URL pattern before fetching metadata.
+The app extracts the URL, keeps the optional note, and accepts any `http` or `https` URL. Metadata is then resolved through the source registry: Reddit uses the Reddit JSON API, X and Bluesky use URL-derived metadata, and unmatched URLs fall back to a generic link record.
 
 ### 6.3 Stale Poll Detection
 
-The app tracks the timestamp of the last successful ntfy poll in the `settings` table under the key `ntfy_last_polled_at` (Unix timestamp). On each app launch, after the startup poll completes, this value is updated.
+The app tracks the timestamp of the last successful ntfy poll in the `settings` table under the key `ntfy_last_polled_at` (Unix timestamp). This is updated after each successful startup, scheduled, or manual poll.
 
 The renderer fetches this value via the `reddit:getNtfyStaleness` IPC channel. If the elapsed time since `ntfy_last_polled_at` exceeds 24 hours — or if the value is null (never polled) and a topic is configured — the Saved Posts view displays the stale-poll warning banner (see ui-ux.md Section 6.0).
 
@@ -222,7 +234,7 @@ Users configure this in the onboarding flow (Step 2) and can edit it later in Se
 
 - The ntfy topic name and server URL are not credentials and are stored as plain text in the `settings` table (see Section 5 for the full storage mapping).
 - A long, random topic name provides obscurity — anyone who knows the topic name can post to it, but it cannot be guessed if sufficiently random. The onboarding flow pre-generates a 20-character alphanumeric name and explains this tradeoff.
-- The app validates that each message body is a Reddit URL before making any follow-up fetch. Non-Reddit URLs are ignored and logged.
+- The app validates that each parsed message contains an HTTP(S) URL before making any follow-up fetch. Unsupported or malformed payloads are skipped and logged.
 - ntfy.sh retains messages for 24 hours on the free public tier. The onboarding flow surfaces this limitation at Step 2 so users can make an informed choice about self-hosting before completing setup.
 - The server URL is validated as a well-formed `https://` URL before saving.
 
@@ -254,22 +266,18 @@ function runScript(interpreter: string, scriptPath: string, args: string[]) {
 
 ## 8. Module / Plugin Architecture
 
-To satisfy NFR-04 (adding a data source must not require changes to core code), each data source should be structured as a module with a defined interface:
+To satisfy NFR-04 (adding a data source must not require changes to core code), each main-process source is registered behind a small shared interface:
 
 ```typescript
 interface DataSourceModule {
-  id: string;                    // Unique identifier, e.g. 'youtube'
-  displayName: string;
-  initialize(db: Database): void; // Run on app start
-  getWidgetComponent(): ReactComponent;
-  getSettingsComponent(): ReactComponent;
-  onScheduledRefresh?(): Promise<void>;
+  id: string
+  displayName: string
+  initialize(db: Database): void
+  shutdown(): void
 }
 ```
 
-The core app maintains a registry of modules. The dashboard iterates the registry to render widgets and settings sections. Adding a new source = adding a new module file and registering it — no changes to dashboard layout or settings screen plumbing.
-
-Assumed: This interface is not final. The architecture agent should define the exact contract. This is a directional sketch to ensure modularity is a first-class design constraint, not an afterthought.
+The main process registry is responsible for lifecycle only. Renderer widgets are registered separately, and the dashboard renders them from persisted `widget_order` / `widget_instances`, which is what enables multiple instances of the same module type.
 
 ---
 
@@ -295,7 +303,9 @@ Assumed: This interface is not final. The architecture agent should define the e
 
 **Packaged smoke mode:** The main process supports `--smoke-test` and optional `--smoke-output=<path>` to initialize DB/migrations in packaged mode and exit with status 0 on success. This is used by the Windows verification script and CI pipeline.
 
-**Auto-update:** Considered for v2. electron-builder supports `electron-updater` for GitHub Releases or S3. Not in scope for v1 (Decision needed: confirm).
+**Auto-update:** Implemented for packaged Windows builds via `electron-updater`. Development builds and non-Windows platforms report auto-updates as unsupported/disabled. Downloaded updates are announced in the renderer and installed only when the user explicitly chooses restart/install.
+
+**Tray behavior:** The app creates a tray icon at startup. `app_close_to_tray` defaults to true, `app_minimize_to_tray` defaults to false, and the first close action emits a renderer toast explaining that the app is still running in the tray.
 
 ---
 

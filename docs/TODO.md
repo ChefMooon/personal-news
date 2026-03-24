@@ -1,5 +1,9 @@
 # Implementation TODO
 
+> Status: Historical implementation checklist retained for project history. This file is not maintained as the current source of truth for project status.
+>
+> Current maintained docs: [README](../README.md), [docs/PRD.md](./PRD.md), [docs/architecture/overview.md](./architecture/overview.md), [docs/architecture/data-sources.md](./architecture/data-sources.md), and [docs/ui-ux.md](./ui-ux.md).
+
 Everything the prototype deliberately skipped. Work through these one at a time.
 Each item links to the relevant architecture doc for the full spec.
 

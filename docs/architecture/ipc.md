@@ -1,7 +1,7 @@
 # IPC Channel Registry — Personal News Dashboard
 
 **Project:** personal-news
-**Last Updated:** 2026-03-15 (rev 2)
+**Last Updated:** 2026-03-24 (rev 3)
 
 ---
 
@@ -103,12 +103,12 @@ interface Video {
 
 ---
 
-#### `youtube:getUpcomingStreams`
+#### `youtube:getVideosFiltered`
 
-Returns all upcoming and live videos across all enabled channels, sorted by `scheduled_start ASC` (live streams first, then upcoming by time).
+Returns cached YouTube videos with search, media-type, watched-state, and pagination filters applied.
 
-- **Args:** none
-- **Returns:** `Video[]` (filtered to `broadcast_status IN ('upcoming', 'live')`)
+- **Args:** `[options?: YouTubeVideosFilterOptions]`
+- **Returns:** `YouTubeVideosFilterResult`
 
 ---
 
@@ -143,7 +143,7 @@ Fired after any RSS poll cycle that detected new or changed data. The renderer r
 
 Returns saved posts, sorted by `saved_at DESC`.
 
-- **Args:** `[options?: { search?: string; subreddit?: string; tag?: string; limit?: number; offset?: number }]`
+- **Args:** `[options?: { search?: string; subreddit?: string; subreddit_filter?: string[]; tag?: string; tag_filter?: string[]; source_filter?: LinkSource[]; hide_viewed?: boolean; sort_by?: 'saved_at' | 'score'; sort_dir?: 'asc' | 'desc'; limit?: number; offset?: number }]`
 - **Returns:** `{ posts: SavedPost[]; total: number }`
 
 ```typescript
@@ -156,7 +156,10 @@ interface SavedPost {
   author: string | null;
   score: number | null;
   body: string | null;
+  source: 'reddit' | 'x' | 'bsky' | 'generic';
   savedAt: number;
+  viewedAt: number | null;
+  note: string | null;
   tags: string[];  // empty array if null in DB
 }
 ```
@@ -201,11 +204,11 @@ Removes a tag from all saved posts that use it.
 
 #### `reddit:pollNtfy`
 
-Triggers an immediate ntfy.sh poll (same logic as startup ingestion). Used by the stale warning "Sync Now" button and the Settings "Test Connection" button.
+Triggers an immediate ntfy.sh poll using the same ingestion path as the startup and scheduled syncs. Used by the stale warning "Sync Now" button and the Settings "Test Connection" button.
 
 - **Args:** none
-- **Returns:** `{ postsIngested: number; lastPolledAt: number }`
-- **Throws:** `{ code: 'NTFY_UNREACHABLE' | 'NO_TOPIC_CONFIGURED', message: string }`
+- **Returns:** `{ postsIngested: number; messagesReceived: number; lastPolledAt: number }`
+- **Throws:** `Error('NO_TOPIC_CONFIGURED')` when no topic is configured; network and HTTP failures propagate as errors from the poller
 
 ---
 
@@ -287,6 +290,7 @@ interface SavedPostSummary {
   title: string;
   permalink: string;
   subreddit: string | null;
+  source: 'reddit' | 'x' | 'bsky' | 'generic';
   savedAt: number;
 }
 ```
@@ -479,16 +483,16 @@ Sets a single value in the `settings` table. Upserts.
 
 ---
 
-#### `settings:getApiKeyStatus`
+#### `settings:getYouTubeApiKeyStatus`
 
 Returns whether the YouTube API key has been set, without returning the key value itself.
 
 - **Args:** none
-- **Returns:** `{ hasKey: boolean }`
+- **Returns:** `{ isSet: boolean; suffix: string | null }`
 
 ---
 
-#### `settings:setApiKey`
+#### `settings:setYouTubeApiKey`
 
 Encrypts and stores the YouTube API key via `safeStorage`.
 
@@ -497,7 +501,7 @@ Encrypts and stores the YouTube API key via `safeStorage`.
 
 ---
 
-#### `settings:clearApiKey`
+#### `settings:clearYouTubeApiKey`
 
 Removes the stored YouTube API key from `safeStorage`.
 
@@ -506,31 +510,21 @@ Removes the stored YouTube API key from `safeStorage`.
 
 ---
 
-#### `settings:testApiKey`
+#### `settings:setRssPollInterval`
 
-Validates the stored YouTube API key by making a minimal `channels.list` call.
+Validates and persists the YouTube RSS poll interval, then reapplies the scheduler immediately.
 
-- **Args:** none
-- **Returns:** `{ valid: boolean; error?: string }`
-
----
-
-#### `settings:getNtfyConfig`
-
-Returns the ntfy configuration from the `settings` table.
-
-- **Args:** none
-- **Returns:** `{ topic: string | null; serverUrl: string }`
-  - `serverUrl` defaults to `"https://ntfy.sh"` if not set.
+- **Args:** `[minutes: number]`
+- **Returns:** `{ ok: boolean; error: string | null }`
 
 ---
 
-#### `settings:setNtfyConfig`
+#### `settings:setNtfyPollInterval`
 
-Saves the ntfy topic and server URL to the `settings` table (plain text).
+Validates and persists the Saved Posts ntfy background poll interval, then reapplies the scheduler immediately.
 
-- **Args:** `[config: { topic: string; serverUrl?: string }]`
-- **Returns:** `{ ok: true }`
+- **Args:** `[minutes: number]`
+- **Returns:** `{ ok: boolean; error: string | null }`
 
 ---
 
@@ -539,7 +533,7 @@ Saves the ntfy topic and server URL to the `settings` table (plain text).
 Returns the current widget order and visibility state.
 
 - **Args:** none
-- **Returns:** `{ order: string[]; visibility: Record<string, boolean> }`
+- **Returns:** `{ widget_order: string[]; widget_visibility: Record<string, boolean>; widget_instances: Record<string, WidgetInstance> }`
 
 ---
 
@@ -547,26 +541,26 @@ Returns the current widget order and visibility state.
 
 Persists a new widget order and/or visibility state.
 
-- **Args:** `[layout: { order?: string[]; visibility?: Record<string, boolean> }]`
+- **Args:** `[layout: WidgetLayout]`
 - **Returns:** `{ ok: true }`
 
 ---
 
-#### `settings:getRedditDigestConfig`
+#### `settings:getNotificationPrefs`
 
-Returns the configured subreddit list and time window.
+Returns the persisted desktop notification preferences.
 
 - **Args:** none
-- **Returns:** `{ subreddits: string[]; timeWindow: 'week' | 'month' | 'all' }`
+- **Returns:** `NotificationPreferences`
 
 ---
 
-#### `settings:setRedditDigestConfig`
+#### `settings:setNotificationPrefs`
 
-Saves the subreddit list and time window to the `settings` table.
+Persists the full desktop notification preferences object.
 
-- **Args:** `[config: { subreddits: string[]; timeWindow: 'week' | 'month' | 'all' }]`
-- **Returns:** `{ ok: true }`
+- **Args:** `[prefs: NotificationPreferences]`
+- **Returns:** `{ ok: boolean; error: string | null }`
 
 ---
 
@@ -591,20 +585,74 @@ Sets the active theme. Updates `settings.active_theme_id`.
 
 ---
 
-#### `settings:getAvailableThemes`
+#### `themes:list`
 
-Returns the list of all themes the user can select: the three built-ins plus any user-created themes from the `themes` table.
+Returns the list of user-created themes stored in the `themes` table.
 
 - **Args:** none
-- **Returns:** `ThemeOption[]`
+- **Returns:** `ThemeRow[]`
 
 ```typescript
-interface ThemeOption {
+interface ThemeRow {
   id: string;
   name: string;
-  isBuiltIn: boolean;  // true for 'system', 'light', 'dark'
+  tokens: Record<string, string>;
+  created_at: number;
 }
 ```
+
+---
+
+## 6. App / Update Channels
+
+### Push — Main → Renderer
+
+---
+
+#### `app:showTrayHint`
+
+Fired the first time a close action is redirected to tray so the renderer can show a toast explaining that the app is still running.
+
+- **Payload:** none
+
+---
+
+#### `updates:status`
+
+Pushes the current auto-update state to the renderer.
+
+- **Payload:** `UpdateStatusEvent`
+
+---
+
+### Invoke — Renderer → Main
+
+---
+
+#### `updates:getStatus`
+
+Returns the latest cached `UpdateStatusEvent`.
+
+- **Args:** none
+- **Returns:** `UpdateStatusEvent`
+
+---
+
+#### `updates:checkForUpdates`
+
+Triggers an update check. In packaged builds this delegates to `electron-updater`; in development or unsupported platforms it returns a disabled/unsupported result.
+
+- **Args:** none
+- **Returns:** `{ ok: boolean; error: string | null }`
+
+---
+
+#### `updates:installUpdate`
+
+Installs a previously downloaded update and restarts the app.
+
+- **Args:** none
+- **Returns:** `{ ok: boolean; error: string | null }`
 
 ---
 
@@ -617,11 +665,18 @@ interface ThemeOption {
 | `youtube:removeChannel` | R→M | invoke | Delete channel + cached videos |
 | `youtube:setChannelEnabled` | R→M | invoke | Toggle channel visibility |
 | `youtube:getVideos` | R→M | invoke | Get cached videos for channel |
-| `youtube:getUpcomingStreams` | R→M | invoke | Get all upcoming/live streams |
+| `youtube:getVideosFiltered` | R→M | invoke | Get cached videos with media/search/watch filters |
 | `youtube:pollNow` | R→M | invoke | Manual RSS poll trigger |
+| `youtube:setChannelNotify` | R→M | invoke | Save per-channel notification preferences |
+| `youtube:clearVideosCache` | R→M | invoke | Clear cached YouTube videos |
+| `youtube:setVideoWatched` | R→M | invoke | Toggle video watched state |
+| `youtube:markChannelWatched` | R→M | invoke | Mark all videos for one channel watched |
 | `youtube:updated` | M→R | push | New video/stream data available |
 | `reddit:getSavedPosts` | R→M | invoke | Get saved posts (with search/filter) |
 | `reddit:getSavedPostsSummary` | R→M | invoke | Get N most recent saved posts for dashboard widget |
+| `reddit:setSavedPostViewed` | R→M | invoke | Toggle one Saved Posts viewed state |
+| `reddit:bulkSetSavedViewed` | R→M | invoke | Bulk-toggle Saved Posts viewed state |
+| `reddit:getSavedViewedAnalytics` | R→M | invoke | Get Saved Posts viewed analytics |
 | `reddit:updatePostTags` | R→M | invoke | Set tags on a post |
 | `reddit:getAllTags` | R→M | invoke | List all tags in use |
 | `reddit:renameTag` | R→M | invoke | Rename a tag across all posts |
@@ -629,8 +684,12 @@ interface ThemeOption {
 | `reddit:pollNtfy` | R→M | invoke | Manual ntfy poll trigger |
 | `reddit:getNtfyStaleness` | R→M | invoke | Get ntfy poll staleness state |
 | `reddit:getDigestPosts` | R→M | invoke | Get Reddit digest posts (flat array) |
-| `reddit:ntfyIngestComplete` | M→R | push | Startup ingestion finished |
+| `reddit:getDigestWeeks` | R→M | invoke | Get stored digest week buckets |
+| `reddit:ntfyIngestComplete` | M→R | push | ntfy ingestion cycle finished |
+| `reddit:updated` | M→R | push | Saved Posts or Digest data changed |
 | `scripts:getAll` | R→M | invoke | List all scripts with status |
+| `scripts:getNotifications` | R→M | invoke | List persisted script notifications |
+| `scripts:markNotificationsRead` | R→M | invoke | Mark one or more script notifications read |
 | `scripts:update` | R→M | invoke | Edit script config |
 | `scripts:setSchedule` | R→M | invoke | Update script schedule only |
 | `scripts:setEnabled` | R→M | invoke | Update script auto-run toggle |
@@ -641,16 +700,25 @@ interface ThemeOption {
 | `scripts:updated` | M→R | push | Script data changed; refresh state |
 | `settings:get` | R→M | invoke | Get one setting value |
 | `settings:set` | R→M | invoke | Set one setting value |
-| `settings:getApiKeyStatus` | R→M | invoke | Check if YouTube API key is set |
-| `settings:setApiKey` | R→M | invoke | Store YouTube API key (safeStorage) |
-| `settings:clearApiKey` | R→M | invoke | Remove YouTube API key |
-| `settings:testApiKey` | R→M | invoke | Validate stored API key |
-| `settings:getNtfyConfig` | R→M | invoke | Get ntfy topic + server URL |
-| `settings:setNtfyConfig` | R→M | invoke | Save ntfy topic + server URL |
+| `settings:getYouTubeApiKeyStatus` | R→M | invoke | Check if YouTube API key is set |
+| `settings:setYouTubeApiKey` | R→M | invoke | Store YouTube API key (safeStorage) |
+| `settings:clearYouTubeApiKey` | R→M | invoke | Remove YouTube API key |
+| `settings:setRssPollInterval` | R→M | invoke | Save YouTube RSS poll interval |
+| `settings:setNtfyPollInterval` | R→M | invoke | Save ntfy background poll interval |
 | `settings:getWidgetLayout` | R→M | invoke | Get widget order + visibility |
 | `settings:setWidgetLayout` | R→M | invoke | Persist widget order + visibility |
-| `settings:getRedditDigestConfig` | R→M | invoke | Get subreddit list + time window |
-| `settings:setRedditDigestConfig` | R→M | invoke | Save subreddit list + time window |
+| `settings:getNotificationPrefs` | R→M | invoke | Get desktop notification preferences |
+| `settings:setNotificationPrefs` | R→M | invoke | Save desktop notification preferences |
 | `settings:getTheme` | R→M | invoke | Get active theme ID + tokens |
 | `settings:setTheme` | R→M | invoke | Set active theme by ID |
-| `settings:getAvailableThemes` | R→M | invoke | List all selectable themes (built-in + custom) |
+| `themes:list` | R→M | invoke | List user-created themes |
+| `themes:create` | R→M | invoke | Create a custom theme |
+| `themes:update` | R→M | invoke | Update a custom theme |
+| `themes:delete` | R→M | invoke | Delete a custom theme |
+| `themes:export` | R→M | invoke | Export a custom theme |
+| `themes:import` | R→M | invoke | Import a custom theme |
+| `updates:getStatus` | R→M | invoke | Get current auto-update status |
+| `updates:checkForUpdates` | R→M | invoke | Trigger update check |
+| `updates:installUpdate` | R→M | invoke | Install downloaded update |
+| `app:showTrayHint` | M→R | push | Show tray hint toast |
+| `updates:status` | M→R | push | Auto-update state changed |

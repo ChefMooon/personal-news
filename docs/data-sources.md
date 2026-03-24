@@ -1,8 +1,8 @@
 # Data Sources Specification — Personal News Dashboard
 
 **Project:** personal-news
-**Status:** Draft
-**Last Updated:** 2026-03-15 (rev 6)
+**Status:** Current implementation
+**Last Updated:** 2026-03-24
 **Related Docs:** [PRD.md](./PRD.md) | [tech-notes.md](./tech-notes.md)
 
 ---
@@ -164,17 +164,17 @@ CREATE TABLE reddit_digest_posts (
 
 ---
 
-## 3. Reddit — Saved Posts (ntfy.sh)
+## 3. Saved Posts (ntfy.sh)
 
 ### 3.1 Purpose
 
-Allow users to save any Reddit post from their phone. The user shares a Reddit post URL to a private ntfy.sh topic via an iOS Shortcut or Android Share Sheet action. On startup, the Electron app polls that topic for new messages and ingests any Reddit URLs found as saved posts.
+Allow users to save Reddit posts and other links from their phone. The user shares a URL to a private ntfy.sh topic via an iOS Shortcut or Android Share Sheet action. The Electron app polls that topic on startup and on a recurring interval, then ingests each supported URL as a saved-post entry.
 
 ### 3.2 Mechanism
 
 **ntfy.sh topic polling**
 
-[ntfy.sh](https://ntfy.sh) is a free, open-source push notification service. Users create a private topic (a unique URL-safe string they choose). The mobile share flow sends the Reddit URL as a message to that topic. The desktop app polls the topic's HTTP API to retrieve new messages.
+[ntfy.sh](https://ntfy.sh) is a free, open-source push notification service. Users create a private topic (a unique URL-safe string they choose). The mobile share flow sends the shared URL as a message to that topic. The desktop app polls the topic's HTTP API to retrieve new messages.
 
 This approach was chosen because:
 - No desktop-side listener or open port required — the app only makes outbound HTTP requests.
@@ -186,33 +186,46 @@ This approach was chosen because:
 ### 3.3 Mobile Send Flow
 
 **iOS:**
-1. User opens a Reddit post in Safari or the Reddit app.
+1. User opens a supported link in a browser or app.
 2. Uses a pre-configured iOS Shortcut with either Ask for Input (URL on line 1, optional notes on line 2) or Get Clipboard (URL-only).
 3. The Shortcut uses Get Contents of URL to POST to `https://ntfy.sh/{TOPIC}`.
 4. Request details are plain text: header `content-type: text/plain`, request body from Ask for Input or Clipboard (no key/value wrapper).
 
 **Android:**
-1. User opens a Reddit post.
+1. User opens a supported link.
 2. Taps Share → selects an HTTP Request shortcut (e.g., via HTTP Shortcuts app) pre-configured to POST to `https://ntfy.sh/{TOPIC}`.
 
 Both flows are user-configured once and require no further interaction per save.
 
 ### 3.4 Desktop Ingestion Flow
 
-On each app startup, the main process:
+On app startup and on a user-configurable interval afterward (default: 60 minutes), the main process:
 1. Reads the configured ntfy.sh topic URL from settings.
 2. Fetches `https://ntfy.sh/{TOPIC}/json?poll=1&since=last_ingested_id` to retrieve only new messages since the last ingest.
-3. For each message, validates it contains a Reddit URL.
-4. Fetches post metadata from the Reddit JSON API (`{post_url}.json`).
-5. Upserts the post into `saved_posts`.
+3. For each message, extracts the first HTTP URL plus an optional free-form note.
+4. Detects the source and builds metadata:
+    - Reddit URLs fetch structured metadata from the Reddit JSON API.
+    - X/Twitter URLs store the link, optional note-derived title, and parsed author handle when available.
+    - Bluesky URLs store the link, optional note-derived title, and parsed handle when available.
+    - Other HTTP URLs fall back to a generic saved-link record.
+5. Upserts the record into `saved_posts`.
 6. Stores the ID of the last successfully processed message to use as the `since` cursor on the next poll.
 
 The `since` cursor is persisted in the `settings` table so re-ingestion does not occur across restarts.
 
 **Error handling:**
-- If ntfy.sh is unreachable (offline), ingestion is skipped silently. No posts are lost — ntfy.sh retains messages; they will be ingested on the next startup.
-- If a Reddit URL in a message returns a 404 or is not a valid post URL, the message is logged and skipped. The cursor still advances.
-- If a message does not contain a recognizable Reddit URL, it is ignored.
+- If ntfy.sh is unreachable (offline), ingestion is skipped silently. No posts are lost — ntfy.sh retains messages; they will be ingested on the next successful poll.
+- If a Reddit URL returns a 404 or cannot be resolved, the message is logged and skipped. The cursor still advances.
+- If a message does not contain a valid HTTP URL, it is ignored.
+
+### 3.5a Supported URL Sources
+
+| Source | Detection | Metadata strategy |
+|--------|-----------|-------------------|
+| Reddit | `reddit.com` URLs | Fetch full post metadata from Reddit JSON API |
+| X / Twitter | `x.com` or `twitter.com` URLs | Store canonical link, inferred handle, and optional note |
+| Bluesky | `bsky.app` URLs | Store canonical link, inferred handle, and optional note |
+| Generic links | Any other HTTP URL | Store raw URL plus optional note |
 
 ### 3.5 Storage
 
@@ -233,16 +246,19 @@ The app only reads from the ntfy topic — it never publishes to it from the des
 
 | Field | Source |
 |-------|--------|
-| Post ID | Reddit API |
-| Title | Reddit API |
-| URL | Reddit API (linked URL or permalink) |
-| Permalink | Reddit API |
-| Subreddit | Reddit API |
-| Author | Reddit API |
-| Score | Reddit API |
-| Body text (if text post) | Reddit API |
+| Post ID | Source-specific parser or Reddit API |
+| Title | Reddit API, optional note fallback, or raw URL |
+| URL | Source URL |
+| Permalink | Source URL or Reddit permalink |
+| Subreddit | Reddit API (Reddit only) |
+| Author | Reddit API or parsed handle when available |
+| Score | Reddit API (Reddit only) |
+| Body text (if text post) | Reddit API (Reddit only) |
 | Saved timestamp | App (local time of ingestion) |
-| Tags | User-applied in app (v1) |
+| Note | Optional text supplied in the ntfy message |
+| Tags | User-applied in app |
+| Source | App-detected source identifier (`reddit`, `x`, `bsky`, `generic`) |
+| Viewed timestamp | App |
 
 ### 3.7 Database Schema (Saved Posts)
 
@@ -257,7 +273,10 @@ CREATE TABLE saved_posts (
     score        INTEGER,
     body         TEXT,
     saved_at     INTEGER NOT NULL,  -- Unix timestamp
-    tags         TEXT               -- JSON array of tag strings, nullable
+    tags         TEXT,
+    note         TEXT,
+    source       TEXT NOT NULL DEFAULT 'reddit',
+    viewed_at    INTEGER
 );
 ```
 
@@ -265,6 +284,8 @@ The `since` cursor is stored in the `settings` table:
 ```sql
 -- Key: 'ntfy_last_message_id', Value: ntfy message ID string
 ```
+
+The app also maintains an FTS5 index over `title`, `body`, `subreddit`, and `source` to support Saved Posts search.
 
 ---
 
@@ -388,5 +409,5 @@ Each future source should be addable as a new module without modifying core dash
 | YouTube (RSS) | HTTP fetch in main process | Interval timer | User-configurable; default 15 min |
 | YouTube (API v3) | HTTP fetch in main process | New RSS delta detected | As needed |
 | Reddit Digest | Python script (Script Manager) | Schedule / manual | User-configured per script |
-| Reddit Saved Posts | ntfy.sh topic poll | App startup | On each launch |
+| Saved Posts | ntfy.sh topic poll | App startup + interval timer | User-configurable; default 60 min |
 | Script output | Child process stdout | Manual / schedule | Per script config |

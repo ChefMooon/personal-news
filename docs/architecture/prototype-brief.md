@@ -1,5 +1,9 @@
 # Prototype Brief — Personal News Dashboard
 
+> Status: Historical prototype brief retained for implementation history. It describes the original scaffold target and should not be treated as the current architectural source of truth.
+>
+> Current maintained docs: [README](../../README.md), [docs/architecture/overview.md](./overview.md), [docs/architecture/data-sources.md](./data-sources.md), [docs/architecture/frontend.md](./frontend.md), and [docs/ui-ux.md](../ui-ux.md).
+
 **For:** Rapid-prototype agent
 **Project:** personal-news
 **Last Updated:** 2026-03-15 (rev 2)

@@ -1,5 +1,9 @@
 ## Plan: Script Catch-Up + Run Complete Foundation
 
+> Status: Historical implementation plan retained for context. It documents a specific follow-up planning pass and is not a maintained source of truth.
+>
+> Current maintained docs: [README](../../README.md), [docs/architecture/data-sources.md](../architecture/data-sources.md), [docs/architecture/frontend.md](../architecture/frontend.md), and [docs/ui-ux.md](../ui-ux.md).
+
 Recommended approach is to implement two backend/platform upgrades together:  
 1. Hybrid missed-window handling at startup (auto catch-up for short downtime, warning event for long downtime).  
 2. Dedicated scripts:runComplete event plus notification-ready persistence and IPC scaffolding, with no notification UI yet.

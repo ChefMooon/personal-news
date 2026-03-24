@@ -1,7 +1,7 @@
 # Data Source Modules — Implementation Spec
 
 **Project:** personal-news
-**Last Updated:** 2026-03-15 (rev 2)
+**Last Updated:** 2026-03-24 (rev 3)
 
 ---
 
@@ -22,7 +22,7 @@ export interface DataSourceModule {
 
 The registry holds the array of all registered modules. On app start, `registry.initialize(db)` calls `initialize` on each module in registration order. On app quit, `registry.shutdown()` calls `shutdown` on each.
 
-The renderer module registry (`src/renderer/modules/registry.ts`) separately maps `id` to `WidgetComponent` and `SettingsComponent`. The `id` field is the join key between the two registries.
+The renderer module registry (`src/renderer/src/modules/registry.ts`) separately maps `id` to the widget component used on the dashboard. Widget settings panels live with the widget implementation rather than in a second registry.
 
 ---
 
@@ -35,201 +35,114 @@ The renderer module registry (`src/renderer/modules/registry.ts`) separately map
 
 | File | Responsibility |
 |------|----------------|
-| `index.ts` | `YouTubeModule` class — implements `DataSourceModule`; starts/stops poller |
-| `rss.ts` | `fetchChannelFeed(channelId)` — fetches and parses the Atom XML feed |
-| `api.ts` | `YouTubeApiClient` — wraps `videos.list` and `channels.list` calls |
-| `poller.ts` | `RssPoller` — manages the interval timer; runs poll cycles |
+| `index.ts` | `YouTubeModule` plus RSS parsing, YouTube Data API fetches, persistence, notification dispatch, and poll scheduling |
 
 ### 1.2 Initialization (`initialize`)
 
 ```
 1. Read rss_poll_interval_minutes from settings table (default 15)
-2. Construct RssPoller with interval
-3. Start the poller (runs immediately, then on interval)
-4. Register a listener for settings changes to rss_poll_interval_minutes
-   — on change, stop the current poller and start a new one with the new interval
+2. Keep the DB reference and create a node-cron task for that interval
+3. Start the poller (immediate cycle + scheduled cycles)
+4. Refresh channel thumbnails that were initially created from RSS-only metadata
 ```
 
-### 1.3 RSS Poll Cycle (`poller.ts`)
+### 1.3 Poll Cycle (`index.ts`)
 
 Called for all enabled channels on every interval tick:
 
 ```typescript
-async function pollCycle(db: Database, apiClient: YouTubeApiClient) {
-  const channels = db.prepare(
-    'SELECT channel_id FROM yt_channels WHERE enabled = 1'
-  ).all();
+async function pollCycle(db: Database): Promise<void> {
+  const channels = getEnabledChannels(db)
+  const rssCandidates = await fetchRssCandidates(channels)
+  const uncachedVideoIds = findNewVideoIds(db, rssCandidates)
+  const activeVideoIds = findTrackedUpcomingAndLiveVideoIds(db)
 
-  for (const { channel_id } of channels) {
-    const feedVideoIds = await fetchChannelFeed(channel_id);  // rss.ts
-
-    const knownIds = db.prepare(
-      'SELECT video_id FROM yt_videos WHERE channel_id = ?'
-    ).all(channel_id).map(r => r.video_id);
-
-    const newIds = feedVideoIds.filter(id => !knownIds.includes(id));
-
-    if (newIds.length > 0) {
-      const videos = await apiClient.videosListBatch(newIds);
-      upsertVideos(db, videos);  // INSERT OR REPLACE into yt_videos
-    }
-
-    // Re-check upcoming/live streams for schedule changes
-    const activeStreams = db.prepare(
-      "SELECT video_id FROM yt_videos WHERE channel_id = ? AND broadcast_status IN ('upcoming', 'live')"
-    ).all(channel_id).map(r => r.video_id);
-
-    if (activeStreams.length > 0) {
-      const refreshed = await apiClient.videosListBatch(activeStreams);
-      upsertVideos(db, refreshed);
-    }
-  }
-
-  // Notify renderer of updates
-  BrowserWindow.getAllWindows()[0]?.webContents.send('youtube:updated');
+  const apiVideoIds = [...uncachedVideoIds, ...activeVideoIds]
+  const apiVideos = await fetchYoutubeVideos(apiVideoIds)
+  upsertVideos(db, apiVideos)
+  emitYoutubeUpdated()
 }
 ```
 
-### 1.4 RSS Feed Parser (`rss.ts`)
+Current behavior highlights:
 
-- Fetches `https://www.youtube.com/feeds/videos.xml?channel_id={channelId}`
-- Parses Atom XML using **`fast-xml-parser`** (confirmed). No native module; pure JavaScript; fast enough for the feed sizes encountered here (15–30 entries per channel).
-- Extracts `<yt:videoId>` elements.
-- Returns `string[]` of video IDs.
-- Throws a typed error if the HTTP request fails or response is not valid XML; the poller catches and logs this, then continues to the next channel.
+- RSS parsing is done inline with `fast-xml-parser`
+- YouTube Data API access is performed from the same module after decrypting the stored API key with `safeStorage`
+- media type classification (`video`, `short`, `upcoming_stream`, `live`) happens during ingest
+- new-video and live-start desktop notifications are emitted from the poll cycle when preferences allow
+- `settings:setRssPollInterval` reapplies the cron schedule immediately
 
-### 1.5 YouTube API Client (`api.ts`)
+### 1.4 Channel Add / Mutations
 
-```typescript
-class YouTubeApiClient {
-  private apiKey: string;  // Decrypted from safeStorage on construction
+`youtube:addChannel` accepts either a channel ID or a supported YouTube URL, resolves channel metadata, creates the `yt_channels` row, and hydrates initial `yt_videos` data from RSS + API fetches.
 
-  async videosListBatch(videoIds: string[]): Promise<RawVideoData[]>;
-  // Parts: snippet,contentDetails,liveStreamingDetails
-  // URL: https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails,liveStreamingDetails&id={ids}&key={apiKey}
-  // Max 50 IDs per call. If videoIds.length > 50, split into batches.
+The module also owns these mutations:
 
-  async channelsList(channelId: string): Promise<RawChannelData>;
-  // Parts: snippet
-  // URL: https://www.googleapis.com/youtube/v3/channels?part=snippet&id={channelId}&key={apiKey}
+- `youtube:setChannelEnabled`
+- `youtube:setChannelNotify`
+- `youtube:setVideoWatched`
+- `youtube:markChannelWatched`
+- `youtube:clearVideosCache`
+- `youtube:removeChannel`
+
+    `youtube:addChannel` accepts either a channel ID or a supported YouTube URL, resolves channel metadata, creates the `yt_channels` row, and hydrates initial `yt_videos` data from RSS + API fetches.
+
+    The current module also owns these mutations:
+
+    - `youtube:setChannelEnabled`
+    - `youtube:setChannelNotify`
+    - `youtube:setVideoWatched`
+    - `youtube:markChannelWatched`
+    - `youtube:clearVideosCache`
+    - `youtube:removeChannel`
+async function pollNtfy(db: Database): Promise<{ postsIngested: number; messagesReceived: number }> {
+  const topic = getSetting('ntfy_topic')
+  if (!topic) return { postsIngested: 0, messagesReceived: 0 }
+
+  const serverUrl = getSetting('ntfy_server_url') || 'https://ntfy.sh'
+  const lastMessageId = getSetting('ntfy_last_message_id')
+  const since = lastMessageId ?? 'all'
+  const fetchUrl = `${serverUrl}/${encodeURIComponent(topic)}/json?poll=1&since=${encodeURIComponent(since)}`
+
+  const response = await fetch(fetchUrl, { signal: controller.signal })
+  const lines = (await response.text()).split('\n').filter(Boolean)
+
+  for (const line of lines) {
+    const msg = JSON.parse(line)
+    if (msg.event !== 'message') continue
+
+    const { url, note } = parseNtfyMessage(msg.message)
+    if (!/^https?:\/\//i.test(url)) continue
+
+    const post = await fetchMetadataForUrl(url, note)
+    upsertSavedPost(db, post)
+  }
+
+  setSetting('ntfy_last_message_id', lastProcessedId)
+  setSetting('ntfy_last_polled_at', String(Math.floor(Date.now() / 1000)))
+  return { postsIngested, messagesReceived }
 }
 ```
 
-- All HTTP calls use the Node.js built-in `fetch` (available in Node 18+, which Electron 28+ ships with).
-- On HTTP 403 (quota exceeded): log a warning; do not throw; return empty array so the poller can continue.
-- On HTTP 400 (bad request / invalid key): log an error; emit an IPC event `youtube:apiError` with the error message so the renderer can surface a "Check your API key" prompt.
+Key current behaviors:
 
-### 1.6 Channel Add Flow (IPC: `youtube:addChannel`)
+- accepts Reddit, X/Twitter, Bluesky, and generic HTTP(S) URLs
+- preserves an optional freeform note from the ntfy payload
+- advances the cursor even when one message cannot be enriched
+- throws on network/non-2xx failures so the caller can emit an error event while leaving the cursor unchanged
 
-```
-1. Parse input: if URL, extract channel ID.
-   - Handle both @handle URLs and direct channel ID URLs.
-   - If @handle format: make a search.list call to resolve channel ID.
-     (Cost: 100 units — acceptable as one-time operation on channel add)
-2. Check channel not already in DB.
-3. Call channelsList(channelId) → get name and thumbnail.
-4. Insert into yt_channels.
-5. Fetch RSS feed for initial video IDs.
-6. Batch-fetch video metadata via videosListBatch.
-7. Upsert into yt_videos.
-8. Return the new Channel record.
-```
+### 2.4 Source Routing and Reddit Validation
 
-### 1.7 Shutdown
+Saved Posts routing is not Reddit-only anymore. `link-sources.ts` matches the incoming URL first and then uses source-specific metadata handling. Reddit-specific validation remains in `validation.ts` / `metadata.ts` because Reddit still has the richest enrichment path.
 
-```
-1. clearInterval on the poller timer.
-```
+Current source set:
 
----
+- `reddit`
+- `x`
+- `bsky`
+- `generic`
 
-## 2. Reddit Module
-
-**Location:** `src/main/sources/reddit/`
-**Module ID:** `reddit`
-
-### 2.1 Files
-
-| File | Responsibility |
-|------|----------------|
-| `index.ts` | `RedditModule` class — implements `DataSourceModule`; runs ntfy startup poll |
-| `ntfy.ts` | `pollNtfy(db, options)` — polls ntfy topic, ingests saved posts |
-| `metadata.ts` | `fetchRedditPost(url)` — fetches Reddit post metadata from JSON API |
-
-### 2.2 Initialization (`initialize`)
-
-```
-1. Store db reference.
-2. Call pollNtfy(db) immediately (startup ingestion).
-3. After poll completes (success or failure), send 'reddit:ntfyIngestComplete' to renderer.
-```
-
-### 2.3 ntfy.sh Poller (`ntfy.ts`)
-
-```typescript
-async function pollNtfy(db: Database): Promise<{ postsIngested: number }> {
-  const topic = getSetting(db, 'ntfy_topic');
-  if (!topic) return { postsIngested: 0 };
-
-  const serverUrl = getSetting(db, 'ntfy_server_url') ?? 'https://ntfy.sh';
-  const lastMessageId = getSetting(db, 'ntfy_last_message_id') ?? null;
-
-  const since = lastMessageId ?? 'all';
-  const url = `${serverUrl}/${topic}/json?poll=1&since=${since}`;
-
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      headers: { 'User-Agent': 'personal-news/1.0' },
-      signal: AbortSignal.timeout(10_000),
-    });
-  } catch {
-    // Network error — log, leave cursor unchanged, do NOT update ntfy_last_polled_at
-    logger.warn('ntfy.sh unreachable — skipping startup poll');
-    return { postsIngested: 0 };
-  }
-
-  if (!response.ok) {
-    logger.warn(`ntfy poll returned HTTP ${response.status}`);
-    return { postsIngested: 0 };
-  }
-
-  const text = await response.text();
-  const lines = text.trim().split('\n').filter(Boolean);
-  const messages = lines.map(l => JSON.parse(l)).filter(m => m.event === 'message');
-
-  let postsIngested = 0;
-  let lastProcessedId: string | null = null;
-
-  for (const msg of messages) {
-    lastProcessedId = msg.id;
-    const url = msg.message?.trim();
-
-    if (!isRedditPostUrl(url)) {
-      logger.info(`ntfy: ignoring non-Reddit message ${msg.id}`);
-      continue;
-    }
-
-    try {
-      const post = await fetchRedditPost(url);
-      upsertSavedPost(db, post);
-      postsIngested++;
-    } catch (err) {
-      logger.warn(`ntfy: failed to fetch Reddit metadata for ${url}`, err);
-      // Continue — cursor advances past failed messages
-    }
-  }
-
-  if (lastProcessedId) {
-    setSetting(db, 'ntfy_last_message_id', lastProcessedId);
-  }
-  setSetting(db, 'ntfy_last_polled_at', String(Math.floor(Date.now() / 1000)));
-
-  return { postsIngested };
-}
-```
-
-### 2.4 Reddit URL Validation
+Reddit-specific validation:
 
 ```typescript
 const REDDIT_POST_URL_PATTERN =

@@ -1,4 +1,6 @@
-# How to Run the Prototype
+# How to Run, Package, and Release
+
+This guide reflects the current development and Windows release workflow used for the app today.
 
 ## Prerequisites
 
@@ -130,28 +132,16 @@ This command performs all required checks:
 
 Smoke results are written to `dist/smoke-test-report.json`.
 
-The Electron window opens automatically. No external services, network connections, or API keys are required to explore the seeded dashboard data — Script Manager reads local Python scripts from the configured **Script Home Directory**.
+This is the current verified Windows pre-release workflow for the repository. The Electron window opens automatically during smoke mode. No external services or API keys are required for the smoke test itself.
 
 ## What to Expect
 
-The app opens a 1280x800 window (minimum 900x600) with a collapsible sidebar on the left and the main content on the right. The **Dashboard** loads by default showing three widgets: the YouTube widget (two seeded channels with video carousels and one upcoming stream), the Reddit Digest widget (empty until the digest script runs, with sort and layout controls), and the Saved Posts widget (three seeded saved posts). Clicking "Edit Layout" enables drag-and-drop reordering of widgets and eye-icon visibility toggles. The **Script Manager** route reads Python scripts from the configured **Script Home Directory** and lets you open that folder or jump to the Scripts settings tab. The **Settings** screen has working tabs: API Keys (no-op save), YouTube (channel enable toggles update local state only), Reddit Digest (first subreddit auto-registers the bundled script on a weekly Monday 09:00 schedule), and Appearance (System/Light/Dark theme switcher that actually applies). Links in video cards and post rows open your default browser.
+`npm run dev` launches the full desktop app with the current dashboard, settings, Script Manager, Saved Posts, notifications preferences, and tray behavior controls. The packaged smoke test verifies that the built app starts, opens its database successfully, and applies bundled migrations in packaged mode.
 
 ## Known Limitations
 
-The following are intentionally not implemented in this prototype:
+The current workflow is verified for Windows packaging and release. macOS and Linux build commands exist in `package.json`, but this document does not claim an equivalent verified release process for those targets yet.
 
-- YouTube RSS polling — no actual RSS fetches; all video data is seeded in the database
-- YouTube Data API v3 calls — no HTTP calls to YouTube; API key field is a no-op
-- ntfy.sh polling — no ntfy ingestion; saved posts are seeded statically
-- Saved Posts full-page view — the `/saved-posts` route is a placeholder
-- ntfy onboarding flow — not present
-- Script execution — the Script Manager executes configured Python scripts, but it is still limited to scripts registered from the home directory
-- node-cron scheduling — no cron jobs; scripts are display-only
-- safeStorage for API key — the key input does not persist anything
-- Tag management — not implemented
-- FTS5 search — not implemented
-- Custom theme creation — only System/Light/Dark built-ins work
-- electron-builder packaging — Windows NSIS (x64) installer is configured; macOS and Linux targets are still pending
-- Window management / tray icon — single window only
-- Per-channel enabled toggle persistence — toggle updates local React state only
-- Channel add flow — Add button logs to console only
+Scheduled script runs and ntfy polling only occur while the desktop app is running.
+
+Desktop notifications depend on Electron notification support on the host OS and are suppressed while the main window is focused.

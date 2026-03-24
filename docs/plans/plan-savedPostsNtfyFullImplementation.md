@@ -1,5 +1,9 @@
 # Implementation Plan: Saved Posts (ntfy.sh) Full Implementation
 
+> Status: Historical implementation plan retained for context. It is not the maintained source of truth for the current Saved Posts or ntfy flow.
+>
+> Current maintained docs: [README](../../README.md), [docs/architecture/data-sources.md](../architecture/data-sources.md), [docs/architecture/overview.md](../architecture/overview.md), and [docs/ui-ux.md](../ui-ux.md).
+
 **Objective:** Wire up the complete ntfy.sh → saved posts data pipeline with UI, onboarding, search, tags, and note support.
 
 **Date:** 2026-03-19  

@@ -1,7 +1,7 @@
 # System Architecture Overview — Personal News Dashboard
 
 **Project:** personal-news
-**Last Updated:** 2026-03-15 (rev 2)
+**Last Updated:** 2026-03-24 (rev 3)
 
 ---
 
@@ -18,7 +18,8 @@ The application follows a **layered, process-separated architecture** imposed by
 │  Typed IPC surface — only channel exposed to renderer    │
 ├──────────────────────────────────────────────────────────┤
 │  Main Process (Node.js)                                  │
-│  Database · Data Sources · Scheduler · Child Processes   │
+│  Database · Data Sources · Scheduler · Notifications     │
+│  Tray · Auto-Updates · Child Processes                   │
 └──────────────────────────────────────────────────────────┘
 ```
 
@@ -37,23 +38,26 @@ src/
 │   │   └── migrations/            Baseline migration SQL (`001_initial.sql`)
 │   ├── ipc/
 │   │   └── index.ts               Registers all ipcMain.handle() channels
+│   ├── notifications/
+│   │   └── notification-service.ts Desktop notification preferences + emitters
 │   ├── sources/
-│   │   ├── registry.ts            Module registry — iterates DataSourceModule instances
+│   │   ├── registry.ts            Module registry — lifecycle for main-process sources
+│   │   ├── link-sources.ts        Saved-link source detection and generic metadata fallback
 │   │   ├── youtube/
-│   │   │   ├── index.ts           YouTubeModule — implements DataSourceModule
-│   │   │   ├── rss.ts             RSS feed fetcher and parser
-│   │   │   ├── api.ts             YouTube Data API v3 client
-│   │   │   └── poller.ts          Interval-based RSS poll + delta detection
+│   │   │   └── index.ts           YouTubeModule — polling, ingest, notifications
 │   │   ├── reddit/
-│   │   │   ├── index.ts           RedditModule — implements DataSourceModule
-│   │   │   ├── ntfy.ts            ntfy.sh topic poller (startup + manual)
-│   │   │   └── metadata.ts        Reddit JSON API fetcher (post metadata)
+│   │   │   ├── index.ts           RedditModule — startup/scheduled/manual ntfy polling
+│   │   │   ├── ntfy.ts            ntfy.sh poller + saved_posts upsert
+│   │   │   ├── metadata.ts        Reddit JSON API fetcher (post metadata)
+│   │   │   └── validation.ts      Reddit URL validation/normalization helpers
 │   │   └── scripts/
 │   │       ├── index.ts           ScriptManagerModule — implements DataSourceModule
 │   │       ├── executor.ts        child_process.spawn wrapper; streams stdout/stderr
 │   │       └── scheduler.ts       node-cron job registry; stale detection logic
 │   └── settings/
 │       └── store.ts               settings table R/W; safeStorage for API key
+│   └── updates/
+│       └── service.ts             Windows packaged auto-update integration
 │
 ├── preload/
 │   └── index.ts                   contextBridge.exposeInMainWorld — all IPC channels
@@ -63,7 +67,9 @@ src/
     ├── App.tsx                    Shell — sidebar nav + <Outlet>
     ├── routes/
     │   ├── Dashboard.tsx
-    │   ├── SavedPosts.tsx
+   │   ├── YouTube.tsx
+   │   ├── RedditDigest.tsx
+   │   ├── SavedPosts.tsx
     │   ├── ScriptManager.tsx
     │   └── Settings.tsx
     ├── providers/
@@ -88,30 +94,29 @@ src/
 1. main/index.ts starts
 2. db/database.ts opens SQLite; applies `001_initial.sql` when schema is uninitialized
 3. sources/registry.ts calls initialize(db) on every registered DataSourceModule
-4. reddit/ntfy.ts runs startup poll — fetches new ntfy messages, ingests saved posts
-5. youtube/poller.ts starts interval timer (rss_poll_interval_minutes from settings)
+4. registered source modules initialize background work (YouTube polling, ntfy polling, script schedules)
+5. auto-update service initializes for packaged Windows builds when enabled
 6. scripts/scheduler.ts registers node-cron jobs for all scheduled scripts;
    runs any scripts with schedule = 'on_app_start'
-7. BrowserWindow created; renderer loads
-8. Renderer calls IPC channels to hydrate its initial state from DB
+7. BrowserWindow and Tray are created; close-to-tray defaults are applied
+8. renderer loads and hydrates from IPC
 ```
 
 ### 3.2 YouTube RSS Poll Cycle
 
 ```
-1. Interval fires in youtube/poller.ts
+1. Scheduled poll fires inside youtube/index.ts
 2. For each enabled channel: fetch RSS feed (HTTP GET, quota-free)
 3. Parse Atom XML → extract video IDs
 4. Query DB for known video IDs for this channel
 5. Compute delta (new IDs not in DB)
-6. If delta is empty → stop; no API call
-7. If delta non-empty → call youtube/api.ts videos.list (batch, up to 50)
+6. Collect uncached video IDs plus already-tracked upcoming/live IDs that need refresh
+7. Fetch YouTube Data API details in batches from the same module (batch size up to 50)
 8. Upsert results into yt_videos
-9. Re-fetch liveStreamingDetails for any known 'upcoming' videos (schedule change check)
-10. Emit ipcMain.emit or BrowserWindow.webContents.send('youtube:updated') → renderer re-queries
+9. Emit `youtube:updated` so the renderer re-queries
 ```
 
-### 3.3 ntfy Ingestion Flow (startup)
+### 3.3 ntfy Ingestion Flow (startup + scheduled/manual)
 
 ```
 1. Read ntfy_topic, ntfy_server_url, ntfy_last_message_id from settings table
@@ -120,10 +125,10 @@ src/
    (since=all on first run)
 4. Parse newline-delimited JSON response
 5. For each message event:
-   a. Validate message body matches Reddit URL pattern
-   b. If invalid → log and skip (cursor still advances)
-   c. Fetch {reddit_url}.json from Reddit API
-   d. Upsert into saved_posts table
+   a. Parse URL + optional note from plain text or share-sheet JSON
+   b. If no HTTP(S) URL is found → log and skip (cursor still advances)
+   c. Detect source (reddit | x | bsky | generic)
+   d. Resolve source-specific metadata and upsert into saved_posts
 6. Update ntfy_last_message_id to ID of last processed message
 7. Update ntfy_last_polled_at to current Unix timestamp
 8. If ntfy unreachable → log; leave cursor unchanged; return without updating ntfy_last_polled_at
@@ -165,7 +170,7 @@ interface DataSourceModule {
 }
 ```
 
-The registry in `sources/registry.ts` holds the array of all registered modules. The dashboard renders widgets by iterating `registry.getEnabled()`. Adding a new data source = creating a new module file and adding one line to the registry. No changes to core dashboard, IPC boilerplate, or layout code required.
+The registry in `sources/registry.ts` holds the array of all registered main-process modules and manages startup/shutdown only. Renderer widget rendering is driven by the persisted widget layout plus the renderer module registry. Adding a new data source still means creating a new module file and registering it, but dashboard rendering is instance-based rather than registry-order based.
 
 Widget and settings components live in the renderer under `modules/{id}/`. The module `id` is the join key between the main-process module and its renderer components.
 
@@ -209,4 +214,4 @@ All renderer-to-main communication uses `invoke` (request/response). All main-to
 - The preload script is the only code that bridges main and renderer. It uses `contextBridge.exposeInMainWorld` exclusively.
 - The renderer never receives the raw YouTube API key. IPC returns only a boolean `hasKey` flag or masked display string.
 - Scripts run with the same OS permissions as the Electron process. No sandboxing is applied; this is acceptable for a personal-use app where the user registers their own scripts.
-- ntfy message bodies are validated against a Reddit URL pattern before any follow-up fetch is made.
+- ntfy message bodies must yield a valid HTTP(S) URL before any follow-up fetch is made; source-specific metadata resolution happens only after that parse step.

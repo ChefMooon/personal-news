@@ -1,8 +1,8 @@
 # UI/UX Design Spec — Personal News Dashboard
 
 **Project:** personal-news
-**Status:** Draft
-**Last Updated:** 2026-03-15 (rev 7)
+**Status:** Active reference
+**Last Updated:** 2026-03-24 (rev 8)
 **Related Docs:** [PRD.md](./PRD.md) | [data-sources.md](./data-sources.md) | [tech-notes.md](./tech-notes.md)
 
 ---
@@ -18,14 +18,17 @@
 
 ## 2. Application Shell
 
-The app has four top-level sections, navigated via a **collapsible left sidebar**. The sidebar maximizes vertical content space on the dashboard. It has two states: expanded (200px, shows icon + label) and collapsed (56px, icon only). The active item is highlighted.
+The app is navigated via a **collapsible left sidebar**. The sidebar maximizes vertical content space on the dashboard. It has two states: expanded (200px, shows icon + label) and collapsed (56px, icon only). The active item is highlighted, feature-gated routes only appear when enabled, and a notifications button opens a flyout rather than navigating away.
 
 | Section | Description |
 |---------|-------------|
 | Dashboard | Main view — all enabled widgets in user-arranged layout |
-| Saved Posts | List/search view for Reddit posts saved via ntfy.sh |
+| YouTube | Full-page YouTube browsing and watch-state management |
+| Reddit Digest | Full-page Reddit Digest view when the feature is enabled |
+| Saved Posts | List/search view for saved links ingested via ntfy.sh when the feature is enabled |
 | Script Manager | Register, run, schedule, and view output for scripts. Nav item shows a subtle badge when one or more scheduled scripts are stale. |
 | Settings | API keys, per-source config, app preferences |
+| Notifications | Sidebar flyout for persisted script notifications |
 
 ---
 
@@ -35,15 +38,17 @@ The app has four top-level sections, navigated via a **collapsible left sidebar*
 
 - The dashboard is a vertical stack of **widgets**.
 - Each widget occupies the full width of the content area.
-- Users can **reorder widgets** by drag and drop (vertical axis).
+- Users can **reorder widget instances** by drag and drop (vertical axis).
+- The dashboard supports **multiple instances** of the same widget type. Each instance can have its own label and its own per-instance settings.
 - Users can **toggle widgets** on/off via the Settings screen or a quick-toggle control on the dashboard (e.g., an edit mode toggle that reveals hide/show controls per widget).
-- Widget order and visibility state are persisted between app restarts.
+- Widget order, visibility, instance metadata, and per-instance settings are persisted between app restarts.
 
 ### 3.2 Dashboard Edit Mode
 
 - A button (e.g., "Edit Layout") activates edit mode.
 - In edit mode, drag handles appear on each widget. Widgets can be reordered.
 - Each widget gains a toggle (eye icon or checkbox) to show/hide it.
+- Each widget can be renamed inline, removed from the layout, or duplicated by adding another instance of the same module type.
 - Exiting edit mode saves the layout.
 
 ### 3.3 Empty State
@@ -149,7 +154,7 @@ Posts within each subreddit (or within a grouped view) can be sorted by any of t
 | `created_utc` | Age | Descending (newest first) |
 | `fetched_at` | Date collected | Descending |
 
-The active sort field and direction are shown in the widget header as a small dropdown control (e.g., "Sort: Score ▾"). The sort preference is per-widget and is persisted in the `reddit_digest_view_config` settings key (see Section 5.5).
+The active sort field and direction are shown in the widget header as a small dropdown control (e.g., "Sort: Score ▾"). The sort preference is per widget instance and is persisted under an instance-scoped settings key (see Section 5.5).
 
 ### 5.3 Grouping
 
@@ -171,11 +176,11 @@ The widget supports two layout modes, toggled by a control in the widget header:
 | **Columns** (default) | Subreddits rendered in a CSS grid of columns. Column count is auto-fit based on widget width (`minmax(220px, 1fr)`). Suitable for 2–5 subreddits. |
 | **Tabs** | Subreddits rendered as shadcn `Tabs`. One tab per subreddit (or "All" tab when group_by is `none`). Suitable for many subreddits (6+). |
 
-Layout mode is preserved per-widget in `reddit_digest_view_config`.
+Layout mode is preserved per widget instance.
 
 ### 5.5 View Config Persistence
 
-The full view configuration for the Reddit Digest widget is stored as a JSON value under the settings key `reddit_digest_view_config`:
+The full view configuration for the Reddit Digest widget is stored as a JSON value under the settings key prefix `reddit_digest_view_config:<instanceId>`:
 
 ```json
 {
@@ -192,7 +197,7 @@ Defaults (applied if the key is missing or any field is absent):
 - `group_by`: `"subreddit"`
 - `layout_mode`: `"columns"`
 
-This config is read and written via `settings:get` / `settings:set` using the `reddit_digest_view_config` key. No separate IPC channel is needed — it is a plain settings value. The widget reads it on mount and writes it on any control interaction.
+This config is read and written via `settings:get` / `settings:set` using an instance-scoped key. No separate IPC channel is needed — it is a plain settings value. Each widget instance reads it on mount and writes it on any control interaction.
 
 ---
 
@@ -218,12 +223,12 @@ Both are registered as a module in the widget registry (module ID: `saved_posts`
 +------------------------------------------------------------+
 ```
 
-- Shows up to 5 most recently saved posts.
-- Each row: subreddit chip, title (linked), relative saved date.
+- Shows up to 5 most recently saved links by default.
+- Each row can show a source badge, Reddit subreddit metadata when available, the title, and relative saved date.
 - If ntfy is not configured, the widget shows a "Set up mobile saving" prompt with a link to Settings.
 - "View All" link in the widget header navigates to `/saved-posts`.
 
-Posts are ingested from a user-configured ntfy.sh topic on app startup. See [data-sources.md](./data-sources.md) Section 3 for the ingestion flow.
+Links are ingested from a user-configured ntfy.sh topic on app startup, on the configured background poll interval, or on manual sync. See [data-sources.md](./data-sources.md) Section 3 for the ingestion flow.
 
 ### 6.0 Stale Poll Warning
 
@@ -245,13 +250,13 @@ If the last successful ntfy poll was more than 24 hours ago, a non-blocking warn
 ### 6.1 Layout
 
 - A list/card view of all saved posts, sorted by saved date (newest first).
-- Each entry shows: title, subreddit, author, score, saved date, tags (if any).
-- Clicking a post opens the Reddit permalink in the default browser.
+- Each entry shows: title, source, saved date, tags, and source-specific metadata when available (for example subreddit/author/score on Reddit items).
+- Clicking a post opens the Reddit permalink for Reddit items, or the stored source URL for all other link types.
 
 ### 6.2 Search and Filter
 
 - A search bar filters by title text.
-- Filter controls: by subreddit, by tag, by date range.
+- Filter controls: by subreddit, by tag, by source, and by viewed/unviewed state.
 - Assumed: client-side search over SQLite (FTS5 or simple LIKE query) — no external search service.
 
 ### 6.3 Tags
@@ -354,7 +359,7 @@ The badge is subtle (small dot, not a numbered chip) to respect the non-intrusiv
 | API Keys | YouTube Data API v3 key; fields are masked by default with a "reveal" toggle |
 | YouTube | List of configured channels — add by channel URL or ID; per-channel enabled/disabled toggle; remove channel; RSS poll interval (minutes) |
 | Reddit Digest | List of configured subreddits — add/remove; time window setting (week/month/all) |
-| Saved Posts | ntfy.sh topic name (plain text input); optional custom ntfy server URL (plain text) |
+| Saved Posts | ntfy.sh topic name, optional custom server URL, sync poll interval, test/sync controls, and data-management actions |
 | Appearance | Theme selector: System Default, Light, Dark. Custom themes (future) are extensible via the `themes` table — see data-model.md §2.9. |
 
 ### 8.2 API Key Fields
@@ -370,6 +375,7 @@ Once ntfy is configured, the Saved Posts settings section shows:
 
 - **Topic name** — plain text field displaying the saved topic name. An "Edit" button re-enters the onboarding flow (Section 8.4) pre-filled with current values.
 - **Server URL** — read-only display of the active server (e.g., `https://ntfy.sh`). An "Edit" button allows changing it. Defaults to `https://ntfy.sh` if blank.
+- **Sync poll interval** — numeric minutes input persisted as `ntfy_poll_interval_minutes`. Saving reapplies the background schedule immediately.
 - **Last synced** — timestamp of the last successful poll, e.g., "Today at 08:42" or "3 days ago." If more than 24 hours ago, shown in amber with the warning text from Section 6.0.
 - **Test Connection** button — sends a single poll request and reports success or failure inline (e.g., "Connected — 0 new messages" or an error message).
 - **Mobile Setup Guide** button — opens the phone setup guide panel (Section 8.4, Step 4) so the user can revisit the iOS/Android instructions at any time without re-running the full onboarding.
@@ -559,6 +565,8 @@ Key components expected:
 - The app is not designed for small screens — it is a desktop tool.
 - Layout is responsive to window width in the sense that carousels and columns reflow gracefully, but no mobile breakpoints are required.
 - The window can be resized freely. Widget layout remains single-column vertical stack regardless of width.
+- Closing the window hides it to the system tray by default. The first close shows a non-blocking toast explaining that the app is still running in the tray.
+- Auto-update state is surfaced as non-blocking toasts: update available, download ready, and recoverable error states.
 
 ---
 

@@ -1,5 +1,9 @@
 # YouTube Channel Sync Strategy
 
+> Status: Historical implementation strategy retained for context. It reflects an earlier debug-first ingest approach and is not the maintained source of truth for the current YouTube pipeline.
+>
+> Current maintained docs: [README](../../README.md), [docs/architecture/data-sources.md](../architecture/data-sources.md), and [docs/architecture/overview.md](../architecture/overview.md).
+
 ## Overview
 
 This version of the strategy is focused on a multi-channel, debug-first ingest loop.

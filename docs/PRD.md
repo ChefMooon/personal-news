@@ -1,8 +1,8 @@
-# Product Requirements Document — Personal News Dashboard
+# Product Specification — Personal News Dashboard
 
 **Project:** personal-news
-**Status:** Draft
-**Last Updated:** 2026-03-15 (rev 6)
+**Status:** Current implementation
+**Last Updated:** 2026-03-24
 **Related Docs:** [data-sources.md](./data-sources.md) | [ui-ux.md](./ui-ux.md) | [tech-notes.md](./tech-notes.md)
 
 ---
@@ -29,12 +29,12 @@ Information about things a person cares about is spread across multiple platform
 
 ---
 
-## 4. Non-Goals (Out of Scope for v1)
+## 4. Non-Goals
 
 - Mobile or web versions — desktop only.
 - Social features, sharing, or multi-user sync.
 - Building a general-purpose RSS reader (sources are purpose-built integrations, not arbitrary feeds).
-- Notifications or system tray alerts — deferred to v2.
+- A hosted backend or cross-device account sync.
 - Monetization or account system.
 
 ---
@@ -72,8 +72,8 @@ Information about things a person cares about is spread across multiple platform
 | ID | As a user, I want to... | So that... |
 |----|------------------------|------------|
 | US-09 | View a weekly digest of top posts from configured subreddits | I stay informed without doomscrolling |
-| US-10 | Save any Reddit post from my phone by sharing its URL to a private ntfy.sh topic | I can capture interesting posts while browsing on mobile without any extra app |
-| US-11 | View and search my saved posts inside the dashboard | I can reference them later |
+| US-10 | Save Reddit posts and other interesting links from my phone by sharing a URL to a private ntfy.sh topic | I can capture items while browsing on mobile without extra app-specific setup |
+| US-11 | View, search, and tag my saved posts inside the dashboard | I can reference them later |
 | US-17 | Be guided through ntfy.sh setup with a first-run onboarding flow | I can get mobile saving working without reading external documentation |
 | US-18 | See a warning when the app hasn't polled my ntfy topic in over 24 hours | I know I may have missed saved posts before messages expired |
 
@@ -122,10 +122,10 @@ Information about things a person cares about is spread across multiple platform
 
 ### 7.4 Saved Posts
 
-- FR-13: On startup, the app shall poll a user-configured ntfy.sh topic for new messages and ingest any Reddit URLs found as saved posts.
-- FR-14: Ingested URLs shall be fetched and stored with title, URL, subreddit, author, and timestamp.
-- FR-15: Saved posts shall be viewable and searchable within the dashboard.
-- FR-16: Saved posts shall support manual tagging in v1.
+- FR-13: The app shall poll a user-configured ntfy.sh topic on startup and on a user-configurable recurring interval for new messages.
+- FR-14: Ingested URLs shall be normalized by source and stored with the metadata available for that source, including title, URL, timestamp, and optional note.
+- FR-15: Saved posts shall be viewable, searchable, and filterable within the dashboard and Saved Posts view.
+- FR-16: Saved posts shall support manual tagging.
 - FR-25: The app shall provide a guided first-run onboarding flow for ntfy.sh setup. The flow shall trigger the first time the user navigates to Saved Posts (or the ntfy Settings section) with no topic configured. See ui-ux.md Section 8.4 for the full flow spec.
 - FR-26: If the time elapsed since the last successful ntfy poll exceeds 24 hours, the app shall display a visible warning informing the user that messages may have expired and they may have missed saved posts. The warning shall include the timestamp of the last successful poll and a button to dismiss or manually re-poll.
 
@@ -152,19 +152,16 @@ Information about things a person cares about is spread across multiple platform
 - NFR-02: Background data refresh shall not block or degrade UI responsiveness.
 - NFR-03: The app shall function fully offline for previously cached data.
 - NFR-04: Adding a new data source module shall not require changes to core dashboard or layout code.
-- NFR-05: The app shall be packaged and installable on Windows, macOS, and Linux via electron-builder.
+- NFR-05: The app shall be packaged with electron-builder, with the Windows installer workflow verified in the current release process.
 
 ---
 
-## 9. Open Questions
+## 9. Current Scope Notes
 
-| # | Question | Impact | Status |
-|---|----------|--------|--------|
-| OQ-01 | Should individual YouTube channels be toggle-able on/off in v1? | Scope of FR-28 | **Resolved: Yes, per-channel toggle required in v1. Deferred: system tray/notifications to v2.** |
-| OQ-02 | Should saved posts support tags/folders in v1? | Scope of FR-16 | **Resolved: Yes, tags required in v1.** |
-| OQ-03 | What is the credential storage mechanism? | Security, tech-notes.md | **Resolved: `safeStorage` for YouTube API key only. ntfy topic name and server URL stored as plain text in `settings` table.** |
-| OQ-04 | Is Reddit API auth (OAuth) required for the digest script, or is public API access sufficient? | Data Sources | **Resolved: Public Reddit JSON API only. No OAuth, no user login required. Scoped to public subreddits.** |
-| OQ-05 | Should the Script Manager support non-Python scripts in v1? | Scope of FR-17 | **Resolved: Python only in v1. Interface must be extensible.** |
-| OQ-06 | What is the refresh interval for YouTube RSS polling? (User-configurable or fixed?) | FR-29, API strategy | **Resolved: User-configurable. Default 15 minutes. Stored in `settings` table as `rss_poll_interval_minutes`.** |
-| TD-07 | Show a warning when ntfy poll is stale (>24h)? | FR-26 | **Resolved: Yes, warning required in v1.** |
-| TD-08 | Support custom ntfy server URL in v1 Settings? | FR-22, FR-25 | **Resolved: Yes, supported in v1 with onboarding flow.** |
+| Area | Current status |
+|---|---|
+| Notifications | Desktop notifications are implemented for YouTube activity, Saved Posts sync, Reddit Digest runs, and Script Manager auto-run events, subject to user preferences and OS support. |
+| System tray | Tray support is implemented, including close-to-tray and minimize-to-tray settings. |
+| Saved Posts | Saved Posts supports ntfy onboarding, manual re-poll, stale-warning messaging, search, tagging, and source-aware storage. |
+| ntfy polling | ntfy polling runs on startup and on a configurable interval. |
+| Credential storage | The YouTube API key uses `safeStorage`; ntfy topic and server URL are stored as plain text settings. |

@@ -1,5 +1,7 @@
 # ntfy Module — Architecture & Data Flow
 
+**Last Updated:** 2026-03-24
+
 ntfy is used as a zero-infrastructure push channel. The user sends any link (Reddit, X/Twitter, Bluesky, or generic URL) to a private ntfy topic from their phone, and the app polls that topic to ingest the link into the local `saved_posts` database with automatic source detection.
 
 ---
@@ -197,7 +199,7 @@ Key points:
 
 ```typescript
 interface NtfyPollResult {
-  postsIngested: number    // Reddit posts successfully upserted
+  postsIngested: number    // Saved links successfully upserted across all supported sources
   messagesReceived: number // ntfy messages with event === 'message'
   lastPolledAt: number     // Unix timestamp of the completed poll
 }

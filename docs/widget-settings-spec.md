@@ -2,7 +2,7 @@
 
 **Project:** personal-news
 **Status:** Active
-**Last Updated:** 2026-03-22
+**Last Updated:** 2026-03-24
 **Related Docs:** [ui-ux.md](./ui-ux.md) | [architecture/frontend.md](./architecture/frontend.md)
 
 ---
@@ -11,7 +11,7 @@
 
 Every dashboard widget that has user-configurable options **must** use the inline settings panel pattern described in this document. This ensures a consistent UX across all widgets: settings open inside the card itself, the widget size does not change when settings open, and the user can always revert changes.
 
-The YouTube and Saved Posts widgets are the canonical reference implementations.
+The YouTube, Reddit Digest, and Saved Posts widgets are the current reference implementations. Their config hooks are all instance-scoped so multiple copies of the same widget type can coexist safely on the dashboard.
 
 ---
 
@@ -445,4 +445,5 @@ When adding a new widget that follows this spec, create or modify these files:
 | Widget | Widget component | Settings panel | Config hook |
 |--------|------------------|----------------|-------------|
 | YouTube | `src/renderer/src/modules/youtube/YouTubeWidget.tsx` | `YouTubeSettingsPanel.tsx` | `useYouTubeViewConfig.ts` |
+| Reddit Digest | `src/renderer/src/modules/reddit/RedditDigestWidget.tsx` | `RedditDigestSettingsPanel.tsx` | `useRedditDigestConfig.ts` |
 | Saved Posts | `src/renderer/src/modules/saved-posts/SavedPostsWidget.tsx` | `SavedPostsSettingsPanel.tsx` | `useSavedPostsConfig.ts` |

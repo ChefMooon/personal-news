@@ -1,5 +1,9 @@
 # Personal News Initial Brainstorm
 
+> Status: Historical brainstorming document retained for early product context. It is not a current source-of-truth spec.
+>
+> Current maintained docs: [README](../README.md), [docs/PRD.md](./PRD.md), [docs/architecture/overview.md](./architecture/overview.md), and [docs/ui-ux.md](./ui-ux.md).
+
 *Create a dashboard that shows all the new information I care about*
 
 **Suggested stack:**

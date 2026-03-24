@@ -1,5 +1,9 @@
 ## Plan: Script Manager Full Implementation
 
+> Status: Historical implementation plan retained for context. It is not a maintained source of truth for the current Script Manager implementation.
+>
+> Current maintained docs: [README](../../README.md), [docs/architecture/data-sources.md](../architecture/data-sources.md), [docs/architecture/frontend.md](../architecture/frontend.md), and [docs/ui-ux.md](../ui-ux.md).
+
 The DB schema is already complete (`scripts` + `script_runs` tables, seeded). Everything else is stub/no-op. The approach mirrors the YouTube module's push event pattern (`emitYoutubeUpdated` → `BrowserWindow.webContents.send`) and follows `docs/architecture/data-sources.md §4`.
 
 ---

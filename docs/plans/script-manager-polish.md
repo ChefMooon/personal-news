@@ -1,5 +1,9 @@
 ## Plan: Script Manager Polish — 4 Features
 
+> Status: Historical implementation plan retained for context. It documents an earlier polish pass and is not a maintained source of truth.
+>
+> Current maintained docs: [README](../../README.md), [docs/architecture/frontend.md](../architecture/frontend.md), [docs/architecture/data-sources.md](../architecture/data-sources.md), and [docs/ui-ux.md](../ui-ux.md).
+
 **TL;DR:** Four targeted changes across the IPC layer, Settings page, and ScriptManager page. One new IPC channel needed (`SHELL_OPEN_PATH`); everything else builds on existing infrastructure.
 
 ---

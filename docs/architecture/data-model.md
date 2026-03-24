@@ -1,7 +1,7 @@
 # Data Model & Schema — Personal News Dashboard
 
 **Project:** personal-news
-**Last Updated:** 2026-03-24 (rev 3)
+**Last Updated:** 2026-03-24 (rev 4)
 
 All data is stored in a single SQLite file at `{userData}/data.db`. All timestamps are Unix epoch integers (seconds). Boolean fields use `INTEGER NOT NULL DEFAULT 0/1` (SQLite has no native boolean type).
 
@@ -72,8 +72,11 @@ Key-value store for all plain-text application settings.
 
 | Key | Type hint | Default | Description |
 |-----|-----------|---------|-------------|
-| `widget_layout` | JSON object (see below) | see `useWidgetLayout.ts` | Full dashboard layout: widget_order (instanceIds), widget_visibility, widget_instances |
+| `widget_order` | JSON array string | legacy seed in `001_initial.sql` | Ordered widget instance IDs after migration; legacy installs may still start from module IDs |
+| `widget_visibility` | JSON object string | legacy seed in `001_initial.sql` | Visibility flags keyed by instance ID after migration |
+| `widget_instances` | JSON object string | created on first migrated save | Widget instance metadata keyed by instance ID |
 | `rss_poll_interval_minutes` | integer string | `"15"` | YouTube RSS polling interval |
+| `ntfy_poll_interval_minutes` | integer string | `"60"` | Background ntfy poll interval |
 | `ntfy_topic` | string | — | ntfy.sh topic name (plain text) |
 | `ntfy_server_url` | URL string | `"https://ntfy.sh"` | ntfy server base URL |
 | `ntfy_last_message_id` | string | — | Cursor for incremental ntfy polling |
@@ -81,8 +84,16 @@ Key-value store for all plain-text application settings.
 | `ntfy_onboarding_dismissed` | boolean string `"1"/"0"` | `"0"` | Whether user dismissed onboarding without completing |
 | `active_theme_id` | string | `"system"` | Active theme. Built-in values: `"system"`, `"light"`, `"dark"`. For user-created themes, this is the `themes.id` value (see §2.9). |
 | `reddit_digest_view_config:<instanceId>` | JSON object string | see below | Per-instance Reddit Digest view config. Keys: sort_by, sort_dir, group_by, layout_mode, subreddit_filter |
+| `saved_posts_view_config:<instanceId>` | JSON object string | see below | Per-instance Saved Posts widget config |
+| `youtube_view_config:<instanceId>` | JSON object string | see code defaults | Per-instance YouTube widget config |
+| `desktop_notification_prefs` | JSON object string | seeded in `001_initial.sql` | Desktop notification preferences for YouTube, Saved Posts, Reddit Digest, and Script Manager |
+| `app_close_to_tray` | boolean string | `"true"` | Hide to tray on close |
+| `app_minimize_to_tray` | boolean string | `"false"` | Hide to tray on minimize |
+| `app_start_minimized` | boolean string | `"false"` | Start hidden/minimized |
+| `app_tray_hint_shown` | boolean string | — | Tracks whether the first-close tray hint has already been shown |
+| `app_auto_update_check_enabled` | boolean string | `"true"` when absent | Enables packaged Windows auto-update checks |
 
-**Widget layout shape (`widget_layout` key):**
+**Widget layout assembled by IPC (`widget_order` + `widget_visibility` + `widget_instances`):**
 
 ```json
 {
@@ -96,7 +107,7 @@ Key-value store for all plain-text application settings.
 }
 ```
 
-`widget_order` contains **instanceIds** (not moduleIds). Multiple instances of the same module are supported. `label` is a user-supplied display name; `null` means use the module's default display name.
+`settings:getWidgetLayout` assembles these three raw settings keys into one `WidgetLayout` object. `widget_order` contains **instanceIds** (not moduleIds) after migration. Multiple instances of the same module are supported. `label` is a user-supplied display name; `null` means use the module's default display name.
 
 **DigestViewConfig shape (per instance):**
 
@@ -222,7 +233,9 @@ Links saved by the user via the ntfy.sh mobile flow. Supports Reddit, X/Twitter,
 | `body` | TEXT | | Post body text (for text posts); null for link posts |
 | `saved_at` | INTEGER | NOT NULL | Unix timestamp when the app ingested this post |
 | `tags` | TEXT | | JSON array of tag strings, e.g. `["ai","research"]`; null if untagged |
+| `note` | TEXT | | Optional note captured from the ntfy payload |
 | `source` | TEXT | NOT NULL DEFAULT `'reddit'` | Link source: `'reddit'`, `'x'`, `'bsky'`, `'generic'` |
+| `viewed_at` | INTEGER | | Unix timestamp when the item was marked viewed; null = unviewed |
 
 **Full-text search:**
 
@@ -260,6 +273,12 @@ CREATE INDEX idx_saved_posts_subreddit
 
 CREATE INDEX idx_saved_posts_source
     ON saved_posts (source);
+
+CREATE INDEX idx_saved_posts_viewed_at
+    ON saved_posts (viewed_at);
+
+CREATE INDEX idx_saved_posts_saved_viewed
+    ON saved_posts (saved_at DESC, viewed_at);
 ```
 
 **Tags note:** Tags are stored as a JSON array in the `tags` column. This is sufficient for v1 given expected cardinality (personal use, tens to hundreds of posts). A normalized `tags` table is not needed for v1. Tag filtering is done with `json_each()` in SQLite.
@@ -418,8 +437,8 @@ The `themes` table is created in migration 001 even though it ships empty. This 
 Seed values inserted in migration 001:
 - `meta.schema_version = '1'`
 - `settings.active_theme_id = 'system'`
-- `settings.widget_order = '["youtube","reddit_digest","saved_posts"]'` (SavedPostsWidget included)
-- `settings.widget_visibility = '{"youtube":true,"reddit_digest":true,"saved_posts":true}'`
+- `settings.widget_order = '["youtube","reddit_digest","saved_posts"]'` (legacy module-id seed; runtime migrates this to instance IDs on first load)
+- `settings.widget_visibility = '{"youtube":true,"reddit_digest":true,"saved_posts":true}'` (legacy shape; runtime migrates alongside `widget_order`)
 - `settings.rss_poll_interval_minutes = '15'`
 - `settings.reddit_digest_view_config = '{"sort_by":"score","sort_dir":"desc","group_by":"subreddit","layout_mode":"columns"}'`
 - `settings.ntfy_poll_interval_minutes = '60'`

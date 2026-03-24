@@ -1,7 +1,7 @@
 # Frontend Architecture — Personal News Dashboard
 
 **Project:** personal-news
-**Last Updated:** 2026-03-15 (rev 2)
+**Last Updated:** 2026-03-24 (rev 3)
 
 ---
 
@@ -22,13 +22,13 @@ React Router v6 with `MemoryRouter` (required in Electron — no `BrowserRouter`
 | Path | Component | Notes |
 |------|-----------|-------|
 | `/` | `Dashboard` | Default route |
-| `/saved-posts` | `SavedPosts` | Triggers ntfy onboarding if not configured |
+| `/youtube` | `YouTubePage` | Full-page YouTube view |
+| `/reddit-digest` | `RedditDigest` | Present only when the feature is enabled |
+| `/saved-posts` | `SavedPosts` | Present only when the feature is enabled; opens ntfy onboarding when no topic is configured |
 | `/scripts` | `ScriptManager` | Shows stale badge on nav item when relevant |
-| `/settings` | `Settings` | Tabbed: API Keys, YouTube, Reddit, Saved Posts, Appearance |
-| `/settings/youtube` | `Settings` (YouTube tab active) | Navigable directly from YouTube widget gear icon |
-| `/settings/saved-posts` | `Settings` (Saved Posts tab active) | Also triggers ntfy onboarding if not configured |
+| `/settings` | `Settings` | Tabbed settings plus feature flags, notifications, updates, and Saved Posts sync controls |
 
-Navigation is via the collapsible left sidebar. The sidebar is always rendered by `App.tsx`; route content renders in the main area via `<Outlet />`.
+Navigation is via the collapsible left sidebar. `App.tsx` renders the sidebar, the current route, the Sonner toast container, and the notifications flyout trigger.
 
 ---
 
@@ -39,15 +39,18 @@ ThemeProvider  ← wraps entire app; applies active_theme_id to <html data-theme
 └── App.tsx
     ├── Sidebar
     │   ├── NavItem (Dashboard)
-    │   ├── NavItem (Saved Posts)
+    │   ├── NavItem (YouTube)
+    │   ├── NavItem (Reddit Digest)   ← feature-gated
+    │   ├── NavItem (Saved Posts)     ← feature-gated
     │   ├── NavItem (Script Manager)  ← shows amber dot badge when stale scripts exist
-    │   └── NavItem (Settings)
-    └── <Outlet>
+    │   ├── NavItem (Settings)
+    │   └── Notifications button      ← opens NotificationsFlyout with unread dot
+    └── route area
         ├── Dashboard
         │   ├── DashboardEditModeToggle
         │   └── DndContext (@dnd-kit/core)
         │       └── SortableContext
-        │           └── WidgetWrapper[] (one per enabled module, in widget_order)
+        │           └── WidgetWrapper[] (one per widget instance, in widget_order)
         │               ├── YouTubeWidget
         │               │   └── ChannelRow[] (one per enabled channel)
         │               │       ├── StreamPanel (left — upcoming/live streams)
@@ -62,16 +65,13 @@ ThemeProvider  ← wraps entire app; applies active_theme_id to <html data-theme
         │                   └── SavedPostSummaryRow[] (up to 5 most recent posts)
         │
         ├── SavedPosts
-        │   ├── NtfyStaleWarningBanner  ← shown when last poll >24h ago
-        │   ├── NtfyOnboardingModal     ← shown on first visit with no topic configured
-        │   │   ├── OnboardingStep1 (What is ntfy)
-        │   │   ├── OnboardingStep2 (Choose topic + server URL)
-        │   │   ├── OnboardingStep3 (Test connection)
-        │   │   └── OnboardingStep4 (Phone setup guide — iOS/Android)
+        │   ├── StaleWarning            ← shown when last poll >24h ago
+        │   ├── NtfyOnboardingWizard    ← shown when no topic is configured
         │   ├── SavedPostsToolbar
         │   │   ├── SearchInput
         │   │   ├── FilterBySubreddit
         │   │   ├── FilterByTag
+        │   │   ├── FilterBySource
         │   │   └── ManageTagsButton → TagManagementModal
         │   └── SavedPostList
         │       └── SavedPostCard[]
@@ -157,7 +157,9 @@ When the main process completes a background task (RSS poll, script run, ntfy in
 | `youtube:updated` | New videos or stream status changes available |
 | `scripts:output` | Chunk of stdout/stderr from running script |
 | `scripts:runComplete` | Script finished — payload: `{ scriptId, exitCode }` |
-| `reddit:ntfyIngestComplete` | ntfy startup ingestion finished |
+| `reddit:ntfyIngestComplete` | ntfy startup/scheduled/manual ingestion finished |
+| `app:showTrayHint` | Show the first-close tray hint toast |
+| `updates:status` | Auto-update state changed |
 
 ### 4.3 IPC Type Safety
 
@@ -178,35 +180,29 @@ export type IpcChannels = {
 
 ### 5.1 Registration
 
-Each data source module registers a widget component and a settings component. The renderer-side module registry (`src/renderer/modules/registry.ts`) maps module IDs to their components:
+The renderer-side module registry is intentionally small: it maps module IDs to widget components only. Dashboard settings panels live alongside each widget and are not registered separately.
 
 ```typescript
 // src/renderer/modules/registry.ts
 import { YouTubeWidget } from './youtube/YouTubeWidget';
-import { YouTubeSettings } from './youtube/YouTubeSettings';
 import { RedditDigestWidget } from './reddit/RedditDigestWidget';
-import { RedditDigestSettings } from './reddit/RedditDigestSettings';
 import { SavedPostsWidget } from './saved-posts/SavedPostsWidget';
-import { SavedPostsSettings } from './saved-posts/SavedPostsSettings';
 
-export const moduleRegistry: ModuleRegistration[] = [
+export const moduleRegistry: RendererModule[] = [
   {
     id: 'youtube',
     displayName: 'YouTube',
-    WidgetComponent: YouTubeWidget,
-    SettingsComponent: YouTubeSettings,
+    widget: YouTubeWidget,
   },
   {
     id: 'reddit_digest',
     displayName: 'Reddit Digest',
-    WidgetComponent: RedditDigestWidget,
-    SettingsComponent: RedditDigestSettings,
+    widget: RedditDigestWidget,
   },
   {
     id: 'saved_posts',
     displayName: 'Saved Posts',
-    WidgetComponent: SavedPostsWidget,
-    SettingsComponent: SavedPostsSettings,
+    widget: SavedPostsWidget,
   },
 ];
 ```
@@ -259,7 +255,7 @@ interface WidgetLayout {
 
 ### 5.3 Settings Rendering
 
-The Settings view iterates `moduleRegistry` and renders each module's `SettingsComponent` as a tab or section. Adding a new module automatically adds its settings section — no changes to `Settings.tsx` required.
+The Settings route is composed explicitly from settings tabs and feature sections. Widget settings are rendered inline from each widget's own settings panel, not from the renderer registry. Adding a new module may still require a deliberate Settings UI entry if that module exposes app-level controls.
 
 ---
 
@@ -278,18 +274,17 @@ The Settings view iterates `moduleRegistry` and renders each module's `SettingsC
 - Drag-end handler, rename, add, and remove all call `setLayout` which persists the full `WidgetLayout` object via `settings:setWidgetLayout`.
 - Exiting edit mode (clicking "Done") simply sets `editMode = false`.
 
-### 6.2 ntfy Onboarding Modal
+### 6.2 ntfy Onboarding Wizard
 
-- `SavedPosts.tsx` fetches ntfy config on mount via `settings:getNtfyConfig`.
-- If `topic` is null/empty and `ntfy_onboarding_dismissed` is not `"1"`, opens `NtfyOnboardingModal`.
-- Modal manages its own step state (`step: 1 | 2 | 3 | 4`).
-- "Done" on Step 4 calls `settings:setNtfyConfig`, then closes modal and refreshes saved posts.
-- "Skip Setup" calls `settings:set('ntfy_onboarding_dismissed', '1')` and closes modal.
+- `SavedPosts.tsx` derives the onboarding state from `reddit:getNtfyStaleness` plus raw `settings:get('ntfy_topic')` / `settings:get('ntfy_server_url')` values.
+- If no topic is configured, it opens `NtfyOnboardingWizard`.
+- The wizard owns the multi-step flow and is also reused from the Saved Posts settings tab.
+- Completing the wizard persists plain settings values, closes the wizard, and refreshes Saved Posts state.
 
 ### 6.3 Stale Script Badge
 
-- `Sidebar.tsx` maintains a `hasStaleScripts` boolean, computed by calling `scripts:getStaleStatus` on mount and re-checking whenever `scripts:runComplete` is received.
-- The amber dot on the Script Manager nav item is rendered conditionally based on this flag.
+- `Sidebar.tsx` derives `hasStaleScripts` from the `useScripts()` hook result.
+- The amber styling on the Script Manager nav item is rendered conditionally based on whether any returned script row has `is_stale = true`.
 
 ### 6.4 Theme Application
 
@@ -336,6 +331,8 @@ src/renderer/
 │   └── WidgetInstanceContext.tsx  Per-instance context (instanceId, moduleId, label)
 ├── routes/
 │   ├── Dashboard.tsx
+│   ├── YouTube.tsx
+│   ├── RedditDigest.tsx
 │   ├── SavedPosts.tsx
 │   ├── ScriptManager.tsx
 │   └── Settings.tsx
@@ -356,22 +353,19 @@ src/renderer/
 │   │   └── RedditDigestSettings.tsx
 │   ├── saved-posts/
 │   │   ├── SavedPostsWidget.tsx    Dashboard widget (compact, 5 posts)
-│   │   └── SavedPostsSettings.tsx  Settings tab (ntfy config — same as SavedPostsTab)
+│   │   ├── SavedPostsSettingsPanel.tsx
+│   │   ├── NtfyOnboardingWizard.tsx
+│   │   ├── StaleWarning.tsx
+│   │   └── TagManagementModal.tsx
 │   └── scripts/
 │       └── ScriptManagerSettings.tsx
 ├── components/
 │   ├── ui/                   shadcn/ui owned copies
 │   ├── Sidebar.tsx
+│   ├── Sidebar.tsx
+│   ├── NotificationsFlyout.tsx
 │   ├── WidgetWrapper.tsx
-│   ├── NtfyOnboardingModal/
-│   │   ├── index.tsx
-│   │   ├── Step1.tsx
-│   │   ├── Step2.tsx
-│   │   ├── Step3.tsx
-│   │   └── Step4.tsx
-│   ├── NtfyStaleWarningBanner.tsx
-│   ├── StaleScriptCallout.tsx
-│   └── TagChip.tsx
+│   └── ...
 ├── hooks/
 │   ├── useYouTubeChannels.ts
 │   ├── useYouTubeVideos.ts

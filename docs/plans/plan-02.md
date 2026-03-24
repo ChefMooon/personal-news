@@ -1,5 +1,9 @@
 ## Plan: Script Manager Editable Scheduling and Config
 
+> Status: Historical implementation plan retained for context. It is not a maintained source of truth for the current Script Manager behavior.
+>
+> Current maintained docs: [README](../../README.md), [docs/architecture/data-sources.md](../architecture/data-sources.md), [docs/architecture/frontend.md](../architecture/frontend.md), and [docs/ui-ux.md](../ui-ux.md).
+
 Yes, this is very possible with the current architecture. The scheduler and script persistence are already in place; the main missing pieces are mutation IPCs and Script Manager editing UI.  
 You asked for all schedule types plus full script editing and description support, so this plan includes all of that.
 
