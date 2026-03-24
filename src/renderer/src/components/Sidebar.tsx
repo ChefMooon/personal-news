@@ -31,6 +31,11 @@ export function Sidebar(): React.ReactElement {
       label: 'Dashboard',
       icon: <LayoutDashboard className="h-5 w-5 shrink-0" />
     },
+    {
+      to: '/youtube',
+      label: 'YouTube',
+      icon: <Youtube className="h-5 w-5 shrink-0" />
+    },
     ...(redditDigestEnabled
       ? [
           {
@@ -49,11 +54,6 @@ export function Sidebar(): React.ReactElement {
           }
         ]
       : []),
-    {
-      to: '/youtube',
-      label: 'YouTube',
-      icon: <Youtube className="h-5 w-5 shrink-0" />
-    },
     {
       to: '/scripts',
       label: 'Script Manager',
