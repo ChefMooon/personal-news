@@ -285,6 +285,16 @@ Assumed: This interface is not final. The architecture agent should define the e
 
 **Native modules:** `better-sqlite3` is a native Node module that must be compiled for the target Electron version. electron-builder handles this via `electron-rebuild` as part of the build pipeline.
 
+**Production verification (Windows):** Run `npm run verify:production:win` to execute the full local release gate. This verifies:
+
+- `npm run build` succeeds
+- `npm run build:win -- --publish=never` produces expected installer/unpacked outputs
+- packaged resources include DB migrations under `resources/migrations`
+- `better-sqlite3` native binary exists under `resources/app.asar.unpacked/node_modules/better-sqlite3/build/Release/better_sqlite3.node`
+- packaged runtime smoke test initializes the database and migrations successfully
+
+**Packaged smoke mode:** The main process supports `--smoke-test` and optional `--smoke-output=<path>` to initialize DB/migrations in packaged mode and exit with status 0 on success. This is used by the Windows verification script and CI pipeline.
+
 **Auto-update:** Considered for v2. electron-builder supports `electron-updater` for GitHub Releases or S3. Not in scope for v1 (Decision needed: confirm).
 
 ---

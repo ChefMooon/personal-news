@@ -10,7 +10,7 @@ import {
   type NativeImage,
   type Rectangle
 } from 'electron'
-import { existsSync } from 'fs'
+import { existsSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { IPC } from '../shared/ipc-types'
@@ -29,6 +29,9 @@ let quitting = false
 let trayHintHideTimer: ReturnType<typeof setTimeout> | null = null
 let persistWindowBoundsTimer: ReturnType<typeof setTimeout> | null = null
 
+const SMOKE_TEST_FLAG = '--smoke-test'
+const SMOKE_TEST_OUTPUT_FLAG = '--smoke-output'
+
 const WINDOW_BOUNDS_SETTING_KEY = 'app_window_bounds'
 const RESTORE_WINDOW_BOUNDS_SETTING_KEY = 'app_restore_window_bounds'
 const START_MAXIMIZED_SETTING_KEY = 'app_start_maximized'
@@ -43,6 +46,44 @@ type PersistedWindowBounds = {
   width: number
   height: number
   isMaximized?: boolean
+}
+
+function isSmokeTestRun(): boolean {
+  return process.argv.includes(SMOKE_TEST_FLAG)
+}
+
+function getArgValue(flag: string): string | null {
+  const exactPrefix = `${flag}=`
+  for (let i = 0; i < process.argv.length; i += 1) {
+    const arg = process.argv[i]
+    if (arg === flag) {
+      return process.argv[i + 1] ?? null
+    }
+    if (arg.startsWith(exactPrefix)) {
+      return arg.slice(exactPrefix.length)
+    }
+  }
+  return null
+}
+
+function writeSmokeReport(dbPath: string, schemaVersion: string | null): void {
+  const outputPath = getArgValue(SMOKE_TEST_OUTPUT_FLAG)
+  if (!outputPath) {
+    return
+  }
+
+  try {
+    const payload = {
+      ok: true,
+      packaged: app.isPackaged,
+      dbPath,
+      schemaVersion,
+      timestamp: new Date().toISOString()
+    }
+    writeFileSync(outputPath, JSON.stringify(payload, null, 2), 'utf-8')
+  } catch (error) {
+    console.error('[SmokeTest] Failed to write smoke report:', error)
+  }
 }
 
 function getBooleanSetting(key: string, fallback: boolean): boolean {
@@ -442,6 +483,7 @@ function createWindow(): BrowserWindow {
 
 app.whenReady().then(() => {
   try {
+    const smokeTestRun = isSmokeTestRun()
     const lockAcquired = app.requestSingleInstanceLock()
     if (!lockAcquired) {
       app.quit()
@@ -471,6 +513,19 @@ app.whenReady().then(() => {
     })
 
     const db = openDatabase()
+
+    if (smokeTestRun) {
+      const dbPath = join(app.getPath('userData'), 'data.db')
+      const schemaVersionRow = db
+        .prepare(`SELECT value FROM meta WHERE key = 'schema_version'`)
+        .get() as { value: string } | undefined
+      console.log(
+        `[SmokeTest] Database initialized at ${dbPath}; schema version ${schemaVersionRow?.value ?? 'unknown'}`
+      )
+      writeSmokeReport(dbPath, schemaVersionRow?.value ?? null)
+      app.exit(0)
+      return
+    }
 
     ensureBooleanSetting('app_close_to_tray', true)
     ensureBooleanSetting('app_start_minimized', false)

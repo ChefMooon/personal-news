@@ -75,6 +75,9 @@ Each item links to the relevant architecture doc for the full spec.
 
 - [ ] **electron-builder config** — configure `electron-builder` in `package.json` for Windows (NSIS installer), macOS (DMG), and Linux (AppImage). See `docs/tech-notes.md` packaging section.
 	- [x] Windows NSIS (x64, guided installer) configured and validated via `npm run build:win -- --publish=never`.
-- [ ] **Production build** — verify `npm run build` produces a working distributable. Test that `better-sqlite3` native module is correctly bundled/rebuilt for the target platform.
+- [x] **Production build** — verify `npm run build` produces a working distributable. Test that `better-sqlite3` native module is correctly bundled/rebuilt for the target platform.
+	- [x] Automated verification added: `npm run verify:production:win` (build + package + artifact checks + packaged smoke test).
+	- [x] Verified output includes `resources/app.asar.unpacked/node_modules/better-sqlite3/build/Release/better_sqlite3.node`.
+	- [x] Verified packaged smoke run initializes DB and applies migrations (`dist/smoke-test-report.json`).
 - [ ] **Auto-update** — integrate `electron-updater` for automatic updates from a GitHub Releases feed.
 - [ ] **Code signing** — required for macOS notarisation and Windows SmartScreen. Set up signing certificates in CI before distributing.

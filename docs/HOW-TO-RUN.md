@@ -36,6 +36,25 @@ npm run build:win -- --publish=never
 
 Artifacts are written to `dist/` as an NSIS setup executable (x64).
 
+## Verify Production Build (Windows)
+
+Use the automated verification pipeline to validate build output, packaging, and native module health:
+
+```bash
+npm run verify:production:win
+```
+
+This command performs all required checks:
+
+- Runs `npm run build`
+- Runs Windows packaging (`npm run build:win -- --publish=never`)
+- Verifies expected artifacts in `dist/`
+- Verifies bundled migrations exist in packaged resources
+- Verifies `better-sqlite3` native binary exists in packaged output
+- Launches packaged app smoke mode and validates DB initialization + schema migration state
+
+Smoke results are written to `dist/smoke-test-report.json`.
+
 The Electron window opens automatically. No external services, network connections, or API keys are required to explore the seeded dashboard data — Script Manager reads local Python scripts from the configured **Script Home Directory**.
 
 ## What to Expect

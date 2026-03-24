@@ -1,0 +1,35 @@
+name: Windows Production Build Verification
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  verify-production-build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify production build (Windows)
+        run: npm run verify:production:win
+
+      - name: Upload build artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-production-build-dist
+          path: |
+            dist/**
+          if-no-files-found: warn
