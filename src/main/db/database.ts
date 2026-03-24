@@ -1,9 +1,18 @@
 import Database from 'better-sqlite3'
 import { app } from 'electron'
 import { join } from 'path'
-import { readFileSync } from 'fs'
+import { mkdirSync, readFileSync } from 'fs'
 
 let db: Database.Database
+
+export function resolveDatabasePath(): string {
+  const overridePath = process.env.PERSONAL_NEWS_DB_PATH?.trim()
+  if (overridePath) {
+    return overridePath
+  }
+
+  return join(app.getPath('userData'), 'data.db')
+}
 
 export function getDb(): Database.Database {
   if (!db) {
@@ -13,7 +22,11 @@ export function getDb(): Database.Database {
 }
 
 export function openDatabase(): Database.Database {
-  const dbPath = join(app.getPath('userData'), 'data.db')
+  const dbPath = resolveDatabasePath()
+  const lastSeparatorIndex = Math.max(dbPath.lastIndexOf('/'), dbPath.lastIndexOf('\\'))
+  if (lastSeparatorIndex > 0) {
+    mkdirSync(dbPath.slice(0, lastSeparatorIndex), { recursive: true })
+  }
   db = new Database(dbPath)
 
   // Enable WAL mode for better performance
@@ -27,21 +40,7 @@ export function openDatabase(): Database.Database {
 
 function runMigrations(database: Database.Database): void {
   const migrationFiles: Record<number, string> = {
-    1: '001_initial.sql',
-    2: '002_remove_youtube_seed.sql',
-    3: '003_youtube_retry_queue.sql',
-    4: '004_add_yt_video_media_type.sql',
-    5: '005_add_saved_post_note.sql',
-    6: '006_add_ntfy_poll_interval_setting.sql',
-    7: '007_add_saved_post_source.sql',
-    8: '008_remove_script_seed.sql',
-    9: '009_add_script_description.sql',
-    10: '010_add_script_notifications.sql',
-    11: '011_remove_reddit_digest_seed.sql',
-    12: '012_reddit_digest_weekly_snapshot.sql',
-    13: '013_add_yt_video_watched.sql',
-    14: '014_add_notification_settings.sql',
-    15: '015_add_reddit_saved_viewed.sql'
+    1: '001_initial.sql'
   }
 
   // Ensure meta table exists first
@@ -77,68 +76,6 @@ function runMigrations(database: Database.Database): void {
 
     const sql = readFileSync(migrationPath, 'utf-8')
 
-    // Migration 013 adds yt_videos.watched_at. Guard it so older databases that
-    // were migrated without schema_version tracking do not fail on rerun.
-    if (nextVersion === 13 && columnExists(database, 'yt_videos', 'watched_at')) {
-      database
-        .prepare(
-          `
-            INSERT INTO meta (key, value)
-            VALUES ('schema_version', ?)
-            ON CONFLICT(key) DO UPDATE SET value = excluded.value
-          `
-        )
-        .run(String(nextVersion))
-      appliedAny = true
-      console.log(`[DB] Migration ${String(nextVersion).padStart(3, '0')} skipped (already applied)`)
-      nextVersion += 1
-      continue
-    }
-
-    // Migration 014 adds yt_channels.notify_new_videos and notify_live_start. Guard
-    // in case both columns already exist from a manual schema edit.
-    if (
-      nextVersion === 14 &&
-      columnExists(database, 'yt_channels', 'notify_new_videos') &&
-      columnExists(database, 'yt_channels', 'notify_live_start')
-    ) {
-      database
-        .prepare(
-          `
-            INSERT INTO meta (key, value)
-            VALUES ('schema_version', ?)
-            ON CONFLICT(key) DO UPDATE SET value = excluded.value
-          `
-        )
-        .run(String(nextVersion))
-      appliedAny = true
-      console.log(`[DB] Migration ${String(nextVersion).padStart(3, '0')} skipped (already applied)`)
-      nextVersion += 1
-      continue
-    }
-
-    // Migration 015 adds viewed_at to reddit_digest_posts and saved_posts.
-    // Guard in case these columns were introduced manually before version bump.
-    if (
-      nextVersion === 15 &&
-      columnExists(database, 'reddit_digest_posts', 'viewed_at') &&
-      columnExists(database, 'saved_posts', 'viewed_at')
-    ) {
-      database
-        .prepare(
-          `
-            INSERT INTO meta (key, value)
-            VALUES ('schema_version', ?)
-            ON CONFLICT(key) DO UPDATE SET value = excluded.value
-          `
-        )
-        .run(String(nextVersion))
-      appliedAny = true
-      console.log(`[DB] Migration ${String(nextVersion).padStart(3, '0')} skipped (already applied)`)
-      nextVersion += 1
-      continue
-    }
-
     const runMigration = database.transaction(() => {
       database.exec(sql)
       database
@@ -161,9 +98,4 @@ function runMigrations(database: Database.Database): void {
   if (!appliedAny) {
     console.log(`[DB] Schema is up to date (version ${currentVersion})`)
   }
-}
-
-function columnExists(database: Database.Database, tableName: string, columnName: string): boolean {
-  const columns = database.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string }>
-  return columns.some((column) => column.name === columnName)
 }

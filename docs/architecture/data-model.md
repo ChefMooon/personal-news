@@ -1,7 +1,7 @@
 # Data Model & Schema — Personal News Dashboard
 
 **Project:** personal-news
-**Last Updated:** 2026-03-15 (rev 2)
+**Last Updated:** 2026-03-24 (rev 3)
 
 All data is stored in a single SQLite file at `{userData}/data.db`. All timestamps are Unix epoch integers (seconds). Boolean fields use `INTEGER NOT NULL DEFAULT 0/1` (SQLite has no native boolean type).
 
@@ -22,26 +22,24 @@ INSERT INTO meta VALUES ('schema_version', '1');
 
 ### 1.2 Migration Files
 
-Migration files live in `src/main/db/migrations/` and follow the naming convention:
+For the v1.0.0 baseline, the app ships a single migration file:
 
 ```
 001_initial.sql
-002_add_tags.sql
-003_...
 ```
 
-On every app startup, `db/database.ts`:
+On startup, `db/database.ts`:
 1. Opens the SQLite connection.
 2. Reads `meta.schema_version` (defaults to `0` if the `meta` table does not exist).
-3. Scans `migrations/` for files with a numeric prefix greater than the current version.
-4. Runs each pending migration in order, inside a single `BEGIN TRANSACTION ... COMMIT` block.
-5. Updates `meta.schema_version` to the highest migration number applied.
+3. Applies `001_initial.sql` when `schema_version` is less than `1`.
+4. Updates `meta.schema_version` to `1`.
 
 If any migration fails, the transaction is rolled back and the app shows an error dialog and refuses to start (a corrupted partial migration is worse than a startup failure).
 
-### 1.3 Rules for Writing Migrations
+### 1.3 Future Migration Rules
 
-- Migrations are **append-only and immutable** once deployed. Never edit a migration that has shipped.
+- `001_initial.sql` is the immutable baseline for v1.0.0. Do not edit it after release.
+- Future schema changes should be added as new files starting at `002_*.sql`.
 - Each migration file is idempotent where possible (`CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`).
 - Destructive changes (DROP COLUMN, ALTER TABLE) require a new migration number.
 - All migration files are bundled into the app at build time via electron-vite's `extraResources` config.
@@ -424,5 +422,7 @@ Seed values inserted in migration 001:
 - `settings.widget_visibility = '{"youtube":true,"reddit_digest":true,"saved_posts":true}'`
 - `settings.rss_poll_interval_minutes = '15'`
 - `settings.reddit_digest_view_config = '{"sort_by":"score","sort_dir":"desc","group_by":"subreddit","layout_mode":"columns"}'`
+- `settings.ntfy_poll_interval_minutes = '60'`
+- `settings.desktop_notification_prefs = '{"desktopNotificationsEnabled":true,"youtube":{"newVideo":true,"liveStart":true},"savedPosts":{"syncSuccess":true},"redditDigest":{"runSuccess":true,"runFailure":true},"scriptManager":{"autoRunSuccess":true,"autoRunFailure":true,"startupWarning":true}}'`
 
-Subsequent migrations handle additive changes only (new columns with defaults, new indexes, new tables).
+The baseline migration intentionally does not seed widget content tables. On first launch, the database schema is present and user content tables are empty.

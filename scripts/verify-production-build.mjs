@@ -1,5 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 
 const ROOT = process.cwd()
@@ -19,7 +20,7 @@ const BETTER_SQLITE_NATIVE_PATH = path.join(
 )
 const MIGRATIONS_DIR = path.join(RESOURCES_DIR, 'migrations')
 const SMOKE_OUTPUT_PATH = path.join(DIST_DIR, 'smoke-test-report.json')
-const MIN_SCHEMA_VERSION = 15
+const EXPECTED_SCHEMA_VERSION = 1
 
 function run(command, args) {
   const fullCommand = `${command} ${args.join(' ')}`
@@ -76,31 +77,42 @@ function verifySmokeReport() {
   }
 
   const schemaVersion = Number.parseInt(String(report.schemaVersion ?? ''), 10)
-  if (Number.isNaN(schemaVersion) || schemaVersion < MIN_SCHEMA_VERSION) {
+  if (Number.isNaN(schemaVersion) || schemaVersion !== EXPECTED_SCHEMA_VERSION) {
     throw new Error(
-      `Schema version check failed. Expected >= ${MIN_SCHEMA_VERSION}, got ${String(report.schemaVersion)}.`
+      `Schema version check failed. Expected ${EXPECTED_SCHEMA_VERSION}, got ${String(report.schemaVersion)}.`
     )
   }
 }
 
 function runPackagedSmokeTest() {
   console.log('\n> Running packaged smoke test')
-  const result = spawnSync(EXE_PATH, ['--smoke-test', `--smoke-output=${SMOKE_OUTPUT_PATH}`], {
-    cwd: WIN_UNPACKED_DIR,
-    stdio: 'inherit',
-    shell: false,
-    timeout: 60_000
-  })
+  const smokeAppData = mkdtempSync(path.join(tmpdir(), 'personal-news-smoke-'))
+  const smokeDbPath = path.join(smokeAppData, 'data.db')
+  try {
+    const result = spawnSync(EXE_PATH, ['--smoke-test', `--smoke-output=${SMOKE_OUTPUT_PATH}`], {
+      cwd: WIN_UNPACKED_DIR,
+      env: {
+        ...process.env,
+        APPDATA: smokeAppData,
+        PERSONAL_NEWS_DB_PATH: smokeDbPath
+      },
+      stdio: 'inherit',
+      shell: false,
+      timeout: 60_000
+    })
 
-  if (result.error) {
-    throw result.error
+    if (result.error) {
+      throw result.error
+    }
+
+    if (typeof result.status !== 'number' || result.status !== 0) {
+      throw new Error(`Packaged smoke test failed (${result.status ?? 'unknown'}).`)
+    }
+
+    verifySmokeReport()
+  } finally {
+    rmSync(smokeAppData, { recursive: true, force: true })
   }
-
-  if (typeof result.status !== 'number' || result.status !== 0) {
-    throw new Error(`Packaged smoke test failed (${result.status ?? 'unknown'}).`)
-  }
-
-  verifySmokeReport()
 }
 
 function verifyBuildOutputs() {
@@ -116,6 +128,12 @@ function verifyBuildOutputs() {
     path.join(MIGRATIONS_DIR, '001_initial.sql'),
     'Expected migration file 001_initial.sql missing from packaged resources.'
   )
+  const bundledMigrationFiles = readdirSync(MIGRATIONS_DIR).filter((entry) => entry.endsWith('.sql'))
+  if (bundledMigrationFiles.length !== 1 || bundledMigrationFiles[0] !== '001_initial.sql') {
+    throw new Error(
+      `Bundled migrations check failed. Expected only 001_initial.sql, found: ${bundledMigrationFiles.join(', ')}`
+    )
+  }
   assertPathExists(
     BETTER_SQLITE_NATIVE_PATH,
     'better-sqlite3 native binary missing from packaged app output.'

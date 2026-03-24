@@ -112,7 +112,7 @@ macOS:    ~/Library/Application Support/personal-news/data.db
 Linux:    ~/.config/personal-news/data.db
 ```
 
-All schema definitions are in migration files. The app runs pending migrations on startup. A simple integer schema version in a `meta` table tracks the current state.
+The v1.0.0 baseline schema is defined in `src/main/db/migrations/001_initial.sql`. On startup, the app applies that baseline if needed and records schema version `1` in `meta`.
 
 ### 4.2 Schema Versioning
 
@@ -124,7 +124,7 @@ CREATE TABLE meta (
 -- Example: INSERT INTO meta VALUES ('schema_version', '1');
 ```
 
-Migrations are numbered files (e.g., `001_initial.sql`, `002_add_tags.sql`). On startup, the app reads the current version, finds all migration files with a higher number, and runs them in order within a transaction.
+For v1.0.0, only `001_initial.sql` is bundled. Future schema changes should be added as new numbered migrations starting at `002_*.sql`.
 
 ### 4.3 Full Schema Reference
 

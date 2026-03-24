@@ -14,7 +14,7 @@ import { existsSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { IPC } from '../shared/ipc-types'
-import { openDatabase } from './db/database'
+import { openDatabase, resolveDatabasePath } from './db/database'
 import { registerIpcHandlers } from './ipc/index'
 import { registerModule, initializeAll, shutdownAll } from './sources/registry'
 import { YouTubeModule } from './sources/youtube/index'
@@ -516,7 +516,7 @@ app.whenReady().then(() => {
     const db = openDatabase()
 
     if (smokeTestRun) {
-      const dbPath = join(app.getPath('userData'), 'data.db')
+      const dbPath = resolveDatabasePath()
       const schemaVersionRow = db
         .prepare(`SELECT value FROM meta WHERE key = 'schema_version'`)
         .get() as { value: string } | undefined

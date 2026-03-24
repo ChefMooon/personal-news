@@ -33,8 +33,8 @@ src/
 ├── main/                          MAIN PROCESS
 │   ├── index.ts                   Entry — creates BrowserWindow, runs startup tasks
 │   ├── db/
-│   │   ├── database.ts            Opens SQLite connection; runs pending migrations
-│   │   └── migrations/            Numbered .sql files (001_initial.sql, etc.)
+│   │   ├── database.ts            Opens SQLite connection; applies schema baseline
+│   │   └── migrations/            Baseline migration SQL (`001_initial.sql`)
 │   ├── ipc/
 │   │   └── index.ts               Registers all ipcMain.handle() channels
 │   ├── sources/
@@ -86,7 +86,7 @@ src/
 
 ```
 1. main/index.ts starts
-2. db/database.ts opens SQLite; runs pending migrations
+2. db/database.ts opens SQLite; applies `001_initial.sql` when schema is uninitialized
 3. sources/registry.ts calls initialize(db) on every registered DataSourceModule
 4. reddit/ntfy.ts runs startup poll — fetches new ntfy messages, ingests saved posts
 5. youtube/poller.ts starts interval timer (rss_poll_interval_minutes from settings)
