@@ -36,6 +36,7 @@ export const IPC = {
   REDDIT_NTFY_INGEST_COMPLETE: 'reddit:ntfyIngestComplete',
   REDDIT_UPDATED: 'reddit:updated',
   REDDIT_CLEAR_SAVED_POSTS: 'reddit:clearSavedPosts',
+  REDDIT_DELETE_SAVED_POSTS: 'reddit:deleteSavedPosts',
   SCRIPTS_GET_ALL: 'scripts:getAll',
   SCRIPTS_RUN: 'scripts:run',
   SCRIPTS_CANCEL: 'scripts:cancel',
@@ -407,6 +408,16 @@ export interface SavedPostsBulkSetViewedRequest {
   subreddit_filter?: string[]
   tag_filter?: string[]
   source_filter?: LinkSource[]
+}
+
+export interface DeleteSavedPostsRequest {
+  post_ids: string[]
+}
+
+export interface DeleteSavedPostsResult {
+  ok: boolean
+  error: string | null
+  deletedCount: number
 }
 
 export interface SavedPostsViewedAnalyticsRequest {

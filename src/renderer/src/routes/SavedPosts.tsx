@@ -9,6 +9,16 @@ import { useSavedPostsEnabled } from '../contexts/SavedPostsEnabledContext'
 import { StaleWarning } from '../modules/saved-posts/StaleWarning'
 import { NtfyOnboardingWizard } from '../modules/saved-posts/NtfyOnboardingWizard'
 import { TagManagementModal } from '../modules/saved-posts/TagManagementModal'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle
+} from '../components/ui/alert-dialog'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
@@ -19,7 +29,7 @@ import {
   SelectTrigger,
   SelectValue
 } from '../components/ui/select'
-import { Bookmark, Search, Tags, RefreshCw, Plus, X, Circle, CircleCheck } from 'lucide-react'
+import { Bookmark, Search, Tags, RefreshCw, Plus, X, Circle, CircleCheck, Trash2 } from 'lucide-react'
 import { formatRelativeTime } from '../lib/time'
 import { toRedditPostUrl } from '../lib/utils'
 
@@ -172,6 +182,10 @@ function SavedPostsContent(): React.ReactElement {
   const [showTagManager, setShowTagManager] = useState(false)
   const [dismissedStale, setDismissedStale] = useState(false)
   const [syncing, setSyncing] = useState(false)
+  const [manageMode, setManageMode] = useState(false)
+  const [selectedPostIds, setSelectedPostIds] = useState<Set<string>>(new Set())
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [allTags, setAllTags] = useState<string[]>([])
   const [subreddits, setSubreddits] = useState<string[]>([])
 
@@ -287,6 +301,31 @@ function SavedPostsContent(): React.ReactElement {
       .finally(() => setBulkLoading(false))
   }
 
+  const handleDeleteSelected = (): void => {
+    setDeleting(true)
+    window.api
+      .invoke(IPC.REDDIT_DELETE_SAVED_POSTS, { post_ids: Array.from(selectedPostIds) })
+      .then((result) => {
+        const payload = result as { ok: boolean; error: string | null; deletedCount: number }
+        if (!payload.ok) {
+          toast.error(payload.error ?? 'Failed to delete posts.')
+          return
+        }
+        toast.success(`Deleted ${payload.deletedCount} post${payload.deletedCount === 1 ? '' : 's'}.`)
+        setSelectedPostIds(new Set())
+        setManageMode(false)
+        void refetch()
+        refreshAnalytics()
+      })
+      .catch((err) => {
+        toast.error(err instanceof Error ? err.message : 'Failed to delete posts.')
+      })
+      .finally(() => {
+        setDeleting(false)
+        setShowDeleteConfirm(false)
+      })
+  }
+
   return (
     <div className="flex flex-col h-full px-6 py-4">
       <div className="flex items-center justify-between mb-4">
@@ -309,6 +348,20 @@ function SavedPostsContent(): React.ReactElement {
             {bulkLoading ? 'Marking...' : 'Mark All Viewed'}
           </Button>
           <Button
+            variant={manageMode ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => {
+              if (manageMode) {
+                setManageMode(false)
+                setSelectedPostIds(new Set())
+              } else {
+                setManageMode(true)
+              }
+            }}
+          >
+            {manageMode ? 'Done' : 'Manage Posts'}
+          </Button>
+          <Button
             variant="outline"
             size="sm"
             onClick={() => setShowTagManager(true)}
@@ -327,6 +380,34 @@ function SavedPostsContent(): React.ReactElement {
           </Button>
         </div>
       </div>
+
+      {manageMode && (
+        <div className="flex items-center gap-3 mb-3 p-2 rounded-md border bg-muted/30 text-sm">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              if (selectedPostIds.size === posts.length && posts.length > 0) {
+                setSelectedPostIds(new Set())
+              } else {
+                setSelectedPostIds(new Set(posts.map((p) => p.post_id)))
+              }
+            }}
+          >
+            {selectedPostIds.size === posts.length && posts.length > 0 ? 'Deselect All' : 'Select All'}
+          </Button>
+          <span className="text-muted-foreground">{selectedPostIds.size} selected</span>
+          <Button
+            variant="destructive"
+            size="sm"
+            disabled={selectedPostIds.size === 0}
+            onClick={() => setShowDeleteConfirm(true)}
+          >
+            <Trash2 className="h-3.5 w-3.5 mr-1" />
+            Delete Selected ({selectedPostIds.size})
+          </Button>
+        </div>
+      )}
 
       <div className="mb-3 p-2 rounded-md border bg-muted/20 text-xs">
         {analyticsLoading || !analytics ? (
@@ -440,6 +521,25 @@ function SavedPostsContent(): React.ReactElement {
                 key={post.post_id}
                 className="flex items-start gap-3 py-3 px-3 rounded-md hover:bg-muted/50 border-b last:border-0"
               >
+                {manageMode && (
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-border cursor-pointer accent-primary mt-1 shrink-0"
+                    checked={selectedPostIds.has(post.post_id)}
+                    onChange={() => {
+                      setSelectedPostIds((prev) => {
+                        const next = new Set(prev)
+                        if (next.has(post.post_id)) {
+                          next.delete(post.post_id)
+                        } else {
+                          next.add(post.post_id)
+                        }
+                        return next
+                      })
+                    }}
+                    aria-label={`Select post: ${post.title}`}
+                  />
+                )}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-0.5">
                     <Badge variant="outline" className="text-xs shrink-0">
@@ -532,6 +632,28 @@ function SavedPostsContent(): React.ReactElement {
         onClose={() => setShowTagManager(false)}
         onTagUpdated={() => void refetch()}
       />
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Delete {selectedPostIds.size} post{selectedPostIds.size === 1 ? '' : 's'}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently removes the selected posts and cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteSelected}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

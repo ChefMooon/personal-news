@@ -1623,6 +1623,21 @@ export function registerIpcHandlers(): void {
     return { deletedCount: result.changes }
   })
 
+  // reddit:deleteSavedPosts
+  ipcMain.handle(
+    IPC.REDDIT_DELETE_SAVED_POSTS,
+    (_event, req: { post_ids: string[] }): { ok: boolean; error: string | null; deletedCount: number } => {
+      if (!req?.post_ids?.length) {
+        return { ok: false, error: 'No post IDs provided.', deletedCount: 0 }
+      }
+      const db = getDb()
+      const placeholders = req.post_ids.map(() => '?').join(', ')
+      const result = db.prepare(`DELETE FROM saved_posts WHERE post_id IN (${placeholders})`).run(...req.post_ids)
+      emitRedditUpdated()
+      return { ok: true, error: null, deletedCount: result.changes }
+    }
+  )
+
   // reddit:getNtfyStaleness
   ipcMain.handle(IPC.REDDIT_GET_NTFY_STALENESS, (): NtfyStaleness => {
     const topicConfigured = Boolean(getSetting('ntfy_topic'))
