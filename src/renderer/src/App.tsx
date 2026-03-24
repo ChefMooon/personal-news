@@ -10,15 +10,75 @@ import Settings from './routes/Settings'
 import { RedditDigestEnabledProvider } from './contexts/RedditDigestEnabledContext'
 import { SavedPostsEnabledProvider } from './contexts/SavedPostsEnabledContext'
 import { Toaster, toast } from 'sonner'
-import { IPC } from '../../shared/ipc-types'
+import { IPC, type IpcMutationResult, type UpdateStatusEvent } from '../../shared/ipc-types'
 
 export default function App(): React.ReactElement {
+  const lastUpdateStateRef = React.useRef<UpdateStatusEvent['state'] | null>(null)
+
   React.useEffect(() => {
     return window.api.on(IPC.APP_SHOW_TRAY_HINT, () => {
       toast.info('Personal News is still running in the system tray.', {
         description: 'Use the tray icon to reopen the app or quit it completely.',
         duration: 5000
       })
+    })
+  }, [])
+
+  React.useEffect(() => {
+    const handleUpdateStatus = (event: UpdateStatusEvent): void => {
+      if (event.state === lastUpdateStateRef.current) {
+        return
+      }
+
+      lastUpdateStateRef.current = event.state
+
+      if (event.state === 'available') {
+        toast.info(`Update ${event.version ?? ''} is available.`, {
+          description: 'Downloading in the background.'
+        })
+        return
+      }
+
+      if (event.state === 'downloaded') {
+        toast.success(`Update ${event.version ?? ''} is ready.`, {
+          description: 'Install now to restart on the latest version.',
+          duration: Infinity,
+          action: {
+            label: 'Install and restart',
+            onClick: () => {
+              window.api
+                .invoke(IPC.UPDATES_INSTALL_UPDATE)
+                .then((result) => {
+                  const mutation = result as IpcMutationResult
+                  if (!mutation.ok) {
+                    throw new Error(mutation.error ?? 'Unable to install update.')
+                  }
+                })
+                .catch((error: unknown) => {
+                  const message = error instanceof Error ? error.message : 'Unable to install update.'
+                  toast.error(message)
+                })
+            }
+          }
+        })
+        return
+      }
+
+      if (event.state === 'error') {
+        toast.error(event.message || 'Auto-update encountered an error.')
+      }
+    }
+
+    window.api
+      .invoke(IPC.UPDATES_GET_STATUS)
+      .then((result) => {
+        handleUpdateStatus(result as UpdateStatusEvent)
+      })
+      .catch(() => {
+      })
+
+    return window.api.on(IPC.UPDATES_STATUS, (event) => {
+      handleUpdateStatus(event as UpdateStatusEvent)
     })
   }, [])
 

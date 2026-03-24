@@ -2,6 +2,10 @@
 
 export const IPC = {
   APP_SHOW_TRAY_HINT: 'app:showTrayHint',
+  UPDATES_STATUS: 'updates:status',
+  UPDATES_GET_STATUS: 'updates:getStatus',
+  UPDATES_CHECK_FOR_UPDATES: 'updates:checkForUpdates',
+  UPDATES_INSTALL_UPDATE: 'updates:installUpdate',
   YOUTUBE_GET_CHANNELS: 'youtube:getChannels',
   YOUTUBE_GET_VIDEOS: 'youtube:getVideos',
   YOUTUBE_GET_VIDEOS_FILTERED: 'youtube:getVideosFiltered',
@@ -346,6 +350,27 @@ export interface YouTubeViewConfig {
 export interface IpcMutationResult {
   ok: boolean
   error: string | null
+}
+
+export type UpdateStatusState =
+  | 'disabled'
+  | 'idle'
+  | 'checking'
+  | 'available'
+  | 'downloading'
+  | 'downloaded'
+  | 'not-available'
+  | 'error'
+
+export interface UpdateStatusEvent {
+  state: UpdateStatusState
+  message: string
+  supported: boolean
+  currentVersion: string
+  version?: string
+  releaseDate?: string
+  releaseNotes?: string | null
+  downloadPercent?: number
 }
 
 export interface YouTubeCacheClearResult extends IpcMutationResult {

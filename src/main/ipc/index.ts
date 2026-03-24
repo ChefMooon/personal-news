@@ -42,7 +42,8 @@ import type {
   ScriptRunCompleteEvent,
   MediaType,
   NotificationPreferences,
-  DigestViewedChangedEvent
+  DigestViewedChangedEvent,
+  UpdateStatusEvent
 } from '../../shared/ipc-types'
 import {
   applyYouTubePollInterval,
@@ -61,6 +62,12 @@ import {
   getNotificationPreferences,
   setNotificationPreferences
 } from '../notifications/notification-service'
+import {
+  checkForAppUpdates,
+  getCurrentUpdateStatus,
+  installDownloadedUpdate,
+  setUpdateStatusListener
+} from '../updates/service'
 
 const YOUTUBE_API_KEY_SETTING = 'youtube_api_key_encrypted'
 const YOUTUBE_VIEW_CONFIG_KEY_PREFIX = 'youtube_view_config:'
@@ -1003,6 +1010,14 @@ export function registerIpcHandlers(): void {
   ipcMain.on(IPC.SETTINGS_GET_THEME_SYNC, (event): void => {
     event.returnValue = getCurrentThemeInfo()
   })
+
+  function emitUpdateStatus(event: UpdateStatusEvent): void {
+    for (const win of BrowserWindow.getAllWindows()) {
+      win.webContents.send(IPC.UPDATES_STATUS, event)
+    }
+  }
+
+  setUpdateStatusListener(emitUpdateStatus)
 
   // Wire script output emitter
   function emitScriptsOutput(chunk: ScriptOutputChunk): void {
@@ -2340,6 +2355,21 @@ export function registerIpcHandlers(): void {
   // settings:get (generic)
   ipcMain.handle(IPC.SETTINGS_GET, (_event, key: string): string | null => {
     return getSetting(key)
+  })
+
+  // updates:getStatus
+  ipcMain.handle(IPC.UPDATES_GET_STATUS, (): UpdateStatusEvent => {
+    return getCurrentUpdateStatus()
+  })
+
+  // updates:checkForUpdates
+  ipcMain.handle(IPC.UPDATES_CHECK_FOR_UPDATES, async (): Promise<IpcMutationResult> => {
+    return checkForAppUpdates({ manual: true })
+  })
+
+  // updates:installUpdate
+  ipcMain.handle(IPC.UPDATES_INSTALL_UPDATE, (): IpcMutationResult => {
+    return installDownloadedUpdate()
   })
 
   // settings:set (generic)

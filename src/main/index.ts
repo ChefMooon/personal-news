@@ -22,6 +22,7 @@ import { RedditModule } from './sources/reddit/index'
 import { ScriptManagerModule } from './sources/scripts/index'
 import { attachWindowListeners } from './notifications/notification-service'
 import { getSetting, setSetting } from './settings/store'
+import { initializeAutoUpdates } from './updates/service'
 
 let tray: Tray | null = null
 let mainWindowRef: BrowserWindow | null = null
@@ -545,6 +546,9 @@ app.whenReady().then(() => {
     initializeAll(db)
 
     registerIpcHandlers()
+    void initializeAutoUpdates().catch((error: unknown) => {
+      console.error('[Updates] Failed to initialize auto-updater:', error)
+    })
 
     const mainWindow = createWindow()
     createTray()

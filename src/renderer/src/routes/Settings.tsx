@@ -19,7 +19,8 @@ import {
   type YouTubeApiKeyStatus,
   type DigestWeekSummary,
   type NotificationPreferences,
-  type ThemeRow
+  type ThemeRow,
+  type UpdateStatusEvent
 } from '../../../shared/ipc-types'
 import {
   Select,
@@ -1009,7 +1010,10 @@ function AppBehaviorTab(): React.ReactElement {
   const [launchAtLogin, setLaunchAtLogin] = useState(false)
   const [restoreWindowBounds, setRestoreWindowBounds] = useState(true)
   const [startMaximized, setStartMaximized] = useState(false)
+  const [autoUpdateCheckEnabled, setAutoUpdateCheckEnabled] = useState(true)
+  const [updatesSupported, setUpdatesSupported] = useState(true)
   const [resettingWindowLayout, setResettingWindowLayout] = useState(false)
+  const [checkingForUpdates, setCheckingForUpdates] = useState(false)
 
   useEffect(() => {
     const loadFlag = (key: string, setter: (value: boolean) => void, fallback: boolean): void => {
@@ -1034,6 +1038,16 @@ function AppBehaviorTab(): React.ReactElement {
     loadFlag('app_launch_at_login', setLaunchAtLogin, false)
     loadFlag('app_restore_window_bounds', setRestoreWindowBounds, true)
     loadFlag('app_start_maximized', setStartMaximized, false)
+    loadFlag('app_auto_update_check_enabled', setAutoUpdateCheckEnabled, true)
+
+    window.api
+      .invoke(IPC.UPDATES_GET_STATUS)
+      .then((status) => {
+        const parsed = status as UpdateStatusEvent
+        setUpdatesSupported(parsed.supported)
+      })
+      .catch(() => {
+      })
   }, [])
 
   const saveFlag = async (
@@ -1053,6 +1067,8 @@ function AppBehaviorTab(): React.ReactElement {
             ? launchAtLogin
             : key === 'app_restore_window_bounds'
               ? restoreWindowBounds
+              : key === 'app_auto_update_check_enabled'
+                ? autoUpdateCheckEnabled
               : startMaximized
 
     setter(value)
@@ -1074,6 +1090,22 @@ function AppBehaviorTab(): React.ReactElement {
       toast.error(err instanceof Error ? err.message : 'Failed to reset window layout.')
     } finally {
       setResettingWindowLayout(false)
+    }
+  }
+
+  const runManualUpdateCheck = async (): Promise<void> => {
+    setCheckingForUpdates(true)
+    try {
+      const result = (await window.api.invoke(IPC.UPDATES_CHECK_FOR_UPDATES)) as IpcMutationResult
+      if (!result.ok) {
+        toast.error(result.error ?? 'Failed to check for updates.')
+        return
+      }
+      toast.success('Checking for updates...')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to check for updates.')
+    } finally {
+      setCheckingForUpdates(false)
     }
   }
 
@@ -1149,6 +1181,54 @@ function AppBehaviorTab(): React.ReactElement {
             </div>
             <Button variant="outline" onClick={() => void resetWindowLayout()} disabled={resettingWindowLayout}>
               {resettingWindowLayout ? 'Resetting...' : 'Reset'}
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-sm font-medium mb-1">Updates</h3>
+        <p className="text-xs text-muted-foreground mb-3">
+          Windows auto-update controls. Manual checks are always available.
+        </p>
+        <div className="space-y-2 max-w-md">
+          <div className="flex items-center justify-between rounded-md border px-3 py-2">
+            <div>
+              <p className="text-sm">Automatically check for updates on startup</p>
+              <p className="text-xs text-muted-foreground">
+                When off, startup checks are skipped. You can still check manually.
+              </p>
+            </div>
+            <Switch
+              checked={autoUpdateCheckEnabled}
+              onCheckedChange={(checked) => {
+                void saveFlag(
+                  'app_auto_update_check_enabled',
+                  checked,
+                  setAutoUpdateCheckEnabled,
+                  'Auto-update startup checks'
+                )
+              }}
+              aria-label="Automatically check for updates on startup"
+              disabled={!updatesSupported}
+            />
+          </div>
+
+          <div className="flex items-center justify-between gap-3 rounded-md border px-3 py-2">
+            <div>
+              <p className="text-sm">Check for updates now</p>
+              <p className="text-xs text-muted-foreground">
+                Runs an immediate update check against the GitHub Releases feed.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              onClick={() => {
+                void runManualUpdateCheck()
+              }}
+              disabled={!updatesSupported || checkingForUpdates}
+            >
+              {checkingForUpdates ? 'Checking...' : 'Check now'}
             </Button>
           </div>
         </div>
