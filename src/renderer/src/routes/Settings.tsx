@@ -9,14 +9,17 @@ import { useTheme } from '../providers/ThemeProvider'
 import { useYouTubeChannels } from '../hooks/useYouTubeChannels'
 import { useRedditDigestEnabled } from '../contexts/RedditDigestEnabledContext'
 import { useSavedPostsEnabled } from '../contexts/SavedPostsEnabledContext'
-import { Eye, EyeOff, ExternalLink } from 'lucide-react'
+import { Download, Eye, EyeOff, ExternalLink, Pencil, Plus, Trash2, Upload } from 'lucide-react'
+import { ThemeCreatorDialog, readThemeTokensFromDocument } from '../components/ThemeCreatorDialog'
 import {
   IPC,
   type IpcMutationResult,
+  type ThemeImportResult,
   type YouTubeCacheClearResult,
   type YouTubeApiKeyStatus,
   type DigestWeekSummary,
-  type NotificationPreferences
+  type NotificationPreferences,
+  type ThemeRow
 } from '../../../shared/ipc-types'
 import {
   Select,
@@ -473,10 +476,94 @@ function YouTubeTab(): React.ReactElement {
 }
 
 function AppearanceTab(): React.ReactElement {
-  const { theme, setTheme } = useTheme()
+  const { theme, customThemes, refreshThemes, setTheme } = useTheme()
+  const [createOpen, setCreateOpen] = useState(false)
+  const [editingTheme, setEditingTheme] = useState<ThemeRow | null>(null)
+  const [deleteBusyId, setDeleteBusyId] = useState<string | null>(null)
+  const [exportBusyId, setExportBusyId] = useState<string | null>(null)
+
+  const openCreate = (): void => {
+    setEditingTheme(null)
+    setCreateOpen(true)
+  }
+
+  const openEdit = (row: ThemeRow): void => {
+    setEditingTheme(row)
+    setCreateOpen(true)
+  }
+
+  const removeTheme = async (row: ThemeRow): Promise<void> => {
+    if (!window.confirm(`Delete the theme "${row.name}"?`)) {
+      return
+    }
+
+    setDeleteBusyId(row.id)
+    try {
+      const result = (await window.api.invoke(IPC.THEMES_DELETE, row.id)) as IpcMutationResult
+      if (!result.ok) {
+        toast.error(result.error ?? 'Failed to delete theme.')
+        return
+      }
+
+      if (theme.id === row.id) {
+        await setTheme('system')
+      }
+
+      await refreshThemes()
+      toast.success('Theme deleted.')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete theme.')
+    } finally {
+      setDeleteBusyId(null)
+    }
+  }
+
+  const exportTheme = async (row: ThemeRow): Promise<void> => {
+    setExportBusyId(row.id)
+    try {
+      const result = (await window.api.invoke(IPC.THEMES_EXPORT, row.id)) as IpcMutationResult
+      if (!result.ok && result.error) {
+        toast.error(result.error)
+      } else if (result.ok) {
+        toast.success(`Theme "${row.name}" exported.`)
+      }
+      // result.ok === false && result.error === null → user cancelled, no toast
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to export theme.')
+    } finally {
+      setExportBusyId(null)
+    }
+  }
+
+  const importTheme = async (): Promise<void> => {
+    try {
+      const result = (await window.api.invoke(IPC.THEMES_IMPORT)) as ThemeImportResult
+      if (!result.ok && result.error) {
+        toast.error(result.error)
+      } else if (result.ok && result.theme) {
+        await refreshThemes()
+        toast.success(`Theme "${result.theme.name}" imported.`)
+      }
+      // result.ok === false && result.error === null → user cancelled, no toast
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to import theme.')
+    }
+  }
+
+  const initialTokens = readThemeTokensFromDocument()
 
   return (
-    <div className="space-y-4 max-w-sm">
+    <div className="space-y-4 max-w-2xl">
+      <ThemeCreatorDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        initialTokens={initialTokens}
+        editingTheme={editingTheme}
+        onSaved={async () => {
+          await refreshThemes()
+        }}
+      />
+
       <div>
         <h3 className="text-sm font-medium mb-1">Theme</h3>
         <p className="text-xs text-muted-foreground mb-2">
@@ -497,8 +584,74 @@ function AppearanceTab(): React.ReactElement {
             <SelectItem value="system">System Default</SelectItem>
             <SelectItem value="light">Light</SelectItem>
             <SelectItem value="dark">Dark</SelectItem>
+            {customThemes.map((row) => (
+              <SelectItem key={row.id} value={row.id}>
+                {row.name}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
+      </div>
+
+      <div className="space-y-3 rounded-md border p-3">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <h3 className="text-sm font-medium">Custom Themes</h3>
+            <p className="text-xs text-muted-foreground">
+              Create, edit, and delete custom themes backed by the local themes table.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => { void importTheme() }}>
+              <Download className="h-4 w-4" />
+              Import
+            </Button>
+            <Button variant="outline" size="sm" onClick={openCreate}>
+              <Plus className="h-4 w-4" />
+              New Theme
+            </Button>
+          </div>
+        </div>
+
+        {customThemes.length === 0 ? (
+          <p className="text-xs text-muted-foreground">No custom themes yet.</p>
+        ) : (
+          <div className="space-y-2">
+            {customThemes.map((row) => (
+              <div key={row.id} className="flex items-center justify-between rounded-md border px-3 py-2">
+                <div>
+                  <p className="text-sm font-medium">{row.name}</p>
+                  <p className="text-[11px] text-muted-foreground">{row.id}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button variant="ghost" size="icon" onClick={() => openEdit(row)} aria-label={`Edit theme ${row.name}`}>
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => { void exportTheme(row) }}
+                    aria-label={`Export theme ${row.name}`}
+                    disabled={exportBusyId === row.id}
+                  >
+                    <Upload className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => {
+                      void removeTheme(row)
+                    }}
+                    aria-label={`Delete theme ${row.name}`}
+                    disabled={deleteBusyId === row.id}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -860,6 +1013,9 @@ function AppBehaviorTab(): React.ReactElement {
   const [startMinimized, setStartMinimized] = useState(false)
   const [minimizeToTray, setMinimizeToTray] = useState(false)
   const [launchAtLogin, setLaunchAtLogin] = useState(false)
+  const [restoreWindowBounds, setRestoreWindowBounds] = useState(true)
+  const [startMaximized, setStartMaximized] = useState(false)
+  const [resettingWindowLayout, setResettingWindowLayout] = useState(false)
 
   useEffect(() => {
     const loadFlag = (key: string, setter: (value: boolean) => void, fallback: boolean): void => {
@@ -882,6 +1038,8 @@ function AppBehaviorTab(): React.ReactElement {
     loadFlag('app_start_minimized', setStartMinimized, false)
     loadFlag('app_minimize_to_tray', setMinimizeToTray, false)
     loadFlag('app_launch_at_login', setLaunchAtLogin, false)
+    loadFlag('app_restore_window_bounds', setRestoreWindowBounds, true)
+    loadFlag('app_start_maximized', setStartMaximized, false)
   }, [])
 
   const saveFlag = async (
@@ -897,7 +1055,11 @@ function AppBehaviorTab(): React.ReactElement {
           ? startMinimized
           : key === 'app_minimize_to_tray'
             ? minimizeToTray
-            : launchAtLogin
+          : key === 'app_launch_at_login'
+            ? launchAtLogin
+            : key === 'app_restore_window_bounds'
+              ? restoreWindowBounds
+              : startMaximized
 
     setter(value)
     try {
@@ -909,12 +1071,99 @@ function AppBehaviorTab(): React.ReactElement {
     }
   }
 
+  const resetWindowLayout = async (): Promise<void> => {
+    setResettingWindowLayout(true)
+    try {
+      await window.api.invoke(IPC.SETTINGS_SET, 'app_window_bounds', '')
+      toast.success('Window layout reset. Default size and position will apply on next launch.')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to reset window layout.')
+    } finally {
+      setResettingWindowLayout(false)
+    }
+  }
+
   return (
     <div className="space-y-4 max-w-lg">
       <div>
-        <h3 className="text-sm font-medium mb-1">Window & Tray</h3>
+        <h3 className="text-sm font-medium mb-1">General</h3>
         <p className="text-xs text-muted-foreground mb-3">
-          Control how Personal News behaves when minimized or closed.
+          Core startup and window state preferences.
+        </p>
+        <div className="space-y-2 max-w-md">
+          <div className="flex items-center justify-between rounded-md border px-3 py-2">
+            <div>
+              <p className="text-sm">Restore last window size and position</p>
+              <p className="text-xs text-muted-foreground">Reopens where you left off on your last session.</p>
+            </div>
+            <Switch
+              checked={restoreWindowBounds}
+              onCheckedChange={(checked) => {
+                void saveFlag(
+                  'app_restore_window_bounds',
+                  checked,
+                  setRestoreWindowBounds,
+                  'Window restore behavior'
+                )
+              }}
+              aria-label="Restore last window size and position"
+            />
+          </div>
+
+          <div className="flex items-center justify-between rounded-md border px-3 py-2">
+            <div>
+              <p className="text-sm">Start app minimized</p>
+              <p className="text-xs text-muted-foreground">Useful when launching automatically at sign-in.</p>
+            </div>
+            <Switch
+              checked={startMinimized}
+              onCheckedChange={(checked) => {
+                void saveFlag(
+                  'app_start_minimized',
+                  checked,
+                  setStartMinimized,
+                  'Start minimized behavior'
+                )
+              }}
+              aria-label="Start app minimized"
+            />
+          </div>
+
+          <div className="flex items-center justify-between rounded-md border px-3 py-2">
+            <div>
+              <p className="text-sm">Launch at login</p>
+              <p className="text-xs text-muted-foreground">Starts Personal News when you sign in.</p>
+            </div>
+            <Switch
+              checked={launchAtLogin}
+              onCheckedChange={(checked) => {
+                void saveFlag(
+                  'app_launch_at_login',
+                  checked,
+                  setLaunchAtLogin,
+                  'Launch-at-login behavior'
+                )
+              }}
+              aria-label="Launch at login"
+            />
+          </div>
+
+          <div className="flex items-center justify-between gap-3 rounded-md border px-3 py-2">
+            <div>
+              <p className="text-sm">Reset window layout</p>
+              <p className="text-xs text-muted-foreground">Clears saved size and position. Applies next app launch.</p>
+            </div>
+            <Button variant="outline" onClick={() => void resetWindowLayout()} disabled={resettingWindowLayout}>
+              {resettingWindowLayout ? 'Resetting...' : 'Reset'}
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-sm font-medium mb-1">Tray Behavior</h3>
+        <p className="text-xs text-muted-foreground mb-3">
+          Control whether the app hides instead of closing to keep background polling active.
         </p>
         <div className="space-y-2 max-w-md">
           <div className="flex items-center justify-between rounded-md border px-3 py-2">
@@ -954,42 +1203,31 @@ function AppBehaviorTab(): React.ReactElement {
               aria-label="Hide to tray when minimizing"
             />
           </div>
+        </div>
+      </div>
 
+      <div>
+        <h3 className="text-sm font-medium mb-1">Window Behavior</h3>
+        <p className="text-xs text-muted-foreground mb-3">
+          Configure how the main window opens each time the app starts.
+        </p>
+        <div className="space-y-2 max-w-md">
           <div className="flex items-center justify-between rounded-md border px-3 py-2">
             <div>
-              <p className="text-sm">Start app minimized</p>
-              <p className="text-xs text-muted-foreground">Useful when launching automatically at sign-in.</p>
+              <p className="text-sm">Start maximized</p>
+              <p className="text-xs text-muted-foreground">Open the app in a maximized window.</p>
             </div>
             <Switch
-              checked={startMinimized}
+              checked={startMaximized}
               onCheckedChange={(checked) => {
                 void saveFlag(
-                  'app_start_minimized',
+                  'app_start_maximized',
                   checked,
-                  setStartMinimized,
-                  'Start minimized behavior'
+                  setStartMaximized,
+                  'Start maximized behavior'
                 )
               }}
-              aria-label="Start app minimized"
-            />
-          </div>
-
-          <div className="flex items-center justify-between rounded-md border px-3 py-2">
-            <div>
-              <p className="text-sm">Launch at login</p>
-              <p className="text-xs text-muted-foreground">Starts Personal News when you sign in.</p>
-            </div>
-            <Switch
-              checked={launchAtLogin}
-              onCheckedChange={(checked) => {
-                void saveFlag(
-                  'app_launch_at_login',
-                  checked,
-                  setLaunchAtLogin,
-                  'Launch-at-login behavior'
-                )
-              }}
-              aria-label="Launch at login"
+              aria-label="Start maximized"
             />
           </div>
         </div>

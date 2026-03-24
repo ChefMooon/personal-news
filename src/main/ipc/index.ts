@@ -1,4 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } from 'electron'
+import { readFile, writeFile } from 'node:fs/promises'
 import { XMLParser } from 'fast-xml-parser'
 import { getDb } from '../db/database'
 import { deleteSetting, getSetting, setSetting } from '../settings/store'
@@ -28,6 +29,8 @@ import type {
   WidgetLayout,
   WidgetInstance,
   ThemeInfo,
+  ThemeRow,
+  ThemeImportResult,
   IpcMutationResult,
   YouTubeCacheClearResult,
   YouTubeApiKeyStatus,
@@ -66,6 +69,8 @@ const xmlParser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: ''
 })
+const BUILT_IN_THEME_IDS = new Set(['system', 'light', 'dark'])
+const THEME_TOKEN_KEY_PATTERN = /^--[a-z0-9-]+$/i
 
 function logYouTubeResolveDebug(_message: string, _payload?: Record<string, unknown>): void {
 }
@@ -913,7 +918,92 @@ function normalizeYouTubeVideosFilterOptions(
   }
 }
 
+function parseThemeTokens(value: unknown): Record<string, string> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null
+  }
+
+  const entries = Object.entries(value as Record<string, unknown>)
+  if (entries.length === 0) {
+    return null
+  }
+
+  const tokens: Record<string, string> = {}
+  for (const [key, tokenValue] of entries) {
+    if (!THEME_TOKEN_KEY_PATTERN.test(key)) {
+      return null
+    }
+    if (typeof tokenValue !== 'string' || tokenValue.trim().length === 0) {
+      return null
+    }
+    tokens[key] = tokenValue.trim()
+  }
+
+  return tokens
+}
+
+function slugifyThemeId(name: string): string {
+  const slug = name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  return slug.length > 0 ? slug : 'theme'
+}
+
+function getUniqueThemeId(baseId: string): string {
+  const db = getDb()
+  let candidate = baseId
+  let suffix = 2
+
+  while (BUILT_IN_THEME_IDS.has(candidate)) {
+    candidate = `${baseId}-${suffix}`
+    suffix += 1
+  }
+
+  while (db.prepare('SELECT 1 FROM themes WHERE id = ?').get(candidate)) {
+    candidate = `${baseId}-${suffix}`
+    suffix += 1
+  }
+
+  return candidate
+}
+
+function parseThemeRow(row: { id: string; name: string; tokens: string; created_at: number }): ThemeRow {
+  return {
+    id: row.id,
+    name: row.name,
+    tokens: JSON.parse(row.tokens) as Record<string, string>,
+    created_at: row.created_at
+  }
+}
+
+function getCurrentThemeInfo(): ThemeInfo {
+  const id = getSetting('active_theme_id') ?? 'system'
+  if (!BUILT_IN_THEME_IDS.has(id)) {
+    const db = getDb()
+    const row = db.prepare('SELECT tokens FROM themes WHERE id = ?').get(id) as
+      | { tokens: string }
+      | undefined
+    if (row) {
+      try {
+        const parsed = JSON.parse(row.tokens) as unknown
+        const tokens = parseThemeTokens(parsed)
+        if (tokens) {
+          return { id, tokens }
+        }
+      } catch {
+      }
+    }
+  }
+  return { id, tokens: null }
+}
+
 export function registerIpcHandlers(): void {
+  ipcMain.on(IPC.SETTINGS_GET_THEME_SYNC, (event): void => {
+    event.returnValue = getCurrentThemeInfo()
+  })
+
   // Wire script output emitter
   function emitScriptsOutput(chunk: ScriptOutputChunk): void {
     for (const win of BrowserWindow.getAllWindows()) {
@@ -1844,24 +1934,223 @@ export function registerIpcHandlers(): void {
 
   // settings:getTheme
   ipcMain.handle(IPC.SETTINGS_GET_THEME, (): ThemeInfo => {
-    const id = getSetting('active_theme_id') ?? 'system'
-    // Check if it's a custom theme
-    if (id !== 'system' && id !== 'light' && id !== 'dark') {
-      const db = getDb()
-      const row = db.prepare('SELECT tokens FROM themes WHERE id = ?').get(id) as
-        | { tokens: string }
-        | undefined
-      if (row) {
-        return { id, tokens: JSON.parse(row.tokens) as Record<string, string> }
-      }
-    }
-    // Built-in theme — tokens always null in prototype
-    return { id, tokens: null }
+    return getCurrentThemeInfo()
   })
 
   // settings:setTheme
   ipcMain.handle(IPC.SETTINGS_SET_THEME, (_event, id: string): void => {
     setSetting('active_theme_id', id)
+  })
+
+  // themes:list
+  ipcMain.handle(IPC.THEMES_LIST, (): ThemeRow[] => {
+    const db = getDb()
+    const rows = db
+      .prepare('SELECT id, name, tokens, created_at FROM themes ORDER BY created_at ASC')
+      .all() as Array<{ id: string; name: string; tokens: string; created_at: number }>
+
+    return rows.map((row) => parseThemeRow(row))
+  })
+
+  // themes:create
+  ipcMain.handle(IPC.THEMES_CREATE, (_event, name: string, tokensInput: unknown): ThemeRow => {
+    const trimmedName = name.trim()
+    if (!trimmedName) {
+      throw new Error('Theme name cannot be empty.')
+    }
+
+    const tokens = parseThemeTokens(tokensInput)
+    if (!tokens) {
+      throw new Error('Theme tokens must be a non-empty map of CSS variables to values.')
+    }
+
+    const db = getDb()
+    const baseId = slugifyThemeId(trimmedName)
+    const id = getUniqueThemeId(baseId)
+    const createdAt = Math.floor(Date.now() / 1000)
+
+    db.prepare('INSERT INTO themes (id, name, tokens, created_at) VALUES (?, ?, ?, ?)').run(
+      id,
+      trimmedName,
+      JSON.stringify(tokens),
+      createdAt
+    )
+
+    return {
+      id,
+      name: trimmedName,
+      tokens,
+      created_at: createdAt
+    }
+  })
+
+  // themes:update
+  ipcMain.handle(IPC.THEMES_UPDATE, (_event, id: string, name: string, tokensInput: unknown): ThemeRow => {
+    if (!id || BUILT_IN_THEME_IDS.has(id)) {
+      throw new Error('Built-in themes cannot be edited.')
+    }
+
+    const trimmedName = name.trim()
+    if (!trimmedName) {
+      throw new Error('Theme name cannot be empty.')
+    }
+
+    const tokens = parseThemeTokens(tokensInput)
+    if (!tokens) {
+      throw new Error('Theme tokens must be a non-empty map of CSS variables to values.')
+    }
+
+    const db = getDb()
+    const result = db
+      .prepare('UPDATE themes SET name = ?, tokens = ? WHERE id = ?')
+      .run(trimmedName, JSON.stringify(tokens), id)
+
+    if (result.changes === 0) {
+      throw new Error('Theme not found.')
+    }
+
+    const row = db.prepare('SELECT created_at FROM themes WHERE id = ?').get(id) as
+      | { created_at: number }
+      | undefined
+    if (!row) {
+      throw new Error('Theme not found.')
+    }
+
+    return {
+      id,
+      name: trimmedName,
+      tokens,
+      created_at: row.created_at
+    }
+  })
+
+  // themes:delete
+  ipcMain.handle(IPC.THEMES_DELETE, (_event, id: string): IpcMutationResult => {
+    if (!id || BUILT_IN_THEME_IDS.has(id)) {
+      return { ok: false, error: 'Built-in themes cannot be deleted.' }
+    }
+
+    const db = getDb()
+    const result = db.prepare('DELETE FROM themes WHERE id = ?').run(id)
+    if (result.changes === 0) {
+      return { ok: false, error: 'Theme not found.' }
+    }
+
+    if ((getSetting('active_theme_id') ?? 'system') === id) {
+      setSetting('active_theme_id', 'system')
+    }
+
+    return { ok: true, error: null }
+  })
+
+  // themes:export
+  ipcMain.handle(IPC.THEMES_EXPORT, async (_event, id: string): Promise<IpcMutationResult> => {
+    if (!id || BUILT_IN_THEME_IDS.has(id)) {
+      return { ok: false, error: 'Built-in themes cannot be exported.' }
+    }
+
+    const db = getDb()
+    const raw = db
+      .prepare('SELECT id, name, tokens, created_at FROM themes WHERE id = ?')
+      .get(id) as { id: string; name: string; tokens: string; created_at: number } | undefined
+
+    if (!raw) {
+      return { ok: false, error: 'Theme not found.' }
+    }
+
+    const row = parseThemeRow(raw)
+
+    const { canceled, filePath } = await dialog.showSaveDialog({
+      title: 'Export Theme',
+      defaultPath: `${row.name}.json`,
+      filters: [{ name: 'JSON', extensions: ['json'] }]
+    })
+
+    if (canceled || !filePath) {
+      return { ok: false, error: null }
+    }
+
+    try {
+      const content = JSON.stringify({ name: row.name, tokens: row.tokens }, null, 2)
+      await writeFile(filePath, content, 'utf-8')
+      return { ok: true, error: null }
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : 'Failed to write file.' }
+    }
+  })
+
+  // themes:import
+  ipcMain.handle(IPC.THEMES_IMPORT, async (): Promise<ThemeImportResult> => {
+    const { canceled, filePaths } = await dialog.showOpenDialog({
+      title: 'Import Theme',
+      filters: [{ name: 'JSON', extensions: ['json'] }],
+      properties: ['openFile']
+    })
+
+    if (canceled || filePaths.length === 0) {
+      return { ok: false, error: null }
+    }
+
+    let raw: string
+    try {
+      raw = await readFile(filePaths[0], 'utf-8')
+    } catch {
+      return { ok: false, error: 'Failed to read file.' }
+    }
+
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(raw)
+    } catch {
+      return { ok: false, error: 'File is not valid JSON.' }
+    }
+
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return { ok: false, error: 'Invalid theme file format.' }
+    }
+
+    const candidate = parsed as Record<string, unknown>
+
+    if (typeof candidate.name !== 'string' || !candidate.name.trim()) {
+      return { ok: false, error: 'Theme file is missing a valid name.' }
+    }
+
+    const tokens = parseThemeTokens(candidate.tokens)
+    if (!tokens) {
+      return { ok: false, error: 'Theme file has invalid or missing token definitions.' }
+    }
+
+    const db = getDb()
+
+    // Handle name collision — auto-suffix rather than error
+    let finalName = candidate.name.trim()
+    const existingNames = new Set<string>(
+      (db.prepare('SELECT name FROM themes').all() as Array<{ name: string }>).map((r) => r.name)
+    )
+    if (existingNames.has(finalName)) {
+      let suffix = 2
+      while (existingNames.has(`${finalName} (${suffix})`)) {
+        suffix++
+      }
+      finalName = `${finalName} (${suffix})`
+    }
+
+    const baseId = slugifyThemeId(finalName)
+    const id = getUniqueThemeId(baseId)
+    const createdAt = Math.floor(Date.now() / 1000)
+
+    db.prepare('INSERT INTO themes (id, name, tokens, created_at) VALUES (?, ?, ?, ?)').run(
+      id,
+      finalName,
+      JSON.stringify(tokens),
+      createdAt
+    )
+
+    return {
+      ok: true,
+      error: null,
+      theme: { id, name: finalName, tokens, created_at: createdAt }
+    }
   })
 
   // settings:getYouTubeApiKeyStatus

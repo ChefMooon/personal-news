@@ -1,14 +1,18 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import type { ThemeInfo } from '../../../shared/ipc-types'
+import { IPC, type ThemeInfo, type ThemeRow } from '../../../shared/ipc-types'
 
 interface ThemeContextValue {
   theme: ThemeInfo
+  customThemes: ThemeRow[]
+  refreshThemes: () => Promise<void>
   setTheme: (id: string) => Promise<void>
 }
 
 const ThemeContext = createContext<ThemeContextValue>({
   theme: { id: 'system', tokens: null },
+  customThemes: [],
+  refreshThemes: async () => {},
   setTheme: async () => {}
 })
 
@@ -45,17 +49,23 @@ function applyTheme(theme: ThemeInfo): void {
 
 export function ThemeProvider({ children }: { children: React.ReactNode }): React.ReactElement {
   const [theme, setThemeState] = useState<ThemeInfo>({ id: 'system', tokens: null })
+  const [customThemes, setCustomThemes] = useState<ThemeRow[]>([])
+
+  const refreshThemes = async (): Promise<void> => {
+    const rows = (await window.api.invoke(IPC.THEMES_LIST)) as ThemeRow[]
+    setCustomThemes(rows)
+  }
 
   useEffect(() => {
-    window.api
-      .invoke('settings:getTheme')
-      .then((t) => {
+    Promise.all([window.api.invoke(IPC.SETTINGS_GET_THEME), window.api.invoke(IPC.THEMES_LIST)])
+      .then(([t, rows]) => {
         const themeInfo = t as ThemeInfo
         setThemeState(themeInfo)
+        setCustomThemes(rows as ThemeRow[])
         applyTheme(themeInfo)
       })
       .catch((err) => {
-        toast.error(err instanceof Error ? err.message : 'Failed to load theme preference.')
+        toast.error(err instanceof Error ? err.message : 'Failed to load theme preferences.')
       })
   }, [])
 
@@ -69,11 +79,15 @@ export function ThemeProvider({ children }: { children: React.ReactNode }): Reac
   }, [theme])
 
   const setTheme = async (id: string): Promise<void> => {
-    await window.api.invoke('settings:setTheme', id)
-    const updated = (await window.api.invoke('settings:getTheme')) as ThemeInfo
+    await window.api.invoke(IPC.SETTINGS_SET_THEME, id)
+    const updated = (await window.api.invoke(IPC.SETTINGS_GET_THEME)) as ThemeInfo
     setThemeState(updated)
     applyTheme(updated)
   }
 
-  return <ThemeContext.Provider value={{ theme, setTheme }}>{children}</ThemeContext.Provider>
+  return (
+    <ThemeContext.Provider value={{ theme, customThemes, refreshThemes, setTheme }}>
+      {children}
+    </ThemeContext.Provider>
+  )
 }

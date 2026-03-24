@@ -50,8 +50,15 @@ export const IPC = {
   SCRIPTS_UPDATED: 'scripts:updated',
   SETTINGS_GET_WIDGET_LAYOUT: 'settings:getWidgetLayout',
   SETTINGS_SET_WIDGET_LAYOUT: 'settings:setWidgetLayout',
+  SETTINGS_GET_THEME_SYNC: 'settings:getThemeSync',
   SETTINGS_GET_THEME: 'settings:getTheme',
   SETTINGS_SET_THEME: 'settings:setTheme',
+  THEMES_LIST: 'themes:list',
+  THEMES_CREATE: 'themes:create',
+  THEMES_UPDATE: 'themes:update',
+  THEMES_DELETE: 'themes:delete',
+  THEMES_EXPORT: 'themes:export',
+  THEMES_IMPORT: 'themes:import',
   SETTINGS_GET_YOUTUBE_API_KEY_STATUS: 'settings:getYouTubeApiKeyStatus',
   SETTINGS_SET_YOUTUBE_API_KEY: 'settings:setYouTubeApiKey',
   SETTINGS_CLEAR_YOUTUBE_API_KEY: 'settings:clearYouTubeApiKey',
@@ -284,6 +291,17 @@ export interface WidgetLayout {
 export interface ThemeInfo {
   id: string
   tokens: Record<string, string> | null
+}
+
+export interface ThemeRow {
+  id: string
+  name: string
+  tokens: Record<string, string>
+  created_at: number
+}
+
+export interface ThemeImportResult extends IpcMutationResult {
+  theme?: ThemeRow
 }
 
 export interface YouTubeApiKeyStatus {

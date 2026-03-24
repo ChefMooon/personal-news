@@ -7,7 +7,7 @@ Each item links to the relevant architecture doc for the full spec.
 
 ## YouTube
 
-- [ ] **RSS feed polling** — implement the interval timer using `node-cron`. On each tick, fetch the Atom feed for every enabled channel, parse with `fast-xml-parser`, compare against DB to detect new/changed videos. Store results in `yt_videos`. See `docs/architecture/data-sources.md §1`.
+- [x] **RSS feed polling** — implement the interval timer using `node-cron`. On each tick, fetch the Atom feed for every enabled channel, parse with `fast-xml-parser`, compare against DB to detect new/changed videos. Store results in `yt_videos`. See `docs/architecture/data-sources.md §1`.
 - [x] **YouTube Data API v3 delta fetch** — when RSS detects a new video ID not in the DB, call the YouTube v3 API to fetch full video details (duration, live broadcast status, scheduled start). Minimise quota usage — only call on new IDs. See `docs/architecture/data-sources.md §1.3`.
 - [x] **API key validation** — when the user saves their YouTube API key in Settings, make a cheap test call (e.g. `videos?part=id&id=dQw4w9WgXcQ`) and surface success/error inline.
 - [x] **Add channel flow** — the "Add" button in Settings > YouTube should resolve a channel URL or handle via the YouTube API, save the result to `yt_channels`, and push a `youtube:updated` event to the renderer. Currently a no-op.
@@ -56,8 +56,8 @@ Each item links to the relevant architecture doc for the full spec.
 
 ## Themes
 
-- [ ] **Custom theme creation UI** — allow users to create themes by defining CSS custom property tokens. Store as rows in the `themes` table. The `ThemeProvider` already has the code path to inject tokens from the DB — this just needs the creation UI. See `docs/architecture/frontend.md §6.4` and `docs/architecture/data-model.md §2.7`.
-- [ ] **Theme management** — list, rename, delete user-created themes in Settings > Appearance.
+- [x] **Custom theme creation UI** — allow users to create themes by defining CSS custom property tokens. Store as rows in the `themes` table. The `ThemeProvider` already has the code path to inject tokens from the DB — this just needs the creation UI. See `docs/architecture/frontend.md §6.4` and `docs/architecture/data-model.md §2.7`.
+- [x] **Theme management** — list, rename, delete user-created themes in Settings > Appearance.
 
 ---
 
@@ -67,7 +67,7 @@ Each item links to the relevant architecture doc for the full spec.
 - [x] **Error boundaries** — add React error boundaries around each widget so one failing widget doesn't crash the whole dashboard.
 - [x] **System tray icon** — add a tray icon so the app can run minimised in the background and still poll on schedule. See `docs/PRD.md` (noted as v2 stretch goal — implement only if background polling is needed).
 - [x] **WCAG AA accessibility audit** — review all interactive components against the 4.5:1 contrast ratio requirement and keyboard navigation. Targeted for v1 but not formally audited yet. See `docs/ui-ux.md §11`.
-- [ ] **Window state persistence** — remember window size/position between sessions using `electron-window-state` or a manual `settings` entry.
+- [x] **Window state persistence** — remember window size/position between sessions using `electron-window-state` or a manual `settings` entry.
 
 ---
 
