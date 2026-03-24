@@ -65,7 +65,7 @@ export default function App(): React.ReactElement {
       }
 
       if (event.state === 'error') {
-        toast.error(event.message || 'Auto-update encountered an error.')
+        toast.error(event.friendlyMessage || event.message || 'Auto-update encountered an error.')
       }
     }
 

@@ -365,6 +365,7 @@ export type UpdateStatusState =
 export interface UpdateStatusEvent {
   state: UpdateStatusState
   message: string
+  friendlyMessage?: string
   supported: boolean
   currentVersion: string
   version?: string

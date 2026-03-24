@@ -5,6 +5,30 @@ import { getSetting } from '../settings/store'
 
 const AUTO_UPDATE_CHECK_ENABLED_KEY = 'app_auto_update_check_enabled'
 
+function normalizeUpdaterErrorMessage(message: string): string {
+  const normalized = message.toLowerCase()
+
+  if (
+    (normalized.includes('404') && normalized.includes('releases.atom')) ||
+    (normalized.includes('authentication token') && normalized.includes('404')) ||
+    normalized.includes('private github')
+  ) {
+    return 'Unable to check for updates. The GitHub release feed is private or unavailable.'
+  }
+
+  if (
+    normalized.includes('enotfound') ||
+    normalized.includes('econnrefused') ||
+    normalized.includes('timed out') ||
+    normalized.includes('etimedout') ||
+    normalized.includes('network')
+  ) {
+    return 'Unable to check for updates because the network request failed. Please try again.'
+  }
+
+  return 'Unable to check for updates right now. Please try again later.'
+}
+
 let initialized = false
 let latestStatus: UpdateStatusEvent = {
   state: 'idle',
@@ -142,9 +166,11 @@ export async function initializeAutoUpdates(): Promise<void> {
   })
 
   autoUpdater.on('error', (error) => {
+    const message = error?.message ?? 'An unknown auto-update error occurred.'
     emitStatus({
       state: 'error',
-      message: error?.message ?? 'An unknown auto-update error occurred.'
+      message,
+      friendlyMessage: normalizeUpdaterErrorMessage(message)
     })
   })
 
@@ -189,8 +215,9 @@ export async function checkForAppUpdates(options?: { manual?: boolean }): Promis
     return { ok: true, error: null }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to check for updates.'
-    emitStatus({ state: 'error', message })
-    return { ok: false, error: message }
+    const friendlyMessage = normalizeUpdaterErrorMessage(message)
+    emitStatus({ state: 'error', message, friendlyMessage })
+    return { ok: false, error: friendlyMessage }
   }
 }
 
