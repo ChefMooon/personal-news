@@ -23,7 +23,7 @@ export function Sidebar(): React.ReactElement {
   const hasStaleScripts = scripts.some((s) => s.is_stale)
   const { enabled: redditDigestEnabled } = useRedditDigestEnabled()
   const { enabled: savedPostsEnabled } = useSavedPostsEnabled()
-  const { unreadCount } = useScriptNotifications()
+  const { notifications, unreadCount, markAllRead, markRead } = useScriptNotifications()
 
   const navItems: NavItem[] = [
     {
@@ -168,7 +168,16 @@ export function Sidebar(): React.ReactElement {
         </button>
       </div>
 
-      {isNotifOpen && <NotificationsFlyout onClose={closeNotifications} />}
+      {isNotifOpen && (
+        <NotificationsFlyout
+          onClose={closeNotifications}
+          sidebarCollapsed={collapsed}
+          notifications={notifications}
+          unreadCount={unreadCount}
+          markAllRead={markAllRead}
+          markRead={markRead}
+        />
+      )}
     </div>
   )
 }

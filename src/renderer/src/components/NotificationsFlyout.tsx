@@ -1,7 +1,6 @@
 import React, { useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { ScriptNotification } from '../../../shared/ipc-types'
-import { useScriptNotifications } from '../hooks/useScriptNotifications'
 import { formatRelativeTime } from '../lib/time'
 import { cn } from '../lib/utils'
 import { Button } from './ui/button'
@@ -9,23 +8,42 @@ import { ScrollArea } from './ui/scroll-area'
 
 interface NotificationsFlyoutProps {
   onClose: () => void
+  sidebarCollapsed: boolean
+  notifications: ScriptNotification[]
+  unreadCount: number
+  markAllRead: () => Promise<void>
+  markRead: (id: number) => Promise<void>
 }
 
-function SeverityDot({ severity }: { severity: ScriptNotification['severity'] }): React.ReactElement {
+function SeverityDot({
+  severity,
+  visible = true
+}: {
+  severity: ScriptNotification['severity']
+  visible?: boolean
+}): React.ReactElement {
   return (
     <span
       className={cn(
         'mt-1 h-2 w-2 shrink-0 rounded-full',
+        !visible && 'opacity-0',
         severity === 'error' && 'bg-red-500',
         severity === 'warning' && 'bg-amber-500',
         severity === 'info' && 'bg-blue-500'
       )}
+      aria-hidden="true"
     />
   )
 }
 
-export function NotificationsFlyout({ onClose }: NotificationsFlyoutProps): React.ReactElement {
-  const { notifications, unreadCount, markAllRead, markRead } = useScriptNotifications()
+export function NotificationsFlyout({
+  onClose,
+  sidebarCollapsed,
+  notifications,
+  unreadCount,
+  markAllRead,
+  markRead
+}: NotificationsFlyoutProps): React.ReactElement {
   const navigate = useNavigate()
   const panelRef = useRef<HTMLDivElement>(null)
 
@@ -70,7 +88,7 @@ export function NotificationsFlyout({ onClose }: NotificationsFlyoutProps): Reac
   }
 
   return (
-    <div className="fixed bottom-2 left-14 z-50">
+    <div className={cn('fixed bottom-2 z-50', sidebarCollapsed ? 'left-14' : 'left-[200px]')}>
       <div
         ref={panelRef}
         role="dialog"
@@ -106,7 +124,10 @@ export function NotificationsFlyout({ onClose }: NotificationsFlyoutProps): Reac
                   notification.is_read === 0 ? 'bg-accent/40' : 'text-muted-foreground'
                 )}
               >
-                <SeverityDot severity={notification.severity} />
+                <SeverityDot
+                  severity={notification.severity}
+                  visible={notification.is_read === 0}
+                />
                 <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                   <span className="line-clamp-2 text-xs leading-snug">{notification.message}</span>
                   <span className="text-[10px] text-muted-foreground">
