@@ -3,15 +3,47 @@
   "version": "1.0.0",
   "description": "Personal News Dashboard",
   "main": "./out/main/index.js",
+  "productName": "Personal News",
   "author": "",
   "homepage": "https://electron-vite.org",
   "build": {
+    "appId": "com.personalnews.app",
     "icon": "resources/icon.png",
     "extraResources": [
-      "resources/**"
+      {
+        "from": "resources",
+        "to": "resources",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "src/main/db/migrations",
+        "to": "migrations",
+        "filter": [
+          "*.sql"
+        ]
+      }
     ],
     "win": {
-      "icon": "resources/icon.ico"
+      "icon": "resources/icon.ico",
+      "signAndEditExecutable": false,
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "${productName}-${version}-Setup-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Personal News"
     },
     "linux": {
       "icon": "resources/icon.png"

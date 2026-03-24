@@ -28,6 +28,14 @@ If you cloned this repo fresh and just run `npm install` and it succeeds without
 npm run dev
 ```
 
+## Build Windows Installer
+
+```bash
+npm run build:win -- --publish=never
+```
+
+Artifacts are written to `dist/` as an NSIS setup executable (x64).
+
 The Electron window opens automatically. No external services, network connections, or API keys are required to explore the seeded dashboard data — Script Manager reads local Python scripts from the configured **Script Home Directory**.
 
 ## What to Expect
@@ -49,7 +57,7 @@ The following are intentionally not implemented in this prototype:
 - Tag management — not implemented
 - FTS5 search — not implemented
 - Custom theme creation — only System/Light/Dark built-ins work
-- electron-builder packaging — prototype runs in dev mode only
+- electron-builder packaging — Windows NSIS (x64) installer is configured; macOS and Linux targets are still pending
 - Window management / tray icon — single window only
 - Per-channel enabled toggle persistence — toggle updates local React state only
 - Channel add flow — Add button logs to console only
