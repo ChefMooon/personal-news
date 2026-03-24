@@ -25,6 +25,7 @@ import {
   AlertDialogTrigger
 } from '../../components/ui/alert-dialog'
 import { formatRelativeTime } from '../../lib/time'
+import { toRedditPostUrl } from '../../lib/utils'
 import { registerRendererModule } from '../registry'
 import { IPC, type SavedPost, type LinkSource, type SavedPostsViewConfig } from '../../../../shared/ipc-types'
 import { NtfyOnboardingWizard } from './NtfyOnboardingWizard'
@@ -272,7 +273,7 @@ function SavedPostsWidget(): React.ReactElement {
         toast.error(err instanceof Error ? err.message : 'Failed to update viewed state.')
       })
     }
-    const url = post.source === 'reddit' ? `https://reddit.com${post.permalink}` : post.url
+    const url = post.source === 'reddit' ? toRedditPostUrl(post.permalink) : post.url
     window.api.invoke('shell:openExternal', url).catch((err) => {
       toast.error(err instanceof Error ? err.message : 'Failed to open saved post link.')
     })

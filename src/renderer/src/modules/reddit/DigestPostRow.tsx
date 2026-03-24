@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import { IPC } from '../../../../shared/ipc-types'
 import type { DigestPost } from '../../../../shared/ipc-types'
 import { formatRelativeTime } from '../../lib/time'
+import { toRedditPostUrl } from '../../lib/utils'
 import { MessageSquare, ArrowUp, Circle, CircleCheck } from 'lucide-react'
 
 interface DigestPostRowProps {
@@ -36,7 +37,7 @@ export function DigestPostRow({ post }: DigestPostRowProps): React.ReactElement 
   }
 
   const handleClick = (): void => {
-    const url = `https://reddit.com${post.permalink}`
+    const url = toRedditPostUrl(post.permalink)
     if (!viewedAt) {
       setViewed(true)
     }

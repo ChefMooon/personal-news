@@ -21,6 +21,7 @@ import {
 } from '../components/ui/select'
 import { Bookmark, Search, Tags, RefreshCw, Plus, X, Circle, CircleCheck } from 'lucide-react'
 import { formatRelativeTime } from '../lib/time'
+import { toRedditPostUrl } from '../lib/utils'
 
 function PostTagEditor({
   post,
@@ -469,7 +470,7 @@ function SavedPostsContent(): React.ReactElement {
                       if (post.viewed_at === null) {
                         setPostViewed(post.post_id, true)
                       }
-                      const url = post.source === 'reddit' ? `https://reddit.com${post.permalink}` : post.url
+                      const url = post.source === 'reddit' ? toRedditPostUrl(post.permalink) : post.url
                       window.api.invoke('shell:openExternal', url).catch((err) => {
                         toast.error(err instanceof Error ? err.message : 'Failed to open link.')
                       })
