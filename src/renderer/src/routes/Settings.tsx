@@ -41,114 +41,6 @@ import {
 import { NtfyOnboardingWizard } from '../modules/saved-posts/NtfyOnboardingWizard'
 import { TagManagementModal } from '../modules/saved-posts/TagManagementModal'
 
-function ApiKeysTab(): React.ReactElement {
-  const [showKey, setShowKey] = useState(false)
-  const [key, setKey] = useState('')
-  const [status, setStatus] = useState<YouTubeApiKeyStatus | null>(null)
-  const [saving, setSaving] = useState(false)
-
-  const refreshStatus = (): void => {
-    window.api
-      .invoke(IPC.SETTINGS_GET_YOUTUBE_API_KEY_STATUS)
-      .then((data) => {
-        setStatus(data as YouTubeApiKeyStatus)
-      })
-      .catch((err) => {
-        toast.error(err instanceof Error ? err.message : 'Failed to load API key status.')
-      })
-  }
-
-  useEffect(() => {
-    refreshStatus()
-  }, [])
-
-  const saveKey = async (): Promise<void> => {
-    setSaving(true)
-    try {
-      const result = (await window.api.invoke(
-        IPC.SETTINGS_SET_YOUTUBE_API_KEY,
-        key
-      )) as IpcMutationResult
-      if (!result.ok) {
-        toast.error(result.error ?? 'Failed to save API key.')
-        return
-      }
-      setKey('')
-      toast.success('API key saved and validated successfully.')
-      refreshStatus()
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to save API key.')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const clearKey = async (): Promise<void> => {
-    setSaving(true)
-    try {
-      await window.api.invoke(IPC.SETTINGS_CLEAR_YOUTUBE_API_KEY)
-      setKey('')
-      toast.success('YouTube API key removed.')
-      refreshStatus()
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to clear API key.')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <div className="space-y-4 max-w-md">
-      <div>
-        <h3 className="text-sm font-medium mb-1">YouTube Data API v3 Key</h3>
-        <p className="text-xs text-muted-foreground mb-2">
-          Required for fetching video metadata. Get yours at console.cloud.google.com.
-        </p>
-        <label htmlFor="youtube-api-key" className="text-xs text-muted-foreground mb-2 block">
-          API key
-        </label>
-        <div className="flex gap-2">
-          <div className="relative flex-1">
-            <Input
-              id="youtube-api-key"
-              type={showKey ? 'text' : 'password'}
-              value={key}
-              onChange={(e) => setKey(e.target.value)}
-              placeholder="AIzaSy..."
-              className="pr-10"
-            />
-            <button
-              type="button"
-              onClick={() => setShowKey((s) => !s)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              aria-label={showKey ? 'Hide API key' : 'Show API key'}
-              aria-pressed={showKey}
-            >
-              {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-            </button>
-          </div>
-          <Button
-            onClick={() => {
-              void saveKey()
-            }}
-            disabled={saving}
-          >
-            {saving ? 'Saving...' : 'Save'}
-          </Button>
-          <Button variant="outline" onClick={() => void clearKey()} disabled={saving}>
-            Clear
-          </Button>
-        </div>
-        {status?.isSet ? (
-          <p className="text-xs text-muted-foreground mt-2">
-            Saved key detected (ending in {status.suffix ?? 'n/a'}).
-          </p>
-        ) : null}
-      </div>
-    </div>
-  )
-}
-
 function YouTubeTab(): React.ReactElement {
   const { channels } = useYouTubeChannels()
   const addInputRef = useRef<HTMLInputElement | null>(null)
@@ -162,6 +54,57 @@ function YouTubeTab(): React.ReactElement {
   const [pollingNow, setPollingNow] = useState(false)
   const [clearingVideoCache, setClearingVideoCache] = useState(false)
   const canSubmitChannel = addInput.trim().length > 0 && !adding
+
+  const [showKey, setShowKey] = useState(false)
+  const [apiKey, setApiKey] = useState('')
+  const [apiKeyStatus, setApiKeyStatus] = useState<YouTubeApiKeyStatus | null>(null)
+  const [savingKey, setSavingKey] = useState(false)
+
+  const refreshApiKeyStatus = (): void => {
+    window.api
+      .invoke(IPC.SETTINGS_GET_YOUTUBE_API_KEY_STATUS)
+      .then((data) => {
+        setApiKeyStatus(data as YouTubeApiKeyStatus)
+      })
+      .catch((err) => {
+        toast.error(err instanceof Error ? err.message : 'Failed to load API key status.')
+      })
+  }
+
+  const saveApiKey = async (): Promise<void> => {
+    setSavingKey(true)
+    try {
+      const result = (await window.api.invoke(
+        IPC.SETTINGS_SET_YOUTUBE_API_KEY,
+        apiKey
+      )) as IpcMutationResult
+      if (!result.ok) {
+        toast.error(result.error ?? 'Failed to save API key.')
+        return
+      }
+      setApiKey('')
+      toast.success('API key saved and validated successfully.')
+      refreshApiKeyStatus()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save API key.')
+    } finally {
+      setSavingKey(false)
+    }
+  }
+
+  const clearApiKey = async (): Promise<void> => {
+    setSavingKey(true)
+    try {
+      await window.api.invoke(IPC.SETTINGS_CLEAR_YOUTUBE_API_KEY)
+      setApiKey('')
+      toast.success('YouTube API key removed.')
+      refreshApiKeyStatus()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to clear API key.')
+    } finally {
+      setSavingKey(false)
+    }
+  }
 
   useEffect(() => {
     window.api
@@ -179,6 +122,10 @@ function YouTubeTab(): React.ReactElement {
   useEffect(() => {
     setPendingByChannel({})
   }, [channels])
+
+  useEffect(() => {
+    refreshApiKeyStatus()
+  }, [])
 
   const isEnabled = (channelId: string, defaultVal: number): boolean => {
     if (channelId in pendingByChannel) return pendingByChannel[channelId]
@@ -356,6 +303,53 @@ function YouTubeTab(): React.ReactElement {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <div>
+        <h3 className="text-sm font-medium mb-1">YouTube Data API v3 Key</h3>
+        <p className="text-xs text-muted-foreground mb-2">
+          Required for fetching video metadata. Get yours at console.cloud.google.com.
+        </p>
+        <label htmlFor="youtube-api-key" className="text-xs text-muted-foreground mb-2 block">
+          API key
+        </label>
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Input
+              id="youtube-api-key"
+              type={showKey ? 'text' : 'password'}
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              placeholder="AIzaSy..."
+              className="pr-10"
+            />
+            <button
+              type="button"
+              onClick={() => setShowKey((s) => !s)}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              aria-label={showKey ? 'Hide API key' : 'Show API key'}
+              aria-pressed={showKey}
+            >
+              {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
+          <Button
+            onClick={() => {
+              void saveApiKey()
+            }}
+            disabled={savingKey}
+          >
+            {savingKey ? 'Saving...' : 'Save'}
+          </Button>
+          <Button variant="outline" onClick={() => void clearApiKey()} disabled={savingKey}>
+            Clear
+          </Button>
+        </div>
+        {apiKeyStatus?.isSet ? (
+          <p className="text-xs text-muted-foreground mt-2">
+            Saved key detected (ending in {apiKeyStatus.suffix ?? 'n/a'}).
+          </p>
+        ) : null}
+      </div>
 
       <div>
         <h3 className="text-sm font-medium mb-2">RSS Poll Interval (minutes)</h3>
@@ -1871,7 +1865,6 @@ export default function Settings(): React.ReactElement {
           <TabsTrigger value="features">Features</TabsTrigger>
           <TabsTrigger value="app-behavior">App Behavior</TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
-          <TabsTrigger value="api-keys">API Keys</TabsTrigger>
           <TabsTrigger value="youtube">YouTube</TabsTrigger>
           {redditDigestEnabled && <TabsTrigger value="reddit-digest">Reddit Digest</TabsTrigger>}
           {savedPostsEnabled && <TabsTrigger value="saved-posts">Saved Posts</TabsTrigger>}
@@ -1886,9 +1879,6 @@ export default function Settings(): React.ReactElement {
         </TabsContent>
         <TabsContent value="notifications" className="mt-4">
           <NotificationsTab />
-        </TabsContent>
-        <TabsContent value="api-keys" className="mt-4">
-          <ApiKeysTab />
         </TabsContent>
         <TabsContent value="youtube" className="mt-4">
           <YouTubeTab />
