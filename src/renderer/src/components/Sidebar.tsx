@@ -1,10 +1,12 @@
-import React, { useState } from 'react'
+import React, { useRef, useState } from 'react'
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, Bookmark, Terminal, Settings, ChevronLeft, ChevronRight, Youtube, Newspaper } from 'lucide-react'
+import { LayoutDashboard, Bookmark, Terminal, Settings, ChevronLeft, ChevronRight, Youtube, Newspaper, Bell } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { useScripts } from '../hooks/useScripts'
 import { useRedditDigestEnabled } from '../contexts/RedditDigestEnabledContext'
 import { useSavedPostsEnabled } from '../contexts/SavedPostsEnabledContext'
+import { useScriptNotifications } from '../hooks/useScriptNotifications'
+import { NotificationsFlyout } from './NotificationsFlyout'
 
 interface NavItem {
   to: string
@@ -15,10 +17,13 @@ interface NavItem {
 
 export function Sidebar(): React.ReactElement {
   const [collapsed, setCollapsed] = useState(false)
+  const [isNotifOpen, setIsNotifOpen] = useState(false)
+  const notificationsButtonRef = useRef<HTMLButtonElement>(null)
   const { scripts } = useScripts()
   const hasStaleScripts = scripts.some((s) => s.is_stale)
   const { enabled: redditDigestEnabled } = useRedditDigestEnabled()
   const { enabled: savedPostsEnabled } = useSavedPostsEnabled()
+  const { unreadCount } = useScriptNotifications()
 
   const navItems: NavItem[] = [
     {
@@ -54,13 +59,13 @@ export function Sidebar(): React.ReactElement {
       label: 'Script Manager',
       icon: <Terminal className="h-5 w-5 shrink-0" />,
       attention: hasStaleScripts
-    },
-    {
-      to: '/settings',
-      label: 'Settings',
-      icon: <Settings className="h-5 w-5 shrink-0" />
     }
   ]
+
+  const closeNotifications = (): void => {
+    setIsNotifOpen(false)
+    notificationsButtonRef.current?.focus()
+  }
 
   return (
     <div
@@ -122,7 +127,48 @@ export function Sidebar(): React.ReactElement {
             )}
           </NavLink>
         ))}
+
+        <NavLink
+          to="/settings"
+          className={({ isActive }) =>
+            cn(
+              'flex items-center gap-3 px-3 py-2 mx-1 rounded-md text-sm transition-colors',
+              isActive
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+            )
+          }
+        >
+          <Settings className="h-5 w-5 shrink-0" />
+          {!collapsed && (
+            <span className="flex-1 truncate">Settings</span>
+          )}
+        </NavLink>
       </nav>
+
+      <div className="border-t py-2">
+        <button
+          ref={notificationsButtonRef}
+          type="button"
+          onClick={() => setIsNotifOpen((open) => !open)}
+          aria-label={unreadCount === 0 ? 'Notifications' : `Notifications, ${unreadCount} unread`}
+          aria-expanded={isNotifOpen}
+          className={cn(
+            'relative mx-1 flex w-[calc(100%-0.5rem)] items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
+            isNotifOpen
+              ? 'bg-primary text-primary-foreground'
+              : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+          )}
+        >
+          <Bell className="h-5 w-5 shrink-0" />
+          {!collapsed && <span className="flex-1 truncate text-left">Notifications</span>}
+          {unreadCount > 0 && (
+            <span className="absolute right-0.5 top-0.5 h-2 w-2 rounded-full bg-red-500" />
+          )}
+        </button>
+      </div>
+
+      {isNotifOpen && <NotificationsFlyout onClose={closeNotifications} />}
     </div>
   )
 }
