@@ -9,6 +9,14 @@ function normalizeUpdaterErrorMessage(message: string): string {
   const normalized = message.toLowerCase()
 
   if (
+    (normalized.includes('404') && normalized.includes('latest.yml')) ||
+    (normalized.includes('404') && normalized.includes('/releases/latest')) ||
+    normalized.includes('no published versions on github')
+  ) {
+    return 'Unable to check for updates. No published release metadata was found (latest.yml). Publish a tagged GitHub Release to enable auto-updates.'
+  }
+
+  if (
     (normalized.includes('404') && normalized.includes('releases.atom')) ||
     (normalized.includes('authentication token') && normalized.includes('404')) ||
     normalized.includes('private github')

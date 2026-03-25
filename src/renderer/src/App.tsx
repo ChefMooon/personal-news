@@ -13,7 +13,7 @@ import { Toaster, toast } from 'sonner'
 import { IPC, type IpcMutationResult, type UpdateStatusEvent } from '../../shared/ipc-types'
 
 export default function App(): React.ReactElement {
-  const lastUpdateStateRef = React.useRef<UpdateStatusEvent['state'] | null>(null)
+  const lastUpdateToastKeyRef = React.useRef<string | null>(null)
 
   React.useEffect(() => {
     return window.api.on(IPC.APP_SHOW_TRAY_HINT, () => {
@@ -26,21 +26,24 @@ export default function App(): React.ReactElement {
 
   React.useEffect(() => {
     const handleUpdateStatus = (event: UpdateStatusEvent): void => {
-      if (event.state === lastUpdateStateRef.current) {
+      const toastKey = `${event.state}|${event.version ?? ''}|${event.friendlyMessage ?? ''}|${event.message}`
+      if (toastKey === lastUpdateToastKeyRef.current) {
         return
       }
 
-      lastUpdateStateRef.current = event.state
+      lastUpdateToastKeyRef.current = toastKey
+
+      const versionLabel = event.version ? ` ${event.version}` : ''
 
       if (event.state === 'available') {
-        toast.info(`Update ${event.version ?? ''} is available.`, {
+        toast.info(`Update${versionLabel} is available.`, {
           description: 'Downloading in the background.'
         })
         return
       }
 
       if (event.state === 'downloaded') {
-        toast.success(`Update ${event.version ?? ''} is ready.`, {
+        toast.success(`Update${versionLabel} is ready.`, {
           description: 'Install now to restart on the latest version.',
           duration: Infinity,
           action: {
@@ -60,6 +63,13 @@ export default function App(): React.ReactElement {
                 })
             }
           }
+        })
+        return
+      }
+
+      if (event.state === 'not-available') {
+        toast.success('You are already on the latest version.', {
+          description: `Current version: ${event.currentVersion}`
         })
         return
       }

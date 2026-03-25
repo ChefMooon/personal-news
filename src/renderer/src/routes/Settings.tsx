@@ -1014,6 +1014,38 @@ function AppBehaviorTab(): React.ReactElement {
   const [updatesSupported, setUpdatesSupported] = useState(true)
   const [resettingWindowLayout, setResettingWindowLayout] = useState(false)
   const [checkingForUpdates, setCheckingForUpdates] = useState(false)
+  const [lastUpdateCheckOutcome, setLastUpdateCheckOutcome] = useState<string | null>(null)
+  const [lastUpdateCheckAt, setLastUpdateCheckAt] = useState<number | null>(null)
+
+  const getUpdateOutcomeLabel = (status: UpdateStatusEvent): string | null => {
+    if (status.state === 'not-available') {
+      return `Up to date (${status.currentVersion})`
+    }
+
+    if (status.state === 'available' || status.state === 'downloaded') {
+      return status.version ? `Update ${status.version} available` : 'Update available'
+    }
+
+    if (status.state === 'error') {
+      return status.friendlyMessage || status.message || 'Update check failed.'
+    }
+
+    if (status.state === 'disabled') {
+      return status.message || 'Update checks are disabled.'
+    }
+
+    return null
+  }
+
+  const applyUpdateStatus = (status: UpdateStatusEvent): void => {
+    setUpdatesSupported(status.supported)
+    const outcome = getUpdateOutcomeLabel(status)
+    if (!outcome) {
+      return
+    }
+    setLastUpdateCheckOutcome(outcome)
+    setLastUpdateCheckAt(Date.now())
+  }
 
   useEffect(() => {
     const loadFlag = (key: string, setter: (value: boolean) => void, fallback: boolean): void => {
@@ -1043,11 +1075,14 @@ function AppBehaviorTab(): React.ReactElement {
     window.api
       .invoke(IPC.UPDATES_GET_STATUS)
       .then((status) => {
-        const parsed = status as UpdateStatusEvent
-        setUpdatesSupported(parsed.supported)
+        applyUpdateStatus(status as UpdateStatusEvent)
       })
       .catch(() => {
       })
+
+    return window.api.on(IPC.UPDATES_STATUS, (event) => {
+      applyUpdateStatus(event as UpdateStatusEvent)
+    })
   }, [])
 
   const saveFlag = async (
@@ -1098,16 +1133,27 @@ function AppBehaviorTab(): React.ReactElement {
     try {
       const result = (await window.api.invoke(IPC.UPDATES_CHECK_FOR_UPDATES)) as IpcMutationResult
       if (!result.ok) {
-        toast.error(result.error ?? 'Failed to check for updates.')
+        // Global update-status listener in App handles user-facing updater errors.
         return
       }
-      toast.success('Checking for updates...')
+      toast.info('Checking for updates...')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to check for updates.')
     } finally {
       setCheckingForUpdates(false)
     }
   }
+
+  const lastUpdateCheckAtLabel =
+    lastUpdateCheckAt !== null
+      ? new Date(lastUpdateCheckAt).toLocaleString([], {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit'
+        })
+      : null
 
   return (
     <div className="space-y-4 max-w-lg">
@@ -1230,6 +1276,16 @@ function AppBehaviorTab(): React.ReactElement {
             >
               {checkingForUpdates ? 'Checking...' : 'Check now'}
             </Button>
+          </div>
+
+          <div className="rounded-md border px-3 py-2">
+            <p className="text-sm">Last update check</p>
+            <p className="text-xs text-muted-foreground">
+              {lastUpdateCheckOutcome ?? 'No completed checks yet in this session.'}
+            </p>
+            {lastUpdateCheckAtLabel ? (
+              <p className="text-xs text-muted-foreground">Updated: {lastUpdateCheckAtLabel}</p>
+            ) : null}
           </div>
         </div>
       </div>
