@@ -70,6 +70,7 @@ All settings are stored locally in the app. To reconfigure:
 
 ## Documentation
 
+- [Changelog](CHANGELOG.md) — Release history and tracked updates
 - [Architecture Overview](docs/architecture/overview.md) — System design and data flows
 - [Data Sources Reference](docs/data-sources.md) — Detailed configuration for each source
 - [How to Build, Package, and Release](docs/HOW-TO-RUN.md) — Source setup plus the verified Windows release workflow
