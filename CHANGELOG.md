@@ -4,16 +4,19 @@ All notable changes to this project are documented in this file.
 
 The format follows Keep a Changelog, and this project uses Semantic Versioning.
 
-## [Unreleased]
-
-- No unreleased changes yet.
-
 ## [1.1.0] - 2026-03-30
+
+### Changed
+
+- Consolidated Settings tabs by merging Features and App Behavior into a single General tab.
+- Reorganized General settings into dedicated About, Features, and App Behavior sections for clearer navigation.
+- Added backward compatibility for legacy settings query params (`tab=features` and `tab=app-behavior`) by mapping both to `tab=general`.
 
 ### Fixed
 
 - Updated YouTube watched-state synchronization so per-channel watched counters update immediately when a video is opened or manually toggled watched/unwatched.
 - Replaced broad watched-state refresh behavior with targeted state updates to prevent the visible widget refresh flash when changing watched status.
+- Improved auto-update status handling with clearer user feedback and error messages.
 
 ## [1.0.0] - 2026-03-24
 

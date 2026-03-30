@@ -971,39 +971,9 @@ function RedditDigestTab(): React.ReactElement {
   )
 }
 
-function FeaturesTab(): React.ReactElement {
+function GeneralTab(): React.ReactElement {
   const { enabled, setEnabled } = useRedditDigestEnabled()
   const { enabled: savedPostsEnabled, setEnabled: setSavedPostsEnabled } = useSavedPostsEnabled()
-
-  return (
-    <div className="space-y-4 max-w-lg">
-      <div>
-        <h3 className="text-sm font-medium mb-1">Reddit Digest</h3>
-        <p className="text-xs text-muted-foreground mb-3">
-          Enable or disable the Reddit Digest feature. When disabled, the dashboard widget,
-          dedicated page, and associated scripts are hidden.
-        </p>
-        <div className="flex items-center justify-between rounded-md border px-3 py-2 max-w-sm">
-          <span className="text-sm">Enable Reddit Digest</span>
-          <Switch checked={enabled} onCheckedChange={setEnabled} aria-label="Enable Reddit Digest" />
-        </div>
-      </div>
-      <div>
-        <h3 className="text-sm font-medium mb-1">Saved Posts</h3>
-        <p className="text-xs text-muted-foreground mb-3">
-          Enable or disable the Saved Posts feature. When disabled, the dashboard widget,
-          dedicated page, and settings tab are hidden.
-        </p>
-        <div className="flex items-center justify-between rounded-md border px-3 py-2 max-w-sm">
-          <span className="text-sm">Enable Saved Posts</span>
-          <Switch checked={savedPostsEnabled} onCheckedChange={setSavedPostsEnabled} aria-label="Enable Saved Posts" />
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function AppBehaviorTab(): React.ReactElement {
   const [closeToTray, setCloseToTray] = useState(true)
   const [startMinimized, setStartMinimized] = useState(false)
   const [minimizeToTray, setMinimizeToTray] = useState(false)
@@ -1012,6 +982,7 @@ function AppBehaviorTab(): React.ReactElement {
   const [startMaximized, setStartMaximized] = useState(false)
   const [autoUpdateCheckEnabled, setAutoUpdateCheckEnabled] = useState(true)
   const [updatesSupported, setUpdatesSupported] = useState(true)
+  const [currentVersion, setCurrentVersion] = useState<string | null>(null)
   const [resettingWindowLayout, setResettingWindowLayout] = useState(false)
   const [checkingForUpdates, setCheckingForUpdates] = useState(false)
   const [lastUpdateCheckOutcome, setLastUpdateCheckOutcome] = useState<string | null>(null)
@@ -1039,6 +1010,7 @@ function AppBehaviorTab(): React.ReactElement {
 
   const applyUpdateStatus = (status: UpdateStatusEvent): void => {
     setUpdatesSupported(status.supported)
+    setCurrentVersion(status.currentVersion)
     const outcome = getUpdateOutcomeLabel(status)
     if (!outcome) {
       return
@@ -1158,7 +1130,50 @@ function AppBehaviorTab(): React.ReactElement {
   return (
     <div className="space-y-4 max-w-lg">
       <div>
-        <h3 className="text-sm font-medium mb-1">General</h3>
+        <h3 className="text-sm font-medium mb-1">About</h3>
+        <p className="text-xs text-muted-foreground mb-3">
+          Program details for this installation.
+        </p>
+        <div className="rounded-md border px-3 py-2 max-w-md">
+          <p className="text-sm">Personal News</p>
+          <p className="text-xs text-muted-foreground">Version {currentVersion ?? '—'}</p>
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-sm font-medium mb-1">Features</h3>
+        <p className="text-xs text-muted-foreground mb-3">
+          Enable or disable optional modules in the app.
+        </p>
+        <div className="space-y-2 max-w-md">
+          <div className="rounded-md border px-3 py-2">
+            <p className="text-sm font-medium">Reddit Digest</p>
+            <p className="text-xs text-muted-foreground mb-3">
+              Enable or disable the Reddit Digest feature. When disabled, the dashboard widget,
+              dedicated page, and associated scripts are hidden.
+            </p>
+            <div className="flex items-center justify-between rounded-md border px-3 py-2 max-w-sm">
+              <span className="text-sm">Enable Reddit Digest</span>
+              <Switch checked={enabled} onCheckedChange={setEnabled} aria-label="Enable Reddit Digest" />
+            </div>
+          </div>
+
+          <div className="rounded-md border px-3 py-2">
+            <p className="text-sm font-medium">Saved Posts</p>
+            <p className="text-xs text-muted-foreground mb-3">
+              Enable or disable the Saved Posts feature. When disabled, the dashboard widget,
+              dedicated page, and settings tab are hidden.
+            </p>
+            <div className="flex items-center justify-between rounded-md border px-3 py-2 max-w-sm">
+              <span className="text-sm">Enable Saved Posts</span>
+              <Switch checked={savedPostsEnabled} onCheckedChange={setSavedPostsEnabled} aria-label="Enable Saved Posts" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-sm font-medium mb-1">App Behavior</h3>
         <p className="text-xs text-muted-foreground mb-3">
           Core startup and window state preferences.
         </p>
@@ -1993,13 +2008,18 @@ export default function Settings(): React.ReactElement {
   const [searchParams] = useSearchParams()
   const { enabled: redditDigestEnabled } = useRedditDigestEnabled()
   const { enabled: savedPostsEnabled } = useSavedPostsEnabled()
+  const requestedTab = searchParams.get('tab')
+  const selectedTab =
+    requestedTab === 'features' || requestedTab === 'app-behavior'
+      ? 'general'
+      : requestedTab ?? 'general'
+
   return (
     <div className="flex flex-col h-full px-6 py-4">
       <h1 className="text-xl font-semibold mb-4">Settings</h1>
-      <Tabs defaultValue={searchParams.get('tab') ?? 'features'} className="flex-1">
+      <Tabs defaultValue={selectedTab} className="flex-1">
         <TabsList>
-          <TabsTrigger value="features">Features</TabsTrigger>
-          <TabsTrigger value="app-behavior">App Behavior</TabsTrigger>
+          <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
           <TabsTrigger value="youtube">YouTube</TabsTrigger>
           {redditDigestEnabled && <TabsTrigger value="reddit-digest">Reddit Digest</TabsTrigger>}
@@ -2007,11 +2027,8 @@ export default function Settings(): React.ReactElement {
           <TabsTrigger value="appearance">Appearance</TabsTrigger>
           <TabsTrigger value="scripts">Scripts</TabsTrigger>
         </TabsList>
-        <TabsContent value="features" className="mt-4">
-          <FeaturesTab />
-        </TabsContent>
-        <TabsContent value="app-behavior" className="mt-4">
-          <AppBehaviorTab />
+        <TabsContent value="general" className="mt-4">
+          <GeneralTab />
         </TabsContent>
         <TabsContent value="notifications" className="mt-4">
           <NotificationsTab />
