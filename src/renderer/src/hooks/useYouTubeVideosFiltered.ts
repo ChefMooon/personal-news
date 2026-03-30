@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
-import { IPC, type MediaType, type YtVideo, type YouTubeVideosFilterResult } from '../../../shared/ipc-types'
+import {
+  IPC,
+  type MediaType,
+  type YtVideo,
+  type YouTubeVideosFilterResult,
+  type YoutubeVideoWatchedChangedEvent
+} from '../../../shared/ipc-types'
 
 interface UseYouTubeVideosFilteredOptions {
   limit?: number
@@ -82,6 +88,33 @@ export function useYouTubeVideosFiltered(
     }
     return window.api.on(IPC.YOUTUBE_UPDATED, handler)
   }, [fetch])
+
+  useEffect(() => {
+    const handler = (...args: unknown[]): void => {
+      const event = args[0] as YoutubeVideoWatchedChangedEvent
+
+      setVideos((prev) => {
+        const next = prev
+          .map((video) =>
+            video.video_id === event.videoId ? { ...video, watched_at: event.watchedAt } : video
+          )
+          .filter((video) => !(hideWatched && video.watched_at != null))
+
+        if (next.length !== prev.length && hideWatched && event.watchedAt != null) {
+          setTotal((current) => Math.max(0, current - 1))
+        }
+
+        return next
+      })
+
+      // If a hidden watched video becomes unwatched elsewhere, refetch so it can re-enter this list.
+      if (hideWatched && event.watchedAt === null) {
+        void fetch()
+      }
+    }
+
+    return window.api.on(IPC.YOUTUBE_VIDEO_WATCHED_CHANGED, handler)
+  }, [fetch, hideWatched])
 
   return {
     videos,

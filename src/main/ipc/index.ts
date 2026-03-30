@@ -43,6 +43,7 @@ import type {
   MediaType,
   NotificationPreferences,
   DigestViewedChangedEvent,
+  YoutubeVideoWatchedChangedEvent,
   UpdateStatusEvent
 } from '../../shared/ipc-types'
 import {
@@ -128,6 +129,12 @@ function buildTemporaryChannelThumbnail(channelId: string, channelName: string):
 function emitYoutubeUpdated(): void {
   for (const win of BrowserWindow.getAllWindows()) {
     win.webContents.send(IPC.YOUTUBE_UPDATED)
+  }
+}
+
+function emitYoutubeVideoWatchedChanged(event: YoutubeVideoWatchedChangedEvent): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    win.webContents.send(IPC.YOUTUBE_VIDEO_WATCHED_CHANGED, event)
   }
 }
 
@@ -1217,6 +1224,8 @@ export function registerIpcHandlers(): void {
       if (result.changes === 0) {
         return { ok: false, error: 'Video not found.' }
       }
+
+      emitYoutubeVideoWatchedChanged({ videoId, watchedAt })
       return { ok: true, error: null }
     }
   )

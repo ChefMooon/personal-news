@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { toast } from 'sonner'
-import type { YtVideo } from '../../../shared/ipc-types'
+import { IPC, type YtVideo, type YoutubeVideoWatchedChangedEvent } from '../../../shared/ipc-types'
 
 export function useYouTubeVideos(channelId: string): { videos: YtVideo[]; loading: boolean } {
   const [videos, setVideos] = useState<YtVideo[]>([])
@@ -28,8 +28,21 @@ export function useYouTubeVideos(channelId: string): { videos: YtVideo[]; loadin
       fetch()
     }
 
-    return window.api.on('youtube:updated', handler)
+    return window.api.on(IPC.YOUTUBE_UPDATED, handler)
   }, [fetch])
+
+  useEffect(() => {
+    const handler = (...args: unknown[]): void => {
+      const event = args[0] as YoutubeVideoWatchedChangedEvent
+      setVideos((prev) =>
+        prev.map((video) =>
+          video.video_id === event.videoId ? { ...video, watched_at: event.watchedAt } : video
+        )
+      )
+    }
+
+    return window.api.on(IPC.YOUTUBE_VIDEO_WATCHED_CHANGED, handler)
+  }, [])
 
   return { videos, loading }
 }

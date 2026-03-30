@@ -17,6 +17,7 @@ export const IPC = {
   YOUTUBE_CLEAR_VIDEOS_CACHE: 'youtube:clearVideosCache',
   YOUTUBE_SET_VIDEO_WATCHED: 'youtube:setVideoWatched',
   YOUTUBE_MARK_CHANNEL_WATCHED: 'youtube:markChannelWatched',
+  YOUTUBE_VIDEO_WATCHED_CHANGED: 'youtube:videoWatchedChanged',
   YOUTUBE_UPDATED: 'youtube:updated',
   REDDIT_GET_DIGEST_POSTS: 'reddit:getDigestPosts',
   REDDIT_GET_DIGEST_WEEKS: 'reddit:getDigestWeeks',
@@ -470,6 +471,11 @@ export interface DigestViewedChangedEvent {
   post_id: string
   week_start_date: string
   viewed_at: number | null
+}
+
+export interface YoutubeVideoWatchedChangedEvent {
+  videoId: string
+  watchedAt: number | null
 }
 
 export interface SavedPostInput {
