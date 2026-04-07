@@ -68,6 +68,7 @@ import {
   triggerWeatherRefresh,
   updateWeatherSettings
 } from '../sources/weather/index'
+import { registerSportsIpcHandlers } from '../sources/sports/ipc'
 import {
   activeRuns,
   ensureBundledRedditDigestScript,
@@ -1043,6 +1044,8 @@ function getCurrentThemeInfo(): ThemeInfo {
 }
 
 export function registerIpcHandlers(): void {
+  registerSportsIpcHandlers()
+
   ipcMain.on(IPC.SETTINGS_GET_THEME_SYNC, (event): void => {
     event.returnValue = getCurrentThemeInfo()
   })

@@ -41,7 +41,8 @@ export function openDatabase(): Database.Database {
 function runMigrations(database: Database.Database): void {
   const migrationFiles: Record<number, string> = {
     1: '001_initial.sql',
-    2: '002_weather.sql'
+    2: '002_weather.sql',
+    3: '003_sports.sql'
   }
 
   // Ensure meta table exists first
@@ -105,6 +106,11 @@ function runMigrations(database: Database.Database): void {
       name: 'weather-schema',
       file: '002_weather.sql',
       shouldApply: (db) => !tableExists(db, 'weather_locations') || !tableExists(db, 'weather_cache')
+    },
+    {
+      name: 'sports-schema',
+      file: '003_sports.sql',
+      shouldApply: (db) => !tableExists(db, 'sports_leagues') || !tableExists(db, 'sports_events')
     }
   ]
 

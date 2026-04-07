@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { X, ArrowLeft, Plus, Youtube, Newspaper, Bookmark, CloudSun } from 'lucide-react'
+import { X, ArrowLeft, Plus, Youtube, Newspaper, Bookmark, CloudSun, Trophy } from 'lucide-react'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
 import {
@@ -12,6 +12,7 @@ import {
 import { moduleRegistry } from '../modules/registry'
 import { useRedditDigest } from '../hooks/useRedditDigest'
 import { useSavedPostsEnabled } from '../contexts/SavedPostsEnabledContext'
+import { useSportsEnabled } from '../contexts/SportsEnabledContext'
 import { useWeatherEnabled } from '../contexts/WeatherEnabledContext'
 import type { WidgetLayout } from '../../../shared/ipc-types'
 import { cn } from '../lib/utils'
@@ -49,6 +50,10 @@ const MODULE_META: Record<string, { description: string; icon: React.ReactNode }
   weather: {
     description: 'Current conditions plus forecast detail for your saved locations.',
     icon: <CloudSun className="h-7 w-7 text-sky-500" />
+  },
+  sports: {
+    description: 'Today\'s schedule plus your tracked teams for supported sports.',
+    icon: <Trophy className="h-7 w-7 text-amber-600" />
   }
 }
 
@@ -63,6 +68,7 @@ export function AddWidgetModal({ layout, onAdd, onClose }: AddWidgetModalProps):
 
   const { posts } = useRedditDigest()
   const { enabled: savedPostsEnabled } = useSavedPostsEnabled()
+  const { enabled: sportsEnabled } = useSportsEnabled()
   const { enabled: weatherEnabled } = useWeatherEnabled()
   const availableSubreddits = useMemo(
     () => [...new Set(posts.map((p) => p.subreddit))].sort(),
@@ -176,7 +182,12 @@ export function AddWidgetModal({ layout, onAdd, onClose }: AddWidgetModalProps):
         {/* Scrollable content */}
         <div className="flex-1 overflow-auto p-5">
           {phase === 'pick' ? (
-            <WidgetPicker onSelect={selectModule} savedPostsEnabled={savedPostsEnabled} weatherEnabled={weatherEnabled} />
+            <WidgetPicker
+              onSelect={selectModule}
+              savedPostsEnabled={savedPostsEnabled}
+              sportsEnabled={sportsEnabled}
+              weatherEnabled={weatherEnabled}
+            />
           ) : (
             <ConfigureForm
               moduleId={selectedModuleId!}
@@ -216,10 +227,12 @@ export function AddWidgetModal({ layout, onAdd, onClose }: AddWidgetModalProps):
 function WidgetPicker({
   onSelect,
   savedPostsEnabled,
+  sportsEnabled,
   weatherEnabled
 }: {
   onSelect: (id: string) => void
   savedPostsEnabled: boolean
+  sportsEnabled: boolean
   weatherEnabled: boolean
 }): React.ReactElement {
   return (
@@ -227,6 +240,9 @@ function WidgetPicker({
       {moduleRegistry.map((mod) => {
         // Skip saved_posts widget if feature is disabled
         if (mod.id === 'saved_posts' && !savedPostsEnabled) {
+          return null
+        }
+        if (mod.id === 'sports' && !sportsEnabled) {
           return null
         }
         if (mod.id === 'weather' && !weatherEnabled) {

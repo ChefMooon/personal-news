@@ -16,6 +16,20 @@ export const IPC = {
   WEATHER_SET_SETTINGS: 'weather:setSettings',
   WEATHER_GET_STATUS: 'weather:getStatus',
   WEATHER_UPDATED: 'weather:updated',
+  SPORTS_GET_TODAY_EVENTS: 'sports:getTodayEvents',
+  SPORTS_GET_TEAM_EVENTS: 'sports:getTeamEvents',
+  SPORTS_GET_TRACKED_TEAMS: 'sports:getTrackedTeams',
+  SPORTS_ADD_TEAM: 'sports:addTeam',
+  SPORTS_REMOVE_TEAM: 'sports:removeTeam',
+  SPORTS_SET_TEAM_ENABLED: 'sports:setTeamEnabled',
+  SPORTS_SET_TEAM_ORDER: 'sports:setTeamOrder',
+  SPORTS_GET_LEAGUES: 'sports:getLeagues',
+  SPORTS_ADD_LEAGUE: 'sports:addLeague',
+  SPORTS_REMOVE_LEAGUE: 'sports:removeLeague',
+  SPORTS_SEARCH_TEAMS: 'sports:searchTeams',
+  SPORTS_REFRESH: 'sports:refresh',
+  SPORTS_GET_STATUS: 'sports:getStatus',
+  SPORTS_DATA_UPDATED: 'sports:dataUpdated',
   YOUTUBE_GET_CHANNELS: 'youtube:getChannels',
   YOUTUBE_GET_VIDEOS: 'youtube:getVideos',
   YOUTUBE_GET_VIDEOS_FILTERED: 'youtube:getVideosFiltered',
@@ -446,6 +460,78 @@ export interface WeatherViewConfig {
   showHumidity: boolean
   showFeelsLike: boolean
   showSunTimes: boolean
+}
+
+export interface SportEvent {
+  eventId: string
+  leagueId: string
+  sport: string
+  homeTeamId: string | null
+  awayTeamId: string | null
+  homeTeam: string
+  awayTeam: string
+  homeScore: string | null
+  awayScore: string | null
+  eventDate: string
+  eventTime: string | null
+  status: string | null
+  venue: string | null
+}
+
+export interface TrackedTeam {
+  teamId: string
+  leagueId: string
+  sport: string
+  name: string
+  shortName: string | null
+  badgeUrl: string | null
+  enabled: boolean
+  sortOrder: number
+}
+
+export interface SportLeague {
+  leagueId: string
+  sport: string
+  name: string
+  country: string | null
+  logoUrl: string | null
+  enabled: boolean
+  sortOrder: number
+}
+
+export interface TeamSearchResult {
+  teamId: string
+  name: string
+  leagueId: string
+  leagueName: string
+  sport: string
+  badgeUrl: string | null
+}
+
+export interface SportsViewConfig {
+  sport: string
+  viewMode: 'all_games' | 'my_teams'
+  showVenue: boolean
+  showTime: boolean
+}
+
+export interface SportTeamEvents {
+  last: SportEvent[]
+  next: SportEvent[]
+}
+
+export interface SportSyncStatus {
+  sport: string
+  lastFetchedAt: number | null
+  fetchDate: string | null
+  enabledLeagueCount: number
+  trackedTeamCount: number
+}
+
+export interface SportsDataUpdatedEvent {
+  sport: string
+  ok: boolean
+  error: string | null
 }
 
 export interface ChannelMediaOverrides {

@@ -24,18 +24,21 @@ import { WidgetInstanceContext } from '../contexts/WidgetInstanceContext'
 import { AddWidgetModal, type AddWidgetConfig } from '../components/AddWidgetModal'
 import { useSavedPostsEnabled } from '../contexts/SavedPostsEnabledContext'
 import { useRedditDigestEnabled } from '../contexts/RedditDigestEnabledContext'
+import { useSportsEnabled } from '../contexts/SportsEnabledContext'
 import { useWeatherEnabled } from '../contexts/WeatherEnabledContext'
 
 // Import modules to trigger registration
 import '../modules/youtube/YouTubeWidget'
 import '../modules/reddit/RedditDigestWidget'
 import '../modules/saved-posts/SavedPostsWidget'
+import '../modules/sports'
 import '../modules/weather/WeatherWidget'
 
 export default function Dashboard(): React.ReactElement {
   const { layout, setLayout, loading } = useWidgetLayout()
   const { enabled: redditDigestEnabled } = useRedditDigestEnabled()
   const { enabled: savedPostsEnabled } = useSavedPostsEnabled()
+  const { enabled: sportsEnabled } = useSportsEnabled()
   const { enabled: weatherEnabled } = useWeatherEnabled()
   const [editMode, setEditMode] = useState(false)
   const [showAddModal, setShowAddModal] = useState(false)
@@ -217,6 +220,7 @@ export default function Dashboard(): React.ReactElement {
               if (!instance) return null
               if (instance.moduleId === 'reddit_digest' && !redditDigestEnabled) return null
               if (instance.moduleId === 'saved_posts' && !savedPostsEnabled) return null
+              if (instance.moduleId === 'sports' && !sportsEnabled) return null
               if (instance.moduleId === 'weather' && !weatherEnabled) return null
               const mod = getModule(instance.moduleId)
               if (!mod) return null

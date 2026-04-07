@@ -9,6 +9,7 @@ import ScriptManager from './routes/ScriptManager'
 import Settings from './routes/Settings'
 import { RedditDigestEnabledProvider } from './contexts/RedditDigestEnabledContext'
 import { SavedPostsEnabledProvider } from './contexts/SavedPostsEnabledContext'
+import { SportsEnabledProvider } from './contexts/SportsEnabledContext'
 import { WeatherEnabledProvider } from './contexts/WeatherEnabledContext'
 import { Toaster, toast } from 'sonner'
 import { IPC, type IpcMutationResult, type UpdateStatusEvent } from '../../shared/ipc-types'
@@ -96,27 +97,29 @@ export default function App(): React.ReactElement {
   return (
     <RedditDigestEnabledProvider>
       <SavedPostsEnabledProvider>
-        <WeatherEnabledProvider>
-          <div className="flex h-screen w-screen overflow-hidden bg-background">
-            <Sidebar />
-            <main className="flex-1 overflow-auto">
-              <Routes>
-                <Route path="/" element={<Dashboard />} />
-                <Route path="/reddit-digest" element={<RedditDigest />} />
-                <Route path="/saved-posts" element={<SavedPosts />} />
-                <Route path="/youtube" element={<YouTubePage />} />
-                <Route path="/scripts" element={<ScriptManager />} />
-                <Route path="/settings" element={<Settings />} />
-              </Routes>
-            </main>
-          </div>
-          <Toaster
-            position="bottom-right"
-            richColors
-            containerAriaLabel="Notifications"
-            toastOptions={{ closeButtonAriaLabel: 'Close notification' }}
-          />
-        </WeatherEnabledProvider>
+        <SportsEnabledProvider>
+          <WeatherEnabledProvider>
+            <div className="flex h-screen w-screen overflow-hidden bg-background">
+              <Sidebar />
+              <main className="flex-1 overflow-auto">
+                <Routes>
+                  <Route path="/" element={<Dashboard />} />
+                  <Route path="/reddit-digest" element={<RedditDigest />} />
+                  <Route path="/saved-posts" element={<SavedPosts />} />
+                  <Route path="/youtube" element={<YouTubePage />} />
+                  <Route path="/scripts" element={<ScriptManager />} />
+                  <Route path="/settings" element={<Settings />} />
+                </Routes>
+              </main>
+            </div>
+            <Toaster
+              position="bottom-right"
+              richColors
+              containerAriaLabel="Notifications"
+              toastOptions={{ closeButtonAriaLabel: 'Close notification' }}
+            />
+          </WeatherEnabledProvider>
+        </SportsEnabledProvider>
       </SavedPostsEnabledProvider>
     </RedditDigestEnabledProvider>
   )

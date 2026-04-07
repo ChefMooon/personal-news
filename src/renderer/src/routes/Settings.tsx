@@ -9,6 +9,7 @@ import { useTheme } from '../providers/ThemeProvider'
 import { useYouTubeChannels } from '../hooks/useYouTubeChannels'
 import { useRedditDigestEnabled } from '../contexts/RedditDigestEnabledContext'
 import { useSavedPostsEnabled } from '../contexts/SavedPostsEnabledContext'
+import { useSportsEnabled } from '../contexts/SportsEnabledContext'
 import { useWeatherEnabled } from '../contexts/WeatherEnabledContext'
 import { Download, Eye, EyeOff, ExternalLink, Pencil, Plus, Trash2, Upload } from 'lucide-react'
 import { ThemeCreatorDialog, readThemeTokensFromDocument } from '../components/ThemeCreatorDialog'
@@ -43,6 +44,7 @@ import {
 } from '../components/ui/alert-dialog'
 import { NtfyOnboardingWizard } from '../modules/saved-posts/NtfyOnboardingWizard'
 import { TagManagementModal } from '../modules/saved-posts/TagManagementModal'
+import { SportsSettingsTab } from '../modules/sports/SportsSettingsTab'
 import { WeatherSettingsTab } from '../modules/weather/WeatherSettingsTab'
 
 function YouTubeTab(): React.ReactElement {
@@ -1042,6 +1044,7 @@ function RedditDigestTab(): React.ReactElement {
 function GeneralTab(): React.ReactElement {
   const { enabled, setEnabled } = useRedditDigestEnabled()
   const { enabled: savedPostsEnabled, setEnabled: setSavedPostsEnabled } = useSavedPostsEnabled()
+  const { enabled: sportsEnabled, setEnabled: setSportsEnabled } = useSportsEnabled()
   const { enabled: weatherEnabled, setEnabled: setWeatherEnabled } = useWeatherEnabled()
   const [closeToTray, setCloseToTray] = useState(true)
   const [startMinimized, setStartMinimized] = useState(false)
@@ -1236,6 +1239,17 @@ function GeneralTab(): React.ReactElement {
             <div className="flex items-center justify-between rounded-md border px-3 py-2 max-w-sm">
               <span className="text-sm">Enable Saved Posts</span>
               <Switch checked={savedPostsEnabled} onCheckedChange={setSavedPostsEnabled} aria-label="Enable Saved Posts" />
+            </div>
+          </div>
+
+          <div className="rounded-md border px-3 py-2">
+            <p className="text-sm font-medium">Sports</p>
+            <p className="text-xs text-muted-foreground mb-3">
+              Enable or disable the Sports feature. When disabled, the dashboard widget and settings tab are hidden.
+            </p>
+            <div className="flex items-center justify-between rounded-md border px-3 py-2 max-w-sm">
+              <span className="text-sm">Enable Sports</span>
+              <Switch checked={sportsEnabled} onCheckedChange={setSportsEnabled} aria-label="Enable Sports" />
             </div>
           </div>
 
@@ -2108,6 +2122,7 @@ export default function Settings(): React.ReactElement {
   const [searchParams] = useSearchParams()
   const { enabled: redditDigestEnabled } = useRedditDigestEnabled()
   const { enabled: savedPostsEnabled } = useSavedPostsEnabled()
+  const { enabled: sportsEnabled } = useSportsEnabled()
   const { enabled: weatherEnabled } = useWeatherEnabled()
   const requestedTab = searchParams.get('tab')
   const selectedTab =
@@ -2123,6 +2138,7 @@ export default function Settings(): React.ReactElement {
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
           <TabsTrigger value="youtube">YouTube</TabsTrigger>
+          {sportsEnabled && <TabsTrigger value="sports">Sports</TabsTrigger>}
           {weatherEnabled && <TabsTrigger value="weather">Weather</TabsTrigger>}
           {redditDigestEnabled && <TabsTrigger value="reddit-digest">Reddit Digest</TabsTrigger>}
           {savedPostsEnabled && <TabsTrigger value="saved-posts">Saved Posts</TabsTrigger>}
@@ -2138,6 +2154,11 @@ export default function Settings(): React.ReactElement {
         <TabsContent value="youtube" className="mt-4">
           <YouTubeTab />
         </TabsContent>
+        {sportsEnabled && (
+          <TabsContent value="sports" className="mt-4">
+            <SportsSettingsTab />
+          </TabsContent>
+        )}
         {weatherEnabled && (
           <TabsContent value="weather" className="mt-4">
             <WeatherSettingsTab />
