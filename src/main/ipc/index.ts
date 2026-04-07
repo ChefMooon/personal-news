@@ -2325,6 +2325,7 @@ export function registerIpcHandlers(): void {
       if ((result.changes as number) === 0) {
         return { ok: false, error: 'Channel not found.' }
       }
+      emitYoutubeUpdated()
       return { ok: true, error: null }
     }
   )
