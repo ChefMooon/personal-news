@@ -8,11 +8,16 @@
   <ellipse cx="64" cy="64" rx="28" ry="40" fill="none" stroke="#3b82f6" stroke-width="1.2" opacity="0.4"/>
   <circle cx="64" cy="64" r="40" fill="none" stroke="#60a5fa" stroke-width="2.5"/>
   <ellipse cx="52" cy="50" rx="13" ry="8" fill="white" opacity="0.13" transform="rotate(-20 52 50)"/>
+  <!-- Badge -->
   <circle cx="99" cy="99" r="21" fill="#0f172a" opacity="0.45"/>
   <circle cx="99" cy="99" r="19" fill="#1d4ed8"/>
+  <!-- Bell body -->
   <path d="M 89 106 L 90 94 Q 90 86 99 86 Q 108 86 108 94 L 109 106 Z" fill="#ffffff"/>
+  <!-- Bell rim (flat base) -->
   <rect x="87" y="106" width="24" height="3.5" rx="1.75" fill="#ffffff"/>
+  <!-- Clapper -->
   <circle cx="99" cy="112" r="3" fill="#ffffff"/>
+  <!-- Small notch at top (hook) -->
   <rect x="97" y="83" width="4" height="4" rx="2" fill="#ffffff" opacity="0.8"/>
   <defs>
     <radialGradient id="g" cx="38%" cy="34%" r="70%">
