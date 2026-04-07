@@ -132,10 +132,13 @@ This separation means:
 
 The bundled Reddit digest script:
 - Accepts a list of subreddits and a time window (default: `week`) as configuration.
+- Supports one-off current-week runs for a supplied subreddit subset when the user adds a new subreddit in Settings.
 - Buckets each ingest run under a `week_start_date` derived from the user's configured week-start day (`Sunday` or `Monday`).
 - Uses the Reddit public JSON API (`https://www.reddit.com/r/{subreddit}/top.json?t=week&limit=25`) — no OAuth required for public subreddits.
 - Writes results to the `reddit_digest_posts` table.
 - Is idempotent within a week: re-running during the same week updates the same `(post_id, week_start_date)` row instead of duplicating it.
+
+When a subreddit is added in Settings, the app saves it immediately and then starts a background current-week sync for that subreddit so the user does not need to wait for the next scheduled weekly run.
 
 This means the same Reddit post can appear in multiple weekly snapshots if it remains a top post across multiple weeks.
 

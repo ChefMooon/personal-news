@@ -36,6 +36,7 @@ export const IPC = {
   REDDIT_RENAME_TAG: 'reddit:renameTag',
   REDDIT_DELETE_TAG: 'reddit:deleteTag',
   REDDIT_VALIDATE_DIGEST_SUBREDDIT: 'reddit:validateDigestSubreddit',
+  REDDIT_SYNC_DIGEST_SUBREDDITS: 'reddit:syncDigestSubreddits',
   REDDIT_POLL_NTFY: 'reddit:pollNtfy',
   REDDIT_GET_NTFY_STALENESS: 'reddit:getNtfyStaleness',
   REDDIT_NTFY_INGEST_COMPLETE: 'reddit:ntfyIngestComplete',
@@ -229,7 +230,13 @@ export interface ScriptOutputChunk {
   text: string
 }
 
-export type ScriptRunTrigger = 'manual' | 'scheduled' | 'on_app_start' | 'catch_up' | 'startup_warning'
+export type ScriptRunTrigger =
+  | 'manual'
+  | 'scheduled'
+  | 'on_app_start'
+  | 'catch_up'
+  | 'startup_warning'
+  | 'reddit_add_sync'
 
 export interface ScriptRunCompleteEvent {
   kind: 'run_complete' | 'startup_warning'

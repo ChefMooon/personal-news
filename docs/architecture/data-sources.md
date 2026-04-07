@@ -399,7 +399,7 @@ Collects top posts for configured subreddits and writes a JSON payload to stdout
 ### 4.2 Configuration
 
 The script reads its configuration from two sources (in priority order):
-1. Command-line arguments: `--db-path`, `--time-window`, `--limit`, `--week-start`
+1. Command-line arguments: `--db-path`, `--time-window`, `--limit`, `--week-start`, optional `--subreddits`
 2. The `settings` table in the SQLite database at `--db-path`
 
 Required args:
@@ -409,6 +409,7 @@ Optional args:
 - `--time-window <week|month|all>`: Default `week`
 - `--limit <n>`: Posts per subreddit. Default `25`.
 - `--week-start <0|1>`: Week boundary used for snapshot bucketing. `0 = Sunday`, `1 = Monday` (default).
+- `--subreddits <comma,separated,list>`: Optional subreddit subset for one-off current-week syncs started after adding a subreddit in Settings.
 
 Required settings:
 - `reddit_digest_subreddits`: JSON array of subreddit names, e.g. `["programming", "rust"]`
@@ -432,10 +433,13 @@ print(json.dumps(payload))
 - Idempotent within a week: the Electron main process upserts on `(post_id, week_start_date)`.
 - Exits with code `0` on success, non-zero on failure.
 - Prints progress to stderr (visible in Script Manager live output) and reserves stdout for the final JSON payload.
+- If `--subreddits` is provided, the script runs only for that subset; otherwise it uses the full configured subreddit list from settings.
 
 ### 4.4 First-Run Registration
 
 When the user configures their first subreddit in Settings → Reddit Digest, the app automatically registers `reddit_digest.py` as a Script Manager entry with a default weekly schedule at `09:00` on Monday. The user can modify or delete this registration in the Script Manager.
+
+After any newly added subreddit is saved, the app also starts a one-off background run of the bundled script for that subreddit only. This uses the same ingest path and weekly bucket semantics as scheduled runs, but it does not modify the stored schedule.
 
 The app locates the bundled script via `process.resourcesPath/resources/scripts/reddit_digest.py`, with dev fallbacks to the repository `resources/scripts` path.
 

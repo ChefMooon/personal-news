@@ -41,6 +41,15 @@ def load_subreddits(conn: sqlite3.Connection) -> List[str]:
 	return results
 
 
+def parse_subreddits_arg(raw_value: str) -> List[str]:
+	results: List[str] = []
+	for value in raw_value.split(","):
+		normalized = value.strip().lower()
+		if normalized and normalized not in results:
+			results.append(normalized)
+	return results
+
+
 def fetch_top_posts(subreddit: str, time_window: str, limit: int) -> List[Dict[str, Any]]:
 	params = parse.urlencode({"t": time_window, "limit": str(limit)})
 	url = f"https://www.reddit.com/r/{subreddit}/top.json?{params}"
@@ -101,11 +110,12 @@ def main() -> int:
 	parser.add_argument("--time-window", default=DEFAULT_TIME_WINDOW, choices=["day", "week", "month", "year", "all"])
 	parser.add_argument("--limit", type=int, default=DEFAULT_LIMIT)
 	parser.add_argument("--week-start", type=int, default=DEFAULT_WEEK_START, choices=[0, 1])
+	parser.add_argument("--subreddits", help="Comma-separated subreddit subset for one-off syncs.")
 	args = parser.parse_args()
 
 	conn = sqlite3.connect(args.db_path)
 	try:
-		subreddits = load_subreddits(conn)
+		subreddits = parse_subreddits_arg(args.subreddits) if args.subreddits else load_subreddits(conn)
 		if not subreddits:
 			raise RuntimeError("No Reddit Digest subreddits are configured yet.")
 

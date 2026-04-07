@@ -54,6 +54,7 @@ import { applyNtfyPollInterval, triggerNtfyPoll } from '../sources/reddit/index'
 import {
   activeRuns,
   ensureBundledRedditDigestScript,
+  getScriptWithLastRun,
   refreshScriptSchedule,
   runScriptById,
   setScriptEmitters,
@@ -79,6 +80,17 @@ const xmlParser = new XMLParser({
 })
 const BUILT_IN_THEME_IDS = new Set(['system', 'light', 'dark'])
 const THEME_TOKEN_KEY_PATTERN = /^--[a-z0-9-]+$/i
+
+function normalizeDigestSubredditList(input: unknown): string[] {
+  if (!Array.isArray(input)) {
+    return []
+  }
+
+  return input
+    .filter((value): value is string => typeof value === 'string')
+    .map((value) => value.trim().toLowerCase())
+    .filter((value, index, values) => /^[a-z0-9_]+$/.test(value) && values.indexOf(value) === index)
+}
 
 function logYouTubeResolveDebug(_message: string, _payload?: Record<string, unknown>): void {
 }
@@ -1843,16 +1855,7 @@ export function registerIpcHandlers(): void {
     }
     const db = getDb()
     syncScriptsFromHomeDir(db)
-    const script = db
-      .prepare(
-        `SELECT s.*, r.started_at, r.finished_at, r.exit_code, 0 AS is_stale
-         FROM scripts s
-         LEFT JOIN script_runs r ON r.id = (
-           SELECT id FROM script_runs WHERE script_id = s.id ORDER BY started_at DESC LIMIT 1
-         )
-         WHERE s.id = ?`
-      )
-      .get(scriptId) as ScriptWithLastRun | undefined
+    const script = getScriptWithLastRun(db, scriptId)
     if (!script) {
       return { ok: false, error: `Script ${scriptId} not found.` }
     }
@@ -2249,6 +2252,47 @@ export function registerIpcHandlers(): void {
     }
   )
 
+  // reddit:syncDigestSubreddits
+  ipcMain.handle(
+    IPC.REDDIT_SYNC_DIGEST_SUBREDDITS,
+    async (_event, requestedSubreddits: unknown): Promise<IpcMutationResult> => {
+      const subreddits = normalizeDigestSubredditList(requestedSubreddits)
+      if (subreddits.length === 0) {
+        return { ok: false, error: 'Choose at least one valid subreddit to sync.' }
+      }
+
+      const db = getDb()
+      const scriptId = ensureBundledRedditDigestScript(db)
+      if (scriptId === null) {
+        return {
+          ok: false,
+          error: 'The bundled Reddit Digest script is unavailable, so the immediate sync could not start.'
+        }
+      }
+
+      if (activeRuns.has(scriptId)) {
+        return {
+          ok: false,
+          error: 'Reddit Digest is already running. Wait for the current run to finish, then try again.'
+        }
+      }
+
+      const script = getScriptWithLastRun(db, scriptId)
+      if (!script) {
+        return { ok: false, error: 'Reddit Digest script not found.' }
+      }
+
+      runScriptById(db, script, {
+        trigger: 'reddit_add_sync',
+        redditDigest: { subreddits }
+      }).catch((err: Error) => {
+        console.error(`[IPC] reddit:syncDigestSubreddits error for script ${scriptId}:`, err)
+      })
+
+      return { ok: true, error: null }
+    }
+  )
+
   // settings:clearYouTubeApiKey
   ipcMain.handle(IPC.SETTINGS_CLEAR_YOUTUBE_API_KEY, (): void => {
     deleteSetting(YOUTUBE_API_KEY_SETTING)
@@ -2298,16 +2342,16 @@ export function registerIpcHandlers(): void {
       try {
         setNotificationPreferences(prefs)
         return { ok: true, error: null }
-      } catch (err) {
+      } catch (error) {
         return {
           ok: false,
-          error: err instanceof Error ? err.message : 'Failed to save notification preferences.'
+          error:
+            error instanceof Error ? error.message : 'Failed to save notification preferences.'
         }
       }
     }
   )
 
-  // youtube:setChannelNotify
   ipcMain.handle(
     IPC.YOUTUBE_SET_CHANNEL_NOTIFY,
     (

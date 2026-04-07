@@ -148,6 +148,10 @@ function mapSchedulerTrigger(trigger: ScriptScheduleRunContext['trigger']): Scri
   return 'catch_up'
 }
 
+function shouldNotifyForTrigger(trigger: ScriptRunTrigger): boolean {
+  return trigger === 'scheduled' || trigger === 'on_app_start' || trigger === 'catch_up'
+}
+
 function getConfiguredDigestSubreddits(): string[] {
   const raw = getSetting(REDDIT_DIGEST_SUBREDDITS_SETTING)
   if (!raw) {
@@ -198,7 +202,26 @@ function getDatabasePath(db: Database.Database): string | null {
   return rows.find((row) => row.name === 'main')?.file ?? null
 }
 
-function buildExtraArgs(db: Database.Database, script: ScriptWithLastRun): string[] {
+interface RedditDigestRunOptions {
+  subreddits?: string[]
+}
+
+function normalizeDigestSubreddits(subreddits: string[] | undefined): string[] {
+  if (!subreddits) {
+    return []
+  }
+
+  return subreddits
+    .filter((value): value is string => typeof value === 'string')
+    .map((value) => value.trim().toLowerCase())
+    .filter((value, index, values) => /^[a-z0-9_]+$/.test(value) && values.indexOf(value) === index)
+}
+
+function buildExtraArgs(
+  db: Database.Database,
+  script: ScriptWithLastRun,
+  options?: RedditDigestRunOptions
+): string[] {
   if (!isBundledRedditDigestScript(script)) {
     return []
   }
@@ -210,8 +233,29 @@ function buildExtraArgs(db: Database.Database, script: ScriptWithLastRun): strin
 
   const weekStart = getSetting(REDDIT_DIGEST_WEEK_START_SETTING)
   const normalizedWeekStart = weekStart === '0' ? '0' : '1'
+  const args = ['--db-path', dbPath, '--week-start', normalizedWeekStart]
+  const normalizedSubreddits = normalizeDigestSubreddits(options?.subreddits)
+  if (normalizedSubreddits.length > 0) {
+    args.push('--subreddits', normalizedSubreddits.join(','))
+  }
 
-  return ['--db-path', dbPath, '--week-start', normalizedWeekStart]
+  return args
+}
+
+export function getScriptWithLastRun(
+  db: Database.Database,
+  scriptId: number
+): ScriptWithLastRun | undefined {
+  return db
+    .prepare(
+      `SELECT s.*, r.started_at, r.finished_at, r.exit_code, 0 AS is_stale
+       FROM scripts s
+       LEFT JOIN script_runs r ON r.id = (
+         SELECT id FROM script_runs WHERE script_id = s.id ORDER BY started_at DESC LIMIT 1
+       )
+       WHERE s.id = ?`
+    )
+    .get(scriptId) as ScriptWithLastRun | undefined
 }
 
 interface RedditDigestPayload {
@@ -514,13 +558,15 @@ export function syncScriptsFromHomeDir(db: Database.Database): void {
 export function runScriptById(
   db: Database.Database,
   script: ScriptWithLastRun,
-  trigger: ScriptRunTrigger = 'manual'
+  options?: { trigger?: ScriptRunTrigger; redditDigest?: RedditDigestRunOptions }
 ): Promise<void> {
+  const trigger = options?.trigger ?? 'manual'
+
   return runScript(
     db,
     script,
     {
-      extraArgs: buildExtraArgs(db, script),
+      extraArgs: buildExtraArgs(db, script, options?.redditDigest),
       persistFullStdout: isBundledRedditDigestScript(script)
     },
     (chunk) => emitOutput?.(chunk),
@@ -535,7 +581,7 @@ export function runScriptById(
     } finally {
       emitRunComplete?.(event)
       emitUpdated?.()
-      if (event.trigger !== 'manual' && event.kind === 'run_complete') {
+      if (shouldNotifyForTrigger(event.trigger) && event.kind === 'run_complete') {
         if (isBundledRedditDigestScript(script)) {
           notifyRedditDigest(event.severity, event.message)
         } else {
@@ -578,7 +624,7 @@ export const ScriptManagerModule: DataSourceModule = {
     syncScriptsFromHomeDir(db)
     scheduler.initialize(
       db,
-      (script, context) => runScriptById(db, script, mapSchedulerTrigger(context.trigger)),
+      (script, context) => runScriptById(db, script, { trigger: mapSchedulerTrigger(context.trigger) }),
       (warning) => {
         const event = buildStartupWarningEvent(warning)
         try {

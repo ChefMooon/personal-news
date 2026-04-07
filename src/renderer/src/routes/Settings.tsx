@@ -19,6 +19,7 @@ import {
   type YouTubeApiKeyStatus,
   type DigestWeekSummary,
   type NotificationPreferences,
+  type ScriptRunCompleteEvent,
   type ThemeRow,
   type UpdateStatusEvent
 } from '../../../shared/ipc-types'
@@ -670,7 +671,9 @@ function RedditDigestTab(): React.ReactElement {
   const [keepWeeks, setKeepWeeks] = useState('4')
   const [draft, setDraft] = useState('')
   const [saving, setSaving] = useState(false)
+  const [syncingSubreddit, setSyncingSubreddit] = useState<string | null>(null)
   const [pruning, setPruning] = useState(false)
+  const addDisabled = saving || syncingSubreddit !== null
 
   const load = (): void => {
     window.api
@@ -723,13 +726,36 @@ function RedditDigestTab(): React.ReactElement {
     load()
   }, [])
 
-  const persist = async (nextSubreddits: string[], successMessage: string): Promise<void> => {
+  useEffect(() => {
+    const unsubscribe = window.api.on(IPC.SCRIPTS_RUN_COMPLETE, (...args: unknown[]) => {
+      const event = args[0] as ScriptRunCompleteEvent
+      if (event.trigger !== 'reddit_add_sync' || event.kind !== 'run_complete') {
+        return
+      }
+
+      setSyncingSubreddit(null)
+      load()
+
+      if (event.severity === 'error') {
+        toast.error(`Subreddit saved, but the immediate sync failed: ${event.message}`)
+        return
+      }
+
+      toast.success(event.message)
+    })
+
+    return unsubscribe
+  }, [])
+
+  const persist = async (nextSubreddits: string[], successMessage: string): Promise<boolean> => {
     try {
       await window.api.invoke(IPC.SETTINGS_SET, 'reddit_digest_subreddits', JSON.stringify(nextSubreddits))
       setSubreddits(nextSubreddits)
       toast.success(successMessage)
+      return true
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to save Reddit Digest settings.')
+      return false
     }
   }
 
@@ -756,8 +782,37 @@ function RedditDigestTab(): React.ReactElement {
       }
 
       const next = [...subreddits, normalized].sort()
-      await persist(next, 'Subreddit added.')
+      const saved = await persist(next, `r/${normalized} added.`)
+      if (!saved) {
+        return
+      }
+
       setDraft('')
+
+      setSyncingSubreddit(normalized)
+      try {
+        const syncResult = (await window.api.invoke(
+          IPC.REDDIT_SYNC_DIGEST_SUBREDDITS,
+          [normalized]
+        )) as IpcMutationResult
+        if (!syncResult.ok) {
+          setSyncingSubreddit(null)
+          toast.error(
+            syncResult.error ??
+              `r/${normalized} was saved, but the immediate Reddit Digest sync could not start.`
+          )
+          return
+        }
+
+        toast.success(`Syncing r/${normalized} for the current week now.`)
+      } catch (err) {
+        setSyncingSubreddit(null)
+        toast.error(
+          err instanceof Error
+            ? `r/${normalized} was saved, but the immediate sync could not start: ${err.message}`
+            : `r/${normalized} was saved, but the immediate sync could not start.`
+        )
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to validate subreddit.')
     } finally {
@@ -877,21 +932,27 @@ function RedditDigestTab(): React.ReactElement {
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder="programming"
+            disabled={addDisabled}
             onKeyDown={(event) => {
               if (event.key !== 'Enter' || event.nativeEvent.isComposing) {
                 return
               }
               event.preventDefault()
-              if (!draft.trim() || saving) {
+              if (!draft.trim() || addDisabled) {
                 return
               }
               void addSubreddit()
             }}
           />
-          <Button variant="outline" onClick={() => void addSubreddit()} disabled={saving || draft.trim().length === 0}>
+          <Button variant="outline" onClick={() => void addSubreddit()} disabled={addDisabled || draft.trim().length === 0}>
             Add
           </Button>
         </div>
+        {syncingSubreddit ? (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Syncing r/{syncingSubreddit} for the current week in the background.
+          </p>
+        ) : null}
       </div>
 
       <div className="space-y-2">
@@ -901,7 +962,12 @@ function RedditDigestTab(): React.ReactElement {
           subreddits.map((subreddit) => (
             <div key={subreddit} className="flex items-center justify-between rounded-md border px-3 py-2">
               <span className="text-sm font-medium">r/{subreddit}</span>
-              <Button variant="ghost" size="sm" onClick={() => void removeSubreddit(subreddit)} disabled={saving}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => void removeSubreddit(subreddit)}
+                disabled={saving || syncingSubreddit !== null}
+              >
                 Remove
               </Button>
             </div>
