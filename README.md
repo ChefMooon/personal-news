@@ -9,6 +9,7 @@ An Electron desktop application that brings YouTube, Reddit, saved links, and ma
 - **Reddit Digest** — Weekly top posts from your favorite subreddits
 - **Saved Posts** — Save Reddit, X/Twitter, Bluesky, and other links from mobile via ntfy.sh and review them in the dashboard
 - **Script Manager** — Run Python scripts manually or on a schedule; view output and run history
+- **Weather** — Track current conditions and forecasts for saved locations with per-widget display settings and threshold-based bad-weather alerts
 - **Notifications and Tray** — Optional desktop notifications plus configurable close-to-tray and minimize-to-tray behavior
 - **Drag-and-Drop Layout** — Customize your dashboard by reordering widgets
 - **Local-First** — All data is stored locally; no cloud sync or external accounts required (except API keys for data sources)
@@ -32,7 +33,8 @@ An Electron desktop application that brings YouTube, Reddit, saved links, and ma
 1. **YouTube** — Enter your YouTube Data API v3 key, then add channel names or URLs
 2. **Reddit** — Add subreddit names (e.g., `python`, `learnprogramming`)
 3. **Saved Posts** — Use the in-app ntfy.sh setup flow to send Reddit posts or other links from your phone into the app
-4. **Scripts** (optional) — Register Python scripts to run on a schedule or manually
+4. **Weather** (optional) — Add saved locations, set refresh frequency, and configure threshold-based alerts
+5. **Scripts** (optional) — Register Python scripts to run on a schedule or manually
 
 Once configured, your dashboard will populate with content from all enabled sources.
 
@@ -52,6 +54,7 @@ All settings are stored locally in the app. To reconfigure:
 - **YouTube Settings** → Enable/disable individual channels, adjust RSS polling interval
 - **Reddit Digest** → Manage tracked subreddits, week start day, and stored digest records
 - **Saved Posts Settings** → Manage your ntfy.sh topic and optional custom server URL
+- **Weather Settings** → Manage saved locations, refresh interval, units, and alert thresholds
 - **Script Manager** → Register scripts, adjust schedule intervals, view run history
 
 ## Troubleshooting

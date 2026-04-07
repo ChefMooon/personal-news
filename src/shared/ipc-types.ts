@@ -6,6 +6,16 @@ export const IPC = {
   UPDATES_GET_STATUS: 'updates:getStatus',
   UPDATES_CHECK_FOR_UPDATES: 'updates:checkForUpdates',
   UPDATES_INSTALL_UPDATE: 'updates:installUpdate',
+  WEATHER_SEARCH_LOCATIONS: 'weather:searchLocations',
+  WEATHER_GET_LOCATIONS: 'weather:getLocations',
+  WEATHER_SAVE_LOCATION: 'weather:saveLocation',
+  WEATHER_REMOVE_LOCATION: 'weather:removeLocation',
+  WEATHER_GET_SNAPSHOT: 'weather:getSnapshot',
+  WEATHER_REFRESH: 'weather:refresh',
+  WEATHER_GET_SETTINGS: 'weather:getSettings',
+  WEATHER_SET_SETTINGS: 'weather:setSettings',
+  WEATHER_GET_STATUS: 'weather:getStatus',
+  WEATHER_UPDATED: 'weather:updated',
   YOUTUBE_GET_CHANNELS: 'youtube:getChannels',
   YOUTUBE_GET_VIDEOS: 'youtube:getVideos',
   YOUTUBE_GET_VIDEOS_FILTERED: 'youtube:getVideosFiltered',
@@ -95,6 +105,9 @@ export interface YtChannel {
 
 export interface NotificationPreferences {
   desktopNotificationsEnabled: boolean
+  weather: {
+    badWeather: boolean
+  }
   youtube: {
     newVideo: boolean
     liveStart: boolean
@@ -320,6 +333,119 @@ export interface ThemeImportResult extends IpcMutationResult {
 export interface YouTubeApiKeyStatus {
   isSet: boolean
   suffix: string | null
+}
+
+export interface WeatherLocation {
+  id: string
+  name: string
+  admin1: string | null
+  country: string | null
+  countryCode: string | null
+  latitude: number
+  longitude: number
+  timezone: string
+  createdAt: number
+  lastFetchedAt: number | null
+}
+
+export interface WeatherSearchResult {
+  id: string
+  name: string
+  admin1: string | null
+  country: string | null
+  countryCode: string | null
+  latitude: number
+  longitude: number
+  timezone: string
+}
+
+export interface WeatherCurrentConditions {
+  time: number
+  temperature: number | null
+  apparentTemperature: number | null
+  relativeHumidity: number | null
+  precipitation: number | null
+  weatherCode: number | null
+  isDay: boolean
+  windSpeed: number | null
+  windGusts: number | null
+}
+
+export interface WeatherHourlyPoint {
+  time: number
+  temperature: number | null
+  precipitationProbability: number | null
+  weatherCode: number | null
+  windSpeed: number | null
+  relativeHumidity: number | null
+}
+
+export interface WeatherDailyPoint {
+  date: string
+  weatherCode: number | null
+  tempMin: number | null
+  tempMax: number | null
+  precipitationSum: number | null
+  snowfallSum: number | null
+  precipitationProbabilityMax: number | null
+  windSpeedMax: number | null
+  sunrise: number | null
+  sunset: number | null
+}
+
+export interface WeatherAlert {
+  id: string
+  kind: 'rain' | 'snow' | 'wind' | 'freeze' | 'heat'
+  severity: 'info' | 'warning' | 'error'
+  title: string
+  message: string
+}
+
+export interface WeatherSnapshot {
+  location: WeatherLocation
+  fetchedAt: number | null
+  stale: boolean
+  current: WeatherCurrentConditions | null
+  hourly: WeatherHourlyPoint[]
+  daily: WeatherDailyPoint[]
+  alerts: WeatherAlert[]
+}
+
+export interface WeatherAlertThresholds {
+  rainMm: number
+  snowCm: number
+  windKph: number
+  freezeTempC: number
+  heatTempC: number
+}
+
+export interface WeatherSettings {
+  pollIntervalMinutes: number
+  defaultLocationId: string | null
+  temperatureUnit: 'celsius' | 'fahrenheit'
+  windSpeedUnit: 'kmh' | 'mph' | 'ms'
+  precipitationUnit: 'mm' | 'inch'
+  timeFormat: 'system' | '12h' | '24h'
+  showAlertsInWidgets: boolean
+  thresholds: WeatherAlertThresholds
+}
+
+export interface WeatherStatus {
+  locationCount: number
+  lastFetchedAt: number | null
+  staleLocationCount: number
+}
+
+export interface WeatherViewConfig {
+  locationId: string | null
+  detailLevel: 'summary' | 'standard' | 'detailed'
+  displayMode: 'current' | 'current_hourly' | 'current_daily'
+  showAlerts: boolean
+  showPrecipitation: boolean
+  showWind: boolean
+  showHumidity: boolean
+  showFeelsLike: boolean
+  showSunTimes: boolean
 }
 
 export interface ChannelMediaOverrides {

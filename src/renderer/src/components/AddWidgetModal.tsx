@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { X, ArrowLeft, Plus, Youtube, Newspaper, Bookmark } from 'lucide-react'
+import { X, ArrowLeft, Plus, Youtube, Newspaper, Bookmark, CloudSun } from 'lucide-react'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
 import {
@@ -12,6 +12,7 @@ import {
 import { moduleRegistry } from '../modules/registry'
 import { useRedditDigest } from '../hooks/useRedditDigest'
 import { useSavedPostsEnabled } from '../contexts/SavedPostsEnabledContext'
+import { useWeatherEnabled } from '../contexts/WeatherEnabledContext'
 import type { WidgetLayout } from '../../../shared/ipc-types'
 import { cn } from '../lib/utils'
 
@@ -44,6 +45,10 @@ const MODULE_META: Record<string, { description: string; icon: React.ReactNode }
   saved_posts: {
     description: 'Posts saved from Reddit via your ntfy mobile flow.',
     icon: <Bookmark className="h-7 w-7 text-primary" />
+  },
+  weather: {
+    description: 'Current conditions plus forecast detail for your saved locations.',
+    icon: <CloudSun className="h-7 w-7 text-sky-500" />
   }
 }
 
@@ -58,6 +63,7 @@ export function AddWidgetModal({ layout, onAdd, onClose }: AddWidgetModalProps):
 
   const { posts } = useRedditDigest()
   const { enabled: savedPostsEnabled } = useSavedPostsEnabled()
+  const { enabled: weatherEnabled } = useWeatherEnabled()
   const availableSubreddits = useMemo(
     () => [...new Set(posts.map((p) => p.subreddit))].sort(),
     [posts]
@@ -170,7 +176,7 @@ export function AddWidgetModal({ layout, onAdd, onClose }: AddWidgetModalProps):
         {/* Scrollable content */}
         <div className="flex-1 overflow-auto p-5">
           {phase === 'pick' ? (
-            <WidgetPicker onSelect={selectModule} savedPostsEnabled={savedPostsEnabled} />
+            <WidgetPicker onSelect={selectModule} savedPostsEnabled={savedPostsEnabled} weatherEnabled={weatherEnabled} />
           ) : (
             <ConfigureForm
               moduleId={selectedModuleId!}
@@ -207,12 +213,23 @@ export function AddWidgetModal({ layout, onAdd, onClose }: AddWidgetModalProps):
 
 // ─── Phase 1: Widget picker ───────────────────────────────────────────────────
 
-function WidgetPicker({ onSelect, savedPostsEnabled }: { onSelect: (id: string) => void; savedPostsEnabled: boolean }): React.ReactElement {
+function WidgetPicker({
+  onSelect,
+  savedPostsEnabled,
+  weatherEnabled
+}: {
+  onSelect: (id: string) => void
+  savedPostsEnabled: boolean
+  weatherEnabled: boolean
+}): React.ReactElement {
   return (
     <div className="grid grid-cols-1 gap-3">
       {moduleRegistry.map((mod) => {
         // Skip saved_posts widget if feature is disabled
         if (mod.id === 'saved_posts' && !savedPostsEnabled) {
+          return null
+        }
+        if (mod.id === 'weather' && !weatherEnabled) {
           return null
         }
         const meta = MODULE_META[mod.id]

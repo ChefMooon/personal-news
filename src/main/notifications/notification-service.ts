@@ -1,6 +1,6 @@
 import { BrowserWindow, Notification } from 'electron'
 import { getSetting, setSetting } from '../settings/store'
-import type { NotificationPreferences, ScriptRunTrigger } from '../../shared/ipc-types'
+import type { NotificationPreferences, ScriptRunTrigger, WeatherAlert } from '../../shared/ipc-types'
 
 const NOTIFICATION_PREFS_KEY = 'desktop_notification_prefs'
 
@@ -28,6 +28,7 @@ export function attachWindowListeners(mainWindow: BrowserWindow): void {
 
 const DEFAULT_PREFS: NotificationPreferences = {
   desktopNotificationsEnabled: true,
+  weather: { badWeather: true },
   youtube: { newVideo: true, liveStart: true },
   savedPosts: { syncSuccess: true },
   redditDigest: { runSuccess: true, runFailure: true },
@@ -45,6 +46,7 @@ export function getNotificationPreferences(): NotificationPreferences {
       desktopNotificationsEnabled:
         parsed.desktopNotificationsEnabled ??
         DEFAULT_PREFS.desktopNotificationsEnabled,
+      weather: { ...DEFAULT_PREFS.weather, ...parsed.weather },
       youtube: { ...DEFAULT_PREFS.youtube, ...parsed.youtube },
       savedPosts: { ...DEFAULT_PREFS.savedPosts, ...parsed.savedPosts },
       redditDigest: { ...DEFAULT_PREFS.redditDigest, ...parsed.redditDigest },
@@ -144,6 +146,20 @@ export function notifySavedPostsSync(postsIngested: number): void {
 
   const label = postsIngested === 1 ? '1 new saved post' : `${postsIngested} new saved posts`
   show('Saved Posts Synced', `Ingested ${label} from ntfy.sh.`)
+}
+
+export function notifyWeatherAlerts(locationName: string, alerts: WeatherAlert[]): void {
+  if (!canNotify()) return
+  const prefs = getNotificationPreferences()
+  if (!prefs.weather.badWeather) return
+  if (alerts.length === 0) return
+
+  if (alerts.length === 1) {
+    show(alerts[0].title, `${locationName}: ${alerts[0].message}`)
+    return
+  }
+
+  show('Weather Alert Summary', `${locationName}: ${alerts.length} active weather alerts.`)
 }
 
 /**

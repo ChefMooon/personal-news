@@ -40,7 +40,8 @@ export function openDatabase(): Database.Database {
 
 function runMigrations(database: Database.Database): void {
   const migrationFiles: Record<number, string> = {
-    1: '001_initial.sql'
+    1: '001_initial.sql',
+    2: '002_weather.sql'
   }
 
   // Ensure meta table exists first
@@ -95,7 +96,47 @@ function runMigrations(database: Database.Database): void {
     nextVersion += 1
   }
 
+  const compatibilityMigrations: Array<{
+    name: string
+    file: string
+    shouldApply: (db: Database.Database) => boolean
+  }> = [
+    {
+      name: 'weather-schema',
+      file: '002_weather.sql',
+      shouldApply: (db) => !tableExists(db, 'weather_locations') || !tableExists(db, 'weather_cache')
+    }
+  ]
+
+  for (const migration of compatibilityMigrations) {
+    if (!migration.shouldApply(database)) {
+      continue
+    }
+
+    const migrationPath = resolveMigrationPath(migration.file)
+    const sql = readFileSync(migrationPath, 'utf-8')
+    database.exec(sql)
+    appliedAny = true
+    console.log(`[DB] Compatibility migration applied: ${migration.name}`)
+  }
+
   if (!appliedAny) {
     console.log(`[DB] Schema is up to date (version ${currentVersion})`)
   }
+}
+
+function resolveMigrationPath(migrationFile: string): string {
+  if (app.isPackaged) {
+    return join(process.resourcesPath, 'migrations', migrationFile)
+  }
+
+  return join(__dirname, `../../src/main/db/migrations/${migrationFile}`)
+}
+
+function tableExists(database: Database.Database, tableName: string): boolean {
+  const row = database
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
+    .get(tableName) as { name: string } | undefined
+
+  return row != null
 }

@@ -20,6 +20,7 @@ import { registerModule, initializeAll, shutdownAll } from './sources/registry'
 import { YouTubeModule } from './sources/youtube/index'
 import { RedditModule } from './sources/reddit/index'
 import { ScriptManagerModule } from './sources/scripts/index'
+import { WeatherModule } from './sources/weather/index'
 import { attachWindowListeners } from './notifications/notification-service'
 import { getSetting, setSetting } from './settings/store'
 import { initializeAutoUpdates } from './updates/service'
@@ -542,6 +543,7 @@ app.whenReady().then(() => {
     registerModule(YouTubeModule)
     registerModule(RedditModule)
     registerModule(ScriptManagerModule)
+    registerModule(WeatherModule)
 
     initializeAll(db)
 

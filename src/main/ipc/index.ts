@@ -5,6 +5,11 @@ import { getDb } from '../db/database'
 import { deleteSetting, getSetting, setSetting } from '../settings/store'
 import { IPC } from '../../shared/ipc-types'
 import type {
+  WeatherSearchResult,
+  WeatherSettings,
+  WeatherStatus,
+  WeatherLocation,
+  WeatherSnapshot,
   YtChannel,
   YtVideo,
   DigestPost,
@@ -51,6 +56,18 @@ import {
   triggerYouTubePollNow
 } from '../sources/youtube/index'
 import { applyNtfyPollInterval, triggerNtfyPoll } from '../sources/reddit/index'
+import {
+  applyWeatherPollSettings,
+  deleteWeatherLocation,
+  getWeatherLocations,
+  getWeatherSettings,
+  getWeatherSnapshot,
+  getWeatherStatus,
+  saveWeatherLocation,
+  searchWeatherLocations,
+  triggerWeatherRefresh,
+  updateWeatherSettings
+} from '../sources/weather/index'
 import {
   activeRuns,
   ensureBundledRedditDigestScript,
@@ -2406,6 +2423,57 @@ export function registerIpcHandlers(): void {
     }
   )
 
+  ipcMain.handle(
+    IPC.WEATHER_SEARCH_LOCATIONS,
+    async (_event, query: string): Promise<WeatherSearchResult[]> => {
+      return searchWeatherLocations(query)
+    }
+  )
+
+  ipcMain.handle(IPC.WEATHER_GET_LOCATIONS, (): WeatherLocation[] => {
+    return getWeatherLocations()
+  })
+
+  ipcMain.handle(IPC.WEATHER_SAVE_LOCATION, (_event, location: WeatherSearchResult): WeatherLocation => {
+    return saveWeatherLocation(location)
+  })
+
+  ipcMain.handle(IPC.WEATHER_REMOVE_LOCATION, (_event, locationId: string): IpcMutationResult => {
+    return deleteWeatherLocation(locationId)
+  })
+
+  ipcMain.handle(IPC.WEATHER_GET_SNAPSHOT, (_event, locationId: string): WeatherSnapshot | null => {
+    return getWeatherSnapshot(locationId)
+  })
+
+  ipcMain.handle(
+    IPC.WEATHER_REFRESH,
+    async (_event, locationId?: string): Promise<IpcMutationResult & { refreshedCount: number }> => {
+      try {
+        const refreshedCount = await triggerWeatherRefresh(locationId)
+        return { ok: true, error: null, refreshedCount }
+      } catch (error) {
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : 'Failed to refresh weather data.',
+          refreshedCount: 0
+        }
+      }
+    }
+  )
+
+  ipcMain.handle(IPC.WEATHER_GET_SETTINGS, (): WeatherSettings => {
+    return getWeatherSettings()
+  })
+
+  ipcMain.handle(IPC.WEATHER_SET_SETTINGS, (_event, settings: WeatherSettings): WeatherSettings => {
+    return updateWeatherSettings(settings)
+  })
+
+  ipcMain.handle(IPC.WEATHER_GET_STATUS, (): WeatherStatus => {
+    return getWeatherStatus()
+  })
+
   // settings:get (generic)
   ipcMain.handle(IPC.SETTINGS_GET, (_event, key: string): string | null => {
     return getSetting(key)
@@ -2453,6 +2521,15 @@ export function registerIpcHandlers(): void {
       app.setLoginItemSettings({
         openAtLogin: value === '1' || value === 'true'
       })
+    }
+
+    if (key === 'weather_enabled') {
+      applyWeatherPollSettings()
+      if (value === 'true' || value === '1') {
+        void triggerWeatherRefresh().catch((error) => {
+          console.error('[Weather] Failed to refresh after enabling feature:', error)
+        })
+      }
     }
   })
 

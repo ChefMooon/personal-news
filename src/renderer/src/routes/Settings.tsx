@@ -9,6 +9,7 @@ import { useTheme } from '../providers/ThemeProvider'
 import { useYouTubeChannels } from '../hooks/useYouTubeChannels'
 import { useRedditDigestEnabled } from '../contexts/RedditDigestEnabledContext'
 import { useSavedPostsEnabled } from '../contexts/SavedPostsEnabledContext'
+import { useWeatherEnabled } from '../contexts/WeatherEnabledContext'
 import { Download, Eye, EyeOff, ExternalLink, Pencil, Plus, Trash2, Upload } from 'lucide-react'
 import { ThemeCreatorDialog, readThemeTokensFromDocument } from '../components/ThemeCreatorDialog'
 import {
@@ -42,6 +43,7 @@ import {
 } from '../components/ui/alert-dialog'
 import { NtfyOnboardingWizard } from '../modules/saved-posts/NtfyOnboardingWizard'
 import { TagManagementModal } from '../modules/saved-posts/TagManagementModal'
+import { WeatherSettingsTab } from '../modules/weather/WeatherSettingsTab'
 
 function YouTubeTab(): React.ReactElement {
   const { channels } = useYouTubeChannels()
@@ -1040,6 +1042,7 @@ function RedditDigestTab(): React.ReactElement {
 function GeneralTab(): React.ReactElement {
   const { enabled, setEnabled } = useRedditDigestEnabled()
   const { enabled: savedPostsEnabled, setEnabled: setSavedPostsEnabled } = useSavedPostsEnabled()
+  const { enabled: weatherEnabled, setEnabled: setWeatherEnabled } = useWeatherEnabled()
   const [closeToTray, setCloseToTray] = useState(true)
   const [startMinimized, setStartMinimized] = useState(false)
   const [minimizeToTray, setMinimizeToTray] = useState(false)
@@ -1233,6 +1236,17 @@ function GeneralTab(): React.ReactElement {
             <div className="flex items-center justify-between rounded-md border px-3 py-2 max-w-sm">
               <span className="text-sm">Enable Saved Posts</span>
               <Switch checked={savedPostsEnabled} onCheckedChange={setSavedPostsEnabled} aria-label="Enable Saved Posts" />
+            </div>
+          </div>
+
+          <div className="rounded-md border px-3 py-2">
+            <p className="text-sm font-medium">Weather</p>
+            <p className="text-xs text-muted-foreground mb-3">
+              Enable or disable the Weather feature. When disabled, the dashboard widget and settings tab are hidden.
+            </p>
+            <div className="flex items-center justify-between rounded-md border px-3 py-2 max-w-sm">
+              <span className="text-sm">Enable Weather</span>
+              <Switch checked={weatherEnabled} onCheckedChange={setWeatherEnabled} aria-label="Enable Weather" />
             </div>
           </div>
         </div>
@@ -1971,6 +1985,26 @@ function NotificationsTab(): React.ReactElement {
         {/* ── Saved Posts ──────────────────────────────────────────── */}
         <div className="space-y-2 mt-6 pt-4 border-t">
           <div>
+            <h3 className="text-sm font-medium">Weather</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Desktop notifications for threshold-based weather alerts on saved locations.
+            </p>
+          </div>
+          <NotifyRow
+            label="Bad weather alerts"
+            description="Notify when a saved location crosses your configured rain, snow, wind, freeze, or heat thresholds."
+            checked={prefs.weather.badWeather}
+            onCheckedChange={(checked) =>
+              void updatePrefs((p) => ({
+                ...p,
+                weather: { ...p.weather, badWeather: checked }
+              }))
+            }
+          />
+        </div>
+
+        <div className="space-y-2 mt-6 pt-4 border-t">
+          <div>
             <h3 className="text-sm font-medium">Saved Posts</h3>
             <p className="text-xs text-muted-foreground mt-0.5">
               Notifications for ntfy.sh sync activity. Requires a configured ntfy topic.
@@ -2074,6 +2108,7 @@ export default function Settings(): React.ReactElement {
   const [searchParams] = useSearchParams()
   const { enabled: redditDigestEnabled } = useRedditDigestEnabled()
   const { enabled: savedPostsEnabled } = useSavedPostsEnabled()
+  const { enabled: weatherEnabled } = useWeatherEnabled()
   const requestedTab = searchParams.get('tab')
   const selectedTab =
     requestedTab === 'features' || requestedTab === 'app-behavior'
@@ -2088,6 +2123,7 @@ export default function Settings(): React.ReactElement {
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
           <TabsTrigger value="youtube">YouTube</TabsTrigger>
+          {weatherEnabled && <TabsTrigger value="weather">Weather</TabsTrigger>}
           {redditDigestEnabled && <TabsTrigger value="reddit-digest">Reddit Digest</TabsTrigger>}
           {savedPostsEnabled && <TabsTrigger value="saved-posts">Saved Posts</TabsTrigger>}
           <TabsTrigger value="appearance">Appearance</TabsTrigger>
@@ -2102,6 +2138,11 @@ export default function Settings(): React.ReactElement {
         <TabsContent value="youtube" className="mt-4">
           <YouTubeTab />
         </TabsContent>
+        {weatherEnabled && (
+          <TabsContent value="weather" className="mt-4">
+            <WeatherSettingsTab />
+          </TabsContent>
+        )}
         {redditDigestEnabled && (
           <TabsContent value="reddit-digest" className="mt-4">
             <RedditDigestTab />
