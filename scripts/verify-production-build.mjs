@@ -19,8 +19,27 @@ const BETTER_SQLITE_NATIVE_PATH = path.join(
   'better_sqlite3.node'
 )
 const MIGRATIONS_DIR = path.join(RESOURCES_DIR, 'migrations')
+const SOURCE_MIGRATIONS_DIR = path.join(ROOT, 'src', 'main', 'db', 'migrations')
 const SMOKE_OUTPUT_PATH = path.join(DIST_DIR, 'smoke-test-report.json')
-const EXPECTED_SCHEMA_VERSION = 1
+
+function getExpectedMigrationFiles() {
+  return readdirSync(SOURCE_MIGRATIONS_DIR)
+    .filter((entry) => entry.endsWith('.sql'))
+    .sort((left, right) => left.localeCompare(right, undefined, { numeric: true }))
+}
+
+function getExpectedSchemaVersion() {
+  const migrationFiles = getExpectedMigrationFiles()
+  const versions = migrationFiles
+    .map((entry) => Number.parseInt(entry.split('_', 1)[0], 10))
+    .filter((value) => Number.isFinite(value))
+
+  if (versions.length === 0) {
+    throw new Error('No migration files were found under src/main/db/migrations.')
+  }
+
+  return Math.max(...versions)
+}
 
 function run(command, args) {
   const fullCommand = `${command} ${args.join(' ')}`
@@ -59,6 +78,7 @@ function verifySmokeReport() {
   assertPathExists(SMOKE_OUTPUT_PATH, 'Smoke test report missing.')
   const reportRaw = readFileSync(SMOKE_OUTPUT_PATH, 'utf-8')
   const report = JSON.parse(reportRaw)
+  const expectedSchemaVersion = getExpectedSchemaVersion()
 
   if (report.ok !== true) {
     throw new Error('Smoke report indicates failure.')
@@ -77,9 +97,9 @@ function verifySmokeReport() {
   }
 
   const schemaVersion = Number.parseInt(String(report.schemaVersion ?? ''), 10)
-  if (Number.isNaN(schemaVersion) || schemaVersion !== EXPECTED_SCHEMA_VERSION) {
+  if (Number.isNaN(schemaVersion) || schemaVersion !== expectedSchemaVersion) {
     throw new Error(
-      `Schema version check failed. Expected ${EXPECTED_SCHEMA_VERSION}, got ${String(report.schemaVersion)}.`
+      `Schema version check failed. Expected ${expectedSchemaVersion}, got ${String(report.schemaVersion)}.`
     )
   }
 }
@@ -88,7 +108,10 @@ function runPackagedSmokeTest() {
   console.log('\n> Running packaged smoke test')
   const smokeAppData = mkdtempSync(path.join(tmpdir(), 'personal-news-smoke-'))
   const smokeDbPath = path.join(smokeAppData, 'data.db')
+  const startedAt = Date.now()
   try {
+    rmSync(SMOKE_OUTPUT_PATH, { force: true })
+
     const result = spawnSync(EXE_PATH, ['--smoke-test', `--smoke-output=${SMOKE_OUTPUT_PATH}`], {
       cwd: WIN_UNPACKED_DIR,
       env: {
@@ -109,6 +132,14 @@ function runPackagedSmokeTest() {
       throw new Error(`Packaged smoke test failed (${result.status ?? 'unknown'}).`)
     }
 
+    assertPathExists(SMOKE_OUTPUT_PATH, 'Packaged smoke test did not write a smoke report.')
+    const reportRaw = readFileSync(SMOKE_OUTPUT_PATH, 'utf-8')
+    const report = JSON.parse(reportRaw)
+    const reportTimestamp = Date.parse(String(report.timestamp ?? ''))
+    if (Number.isNaN(reportTimestamp) || reportTimestamp < startedAt) {
+      throw new Error('Packaged smoke test report is stale or has an invalid timestamp.')
+    }
+
     verifySmokeReport()
   } finally {
     rmSync(smokeAppData, { recursive: true, force: true })
@@ -124,14 +155,13 @@ function verifyBuildOutputs() {
   assertPathExists(EXE_PATH, 'Packed app executable missing.')
   assertPathExists(APP_ASAR_PATH, 'app.asar missing from packed resources.')
   assertPathExists(MIGRATIONS_DIR, 'Bundled migrations directory missing.')
-  assertPathExists(
-    path.join(MIGRATIONS_DIR, '001_initial.sql'),
-    'Expected migration file 001_initial.sql missing from packaged resources.'
-  )
-  const bundledMigrationFiles = readdirSync(MIGRATIONS_DIR).filter((entry) => entry.endsWith('.sql'))
-  if (bundledMigrationFiles.length !== 1 || bundledMigrationFiles[0] !== '001_initial.sql') {
+  const expectedMigrationFiles = getExpectedMigrationFiles()
+  const bundledMigrationFiles = readdirSync(MIGRATIONS_DIR)
+    .filter((entry) => entry.endsWith('.sql'))
+    .sort((left, right) => left.localeCompare(right, undefined, { numeric: true }))
+  if (bundledMigrationFiles.join('|') !== expectedMigrationFiles.join('|')) {
     throw new Error(
-      `Bundled migrations check failed. Expected only 001_initial.sql, found: ${bundledMigrationFiles.join(', ')}`
+      `Bundled migrations check failed. Expected: ${expectedMigrationFiles.join(', ')}. Found: ${bundledMigrationFiles.join(', ')}`
     )
   }
   assertPathExists(

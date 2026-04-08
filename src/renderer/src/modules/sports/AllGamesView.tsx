@@ -3,10 +3,11 @@ import { Badge } from '../../components/ui/badge'
 import type { SportEvent, SportLeague } from '../../../../shared/ipc-types'
 import { getSportLabel } from '../../../../shared/sports'
 import { GameCard } from './GameCard'
+import { getLeagueLabel } from './league-display'
+import { TeamAvatar } from './TeamAvatar'
 import {
   getGamePhase,
   getGamePhaseBadgeClasses,
-  getGamePhaseHeadline,
   getGamePhaseLabel,
   isLiveStatus
 } from './utils'
@@ -44,12 +45,27 @@ function sortEvents(a: SportEvent, b: SportEvent): number {
   return a.homeTeam.localeCompare(b.homeTeam)
 }
 
-function renderGameLine(game: SportEvent): string {
-  if (getGamePhase(game) === 'finished') {
-    return `${game.awayTeam} ${game.awayScore ?? '—'} · ${game.homeTeam} ${game.homeScore ?? '—'}`
-  }
+function TeamLines({ game }: { game: SportEvent }): React.ReactElement {
+  const finished = getGamePhase(game) === 'finished'
 
-  return `${game.awayTeam} · ${game.homeTeam}`
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-2">
+        <TeamAvatar name={game.awayTeam} src={game.awayTeamBadgeUrl} className="h-7 w-7 rounded-full" fallbackClassName="text-[10px]" />
+        <span className="truncate text-sm font-medium">
+          {game.awayTeam}
+          {finished ? ` ${game.awayScore ?? '—'}` : ''}
+        </span>
+      </div>
+      <div className="flex items-center gap-2">
+        <TeamAvatar name={game.homeTeam} src={game.homeTeamBadgeUrl} className="h-7 w-7 rounded-full" fallbackClassName="text-[10px]" />
+        <span className="truncate text-sm font-medium">
+          {game.homeTeam}
+          {finished ? ` ${game.homeScore ?? '—'}` : ''}
+        </span>
+      </div>
+    </div>
+  )
 }
 
 function getTodayString(): string {
@@ -109,7 +125,7 @@ export function AllGamesView({
                 header={
                   <>
                     <div>
-                      <p className="text-sm font-medium">{renderGameLine(game)}</p>
+                      <TeamLines game={game} />
                       {showVenue && game.venue ? <p className="text-xs text-muted-foreground">{game.venue}</p> : null}
                       {showSportLabels ? <p className="text-xs text-muted-foreground">{getSportLabel(game.sport)}</p> : null}
                     </div>
@@ -136,7 +152,14 @@ export function AllGamesView({
         return (
         <section key={leagueKey} className="space-y-2">
           <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold">{league?.name ?? leagueEvents[0]?.leagueId ?? leagueKey}</h3>
+            <h3 className="text-sm font-semibold">
+              {getLeagueLabel({
+                sport: league?.sport ?? leagueEvents[0]?.sport ?? '',
+                leagueId: league?.leagueId ?? leagueEvents[0]?.leagueId ?? leagueKey,
+                leaguesById,
+                fallbackLabel: league?.name ?? null
+              })}
+            </h3>
             {showSportLabels ? <Badge variant="outline">{getSportLabel(league?.sport ?? leagueEvents[0]?.sport ?? '')}</Badge> : null}
             {league?.country ? (
               <span className="text-xs text-muted-foreground">{league.country}</span>
@@ -150,7 +173,7 @@ export function AllGamesView({
                 header={
                   <>
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{renderGameLine(game)}</p>
+                      <TeamLines game={game} />
                       {showVenue && game.venue ? <p className="text-xs text-muted-foreground">{game.venue}</p> : null}
                     </div>
                     <div className="shrink-0 text-right">

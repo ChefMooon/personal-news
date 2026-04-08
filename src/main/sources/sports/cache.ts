@@ -110,13 +110,17 @@ function mapEvent(row: EventRow): SportEvent {
 }
 
 function isFinishedStatus(status: string | null): boolean {
-  return Boolean(status && /(finished|final|completed|game over|ended|after penalties|after extra time)/i.test(status))
+  return Boolean(status && /(finished|final|completed|game over|ended|after penalties|after extra time|full time|\bft\b|\baet\b)/i.test(status))
 }
 
 function eventSortValue(event: SportEvent): number {
   const time = event.eventTime ? `${event.eventTime}:00` : '12:00:00'
   const value = Date.parse(`${event.eventDate}T${time}Z`)
   return Number.isNaN(value) ? 0 : value
+}
+
+function getBadgeCacheKey(sport: string, leagueId: string): string {
+  return `badge:${sport}:${leagueId}`
 }
 
 export function getLocalDateString(date = new Date()): string {
@@ -432,6 +436,25 @@ export function upsertCacheMeta(db: Database.Database, sport: string, date: stri
   ).run(sport, date, fetchedAt)
 }
 
+export function getBadgeCacheMeta(
+  db: Database.Database,
+  sport: string,
+  leagueId: string,
+  date = 'badge-sync'
+): { fetchedAt: number } | null {
+  return getCacheMeta(db, getBadgeCacheKey(sport, leagueId), date)
+}
+
+export function upsertBadgeCacheMeta(
+  db: Database.Database,
+  sport: string,
+  leagueId: string,
+  fetchedAt: number,
+  date = 'badge-sync'
+): void {
+  upsertCacheMeta(db, getBadgeCacheKey(sport, leagueId), date, fetchedAt)
+}
+
 export function getSportSyncStatus(db: Database.Database, sport: string): SportSyncStatus {
   const meta = db
     .prepare(
@@ -443,6 +466,14 @@ export function getSportSyncStatus(db: Database.Database, sport: string): SportS
     )
     .get(sport) as { fetch_date: string; fetched_at: number } | undefined
 
+  const badgeMeta = db
+    .prepare(
+      `SELECT MAX(fetched_at) AS fetched_at
+         FROM sports_cache_meta
+        WHERE sport LIKE ? AND fetch_date = ?`
+    )
+    .get(`badge:${sport}:%`, 'badge-sync') as { fetched_at: number | null } | undefined
+
   const enabledLeagueCount = (db
     .prepare('SELECT COUNT(*) AS count FROM sports_leagues WHERE sport = ? AND enabled = 1')
     .get(sport) as { count: number }).count
@@ -453,6 +484,7 @@ export function getSportSyncStatus(db: Database.Database, sport: string): SportS
   return {
     sport,
     lastFetchedAt: meta?.fetched_at ?? null,
+    lastBadgeFetchedAt: badgeMeta?.fetched_at ?? null,
     fetchDate: meta?.fetch_date ?? null,
     enabledLeagueCount,
     trackedTeamCount

@@ -1,10 +1,11 @@
 import React, { useRef, useState } from 'react'
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, Bookmark, Terminal, Settings, ChevronLeft, ChevronRight, Youtube, Newspaper, Bell } from 'lucide-react'
+import { LayoutDashboard, Bookmark, Terminal, Settings, ChevronLeft, ChevronRight, Youtube, Newspaper, Bell, Trophy } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { useScripts } from '../hooks/useScripts'
 import { useRedditDigestEnabled } from '../contexts/RedditDigestEnabledContext'
 import { useSavedPostsEnabled } from '../contexts/SavedPostsEnabledContext'
+import { useSportsEnabled } from '../contexts/SportsEnabledContext'
 import { useScriptNotifications } from '../hooks/useScriptNotifications'
 import { NotificationsFlyout } from './NotificationsFlyout'
 
@@ -23,6 +24,7 @@ export function Sidebar(): React.ReactElement {
   const hasStaleScripts = scripts.some((s) => s.is_stale)
   const { enabled: redditDigestEnabled } = useRedditDigestEnabled()
   const { enabled: savedPostsEnabled } = useSavedPostsEnabled()
+  const { enabled: sportsEnabled } = useSportsEnabled()
   const { notifications, unreadCount, markAllRead, markRead } = useScriptNotifications()
 
   const navItems: NavItem[] = [
@@ -51,6 +53,15 @@ export function Sidebar(): React.ReactElement {
             to: '/saved-posts',
             label: 'Saved Posts',
             icon: <Bookmark className="h-5 w-5 shrink-0" />
+          }
+        ]
+      : []),
+    ...(sportsEnabled
+      ? [
+          {
+            to: '/sports',
+            label: 'Sports',
+            icon: <Trophy className="h-5 w-5 shrink-0" />
           }
         ]
       : []),

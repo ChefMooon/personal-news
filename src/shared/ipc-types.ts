@@ -30,7 +30,12 @@ export const IPC = {
   SPORTS_REMOVE_LEAGUE: 'sports:removeLeague',
   SPORTS_SEARCH_TEAMS: 'sports:searchTeams',
   SPORTS_REFRESH: 'sports:refresh',
+  SPORTS_REFRESH_BADGES: 'sports:refreshBadges',
   SPORTS_GET_STATUS: 'sports:getStatus',
+  SPORTS_GET_STANDINGS: 'sports:getStandings',
+  SPORTS_GET_EVENT_DETAILS: 'sports:getEventDetails',
+  SPORTS_SEARCH_RADIO_STATIONS: 'sports:searchRadioStations',
+  SPORTS_RESOLVE_RADIO_STREAM: 'sports:resolveRadioStream',
   SPORTS_DATA_UPDATED: 'sports:dataUpdated',
   YOUTUBE_GET_CHANNELS: 'youtube:getChannels',
   YOUTUBE_GET_VIDEOS: 'youtube:getVideos',
@@ -486,6 +491,42 @@ export interface SportEvent {
   venue: string | null
 }
 
+export interface SportStandingRow {
+  rank: number
+  teamId: string
+  teamName: string
+  played: number
+  win: number
+  loss: number
+  draw: number
+  points: number
+  goalsFor: number | null
+  goalsAgainst: number | null
+  goalDifference: number | null
+  form: string | null
+  description: string | null
+  leagueId: string
+  season: string
+}
+
+export interface SportEventDetail extends SportEvent {
+  progress: string | null
+  descriptionEN: string | null
+}
+
+export interface RadioStation {
+  stationuuid: string
+  name: string
+  urlResolved: string
+  playableStreamUrl: string | null
+  favicon: string | null
+  country: string | null
+  countryCode: string | null
+  codec: string | null
+  bitrate: number | null
+  tags: string[]
+}
+
 export interface TrackedTeam {
   teamId: string
   leagueId: string
@@ -531,6 +572,7 @@ export interface SportTeamEvents {
 export interface SportSyncStatus {
   sport: string
   lastFetchedAt: number | null
+  lastBadgeFetchedAt: number | null
   fetchDate: string | null
   enabledLeagueCount: number
   trackedTeamCount: number

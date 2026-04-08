@@ -1,7 +1,7 @@
 import type { SportEvent } from '../../../../shared/ipc-types'
 
 export function isFinishedStatus(status: string | null): boolean {
-  return Boolean(status && /(finished|final|completed|game over|ended|after penalties|after extra time)/i.test(status))
+  return Boolean(status && /(finished|final|completed|game over|ended|after penalties|after extra time|full time|\bft\b|\baet\b)/i.test(status))
 }
 
 export function hasResolvedScore(game: SportEvent | null): boolean {
@@ -18,7 +18,7 @@ export function isLiveStatus(status: string | null): boolean {
   return Boolean(
     status
       && !isFinishedStatus(status)
-      && /(live|in progress|half time|break|period|quarter|inning|set \d|overtime|extra time)/i.test(status)
+      && /(live|in progress|half time|break|period|quarter|inning|set \d|overtime|extra time|top \d|bottom \d|\b(?:1st|2nd|3rd|4th)\b|\d{1,3}(?:\+\d{1,2})?['’])/i.test(status)
   )
 }
 

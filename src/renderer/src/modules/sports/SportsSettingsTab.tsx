@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import { ArrowDown, ArrowUp, Plus, RefreshCcw, Search, Trash2 } from 'lucide-react'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
+import { SportOrderControl } from './SportOrderControl'
 import { Switch } from '../../components/ui/switch'
 import {
   Dialog,
@@ -28,7 +29,9 @@ import {
   type TeamSearchResult,
   type TrackedTeam
 } from '../../../../shared/ipc-types'
-import { DEFAULT_SPORT, SPORTS_OPTIONS, getSportLabel, type SupportedSport } from '../../../../shared/sports'
+import { DEFAULT_SPORT, SPORTS_OPTIONS, SUPPORTED_SPORTS, getSportLabel, type SupportedSport } from '../../../../shared/sports'
+import { getLeagueKey, getTrackedTeamMeta } from './league-display'
+import { SPORTS_PAGE_SPORT_ORDER_KEY, normalizeSportOrder } from './sport-order'
 
 function formatLastSynced(timestamp: number | null): string {
   if (timestamp == null) {
@@ -60,6 +63,7 @@ function formatLastSynced(timestamp: number | null): string {
 
 export function SportsSettingsTab(): React.ReactElement {
   const [selectedSport, setSelectedSport] = useState<SupportedSport>(DEFAULT_SPORT)
+  const [sportOrder, setSportOrder] = useState<SupportedSport[]>(SUPPORTED_SPORTS)
   const [status, setStatus] = useState<SportSyncStatus | null>(null)
   const [teams, setTeams] = useState<TrackedTeam[]>([])
   const [leagues, setLeagues] = useState<SportLeague[]>([])
@@ -67,10 +71,35 @@ export function SportsSettingsTab(): React.ReactElement {
   const [searchResults, setSearchResults] = useState<TeamSearchResult[]>([])
   const [searching, setSearching] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  const [refreshingBadges, setRefreshingBadges] = useState(false)
   const [sportsSettings, setSportsSettings] = useState<SportsSettings>({ pollIntervalMinutes: 5 })
   const [pollIntervalValue, setPollIntervalValue] = useState('5')
   const [savingPollInterval, setSavingPollInterval] = useState(false)
   const [browseLeaguesOpen, setBrowseLeaguesOpen] = useState(false)
+  const [orderReady, setOrderReady] = useState(false)
+
+  useEffect(() => {
+    window.api
+      .invoke(IPC.SETTINGS_GET, SPORTS_PAGE_SPORT_ORDER_KEY)
+      .then((value) => {
+        setSportOrder(normalizeSportOrder(value))
+        setOrderReady(true)
+      })
+      .catch((error) => {
+        toast.error(error instanceof Error ? error.message : 'Failed to load sport order.')
+        setOrderReady(true)
+      })
+  }, [])
+
+  useEffect(() => {
+    if (!orderReady) {
+      return
+    }
+
+    window.api.invoke(IPC.SETTINGS_SET, SPORTS_PAGE_SPORT_ORDER_KEY, JSON.stringify(sportOrder)).catch((error) => {
+      toast.error(error instanceof Error ? error.message : 'Failed to save sport order.')
+    })
+  }, [orderReady, sportOrder])
 
   const loadData = useCallback(async () => {
     try {
@@ -113,6 +142,10 @@ export function SportsSettingsTab(): React.ReactElement {
   }, [selectedSport])
 
   const trackedTeamIds = useMemo(() => new Set(teams.map((team) => team.teamId)), [teams])
+  const leaguesById = useMemo(
+    () => Object.fromEntries(leagues.map((league) => [getLeagueKey(league.sport, league.leagueId), league] as const)),
+    [leagues]
+  )
   const sportLabel = getSportLabel(selectedSport)
 
   const refreshNow = async (): Promise<void> => {
@@ -129,6 +162,23 @@ export function SportsSettingsTab(): React.ReactElement {
       toast.error(err instanceof Error ? err.message : 'Failed to refresh sports data.')
     } finally {
       setRefreshing(false)
+    }
+  }
+
+  const refreshBadgesNow = async (): Promise<void> => {
+    setRefreshingBadges(true)
+    try {
+      const result = (await window.api.invoke(IPC.SPORTS_REFRESH_BADGES, { sport: selectedSport })) as IpcMutationResult
+      if (!result.ok) {
+        toast.error(result.error ?? 'Failed to refresh sports badges and logos.')
+        return
+      }
+      toast.success('Sports badges and logos refresh complete.')
+      await loadData()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to refresh sports badges and logos.')
+    } finally {
+      setRefreshingBadges(false)
     }
   }
 
@@ -285,7 +335,7 @@ export function SportsSettingsTab(): React.ReactElement {
               <div key={league.leagueId} className="flex items-center justify-between gap-3 rounded-md border px-3 py-2">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium">{league.name}</p>
-                  <p className="truncate text-xs text-muted-foreground">{league.country ?? league.leagueId}</p>
+                  {league.country ? <p className="truncate text-xs text-muted-foreground">{league.country}</p> : null}
                 </div>
                 <Button variant={league.enabled ? 'secondary' : 'outline'} size="sm" onClick={() => void setLeagueEnabled(league, !league.enabled)}>
                   {league.enabled ? 'Enabled' : 'Enable'}
@@ -295,6 +345,14 @@ export function SportsSettingsTab(): React.ReactElement {
           </div>
         </DialogContent>
       </Dialog>
+
+      <div>
+        <h3 className="mb-1 text-sm font-medium">Sports page order</h3>
+        <p className="mb-3 text-xs text-muted-foreground">
+          Drag to reorder the sport sections shown on the dedicated Sports page.
+        </p>
+        <SportOrderControl orderedSports={sportOrder} onChange={(value) => setSportOrder(value as SupportedSport[])} />
+      </div>
 
       <div>
         <h3 className="mb-1 text-sm font-medium">Sport</h3>
@@ -322,6 +380,7 @@ export function SportsSettingsTab(): React.ReactElement {
           <div className="rounded-md border px-3 py-3">
             <p className="text-sm font-medium">{sportLabel}</p>
             <p className="mt-2 text-xs text-muted-foreground">Last synced: {formatLastSynced(status?.lastFetchedAt ?? null)}</p>
+            <p className="text-xs text-muted-foreground">Last badges/logos sync: {formatLastSynced(status?.lastBadgeFetchedAt ?? null)}</p>
             <p className="text-xs text-muted-foreground">Enabled leagues: {status?.enabledLeagueCount ?? 0}</p>
             <p className="text-xs text-muted-foreground">Tracked teams: {status?.trackedTeamCount ?? 0}</p>
           </div>
@@ -341,10 +400,16 @@ export function SportsSettingsTab(): React.ReactElement {
               </Button>
             </div>
             <p className="mt-2 text-xs text-muted-foreground">Current setting: every {sportsSettings.pollIntervalMinutes} minute{sportsSettings.pollIntervalMinutes === 1 ? '' : 's'}.</p>
-            <Button className="mt-3" variant="outline" size="sm" onClick={() => void refreshNow()} disabled={refreshing}>
-              <RefreshCcw className={`mr-1 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-              {refreshing ? 'Refreshing...' : 'Refresh Now'}
-            </Button>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button variant="outline" size="sm" onClick={() => void refreshNow()} disabled={refreshing}>
+                <RefreshCcw className={`mr-1 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                {refreshing ? 'Refreshing scores...' : 'Refresh scores'}
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => void refreshBadgesNow()} disabled={refreshingBadges}>
+                <RefreshCcw className={`mr-1 h-4 w-4 ${refreshingBadges ? 'animate-spin' : ''}`} />
+                {refreshingBadges ? 'Refreshing badges...' : 'Refresh badges/logos'}
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -390,7 +455,7 @@ export function SportsSettingsTab(): React.ReactElement {
                 <div key={team.teamId} className="flex items-center justify-between gap-3 rounded-md border px-3 py-2">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium">{team.name}</p>
-                    <p className="truncate text-xs text-muted-foreground">{team.leagueId}</p>
+                    <p className="truncate text-xs text-muted-foreground">{getTrackedTeamMeta(team, leaguesById, false)}</p>
                   </div>
                   <div className="flex items-center gap-2">
                     <Button variant="outline" size="icon" onClick={() => void reorderTeams(index, index - 1)} disabled={index === 0} aria-label="Move team up">
@@ -422,7 +487,7 @@ export function SportsSettingsTab(): React.ReactElement {
               <div key={league.leagueId} className="flex items-center justify-between rounded-md border px-3 py-2">
                 <div>
                   <p className="text-sm font-medium">{league.name}</p>
-                  <p className="text-xs text-muted-foreground">{league.country ?? league.leagueId}</p>
+                  {league.country ? <p className="text-xs text-muted-foreground">{league.country}</p> : null}
                 </div>
                 <Switch checked={league.enabled} onCheckedChange={(checked) => void setLeagueEnabled(league, checked)} aria-label={`Enable ${league.name}`} />
               </div>

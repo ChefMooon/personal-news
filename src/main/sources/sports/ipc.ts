@@ -1,22 +1,29 @@
 import { ipcMain } from 'electron'
 import type {
   IpcMutationResult,
+  RadioStation,
+  SportEventDetail,
   SportLeague,
+  SportStandingRow,
   SportsSettings,
   SportSyncStatus,
   TeamSearchResult,
   TrackedTeam
 } from '../../../shared/ipc-types'
 import { IPC } from '../../../shared/ipc-types'
+import { resolveSportsRadioStream, searchSportsRadioStations } from './radio'
 import {
   addSportsLeague,
   addSportsTeam,
+  getSportsEventDetails,
   getSportsLeagues,
   getSportsSettings,
+  getSportsStandings,
   getSportsStatus,
   getSportsTeamEvents,
   getSportsTodayEvents,
   getSportsTrackedTeams,
+  refreshSportsBadges,
   refreshSportsData,
   removeSportsLeague,
   removeSportsTeam,
@@ -41,6 +48,28 @@ export function registerSportsIpcHandlers(): void {
 
   ipcMain.handle(IPC.SPORTS_GET_TEAM_EVENTS, (_event, args: { teamId: string }) => {
     return getSportsTeamEvents(args.teamId)
+  })
+
+  ipcMain.handle(
+    IPC.SPORTS_GET_STANDINGS,
+    async (_event, args: { leagueId: string; season: string; sport: string; leagueName?: string }): Promise<SportStandingRow[]> => {
+      return getSportsStandings(args.leagueId, args.season, args.sport, args.leagueName)
+    }
+  )
+
+  ipcMain.handle(
+    IPC.SPORTS_GET_EVENT_DETAILS,
+    async (_event, args: { eventId: string }): Promise<SportEventDetail | null> => {
+      return getSportsEventDetails(args.eventId)
+    }
+  )
+
+  ipcMain.handle(IPC.SPORTS_SEARCH_RADIO_STATIONS, async (_event, args: { game: Parameters<typeof searchSportsRadioStations>[0] }): Promise<RadioStation[]> => {
+    return searchSportsRadioStations(args.game)
+  })
+
+  ipcMain.handle(IPC.SPORTS_RESOLVE_RADIO_STREAM, async (_event, args: { url: string }): Promise<string> => {
+    return resolveSportsRadioStream(args.url)
   })
 
   ipcMain.handle(IPC.SPORTS_GET_TRACKED_TEAMS, (): TrackedTeam[] => {
@@ -104,6 +133,18 @@ export function registerSportsIpcHandlers(): void {
       return {
         ok: false,
         error: error instanceof Error ? error.message : 'Failed to refresh sports data.'
+      }
+    }
+  })
+
+  ipcMain.handle(IPC.SPORTS_REFRESH_BADGES, async (_event, args: { sport: string }): Promise<IpcMutationResult> => {
+    try {
+      await refreshSportsBadges(args.sport, true)
+      return { ok: true, error: null }
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : 'Failed to refresh sports badges.'
       }
     }
   })

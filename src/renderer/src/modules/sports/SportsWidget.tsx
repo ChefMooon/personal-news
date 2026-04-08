@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { RefreshCcw, Settings2, X } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
@@ -8,6 +8,7 @@ import { useSportsViewConfig } from '../../hooks/useSportsViewConfig'
 import { IPC, type IpcMutationResult, type SportEvent, type SportLeague, type SportsDataUpdatedEvent, type SportTeamEvents, type TrackedTeam } from '../../../../shared/ipc-types'
 import { ALL_SPORTS_ID, SUPPORTED_SPORTS, getSportLabel } from '../../../../shared/sports'
 import { AllGamesView } from './AllGamesView'
+import { getLeagueKey } from './league-display'
 import { MyTeamsView } from './MyTeamsView'
 import { SportsSettingsPanel } from './SportsSettingsPanel'
 
@@ -30,10 +31,6 @@ function sortUpcomingEvents(a: SportEvent, b: SportEvent): number {
   return aValue - bValue
 }
 
-function getLeagueKey(sport: string, leagueId: string): string {
-  return `${sport}:${leagueId}`
-}
-
 function SportsWidget(): React.ReactElement {
   const { instanceId, label } = useWidgetInstance()
   const widgetTitle = label ?? 'Sports'
@@ -51,6 +48,8 @@ function SportsWidget(): React.ReactElement {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
+  const hasLoadedDataRef = useRef(false)
+  const latestLoadIdRef = useRef(0)
 
   const loadTeamEvents = useCallback(async (teams: TrackedTeam[]): Promise<Record<string, SportTeamEvents>> => {
     const pairs = await Promise.all(
@@ -63,8 +62,14 @@ function SportsWidget(): React.ReactElement {
     return Object.fromEntries(pairs)
   }, [])
 
-  const loadData = useCallback(async () => {
-    setLoading(true)
+  const loadData = useCallback(async ({ preserveContent = false }: { preserveContent?: boolean } = {}) => {
+    const loadId = latestLoadIdRef.current + 1
+    latestLoadIdRef.current = loadId
+
+    if (!preserveContent || !hasLoadedDataRef.current) {
+      setLoading(true)
+    }
+
     try {
       const [eventResults, leagueResults, allTeams] = await Promise.all([
         Promise.all(selectedSports.map((sport) => window.api.invoke(IPC.SPORTS_GET_TODAY_EVENTS, { sport }))),
@@ -74,14 +79,27 @@ function SportsWidget(): React.ReactElement {
 
       const selectedSportSet = new Set(selectedSports)
       const sportTeams = (allTeams as TrackedTeam[]).filter((team) => selectedSportSet.has(team.sport))
+      const nextTeamEventsById = await loadTeamEvents(sportTeams)
+
+      if (loadId !== latestLoadIdRef.current) {
+        return
+      }
+
       setTodayEvents((eventResults as SportEvent[][]).flat())
       setLeagues((leagueResults as SportLeague[][]).flat())
       setTrackedTeams(sportTeams)
-      setTeamEventsById(await loadTeamEvents(sportTeams))
+      setTeamEventsById(nextTeamEventsById)
+      hasLoadedDataRef.current = true
     } catch (err) {
+      if (loadId !== latestLoadIdRef.current) {
+        return
+      }
+
       toast.error(err instanceof Error ? err.message : 'Failed to load Sports widget data.')
     } finally {
-      setLoading(false)
+      if (loadId === latestLoadIdRef.current) {
+        setLoading(false)
+      }
     }
   }, [loadTeamEvents, selectedSports])
 
@@ -100,7 +118,7 @@ function SportsWidget(): React.ReactElement {
         toast.error(payload.error)
       }
 
-      void loadData()
+      void loadData({ preserveContent: true })
     })
   }, [loadData, selectedSports])
 
@@ -137,7 +155,6 @@ function SportsWidget(): React.ReactElement {
         return
       }
       toast.success('Sports data refresh started.')
-      await loadData()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to refresh Sports data.')
     } finally {
@@ -184,6 +201,7 @@ function SportsWidget(): React.ReactElement {
                 <MyTeamsView
                   teams={enabledTeams}
                   teamEventsById={teamEventsById}
+                  leaguesById={leaguesById}
                   showVenue={config.showVenue}
                   showTime={config.showTime}
                   viewMode={config.viewMode}
@@ -210,6 +228,7 @@ function SportsWidget(): React.ReactElement {
           <MyTeamsView
             teams={enabledTeams}
             teamEventsById={teamEventsById}
+            leaguesById={leaguesById}
             showVenue={config.showVenue}
             showTime={config.showTime}
             viewMode={config.viewMode}

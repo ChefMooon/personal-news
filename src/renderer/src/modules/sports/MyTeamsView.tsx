@@ -1,7 +1,8 @@
 import React from 'react'
-import type { SportEvent, SportTeamEvents, TrackedTeam } from '../../../../shared/ipc-types'
-import { getSportLabel } from '../../../../shared/sports'
+import type { SportEvent, SportLeague, SportTeamEvents, TrackedTeam } from '../../../../shared/ipc-types'
 import { cn } from '../../lib/utils'
+import { getTrackedTeamMeta, type LeaguesById } from './league-display'
+import { TeamAvatar } from './TeamAvatar'
 import {
   getGamePhase,
   getGamePhaseBadgeClasses,
@@ -136,36 +137,20 @@ function outcomeClasses(outcome: 'W' | 'L' | 'T' | null): { text: string; bg: st
   return { text: 'text-muted-foreground', bg: 'bg-muted/30', border: 'border-muted' }
 }
 
-function getTeamMeta(team: TrackedTeam, showSportLabels: boolean): string {
-  return showSportLabels ? `${getSportLabel(team.sport)} · ${team.leagueId}` : team.leagueId
+function getTeamMeta(team: TrackedTeam, leaguesById: LeaguesById, showSportLabels: boolean): string {
+  return getTrackedTeamMeta(team, leaguesById, showSportLabels)
 }
 
 function TeamBadge({ team, size = 'md' }: { team: TrackedTeam; size?: 'sm' | 'md' | 'lg' }): React.ReactElement {
   const sizeClass = size === 'sm' ? 'h-7 w-7 text-xs' : size === 'lg' ? 'h-11 w-11 text-sm' : 'h-9 w-9 text-xs'
 
-  if (team.badgeUrl) {
-    return <img src={team.badgeUrl} alt="" className={cn('rounded-full bg-muted object-cover', sizeClass)} />
-  }
-
-  return (
-    <div className={cn('flex items-center justify-center rounded-full bg-muted font-semibold text-muted-foreground', sizeClass)}>
-      {(team.shortName ?? team.name).slice(0, 2).toUpperCase()}
-    </div>
-  )
+  return <TeamAvatar name={team.shortName ?? team.name} src={team.badgeUrl} className={cn('rounded-full', sizeClass)} />
 }
 
 function OpponentBadge({ name, badgeUrl, size = 'md' }: { name: string; badgeUrl: string | null; size?: 'sm' | 'md' | 'lg' }): React.ReactElement {
   const sizeClass = size === 'sm' ? 'h-7 w-7 text-xs' : size === 'lg' ? 'h-11 w-11 text-sm' : 'h-9 w-9 text-xs'
 
-  if (badgeUrl) {
-    return <img src={badgeUrl} alt="" className={cn('rounded-full bg-muted object-cover', sizeClass)} />
-  }
-
-  return (
-    <div className={cn('flex items-center justify-center rounded-full bg-muted font-semibold text-muted-foreground', sizeClass)}>
-      {name.slice(0, 2).toUpperCase()}
-    </div>
-  )
+  return <TeamAvatar name={name} src={badgeUrl} className={cn('rounded-full', sizeClass)} />
 }
 
 function GameStateDisplay({
@@ -283,7 +268,8 @@ function SummarizedTeamCard({
   todayGame,
   nextGame,
   showTime,
-  showSportLabels
+  showSportLabels,
+  leaguesById
 }: {
   team: TrackedTeam
   lastGame: SportEvent | null
@@ -291,6 +277,7 @@ function SummarizedTeamCard({
   nextGame: SportEvent | null
   showTime: boolean
   showSportLabels: boolean
+  leaguesById: Record<string, SportLeague>
 }): React.ReactElement {
   const displayGame = todayGame ?? lastGame
   const displayPhase = getGamePhase(displayGame)
@@ -304,7 +291,7 @@ function SummarizedTeamCard({
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
             <span className="block truncate text-sm font-semibold">{team.name}</span>
-            <span className="block truncate text-[11px] text-muted-foreground">{getTeamMeta(team, showSportLabels)}</span>
+            <span className="block truncate text-[11px] text-muted-foreground">{getTeamMeta(team, leaguesById, showSportLabels)}</span>
           </div>
           {displayGame ? (
             <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-xs font-bold', getTodayBadgeClasses(displayGame))}>
@@ -343,7 +330,8 @@ function StandardTeamCard({
   nextGame,
   showTime,
   showVenue,
-  showSportLabels
+  showSportLabels,
+  leaguesById
 }: {
   team: TrackedTeam
   lastGame: SportEvent | null
@@ -352,6 +340,7 @@ function StandardTeamCard({
   showTime: boolean
   showVenue: boolean
   showSportLabels: boolean
+  leaguesById: Record<string, SportLeague>
 }): React.ReactElement {
   const displayGame = todayGame && hasResolvedScore(todayGame) ? todayGame : lastGame
   const outcome = displayGame ? getOutcome(displayGame, team.teamId) : null
@@ -363,7 +352,7 @@ function StandardTeamCard({
         <TeamBadge team={team} size="md" />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-bold">{team.name}</p>
-          <p className="text-xs text-muted-foreground">{getTeamMeta(team, showSportLabels)}</p>
+          <p className="text-xs text-muted-foreground">{getTeamMeta(team, leaguesById, showSportLabels)}</p>
         </div>
         {displayGame && outcome ? (
           <div className={cn('flex shrink-0 flex-col items-center rounded-md px-2.5 py-1', classes.bg)}>
@@ -419,7 +408,8 @@ function DetailedTeamCard({
   streak,
   showTime,
   showVenue,
-  showSportLabels
+  showSportLabels,
+  leaguesById
 }: {
   team: TrackedTeam
   lastGame: SportEvent | null
@@ -429,6 +419,7 @@ function DetailedTeamCard({
   showTime: boolean
   showVenue: boolean
   showSportLabels: boolean
+  leaguesById: Record<string, SportLeague>
 }): React.ReactElement {
   const featuredGame = todayGame ?? lastGame
   const outcome = featuredGame ? getOutcome(featuredGame, team.teamId) : null
@@ -441,7 +432,7 @@ function DetailedTeamCard({
         <TeamBadge team={team} size="lg" />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-bold">{team.name}</p>
-          <p className="text-xs text-muted-foreground">{getTeamMeta(team, showSportLabels)}</p>
+          <p className="text-xs text-muted-foreground">{getTeamMeta(team, leaguesById, showSportLabels)}</p>
         </div>
         {streak ? (
           <div className="shrink-0 text-right">
@@ -512,7 +503,8 @@ function TodayGameCard({
   lastGame,
   showTime,
   showVenue,
-  showSportLabels
+  showSportLabels,
+  leaguesById
 }: {
   team: TrackedTeam
   todayGame: SportEvent | null
@@ -520,6 +512,7 @@ function TodayGameCard({
   showTime: boolean
   showVenue: boolean
   showSportLabels: boolean
+  leaguesById: Record<string, SportLeague>
 }): React.ReactElement {
   const priorGame = lastGame && lastGame.eventId !== todayGame?.eventId ? lastGame : null
   const outcome = todayGame ? getOutcome(todayGame, team.teamId) : null
@@ -538,7 +531,7 @@ function TodayGameCard({
         <TeamBadge team={team} size="md" />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-bold">{team.name}</p>
-          <p className="text-xs text-muted-foreground">{getTeamMeta(team, showSportLabels)}</p>
+          <p className="text-xs text-muted-foreground">{getTeamMeta(team, leaguesById, showSportLabels)}</p>
         </div>
         <div className={cn('flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5', getTodayBadgeClasses(todayGame))}>
           <span className={cn('h-1.5 w-1.5 rounded-full', getTodayDotClasses(todayGame))} />
@@ -627,19 +620,21 @@ function TodayRestingRow({
   team,
   nextGame,
   showTime,
-  showSportLabels
+  showSportLabels,
+  leaguesById
 }: {
   team: TrackedTeam
   nextGame: SportEvent | null
   showTime: boolean
   showSportLabels: boolean
+  leaguesById: Record<string, SportLeague>
 }): React.ReactElement {
   return (
     <div className="flex items-center gap-3 rounded-lg border px-3 py-2 opacity-40">
       <TeamBadge team={team} size="sm" />
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-semibold text-muted-foreground">{team.name}</p>
-        <p className="truncate text-[11px] text-muted-foreground">{getTeamMeta(team, showSportLabels)}</p>
+        <p className="truncate text-[11px] text-muted-foreground">{getTeamMeta(team, leaguesById, showSportLabels)}</p>
         <p className="text-xs text-muted-foreground">
           {nextGame ? (
             <>
@@ -659,7 +654,8 @@ function TodayView({
   showVenue,
   showTime,
   today,
-  showSportLabels
+  showSportLabels,
+  leaguesById
 }: {
   teams: TrackedTeam[]
   teamEventsById: Record<string, SportTeamEvents>
@@ -667,6 +663,7 @@ function TodayView({
   showTime: boolean
   today: string
   showSportLabels: boolean
+  leaguesById: Record<string, SportLeague>
 }): React.ReactElement {
   const playing = teams.filter((team) => getTodayGame(teamEventsById[team.teamId], today) !== null)
   const resting = teams.filter((team) => getTodayGame(teamEventsById[team.teamId], today) === null)
@@ -688,6 +685,7 @@ function TodayView({
                   nextGame={nextGame}
                   showTime={showTime}
                   showSportLabels={showSportLabels}
+                  leaguesById={leaguesById}
                 />
               )
             })}
@@ -712,6 +710,7 @@ function TodayView({
             showTime={showTime}
             showVenue={showVenue}
             showSportLabels={showSportLabels}
+            leaguesById={leaguesById}
           />
         )
       })}
@@ -729,6 +728,7 @@ function TodayView({
                   nextGame={nextGame}
                   showTime={showTime}
                   showSportLabels={showSportLabels}
+                  leaguesById={leaguesById}
                 />
               )
             })}
@@ -742,6 +742,7 @@ function TodayView({
 export function MyTeamsView({
   teams,
   teamEventsById,
+  leaguesById,
   showVenue,
   showTime,
   viewMode,
@@ -749,6 +750,7 @@ export function MyTeamsView({
 }: {
   teams: TrackedTeam[]
   teamEventsById: Record<string, SportTeamEvents>
+  leaguesById: Record<string, SportLeague>
   showVenue: boolean
   showTime: boolean
   viewMode: 'today' | 'summarized' | 'standard' | 'detailed'
@@ -769,6 +771,7 @@ export function MyTeamsView({
       <TodayView
         teams={teams}
         teamEventsById={teamEventsById}
+        leaguesById={leaguesById}
         showVenue={showVenue}
         showTime={showTime}
         today={today}
@@ -796,6 +799,7 @@ export function MyTeamsView({
               nextGame={nextGame}
               showTime={showTime}
               showSportLabels={showSportLabels}
+              leaguesById={leaguesById}
             />
           )
         }
@@ -811,6 +815,7 @@ export function MyTeamsView({
               showTime={showTime}
               showVenue={showVenue}
               showSportLabels={showSportLabels}
+              leaguesById={leaguesById}
             />
           )
         }
@@ -826,6 +831,7 @@ export function MyTeamsView({
             showTime={showTime}
             showVenue={showVenue}
             showSportLabels={showSportLabels}
+            leaguesById={leaguesById}
           />
         )
       })}
