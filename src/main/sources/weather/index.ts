@@ -444,7 +444,7 @@ async function fetchForecast(location: WeatherLocation, settings: WeatherSetting
   }
 
   const hourlyTimes = Array.isArray(payload.hourly?.time) ? payload.hourly.time : []
-  const hourly = hourlyTimes.slice(0, 12).map((time, index) => ({
+  const mappedHourly = hourlyTimes.map((time, index) => ({
     time: toUnixSeconds(String(time)) ?? Math.floor(Date.now() / 1000),
     temperature: Array.isArray(payload.hourly?.temperature_2m)
       ? Number(payload.hourly.temperature_2m[index] ?? null)
@@ -462,6 +462,9 @@ async function fetchForecast(location: WeatherLocation, settings: WeatherSetting
       ? Number(payload.hourly.relative_humidity_2m[index] ?? null)
       : null
   }))
+  const firstUpcomingHourlyIndex = mappedHourly.findIndex((point) => point.time >= current.time)
+  const hourlyStartIndex = firstUpcomingHourlyIndex >= 0 ? firstUpcomingHourlyIndex : 0
+  const hourly = mappedHourly.slice(hourlyStartIndex, hourlyStartIndex + 12)
 
   const dailyTimes = Array.isArray(payload.daily?.time) ? payload.daily.time : []
   const daily = dailyTimes.slice(0, 7).map((date, index) => ({
