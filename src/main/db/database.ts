@@ -43,7 +43,8 @@ function runMigrations(database: Database.Database): void {
     1: '001_initial.sql',
     2: '002_weather.sql',
     3: '003_sports.sql',
-    4: '004_sports_team_cache.sql'
+    4: '004_sports_team_cache.sql',
+    5: '005_youtube_livestream_lifecycle.sql'
   }
 
   // Ensure meta table exists first
@@ -117,6 +118,14 @@ function runMigrations(database: Database.Database): void {
       name: 'sports-team-cache',
       file: '004_sports_team_cache.sql',
       shouldApply: (db) => !tableExists(db, 'sports_opponent_cache')
+    },
+    {
+      name: 'youtube-livestream-lifecycle',
+      file: '005_youtube_livestream_lifecycle.sql',
+      shouldApply: (db) =>
+        !columnExists(db, 'yt_videos', 'actual_start_time') ||
+        !columnExists(db, 'yt_videos', 'actual_end_time') ||
+        !columnExists(db, 'yt_videos', 'is_livestream')
     }
   ]
 
@@ -151,4 +160,9 @@ function tableExists(database: Database.Database, tableName: string): boolean {
     .get(tableName) as { name: string } | undefined
 
   return row != null
+}
+
+function columnExists(database: Database.Database, tableName: string, columnName: string): boolean {
+  const columns = database.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string }>
+  return columns.some((column) => column.name === columnName)
 }

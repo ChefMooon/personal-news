@@ -4,6 +4,7 @@ import { Circle, CircleCheck } from 'lucide-react'
 import { IPC, type YtVideo } from '../../../../shared/ipc-types'
 import { formatAbsoluteTime, formatDuration, formatFutureTime, formatRelativeTime } from '../../lib/time'
 import { cn } from '../../lib/utils'
+import { inferMediaType } from './video-lifecycle'
 
 interface VideoCardProps {
   video: YtVideo
@@ -19,8 +20,7 @@ function getMediaLabel(video: YtVideo): string {
     return 'UPCOMING'
   }
 
-  const mediaType =
-    video.media_type ?? (video.duration_sec != null && video.duration_sec <= 60 ? 'short' : 'video')
+  const mediaType = inferMediaType(video)
 
   if (mediaType === 'short') return 'SHORT'
   if (mediaType === 'live') return 'PAST LIVE'
@@ -82,11 +82,21 @@ export function VideoCard({
     video.scheduled_start != null ? formatFutureTime(video.scheduled_start) : 'Scheduled'
   const scheduledAbsolute =
     video.scheduled_start != null ? formatAbsoluteTime(video.scheduled_start) : null
+  const actualStartRelative =
+    video.actual_start_time != null ? formatRelativeTime(video.actual_start_time) : null
+  const actualStartAbsolute =
+    video.actual_start_time != null ? formatAbsoluteTime(video.actual_start_time) : null
+  const actualEndRelative =
+    video.actual_end_time != null ? formatRelativeTime(video.actual_end_time) : null
+  const actualEndAbsolute =
+    video.actual_end_time != null ? formatAbsoluteTime(video.actual_end_time) : null
   const syncedRelative = formatRelativeTime(video.fetched_at)
   const watchedRelative = watchedAt != null ? formatRelativeTime(watchedAt) : null
   const watchedAbsolute = watchedAt != null ? formatAbsoluteTime(watchedAt) : null
   const mediaLabel = getMediaLabel(video)
-  const isUpcoming = video.broadcast_status === 'upcoming' || video.media_type === 'upcoming_stream'
+  const isUpcoming = video.broadcast_status === 'upcoming'
+  const isLiveNow = video.broadcast_status === 'live'
+  const isPastLivestream = !isLiveNow && !isUpcoming && inferMediaType(video) === 'live'
 
   const cardWidth = isCompact ? 'w-[140px]' : 'w-[180px]'
   const thumbHeight = isCompact ? 'h-[79px]' : 'h-[101px]'
@@ -162,6 +172,18 @@ export function VideoCard({
           <p className="mt-0.5 text-[10px] text-muted-foreground" title={scheduledAbsolute ?? undefined}>
             {scheduledRelative}
           </p>
+        ) : isLiveNow ? (
+          <p className="mt-0.5 text-[10px] text-muted-foreground" title={actualStartAbsolute ?? undefined}>
+            {actualStartRelative ? `Live now · started ${actualStartRelative}` : 'Live now'}
+          </p>
+        ) : isPastLivestream ? (
+          <p className="mt-0.5 text-[10px] text-muted-foreground" title={(actualEndAbsolute ?? actualStartAbsolute) ?? undefined}>
+            {actualEndRelative
+              ? `Ended ${actualEndRelative}`
+              : actualStartRelative
+                ? `Streamed ${actualStartRelative}`
+                : publishedRelative}
+          </p>
         ) : (
           <p className="mt-0.5 text-[10px] text-muted-foreground">{publishedRelative}</p>
         )
@@ -170,6 +192,18 @@ export function VideoCard({
           {isUpcoming ? (
             <p className="mt-0.5 text-xs text-muted-foreground" title={scheduledAbsolute ?? undefined}>
               {scheduledRelative}
+            </p>
+          ) : isLiveNow ? (
+            <p className="mt-0.5 text-xs text-muted-foreground" title={actualStartAbsolute ?? undefined}>
+              {actualStartRelative ? `Live now · started ${actualStartRelative}` : 'Live now'}
+            </p>
+          ) : isPastLivestream ? (
+            <p className="mt-0.5 text-xs text-muted-foreground" title={(actualEndAbsolute ?? actualStartAbsolute) ?? undefined}>
+              {actualEndRelative
+                ? `Ended ${actualEndRelative}`
+                : actualStartRelative
+                  ? `Streamed ${actualStartRelative}`
+                  : `Published ${publishedRelative}`}
             </p>
           ) : (
             <p className="mt-0.5 text-xs text-muted-foreground" title={publishedAbsolute}>

@@ -17,6 +17,11 @@ import { StreamPanel } from '../modules/youtube/StreamPanel'
 import { VideoCard } from '../modules/youtube/VideoCard'
 import { VideoCarousel } from '../modules/youtube/VideoCarousel'
 import { CheckCheck, RefreshCw, Search, Youtube } from 'lucide-react'
+import {
+  getYouTubeLifecycleSortTime,
+  inferMediaType,
+  isActiveLivestream
+} from '../modules/youtube/video-lifecycle'
 
 const YOUTUBE_PAGE_VIEW_MODE_KEY = 'youtube_page_view_mode'
 const YOUTUBE_PAGE_DENSITY_KEY = 'youtube_page_density_by_mode'
@@ -49,14 +54,6 @@ const MEDIA_TYPE_OPTIONS: PageMediaTypeOption[] = [
   { id: 'upcoming_stream', label: 'Upcoming' },
   { id: 'live', label: 'Live / Past Live' }
 ]
-
-function inferMediaType(video: YtVideo): MediaType {
-  if (video.broadcast_status === 'live') return 'live'
-  if (video.broadcast_status === 'upcoming') return 'upcoming_stream'
-  if (video.media_type != null) return video.media_type
-  if (video.duration_sec != null && video.duration_sec <= 60) return 'short'
-  return 'video'
-}
 
 function matchesMediaTypes(video: YtVideo, selectedMediaTypes: Set<MediaType>): boolean {
   if (selectedMediaTypes.size === 0) {
@@ -128,11 +125,9 @@ function ChannelCarouselSection({
   )
 
   const streams = filteredVideos.filter(
-    (video) => video.broadcast_status === 'upcoming' || video.broadcast_status === 'live'
+    (video) => isActiveLivestream(video)
   )
-  const regularVideos = filteredVideos.filter(
-    (video) => video.broadcast_status === 'none' || video.broadcast_status === null
-  )
+  const regularVideos = filteredVideos.filter((video) => !isActiveLivestream(video))
 
   if (!loading && filteredVideos.length === 0) {
     return null
@@ -213,7 +208,9 @@ function ChannelGroupedSection({
 
   const filteredVideos = useMemo(() => {
     const base = filterVideos(videos, searchQuery, selectedMediaTypes, hideWatched)
-    const sorted = [...base].sort((a, b) => a.published_at - b.published_at)
+    const sorted = [...base].sort(
+      (a, b) => getYouTubeLifecycleSortTime(a) - getYouTubeLifecycleSortTime(b)
+    )
     return sortDir === 'asc' ? sorted : sorted.reverse()
   }, [videos, searchQuery, selectedMediaTypes, hideWatched, sortDir])
 

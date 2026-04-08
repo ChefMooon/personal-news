@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import type { YtVideo } from '../../../../shared/ipc-types'
-import { formatFutureTime } from '../../lib/time'
+import { formatFutureTime, formatRelativeTime } from '../../lib/time'
+import { isActiveLivestream } from './video-lifecycle'
 
 interface StreamPanelProps {
   streams: YtVideo[]
@@ -16,11 +17,36 @@ export function StreamPanel({ streams }: StreamPanelProps): React.ReactElement {
   }, [])
 
   const now = Math.floor(Date.now() / 1000)
-  const upcomingStreams = streams.filter(
-    (stream) =>
-      stream.broadcast_status === 'upcoming' &&
-      (stream.scheduled_start == null || stream.scheduled_start > now)
-  )
+  const upcomingStreams = [...streams]
+    .filter((stream) => {
+      if (!isActiveLivestream(stream)) {
+        return false
+      }
+
+      if (stream.broadcast_status === 'live') {
+        return true
+      }
+
+      return stream.scheduled_start == null || stream.scheduled_start > now
+    })
+    .sort((left, right) => {
+      const leftPriority = left.broadcast_status === 'live' ? 0 : 1
+      const rightPriority = right.broadcast_status === 'live' ? 0 : 1
+      if (leftPriority !== rightPriority) {
+        return leftPriority - rightPriority
+      }
+
+      const leftTime =
+        left.broadcast_status === 'live'
+          ? left.actual_start_time ?? left.scheduled_start ?? left.published_at
+          : left.scheduled_start ?? left.published_at
+      const rightTime =
+        right.broadcast_status === 'live'
+          ? right.actual_start_time ?? right.scheduled_start ?? right.published_at
+          : right.scheduled_start ?? right.published_at
+
+      return leftTime - rightTime
+    })
 
   return (
     <div className="flex flex-col gap-2 w-[200px] shrink-0">
@@ -46,7 +72,11 @@ export function StreamPanel({ streams }: StreamPanelProps): React.ReactElement {
                 {stream.title}
               </p>
               <p className="text-[11px] text-muted-foreground">
-                {stream.scheduled_start ? formatFutureTime(stream.scheduled_start) : 'Upcoming'}
+                {stream.broadcast_status === 'live'
+                  ? `Live now${stream.actual_start_time ? ` · started ${formatRelativeTime(stream.actual_start_time)}` : ''}`
+                  : stream.scheduled_start
+                    ? formatFutureTime(stream.scheduled_start)
+                    : 'Upcoming'}
               </p>
             </div>
           </button>

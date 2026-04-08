@@ -107,6 +107,11 @@ interface ChannelThumbnailRefreshStats {
   skippedReason: string | null
 }
 
+interface TrackedLivestreamRow {
+  video_id: string
+  channel_id: string
+}
+
 function emitYoutubeUpdated(): void {
   for (const win of BrowserWindow.getAllWindows()) {
     win.webContents.send(IPC.YOUTUBE_UPDATED)
@@ -473,7 +478,15 @@ function normalizeVideoItem(item: ApiVideoItem): NormalizedFeedEntry | null {
     mediaType: media.mediaType,
     mediaTypeConfidence: media.confidence,
     durationSeconds,
-    channelId: item.snippet?.channelId
+    channelId: item.snippet?.channelId,
+    scheduledStartAt: item.liveStreamingDetails?.scheduledStartTime ?? null,
+    actualStartAt: item.liveStreamingDetails?.actualStartTime ?? null,
+    actualEndAt: item.liveStreamingDetails?.actualEndTime ?? null,
+    isLivestream:
+      media.mediaType === 'live' ||
+      media.mediaType === 'upcoming_stream' ||
+      item.liveStreamingDetails?.actualStartTime != null ||
+      item.liveStreamingDetails?.actualEndTime != null
   }
 
   return normalized
@@ -498,6 +511,34 @@ function toBroadcastStatus(mediaType: MediaType): 'none' | 'upcoming' | 'live' {
     return 'upcoming'
   }
   return 'none'
+}
+
+function getTrackedLivestreamRows(database: Database.Database): TrackedLivestreamRow[] {
+  return database
+    .prepare(
+      `SELECT video_id, channel_id
+       FROM yt_videos
+       WHERE broadcast_status IN ('upcoming', 'live')
+       ORDER BY fetched_at ASC`
+    )
+    .all() as TrackedLivestreamRow[]
+}
+
+function resolveStoredMediaType(payload: {
+  classifiedMediaType: MediaType
+  broadcastStatus: 'none' | 'upcoming' | 'live'
+  isLivestream: boolean
+}): MediaType {
+  if (payload.broadcastStatus === 'live') {
+    return 'live'
+  }
+  if (payload.broadcastStatus === 'upcoming') {
+    return 'upcoming_stream'
+  }
+  if (payload.isLivestream) {
+    return 'live'
+  }
+  return payload.classifiedMediaType
 }
 
 function enqueueRetryBatch(
@@ -635,6 +676,13 @@ async function pollAllEnabledChannels(): Promise<void> {
   }
 
   const incomingIds = Array.from(byVideoId.keys())
+  const trackedLivestreamRows = getTrackedLivestreamRows(dbRef)
+  const trackedLivestreamIds = trackedLivestreamRows.map((row) => row.video_id)
+  const fallbackChannelIdByVideoId = new Map<string, string>()
+
+  for (const row of trackedLivestreamRows) {
+    fallbackChannelIdByVideoId.set(row.video_id, row.channel_id)
+  }
 
   let existingIds: Set<string>
   try {
@@ -667,7 +715,8 @@ async function pollAllEnabledChannels(): Promise<void> {
   }
 
   const newVideoIds = incomingIds.filter((id) => !existingIds.has(id))
-  const batches = chunkArray(newVideoIds, MAX_BATCH_SIZE)
+  const videosToFetch = Array.from(new Set([...newVideoIds, ...trackedLivestreamIds]))
+  const batches = chunkArray(videosToFetch, MAX_BATCH_SIZE)
   const apiKey = getDecryptedYouTubeApiKey()
   const manualConfirmationEnabled = getManualConfirmationEnabled()
   const channelThumbCandidates = channels.filter((channel) =>
@@ -697,7 +746,8 @@ async function pollAllEnabledChannels(): Promise<void> {
     candidateVideoCount: allCandidates.length,
     uniqueIncomingIdCount: incomingIds.length,
     existingIdCount: existingIds.size,
-    newVideoIds
+    newVideoIds,
+    trackedLivestreamIds
   })
 
   if (!apiKey && newVideoIds.length > 0) {
@@ -731,6 +781,7 @@ async function pollAllEnabledChannels(): Promise<void> {
       uniqueIncomingIdCount: incomingIds.length,
       existingIdCount: existingIds.size,
       newVideoIds,
+      trackedLivestreamIds,
       channelThumbCandidates,
       channelThumbApiRequested,
       channelThumbUpdated,
@@ -1006,7 +1057,18 @@ async function pollAllEnabledChannels(): Promise<void> {
     normalizedPreviewEntries.push(...normalizedBatch)
 
     const ingestTx = dbRef.transaction(() => {
-      const existsStmt = dbRef!.prepare('SELECT video_id, broadcast_status FROM yt_videos WHERE video_id = ?')
+      const existsStmt = dbRef!.prepare(
+        `SELECT
+           video_id,
+           channel_id,
+           broadcast_status,
+           media_type,
+           actual_start_time,
+           actual_end_time,
+           is_livestream
+         FROM yt_videos
+         WHERE video_id = ?`
+      )
       const upsertStmt = dbRef!.prepare(
         `INSERT INTO yt_videos (
           video_id,
@@ -1018,8 +1080,11 @@ async function pollAllEnabledChannels(): Promise<void> {
           media_type,
           broadcast_status,
           scheduled_start,
+          actual_start_time,
+          actual_end_time,
+          is_livestream,
           fetched_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(video_id) DO UPDATE SET
           channel_id = excluded.channel_id,
           title = excluded.title,
@@ -1029,6 +1094,9 @@ async function pollAllEnabledChannels(): Promise<void> {
           media_type = excluded.media_type,
           broadcast_status = excluded.broadcast_status,
           scheduled_start = excluded.scheduled_start,
+          actual_start_time = excluded.actual_start_time,
+          actual_end_time = excluded.actual_end_time,
+          is_livestream = excluded.is_livestream,
           fetched_at = excluded.fetched_at`
       )
 
@@ -1040,7 +1108,10 @@ async function pollAllEnabledChannels(): Promise<void> {
 
       for (const entry of normalizedBatch) {
         const primaryChannelId = entry.channelId?.trim() ?? ''
-        const fallbackChannelId = (byVideoId.get(entry.id) ?? [])[0]?.sourceChannelId ?? ''
+        const fallbackChannelId =
+          (byVideoId.get(entry.id) ?? [])[0]?.sourceChannelId ??
+          fallbackChannelIdByVideoId.get(entry.id) ??
+          ''
         const channelId = knownChannelIds.has(primaryChannelId)
           ? primaryChannelId
           : knownChannelIds.has(fallbackChannelId)
@@ -1058,10 +1129,33 @@ async function pollAllEnabledChannels(): Promise<void> {
           continue
         }
 
-        const alreadyExists = existsStmt.get(entry.id) as { video_id: string; broadcast_status: string | null } | undefined
-        const scheduledStartUnix = parseUnixSeconds(
-          apiItems.find((item) => item.id === entry.id)?.liveStreamingDetails?.scheduledStartTime
-        )
+        const alreadyExists = existsStmt.get(entry.id) as
+          | {
+              video_id: string
+              channel_id: string
+              broadcast_status: string | null
+              media_type: MediaType | null
+              actual_start_time: number | null
+              actual_end_time: number | null
+              is_livestream: number
+            }
+          | undefined
+        const scheduledStartUnix = parseUnixSeconds(entry.scheduledStartAt)
+        const actualStartUnix = parseUnixSeconds(entry.actualStartAt)
+        const actualEndUnix = parseUnixSeconds(entry.actualEndAt)
+        const nextActualStartUnix = actualStartUnix ?? alreadyExists?.actual_start_time ?? null
+        const nextActualEndUnix = actualEndUnix ?? alreadyExists?.actual_end_time ?? null
+        const nextIsLivestream =
+          entry.isLivestream === true ||
+          nextActualStartUnix != null ||
+          nextActualEndUnix != null ||
+          (alreadyExists?.is_livestream ?? 0) === 1
+        const nextBroadcastStatus = toBroadcastStatus(entry.mediaType)
+        const storedMediaType = resolveStoredMediaType({
+          classifiedMediaType: entry.mediaType,
+          broadcastStatus: nextBroadcastStatus,
+          isLivestream: nextIsLivestream
+        })
 
         upsertStmt.run(
           entry.id,
@@ -1070,16 +1164,19 @@ async function pollAllEnabledChannels(): Promise<void> {
           publishedAtUnix,
           entry.thumbnailUrl,
           entry.durationSeconds ?? null,
-          entry.mediaType,
-          toBroadcastStatus(entry.mediaType),
+          storedMediaType,
+          nextBroadcastStatus,
           scheduledStartUnix,
+          nextActualStartUnix,
+          nextActualEndUnix,
+          nextIsLivestream ? 1 : 0,
           now
         )
 
         if (alreadyExists) {
           batchUpdated += 1
           // Detect live-start transition: was not 'live', now is 'live'.
-          if (alreadyExists.broadcast_status !== 'live' && toBroadcastStatus(entry.mediaType) === 'live') {
+          if (alreadyExists.broadcast_status !== 'live' && nextBroadcastStatus === 'live') {
             liveStartEntries.push({ videoId: entry.id, channelId, title: entry.title })
           }
         } else {
@@ -1147,6 +1244,7 @@ async function pollAllEnabledChannels(): Promise<void> {
     uniqueIncomingIdCount: incomingIds.length,
     existingIdCount: existingIds.size,
     newVideoIds,
+    trackedLivestreamIds,
     channelThumbCandidates,
     channelThumbApiRequested,
     channelThumbUpdated,

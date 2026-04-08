@@ -157,6 +157,9 @@ export interface YtVideo {
   media_type: MediaType | null
   broadcast_status: 'none' | 'upcoming' | 'live' | null
   scheduled_start: number | null
+  actual_start_time: number | null
+  actual_end_time: number | null
+  is_livestream: number
   fetched_at: number
   watched_at: number | null
 }
@@ -674,6 +677,10 @@ export interface NormalizedFeedEntry {
   mediaTypeConfidence?: 'high' | 'low'
   durationSeconds?: number | null
   channelId?: string
+  scheduledStartAt?: string | null
+  actualStartAt?: string | null
+  actualEndAt?: string | null
+  isLivestream?: boolean
 }
 
 export interface ParsedFeed {

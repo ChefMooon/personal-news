@@ -962,6 +962,22 @@ function normalizeYouTubeVideosFilterOptions(
   }
 }
 
+const YOUTUBE_EFFECTIVE_MEDIA_TYPE_SQL = `CASE
+  WHEN broadcast_status = 'live' THEN 'live'
+  WHEN broadcast_status = 'upcoming' THEN 'upcoming_stream'
+  WHEN is_livestream = 1 THEN 'live'
+  WHEN media_type IS NOT NULL THEN media_type
+  WHEN duration_sec IS NOT NULL AND duration_sec <= 60 THEN 'short'
+  ELSE 'video'
+END`
+
+const YOUTUBE_SORT_TIME_SQL = `CASE
+  WHEN broadcast_status = 'upcoming' THEN COALESCE(scheduled_start, published_at)
+  WHEN broadcast_status = 'live' THEN COALESCE(actual_start_time, scheduled_start, published_at)
+  WHEN is_livestream = 1 THEN COALESCE(actual_end_time, actual_start_time, published_at)
+  ELSE published_at
+END`
+
 function parseThemeTokens(value: unknown): Record<string, string> | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return null
@@ -1087,7 +1103,11 @@ export function registerIpcHandlers(): void {
     const db = getDb()
     return db
       .prepare(
-        'SELECT * FROM yt_videos WHERE channel_id = ? ORDER BY published_at DESC LIMIT 15'
+        `SELECT *
+         FROM yt_videos
+         WHERE channel_id = ?
+         ORDER BY ${YOUTUBE_SORT_TIME_SQL} DESC, published_at DESC
+         LIMIT 15`
       )
       .all(channelId) as YtVideo[]
   })
@@ -1108,7 +1128,7 @@ export function registerIpcHandlers(): void {
 
       if (normalized.mediaTypes.length > 0) {
         const placeholders = normalized.mediaTypes.map(() => '?').join(', ')
-        whereClauses.push(`media_type IN (${placeholders})`)
+        whereClauses.push(`${YOUTUBE_EFFECTIVE_MEDIA_TYPE_SQL} IN (${placeholders})`)
         whereParams.push(...normalized.mediaTypes)
       }
 
@@ -1130,7 +1150,11 @@ export function registerIpcHandlers(): void {
 
       const videos = db
         .prepare(
-          `SELECT * FROM yt_videos ${whereSql} ORDER BY published_at ${orderSql} LIMIT ? OFFSET ?`
+          `SELECT *
+           FROM yt_videos
+           ${whereSql}
+           ORDER BY ${YOUTUBE_SORT_TIME_SQL} ${orderSql}, published_at ${orderSql}
+           LIMIT ? OFFSET ?`
         )
         .all(...whereParams, normalized.limit, normalized.offset) as YtVideo[]
 
