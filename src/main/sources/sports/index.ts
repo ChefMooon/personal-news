@@ -4,6 +4,7 @@ import type {
   IpcMutationResult,
   SportEvent,
   SportLeague,
+  SportsSettings,
   SportsDataUpdatedEvent,
   SportSyncStatus,
   SportTeamEvents,
@@ -11,9 +12,12 @@ import type {
   TrackedTeam
 } from '../../../shared/ipc-types'
 import { IPC } from '../../../shared/ipc-types'
-import { getSetting } from '../../settings/store'
+import { DEFAULT_SPORT, SUPPORTED_SPORTS, type SupportedSport } from '../../../shared/sports'
+import { getSetting, setSetting } from '../../settings/store'
 import type { DataSourceModule } from '../registry'
 import {
+  fetchEventById,
+  fetchTeamBadgesForLeague,
   fetchTeamDetails,
   fetchLastEventsForTeam,
   fetchLeagueEventsForDate,
@@ -40,17 +44,28 @@ import {
   upsertCacheMeta,
   upsertEvents,
   upsertLeague,
+  upsertOpponentBadge,
   upsertTrackedTeam
 } from './cache'
 
 const SPORTS_ENABLED_KEY = 'sports_enabled'
-const SUPPORTED_SPORTS = ['Baseball'] as const
-const DEFAULT_ENABLED_LEAGUE_IDS: Record<string, Set<string>> = {
-  Baseball: new Set(['4424'])
+const SPORTS_POLL_INTERVAL_KEY = 'sports_poll_interval_minutes'
+const DEFAULT_POLL_INTERVAL_MINUTES = 5
+const LIVE_REFRESH_INTERVAL_MS = 60_000
+const DEFAULT_ENABLED_LEAGUE_IDS: Partial<Record<SupportedSport, Set<string>>> = {
+  Baseball: new Set(['4424']),
+  Basketball: new Set(['4387'])
+}
+const DEFAULT_ENABLED_LEAGUE_PATTERNS: Partial<Record<SupportedSport, RegExp[]>> = {
+  Baseball: [/major league baseball|\bmlb\b/i],
+  Basketball: [/national basketball association|\bnba\b/i],
+  'Ice Hockey': [/national hockey league|\bnhl\b/i]
 }
 
 let dbRef: Database.Database | null = null
 const refreshPromises = new Map<string, Promise<void>>()
+let pollTimer: ReturnType<typeof setInterval> | null = null
+const liveRefreshTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
 function ensureDb(): Database.Database {
   if (!dbRef) {
@@ -64,6 +79,78 @@ function isSportsEnabled(): boolean {
   return getSetting(SPORTS_ENABLED_KEY) !== 'false'
 }
 
+function isLiveEventStatus(status: string | null): boolean {
+  return Boolean(
+    status
+      && !/(finished|final|completed|game over|ended|after penalties|after extra time)/i.test(status)
+      && /(live|in progress|half time|break|period|quarter|inning|set \d|overtime|extra time)/i.test(status)
+  )
+}
+
+function getPollIntervalMinutes(): number {
+  const raw = getSetting(SPORTS_POLL_INTERVAL_KEY)
+  const parsed = raw ? Number.parseInt(raw, 10) : Number.NaN
+  if (!Number.isFinite(parsed)) {
+    return DEFAULT_POLL_INTERVAL_MINUTES
+  }
+
+  return Math.max(1, Math.min(1440, Math.round(parsed)))
+}
+
+function clearLiveRefreshTimer(sport: string): void {
+  const timer = liveRefreshTimers.get(sport)
+  if (!timer) {
+    return
+  }
+
+  clearTimeout(timer)
+  liveRefreshTimers.delete(sport)
+}
+
+function clearLiveRefreshTimers(): void {
+  for (const timer of liveRefreshTimers.values()) {
+    clearTimeout(timer)
+  }
+  liveRefreshTimers.clear()
+}
+
+function stopPollTimer(): void {
+  if (pollTimer !== null) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+}
+
+function startPollTimer(): void {
+  stopPollTimer()
+
+  if (!dbRef || !isSportsEnabled()) {
+    return
+  }
+
+  pollTimer = setInterval(() => {
+    for (const sport of SUPPORTED_SPORTS) {
+      void refreshSportInternal(sport, true).catch((error) => {
+        console.error(`[Sports] Scheduled refresh failed for ${sport}:`, error)
+      })
+    }
+  }, getPollIntervalMinutes() * 60 * 1000)
+}
+
+async function prefetchLeagueTeamBadges(db: Database.Database, leagueName: string): Promise<void> {
+  try {
+    const teams = await fetchTeamBadgesForLeague(leagueName)
+    for (const team of teams) {
+      if (getTrackedTeam(db, team.teamId)?.badgeUrl) {
+        continue
+      }
+      upsertOpponentBadge(db, team.teamId, team.name, team.badgeUrl)
+    }
+  } catch (error) {
+    console.warn(`[Sports] Failed to prefetch team badges for league "${leagueName}":`, error)
+  }
+}
+
 function emitSportsUpdated(payload: SportsDataUpdatedEvent): void {
   for (const win of BrowserWindow.getAllWindows()) {
     win.webContents.send(IPC.SPORTS_DATA_UPDATED, payload)
@@ -75,7 +162,7 @@ function defaultLeagueEnabled(sport: string, league: SportLeague): boolean {
     return true
   }
 
-  return sport === 'Baseball' && /major league baseball|\bmlb\b/i.test(league.name)
+  return DEFAULT_ENABLED_LEAGUE_PATTERNS[sport]?.some((pattern) => pattern.test(league.name)) ?? false
 }
 
 async function ensureLeagueCatalogLoaded(sport: string): Promise<SportLeague[]> {
@@ -106,7 +193,52 @@ async function refreshTrackedTeam(team: TrackedTeam, fetchedDate: string): Promi
     fetchLastEventsForTeam(team.teamId),
     fetchNextEventsForTeam(team.teamId)
   ])
-  upsertEvents(db, [...lastEvents, ...nextEvents], fetchedDate)
+  const events = [...lastEvents, ...nextEvents]
+  upsertEvents(db, events, fetchedDate)
+}
+
+function scheduleLiveRefreshIfNeeded(sport: string): void {
+  const db = ensureDb()
+  const today = getLocalDateString()
+  const hasLiveEvents = readTodayEvents(db, sport, today).some((event) => isLiveEventStatus(event.status))
+
+  if (!hasLiveEvents) {
+    clearLiveRefreshTimer(sport)
+    return
+  }
+
+  if (liveRefreshTimers.has(sport)) {
+    return
+  }
+
+  const timer = setTimeout(() => {
+    liveRefreshTimers.delete(sport)
+    void doLiveRefresh(sport)
+  }, LIVE_REFRESH_INTERVAL_MS)
+
+  liveRefreshTimers.set(sport, timer)
+}
+
+async function doLiveRefresh(sport: string): Promise<void> {
+  const db = ensureDb()
+  const fetchDate = getLocalDateString()
+  const liveEvents = readTodayEvents(db, sport, fetchDate).filter((event) => isLiveEventStatus(event.status))
+  const refreshedEvents: SportEvent[] = []
+
+  for (const event of liveEvents) {
+    const refreshedEvent = await fetchEventById(event.eventId)
+    if (refreshedEvent) {
+      refreshedEvents.push(refreshedEvent)
+    }
+  }
+
+  if (refreshedEvents.length > 0) {
+    upsertEvents(db, refreshedEvents, fetchDate)
+  }
+
+  upsertCacheMeta(db, sport, fetchDate, Math.floor(Date.now() / 1000))
+  emitSportsUpdated({ sport, ok: true, error: null })
+  scheduleLiveRefreshIfNeeded(sport)
 }
 
 async function doRefreshSport(sport: string, force: boolean): Promise<void> {
@@ -122,6 +254,7 @@ async function doRefreshSport(sport: string, force: boolean): Promise<void> {
   const enabledLeagues = listEnabledLeagues(db, sport)
   for (const league of enabledLeagues) {
     const events = await fetchLeagueEventsForDate(fetchDate, league.name)
+    await prefetchLeagueTeamBadges(db, league.name)
     upsertEvents(db, events, fetchDate)
   }
 
@@ -131,6 +264,7 @@ async function doRefreshSport(sport: string, force: boolean): Promise<void> {
   }
 
   upsertCacheMeta(db, sport, fetchDate, Math.floor(Date.now() / 1000))
+  scheduleLiveRefreshIfNeeded(sport)
 }
 
 async function refreshSportInternal(sport: string, force: boolean): Promise<void> {
@@ -168,6 +302,23 @@ export function getSportsTeamEvents(teamId: string): SportTeamEvents {
 
 export function getSportsTrackedTeams(): TrackedTeam[] {
   return listTrackedTeams(ensureDb())
+}
+
+export function getSportsSettings(): SportsSettings {
+  return { pollIntervalMinutes: getPollIntervalMinutes() }
+}
+
+export function updateSportsSettings(settings: Partial<SportsSettings>): SportsSettings {
+  if (settings.pollIntervalMinutes !== undefined) {
+    const clamped = Math.max(1, Math.min(1440, Math.round(settings.pollIntervalMinutes)))
+    setSetting(SPORTS_POLL_INTERVAL_KEY, String(clamped))
+  }
+
+  if (isSportsEnabled()) {
+    startPollTimer()
+  }
+
+  return getSportsSettings()
 }
 
 export async function addSportsTeam(
@@ -218,6 +369,7 @@ export async function addSportsTeam(
 
     void refreshTrackedTeam(team, getLocalDateString())
       .then(() => {
+        scheduleLiveRefreshIfNeeded(team.sport)
         emitSportsUpdated({ sport, ok: true, error: null })
       })
       .catch((error) => {
@@ -238,6 +390,7 @@ export async function addSportsTeam(
   const team = upsertTrackedTeam(db, details)
   void refreshTrackedTeam(team, getLocalDateString())
     .then(() => {
+      scheduleLiveRefreshIfNeeded(team.sport)
       emitSportsUpdated({ sport, ok: true, error: null })
     })
     .catch((error) => {
@@ -258,7 +411,7 @@ export function removeSportsTeam(teamId: string): IpcMutationResult {
     return { ok: false, error: 'Tracked team not found.' }
   }
 
-  emitSportsUpdated({ sport: team?.sport ?? 'Baseball', ok: true, error: null })
+  emitSportsUpdated({ sport: team?.sport ?? DEFAULT_SPORT, ok: true, error: null })
   return { ok: true, error: null }
 }
 
@@ -269,13 +422,14 @@ export function setSportsTeamEnabled(teamId: string, enabled: boolean): IpcMutat
     return { ok: false, error: 'Tracked team not found.' }
   }
 
-  emitSportsUpdated({ sport: team?.sport ?? 'Baseball', ok: true, error: null })
+  emitSportsUpdated({ sport: team?.sport ?? DEFAULT_SPORT, ok: true, error: null })
   return { ok: true, error: null }
 }
 
 export function setSportsTeamOrder(orderedIds: string[]): IpcMutationResult {
   setTrackedTeamOrder(ensureDb(), orderedIds)
-  emitSportsUpdated({ sport: 'Baseball', ok: true, error: null })
+  const updatedSport = orderedIds[0] ? getTrackedTeam(ensureDb(), orderedIds[0])?.sport ?? DEFAULT_SPORT : DEFAULT_SPORT
+  emitSportsUpdated({ sport: updatedSport, ok: true, error: null })
   return { ok: true, error: null }
 }
 
@@ -308,7 +462,7 @@ export function removeSportsLeague(leagueId: string): IpcMutationResult {
     return { ok: false, error: 'League not found.' }
   }
 
-  emitSportsUpdated({ sport: league?.sport ?? 'Baseball', ok: true, error: null })
+  emitSportsUpdated({ sport: league?.sport ?? DEFAULT_SPORT, ok: true, error: null })
   return { ok: true, error: null }
 }
 
@@ -322,7 +476,7 @@ export async function refreshSportsData(sport: string, force = true): Promise<vo
 
 export function getSportsStatus(): SportSyncStatus[] {
   const db = ensureDb()
-  return [...SUPPORTED_SPORTS].map((sport) => getSportSyncStatus(db, sport))
+  return SUPPORTED_SPORTS.map((sport) => getSportSyncStatus(db, sport))
 }
 
 export const SportsModule: DataSourceModule = {
@@ -340,8 +494,12 @@ export const SportsModule: DataSourceModule = {
         console.error(`[Sports] Initial refresh failed for ${sport}:`, error)
       })
     }
+
+    startPollTimer()
   },
   shutdown(): void {
+    stopPollTimer()
+    clearLiveRefreshTimers()
     dbRef = null
     refreshPromises.clear()
   }

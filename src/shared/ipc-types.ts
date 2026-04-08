@@ -16,6 +16,8 @@ export const IPC = {
   WEATHER_SET_SETTINGS: 'weather:setSettings',
   WEATHER_GET_STATUS: 'weather:getStatus',
   WEATHER_UPDATED: 'weather:updated',
+  SETTINGS_GET_SPORTS_SETTINGS: 'settings:getSportsSettings',
+  SETTINGS_UPDATE_SPORTS_SETTINGS: 'settings:updateSportsSettings',
   SPORTS_GET_TODAY_EVENTS: 'sports:getTodayEvents',
   SPORTS_GET_TEAM_EVENTS: 'sports:getTeamEvents',
   SPORTS_GET_TRACKED_TEAMS: 'sports:getTrackedTeams',
@@ -462,6 +464,10 @@ export interface WeatherViewConfig {
   showSunTimes: boolean
 }
 
+export interface SportsSettings {
+  pollIntervalMinutes: number
+}
+
 export interface SportEvent {
   eventId: string
   leagueId: string
@@ -470,6 +476,8 @@ export interface SportEvent {
   awayTeamId: string | null
   homeTeam: string
   awayTeam: string
+  homeTeamBadgeUrl: string | null
+  awayTeamBadgeUrl: string | null
   homeScore: string | null
   awayScore: string | null
   eventDate: string
@@ -510,7 +518,7 @@ export interface TeamSearchResult {
 
 export interface SportsViewConfig {
   sport: string
-  viewMode: 'all_games' | 'my_teams'
+  viewMode: 'all_games' | 'today' | 'summarized' | 'standard' | 'detailed'
   showVenue: boolean
   showTime: boolean
 }

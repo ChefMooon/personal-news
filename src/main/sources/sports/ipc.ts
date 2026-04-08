@@ -1,10 +1,18 @@
 import { ipcMain } from 'electron'
-import type { IpcMutationResult, SportLeague, SportSyncStatus, TeamSearchResult, TrackedTeam } from '../../../shared/ipc-types'
+import type {
+  IpcMutationResult,
+  SportLeague,
+  SportsSettings,
+  SportSyncStatus,
+  TeamSearchResult,
+  TrackedTeam
+} from '../../../shared/ipc-types'
 import { IPC } from '../../../shared/ipc-types'
 import {
   addSportsLeague,
   addSportsTeam,
   getSportsLeagues,
+  getSportsSettings,
   getSportsStatus,
   getSportsTeamEvents,
   getSportsTodayEvents,
@@ -14,10 +22,19 @@ import {
   removeSportsTeam,
   searchSportsTeams,
   setSportsTeamEnabled,
-  setSportsTeamOrder
+  setSportsTeamOrder,
+  updateSportsSettings
 } from './index'
 
 export function registerSportsIpcHandlers(): void {
+  ipcMain.handle(IPC.SETTINGS_GET_SPORTS_SETTINGS, (): SportsSettings => {
+    return getSportsSettings()
+  })
+
+  ipcMain.handle(IPC.SETTINGS_UPDATE_SPORTS_SETTINGS, (_event, args: Partial<SportsSettings>): SportsSettings => {
+    return updateSportsSettings(args)
+  })
+
   ipcMain.handle(IPC.SPORTS_GET_TODAY_EVENTS, (_event, args: { sport: string }) => {
     return getSportsTodayEvents(args.sport)
   })

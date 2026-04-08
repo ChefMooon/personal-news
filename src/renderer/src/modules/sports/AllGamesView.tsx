@@ -1,15 +1,15 @@
 import React, { useMemo } from 'react'
 import { Badge } from '../../components/ui/badge'
 import type { SportEvent, SportLeague } from '../../../../shared/ipc-types'
+import { getSportLabel } from '../../../../shared/sports'
 import { GameCard } from './GameCard'
-
-function isFinishedStatus(status: string | null): boolean {
-  return Boolean(status && /(finished|final|completed|game over|ended|after penalties|after extra time)/i.test(status))
-}
-
-function isLiveStatus(status: string | null): boolean {
-  return Boolean(status && /(live|in progress|inning|quarter|period|half|overtime|extra time)/i.test(status))
-}
+import {
+  getGamePhase,
+  getGamePhaseBadgeClasses,
+  getGamePhaseHeadline,
+  getGamePhaseLabel,
+  isLiveStatus
+} from './utils'
 
 function formatEventTime(game: SportEvent): string {
   if (!game.eventTime) {
@@ -24,9 +24,10 @@ function formatEventTime(game: SportEvent): string {
 
 function sortEvents(a: SportEvent, b: SportEvent): number {
   const rank = (event: SportEvent): number => {
-    if (isLiveStatus(event.status)) return 0
-    if (isFinishedStatus(event.status)) return 2
-    return 1
+    const phase = getGamePhase(event)
+    if (phase === 'live') return 0
+    if (phase === 'scheduled') return 1
+    return 2
   }
 
   const rankDiff = rank(a) - rank(b)
@@ -44,11 +45,24 @@ function sortEvents(a: SportEvent, b: SportEvent): number {
 }
 
 function renderGameLine(game: SportEvent): string {
-  if (isFinishedStatus(game.status)) {
+  if (getGamePhase(game) === 'finished') {
     return `${game.awayTeam} ${game.awayScore ?? '—'} · ${game.homeTeam} ${game.homeScore ?? '—'}`
   }
 
   return `${game.awayTeam} · ${game.homeTeam}`
+}
+
+function getTodayString(): string {
+  const date = new Date()
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+function getTodayBadgeClasses(game: SportEvent): string {
+  if (getGamePhase(game) === 'scheduled' && game.eventDate === getTodayString()) {
+    return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300'
+  }
+
+  return getGamePhaseBadgeClasses(game)
 }
 
 export function AllGamesView({
@@ -56,22 +70,25 @@ export function AllGamesView({
   leaguesById,
   showTime,
   showVenue,
-  fallbackEvents
+  fallbackEvents,
+  showSportLabels = false
 }: {
   events: SportEvent[]
   leaguesById: Record<string, SportLeague>
   showTime: boolean
   showVenue: boolean
   fallbackEvents: SportEvent[]
+  showSportLabels?: boolean
 }): React.ReactElement {
   const grouped = useMemo(() => {
     const groups = new Map<string, SportEvent[]>()
     for (const event of [...events].sort(sortEvents)) {
-      const list = groups.get(event.leagueId)
+      const groupKey = `${event.sport}:${event.leagueId}`
+      const list = groups.get(groupKey)
       if (list) {
         list.push(event)
       } else {
-        groups.set(event.leagueId, [event])
+        groups.set(groupKey, [event])
       }
     }
     return Array.from(groups.entries())
@@ -94,8 +111,14 @@ export function AllGamesView({
                     <div>
                       <p className="text-sm font-medium">{renderGameLine(game)}</p>
                       {showVenue && game.venue ? <p className="text-xs text-muted-foreground">{game.venue}</p> : null}
+                      {showSportLabels ? <p className="text-xs text-muted-foreground">{getSportLabel(game.sport)}</p> : null}
                     </div>
-                    <span className="text-xs text-muted-foreground">{showTime ? formatEventTime(game) : game.eventDate}</span>
+                    <div className="shrink-0 text-right">
+                      <Badge variant="secondary" className={getGamePhaseBadgeClasses(game)}>
+                        {getGamePhaseLabel(game)}
+                      </Badge>
+                      <p className="mt-1 text-xs text-muted-foreground">{showTime ? formatEventTime(game) : game.eventDate}</p>
+                    </div>
                   </>
                 }
               />
@@ -108,12 +131,15 @@ export function AllGamesView({
 
   return (
     <div className="space-y-4">
-      {grouped.map(([leagueId, leagueEvents]) => (
-        <section key={leagueId} className="space-y-2">
+      {grouped.map(([leagueKey, leagueEvents]) => {
+        const league = leaguesById[leagueKey]
+        return (
+        <section key={leagueKey} className="space-y-2">
           <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold">{leaguesById[leagueId]?.name ?? leagueId}</h3>
-            {leaguesById[leagueId]?.country ? (
-              <span className="text-xs text-muted-foreground">{leaguesById[leagueId].country}</span>
+            <h3 className="text-sm font-semibold">{league?.name ?? leagueEvents[0]?.leagueId ?? leagueKey}</h3>
+            {showSportLabels ? <Badge variant="outline">{getSportLabel(league?.sport ?? leagueEvents[0]?.sport ?? '')}</Badge> : null}
+            {league?.country ? (
+              <span className="text-xs text-muted-foreground">{league.country}</span>
             ) : null}
           </div>
           <div className="space-y-2">
@@ -128,29 +154,27 @@ export function AllGamesView({
                       {showVenue && game.venue ? <p className="text-xs text-muted-foreground">{game.venue}</p> : null}
                     </div>
                     <div className="shrink-0 text-right">
-                      {isLiveStatus(game.status) ? (
-                        <Badge variant="secondary" className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
-                          In Progress
-                        </Badge>
-                      ) : null}
-                      {!isLiveStatus(game.status) ? (
-                        <span className="text-xs text-muted-foreground">
-                          {isFinishedStatus(game.status)
-                            ? game.status ?? 'Final'
+                      <Badge variant="secondary" className={getTodayBadgeClasses(game)}>
+                        {getGamePhase(game) === 'scheduled' ? 'Today' : getGamePhaseLabel(game)}
+                      </Badge>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {getGamePhase(game) === 'live'
+                          ? game.status ?? 'Live'
+                          : getGamePhase(game) === 'finished'
+                            ? 'Final score'
                             : showTime
-                              ? formatEventTime(game)
-                              : game.status ?? 'Scheduled'}
-                        </span>
-                      ) : null}
+                              ? `${formatEventTime(game)} · Today`
+                              : 'Today'}
+                      </p>
                     </div>
                   </>
                 }
-                footer={showTime && !isFinishedStatus(game.status) && !isLiveStatus(game.status) ? `Date: ${game.eventDate}` : undefined}
+                footer={getGamePhase(game) === 'scheduled' && showTime ? `Date: ${game.eventDate}` : undefined}
               />
             ))}
           </div>
         </section>
-      ))}
+      )})}
     </div>
   )
 }

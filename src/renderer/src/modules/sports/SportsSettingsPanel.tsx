@@ -8,6 +8,7 @@ import {
   SelectValue
 } from '../../components/ui/select'
 import type { SportsViewConfig } from '../../../../shared/ipc-types'
+import { SPORTS_WIDGET_OPTIONS } from '../../../../shared/sports'
 
 export function SportsSettingsPanel({
   config,
@@ -28,7 +29,9 @@ export function SportsSettingsPanel({
         <Select value={config.sport} onValueChange={(value) => setConfig({ ...config, sport: value })}>
           <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
           <SelectContent align="start" side="bottom">
-            <SelectItem value="Baseball">Baseball</SelectItem>
+            {SPORTS_WIDGET_OPTIONS.map((sport) => (
+              <SelectItem key={sport.id} value={sport.id}>{sport.label}</SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
@@ -41,8 +44,11 @@ export function SportsSettingsPanel({
         >
           <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
           <SelectContent align="start" side="bottom">
+            <SelectItem value="today">Today</SelectItem>
+            <SelectItem value="summarized">Summarized</SelectItem>
+            <SelectItem value="standard">Standard</SelectItem>
+            <SelectItem value="detailed">Detailed</SelectItem>
             <SelectItem value="all_games">All Games</SelectItem>
-            <SelectItem value="my_teams">My Teams</SelectItem>
           </SelectContent>
         </Select>
       </div>

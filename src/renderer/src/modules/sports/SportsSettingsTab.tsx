@@ -11,7 +11,24 @@ import {
   DialogHeader,
   DialogTitle
 } from '../../components/ui/dialog'
-import { IPC, type IpcMutationResult, type SportLeague, type SportsDataUpdatedEvent, type SportSyncStatus, type TeamSearchResult, type TrackedTeam } from '../../../../shared/ipc-types'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '../../components/ui/select'
+import {
+  IPC,
+  type IpcMutationResult,
+  type SportLeague,
+  type SportsDataUpdatedEvent,
+  type SportsSettings,
+  type SportSyncStatus,
+  type TeamSearchResult,
+  type TrackedTeam
+} from '../../../../shared/ipc-types'
+import { DEFAULT_SPORT, SPORTS_OPTIONS, getSportLabel, type SupportedSport } from '../../../../shared/sports'
 
 function formatLastSynced(timestamp: number | null): string {
   if (timestamp == null) {
@@ -42,6 +59,7 @@ function formatLastSynced(timestamp: number | null): string {
 }
 
 export function SportsSettingsTab(): React.ReactElement {
+  const [selectedSport, setSelectedSport] = useState<SupportedSport>(DEFAULT_SPORT)
   const [status, setStatus] = useState<SportSyncStatus | null>(null)
   const [teams, setTeams] = useState<TrackedTeam[]>([])
   const [leagues, setLeagues] = useState<SportLeague[]>([])
@@ -49,23 +67,29 @@ export function SportsSettingsTab(): React.ReactElement {
   const [searchResults, setSearchResults] = useState<TeamSearchResult[]>([])
   const [searching, setSearching] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  const [sportsSettings, setSportsSettings] = useState<SportsSettings>({ pollIntervalMinutes: 5 })
+  const [pollIntervalValue, setPollIntervalValue] = useState('5')
+  const [savingPollInterval, setSavingPollInterval] = useState(false)
   const [browseLeaguesOpen, setBrowseLeaguesOpen] = useState(false)
 
   const loadData = useCallback(async () => {
     try {
-      const [statusList, trackedTeams, sportLeagues] = await Promise.all([
+      const [statusList, trackedTeams, sportLeagues, currentSettings] = await Promise.all([
         window.api.invoke(IPC.SPORTS_GET_STATUS),
         window.api.invoke(IPC.SPORTS_GET_TRACKED_TEAMS),
-        window.api.invoke(IPC.SPORTS_GET_LEAGUES, { sport: 'Baseball' })
+        window.api.invoke(IPC.SPORTS_GET_LEAGUES, { sport: selectedSport }),
+        window.api.invoke(IPC.SETTINGS_GET_SPORTS_SETTINGS)
       ])
 
-      setStatus(((statusList as SportSyncStatus[]).find((item) => item.sport === 'Baseball') ?? null))
-      setTeams((trackedTeams as TrackedTeam[]).filter((team) => team.sport === 'Baseball').sort((a, b) => a.sortOrder - b.sortOrder))
+      setStatus(((statusList as SportSyncStatus[]).find((item) => item.sport === selectedSport) ?? null))
+      setTeams((trackedTeams as TrackedTeam[]).filter((team) => team.sport === selectedSport).sort((a, b) => a.sortOrder - b.sortOrder))
       setLeagues((sportLeagues as SportLeague[]).sort((a, b) => Number(b.enabled) - Number(a.enabled) || a.name.localeCompare(b.name)))
+      setSportsSettings(currentSettings as SportsSettings)
+      setPollIntervalValue(String((currentSettings as SportsSettings).pollIntervalMinutes))
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to load Sports settings.')
     }
-  }, [])
+  }, [selectedSport])
 
   useEffect(() => {
     void loadData()
@@ -74,7 +98,7 @@ export function SportsSettingsTab(): React.ReactElement {
   useEffect(() => {
     return window.api.on(IPC.SPORTS_DATA_UPDATED, (event) => {
       const payload = event as SportsDataUpdatedEvent
-      if (payload.sport !== 'Baseball') {
+      if (payload.sport !== selectedSport) {
         return
       }
       if (!payload.ok && payload.error) {
@@ -82,14 +106,19 @@ export function SportsSettingsTab(): React.ReactElement {
       }
       void loadData()
     })
-  }, [loadData])
+  }, [loadData, selectedSport])
+
+  useEffect(() => {
+    setSearchResults([])
+  }, [selectedSport])
 
   const trackedTeamIds = useMemo(() => new Set(teams.map((team) => team.teamId)), [teams])
+  const sportLabel = getSportLabel(selectedSport)
 
   const refreshNow = async (): Promise<void> => {
     setRefreshing(true)
     try {
-      const result = (await window.api.invoke(IPC.SPORTS_REFRESH, { sport: 'Baseball' })) as IpcMutationResult
+      const result = (await window.api.invoke(IPC.SPORTS_REFRESH, { sport: selectedSport })) as IpcMutationResult
       if (!result.ok) {
         toast.error(result.error ?? 'Failed to refresh sports data.')
         return
@@ -103,6 +132,29 @@ export function SportsSettingsTab(): React.ReactElement {
     }
   }
 
+  const savePollInterval = async (): Promise<void> => {
+    const parsed = Number.parseInt(pollIntervalValue, 10)
+    if (!Number.isFinite(parsed) || parsed < 1 || parsed > 1440) {
+      toast.error('Refresh interval must be between 1 and 1440 minutes.')
+      return
+    }
+
+    setSavingPollInterval(true)
+    try {
+      const nextSettings = (await window.api.invoke(IPC.SETTINGS_UPDATE_SPORTS_SETTINGS, {
+        pollIntervalMinutes: parsed
+      })) as SportsSettings
+      setSportsSettings(nextSettings)
+      setPollIntervalValue(String(nextSettings.pollIntervalMinutes))
+      toast.success('Sports refresh interval saved.')
+      await loadData()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save sports refresh interval.')
+    } finally {
+      setSavingPollInterval(false)
+    }
+  }
+
   const runSearch = async (): Promise<void> => {
     const trimmed = searchQuery.trim()
     if (!trimmed) {
@@ -113,7 +165,7 @@ export function SportsSettingsTab(): React.ReactElement {
     try {
       const results = (await window.api.invoke(IPC.SPORTS_SEARCH_TEAMS, {
         query: trimmed,
-        sport: 'Baseball'
+        sport: selectedSport
       })) as TeamSearchResult[]
       setSearchResults(results)
     } catch (err) {
@@ -223,7 +275,7 @@ export function SportsSettingsTab(): React.ReactElement {
       <Dialog open={browseLeaguesOpen} onOpenChange={setBrowseLeaguesOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Browse Baseball Leagues</DialogTitle>
+            <DialogTitle>Browse {sportLabel} Leagues</DialogTitle>
             <DialogDescription>
               Enable leagues to include them in the All Games view.
             </DialogDescription>
@@ -245,22 +297,50 @@ export function SportsSettingsTab(): React.ReactElement {
       </Dialog>
 
       <div>
+        <h3 className="mb-1 text-sm font-medium">Sport</h3>
+        <p className="mb-3 text-xs text-muted-foreground">
+          Choose which sport to configure for shared cache, tracked teams, and league coverage.
+        </p>
+        <div className="max-w-xs">
+          <Select value={selectedSport} onValueChange={(value) => setSelectedSport(value as SupportedSport)}>
+            <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+            <SelectContent align="start" side="bottom">
+              {SPORTS_OPTIONS.map((sport) => (
+                <SelectItem key={sport.id} value={sport.id}>{sport.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div>
         <h3 className="mb-1 text-sm font-medium">Data & Refresh</h3>
         <p className="mb-3 text-xs text-muted-foreground">
           Shared sports cache state for all Sports widgets.
         </p>
         <div className="grid gap-3 md:grid-cols-2 max-w-3xl">
           <div className="rounded-md border px-3 py-3">
-            <p className="text-sm font-medium">Baseball</p>
+            <p className="text-sm font-medium">{sportLabel}</p>
             <p className="mt-2 text-xs text-muted-foreground">Last synced: {formatLastSynced(status?.lastFetchedAt ?? null)}</p>
             <p className="text-xs text-muted-foreground">Enabled leagues: {status?.enabledLeagueCount ?? 0}</p>
             <p className="text-xs text-muted-foreground">Tracked teams: {status?.trackedTeamCount ?? 0}</p>
           </div>
           <div className="rounded-md border px-3 py-3">
-            <p className="text-sm font-medium">Refresh cache</p>
-            <p className="mt-2 text-xs text-muted-foreground">
-              Forces a fresh fetch from TheSportsDB for Baseball.
-            </p>
+            <p className="text-sm font-medium">Refresh cadence</p>
+            <p className="mt-2 text-xs text-muted-foreground">Refresh every ___ minutes for automatic sports sync.</p>
+            <div className="mt-3 flex items-center gap-2">
+              <Input
+                value={pollIntervalValue}
+                onChange={(event) => setPollIntervalValue(event.target.value)}
+                inputMode="numeric"
+                className="w-28"
+                aria-label="Sports refresh interval in minutes"
+              />
+              <Button variant="outline" size="sm" onClick={() => void savePollInterval()} disabled={savingPollInterval}>
+                {savingPollInterval ? 'Saving...' : 'Save Interval'}
+              </Button>
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">Current setting: every {sportsSettings.pollIntervalMinutes} minute{sportsSettings.pollIntervalMinutes === 1 ? '' : 's'}.</p>
             <Button className="mt-3" variant="outline" size="sm" onClick={() => void refreshNow()} disabled={refreshing}>
               <RefreshCcw className={`mr-1 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
               {refreshing ? 'Refreshing...' : 'Refresh Now'}
@@ -270,7 +350,7 @@ export function SportsSettingsTab(): React.ReactElement {
       </div>
 
       <div>
-        <h3 className="mb-1 text-sm font-medium">Baseball Tracked Teams</h3>
+        <h3 className="mb-1 text-sm font-medium">{sportLabel} Tracked Teams</h3>
         <p className="mb-3 text-xs text-muted-foreground">
           Teams render in the order shown here when the widget is set to My Teams.
         </p>
@@ -332,9 +412,9 @@ export function SportsSettingsTab(): React.ReactElement {
       </div>
 
       <div>
-        <h3 className="mb-1 text-sm font-medium">Baseball Leagues in All Games View</h3>
+        <h3 className="mb-1 text-sm font-medium">{sportLabel} Leagues in All Games View</h3>
         <p className="mb-3 text-xs text-muted-foreground">
-          Enabled leagues appear in the All Games overview for Baseball.
+          Enabled leagues appear in the All Games overview for {sportLabel}.
         </p>
         <div className="rounded-md border px-3 py-3 max-w-3xl space-y-3">
           <div className="space-y-2">

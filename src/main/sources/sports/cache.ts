@@ -54,6 +54,8 @@ type EventRow = {
   away_team_id: string | null
   home_team: string
   away_team: string
+  home_team_badge_url?: string | null
+  away_team_badge_url?: string | null
   home_score: string | null
   away_score: string | null
   event_date: string
@@ -96,6 +98,8 @@ function mapEvent(row: EventRow): SportEvent {
     awayTeamId: row.away_team_id,
     homeTeam: row.home_team,
     awayTeam: row.away_team,
+    homeTeamBadgeUrl: row.home_team_badge_url ?? null,
+    awayTeamBadgeUrl: row.away_team_badge_url ?? null,
     homeScore: row.home_score,
     awayScore: row.away_score,
     eventDate: row.event_date,
@@ -325,14 +329,49 @@ export function upsertEvents(db: Database.Database, events: SportEvent[], fetche
   apply(events)
 }
 
+export function clearOpponentCache(db: Database.Database): void {
+  db.prepare('DELETE FROM sports_opponent_cache').run()
+}
+
+export function getOpponentBadge(db: Database.Database, teamId: string): string | null | undefined {
+  const row = db.prepare('SELECT badge_url FROM sports_opponent_cache WHERE team_id = ?').get(teamId) as
+    | { badge_url: string | null }
+    | undefined
+
+  return row === undefined ? undefined : row.badge_url
+}
+
+export function upsertOpponentBadge(
+  db: Database.Database,
+  teamId: string,
+  name: string,
+  badgeUrl: string | null
+): void {
+  db.prepare(
+    `INSERT INTO sports_opponent_cache (team_id, name, badge_url, fetched_at)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT(team_id) DO UPDATE SET
+       name = excluded.name,
+       badge_url = excluded.badge_url,
+       fetched_at = excluded.fetched_at`
+  ).run(teamId, name, badgeUrl, Math.floor(Date.now() / 1000))
+}
+
 export function getTodayEvents(db: Database.Database, sport: string, date: string): SportEvent[] {
   const rows = db
     .prepare(
       `SELECT se.event_id, se.league_id, se.sport, se.home_team_id, se.away_team_id,
-              se.home_team, se.away_team, se.home_score, se.away_score,
+              se.home_team, se.away_team,
+              COALESCE(ht.badge_url, hoc.badge_url) AS home_team_badge_url,
+              COALESCE(at.badge_url, aoc.badge_url) AS away_team_badge_url,
+              se.home_score, se.away_score,
               se.event_date, se.event_time, se.status, se.venue
          FROM sports_events se
          INNER JOIN sports_leagues sl ON sl.league_id = se.league_id
+         LEFT JOIN sports_teams ht ON ht.team_id = se.home_team_id
+         LEFT JOIN sports_teams at ON at.team_id = se.away_team_id
+         LEFT JOIN sports_opponent_cache hoc ON hoc.team_id = se.home_team_id
+         LEFT JOIN sports_opponent_cache aoc ON aoc.team_id = se.away_team_id
         WHERE se.sport = ?
           AND se.event_date = ?
           AND sl.enabled = 1
@@ -346,10 +385,17 @@ export function getTodayEvents(db: Database.Database, sport: string, date: strin
 export function getTeamEvents(db: Database.Database, teamId: string, today: string): SportTeamEvents {
   const rows = db
     .prepare(
-      `SELECT event_id, league_id, sport, home_team_id, away_team_id, home_team, away_team,
-              home_score, away_score, event_date, event_time, status, venue
-         FROM sports_events
-        WHERE home_team_id = ? OR away_team_id = ?`
+      `SELECT se.event_id, se.league_id, se.sport, se.home_team_id, se.away_team_id,
+              se.home_team, se.away_team,
+              COALESCE(ht.badge_url, hoc.badge_url) AS home_team_badge_url,
+              COALESCE(at.badge_url, aoc.badge_url) AS away_team_badge_url,
+              se.home_score, se.away_score, se.event_date, se.event_time, se.status, se.venue
+         FROM sports_events se
+         LEFT JOIN sports_teams ht ON ht.team_id = se.home_team_id
+         LEFT JOIN sports_teams at ON at.team_id = se.away_team_id
+         LEFT JOIN sports_opponent_cache hoc ON hoc.team_id = se.home_team_id
+         LEFT JOIN sports_opponent_cache aoc ON aoc.team_id = se.away_team_id
+        WHERE se.home_team_id = ? OR se.away_team_id = ?`
     )
     .all(teamId, teamId) as EventRow[]
 

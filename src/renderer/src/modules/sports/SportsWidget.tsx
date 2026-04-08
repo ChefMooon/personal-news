@@ -6,6 +6,7 @@ import { Button } from '../../components/ui/button'
 import { useWidgetInstance } from '../../contexts/WidgetInstanceContext'
 import { useSportsViewConfig } from '../../hooks/useSportsViewConfig'
 import { IPC, type IpcMutationResult, type SportEvent, type SportLeague, type SportsDataUpdatedEvent, type SportTeamEvents, type TrackedTeam } from '../../../../shared/ipc-types'
+import { ALL_SPORTS_ID, SUPPORTED_SPORTS, getSportLabel } from '../../../../shared/sports'
 import { AllGamesView } from './AllGamesView'
 import { MyTeamsView } from './MyTeamsView'
 import { SportsSettingsPanel } from './SportsSettingsPanel'
@@ -29,10 +30,20 @@ function sortUpcomingEvents(a: SportEvent, b: SportEvent): number {
   return aValue - bValue
 }
 
+function getLeagueKey(sport: string, leagueId: string): string {
+  return `${sport}:${leagueId}`
+}
+
 function SportsWidget(): React.ReactElement {
   const { instanceId, label } = useWidgetInstance()
   const widgetTitle = label ?? 'Sports'
   const { config, setConfig } = useSportsViewConfig(instanceId)
+  const selectedSports = useMemo(
+    () => (config.sport === ALL_SPORTS_ID ? SUPPORTED_SPORTS : [config.sport]),
+    [config.sport]
+  )
+  const showSportLabels = config.sport === ALL_SPORTS_ID
+  const sportLabel = getSportLabel(config.sport)
   const [todayEvents, setTodayEvents] = useState<SportEvent[]>([])
   const [trackedTeams, setTrackedTeams] = useState<TrackedTeam[]>([])
   const [leagues, setLeagues] = useState<SportLeague[]>([])
@@ -55,15 +66,16 @@ function SportsWidget(): React.ReactElement {
   const loadData = useCallback(async () => {
     setLoading(true)
     try {
-      const [events, leaguesResult, allTeams] = await Promise.all([
-        window.api.invoke(IPC.SPORTS_GET_TODAY_EVENTS, { sport: config.sport }),
-        window.api.invoke(IPC.SPORTS_GET_LEAGUES, { sport: config.sport }),
+      const [eventResults, leagueResults, allTeams] = await Promise.all([
+        Promise.all(selectedSports.map((sport) => window.api.invoke(IPC.SPORTS_GET_TODAY_EVENTS, { sport }))),
+        Promise.all(selectedSports.map((sport) => window.api.invoke(IPC.SPORTS_GET_LEAGUES, { sport }))),
         window.api.invoke(IPC.SPORTS_GET_TRACKED_TEAMS)
       ])
 
-      const sportTeams = (allTeams as TrackedTeam[]).filter((team) => team.sport === config.sport)
-      setTodayEvents(events as SportEvent[])
-      setLeagues(leaguesResult as SportLeague[])
+      const selectedSportSet = new Set(selectedSports)
+      const sportTeams = (allTeams as TrackedTeam[]).filter((team) => selectedSportSet.has(team.sport))
+      setTodayEvents((eventResults as SportEvent[][]).flat())
+      setLeagues((leagueResults as SportLeague[][]).flat())
       setTrackedTeams(sportTeams)
       setTeamEventsById(await loadTeamEvents(sportTeams))
     } catch (err) {
@@ -71,7 +83,7 @@ function SportsWidget(): React.ReactElement {
     } finally {
       setLoading(false)
     }
-  }, [config.sport, loadTeamEvents])
+  }, [loadTeamEvents, selectedSports])
 
   useEffect(() => {
     void loadData()
@@ -80,7 +92,7 @@ function SportsWidget(): React.ReactElement {
   useEffect(() => {
     return window.api.on(IPC.SPORTS_DATA_UPDATED, (event) => {
       const payload = event as SportsDataUpdatedEvent
-      if (payload.sport !== config.sport) {
+      if (!selectedSports.includes(payload.sport)) {
         return
       }
 
@@ -90,10 +102,10 @@ function SportsWidget(): React.ReactElement {
 
       void loadData()
     })
-  }, [config.sport, loadData])
+  }, [loadData, selectedSports])
 
   const leaguesById = useMemo(
-    () => Object.fromEntries(leagues.map((league) => [league.leagueId, league] as const)),
+    () => Object.fromEntries(leagues.map((league) => [getLeagueKey(league.sport, league.leagueId), league] as const)),
     [leagues]
   )
 
@@ -103,20 +115,25 @@ function SportsWidget(): React.ReactElement {
   )
 
   const fallbackEvents = useMemo(() => {
-    const enabledLeagueIds = new Set(leagues.filter((league) => league.enabled).map((league) => league.leagueId))
+    const enabledLeagueIds = new Set(
+      leagues.filter((league) => league.enabled).map((league) => getLeagueKey(league.sport, league.leagueId))
+    )
     return dedupeEvents(
       enabledTeams.flatMap((team) => teamEventsById[team.teamId]?.next ?? [])
     )
-      .filter((event) => enabledLeagueIds.size === 0 || enabledLeagueIds.has(event.leagueId))
+      .filter((event) => enabledLeagueIds.size === 0 || enabledLeagueIds.has(getLeagueKey(event.sport, event.leagueId)))
       .sort(sortUpcomingEvents)
   }, [enabledTeams, leagues, teamEventsById])
 
   const refreshNow = async (): Promise<void> => {
     setRefreshing(true)
     try {
-      const result = (await window.api.invoke(IPC.SPORTS_REFRESH, { sport: config.sport })) as IpcMutationResult
-      if (!result.ok) {
-        toast.error(result.error ?? 'Failed to refresh Sports data.')
+      const results = (await Promise.all(
+        selectedSports.map((sport) => window.api.invoke(IPC.SPORTS_REFRESH, { sport }))
+      )) as IpcMutationResult[]
+      const failed = results.find((result) => !result.ok)
+      if (failed) {
+        toast.error(failed.error ?? 'Failed to refresh Sports data.')
         return
       }
       toast.success('Sports data refresh started.')
@@ -135,7 +152,7 @@ function SportsWidget(): React.ReactElement {
           <div>
             <CardTitle className="text-lg">{widgetTitle}</CardTitle>
             <p className="mt-1 text-xs text-muted-foreground">
-              Daily schedule and tracked teams for {config.sport}.
+              Daily schedule and tracked teams for {sportLabel}.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -161,6 +178,7 @@ function SportsWidget(): React.ReactElement {
                   showTime={config.showTime}
                   showVenue={config.showVenue}
                   fallbackEvents={fallbackEvents}
+                  showSportLabels={showSportLabels}
                 />
               ) : (
                 <MyTeamsView
@@ -168,6 +186,8 @@ function SportsWidget(): React.ReactElement {
                   teamEventsById={teamEventsById}
                   showVenue={config.showVenue}
                   showTime={config.showTime}
+                  viewMode={config.viewMode}
+                  showSportLabels={showSportLabels}
                 />
               )}
             </div>
@@ -184,6 +204,7 @@ function SportsWidget(): React.ReactElement {
             showTime={config.showTime}
             showVenue={config.showVenue}
             fallbackEvents={fallbackEvents}
+            showSportLabels={showSportLabels}
           />
         ) : (
           <MyTeamsView
@@ -191,6 +212,8 @@ function SportsWidget(): React.ReactElement {
             teamEventsById={teamEventsById}
             showVenue={config.showVenue}
             showTime={config.showTime}
+            viewMode={config.viewMode}
+            showSportLabels={showSportLabels}
           />
         )}
       </CardContent>
