@@ -32,6 +32,10 @@ interface UseSavedPostsResult {
   setOffset: (offset: number) => void
 }
 
+interface FetchPostsOptions {
+  silent?: boolean
+}
+
 export function useSavedPosts(options?: UseSavedPostsOptions): UseSavedPostsResult {
   const [posts, setPosts] = useState<SavedPost[]>([])
   const [total, setTotal] = useState(0)
@@ -53,8 +57,11 @@ export function useSavedPosts(options?: UseSavedPostsOptions): UseSavedPostsResu
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const fetchPosts = useCallback(async () => {
-    setLoading(true)
+  const fetchPosts = useCallback(async (fetchOptions?: FetchPostsOptions) => {
+    const silent = fetchOptions?.silent ?? false
+    if (!silent) {
+      setLoading(true)
+    }
     setError(null)
     try {
       const request: GetSavedPostsRequest = {
@@ -93,7 +100,9 @@ export function useSavedPosts(options?: UseSavedPostsOptions): UseSavedPostsResu
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load saved posts')
     } finally {
-      setLoading(false)
+      if (!silent) {
+        setLoading(false)
+      }
     }
   }, [
     hideViewed,
@@ -122,14 +131,14 @@ export function useSavedPosts(options?: UseSavedPostsOptions): UseSavedPostsResu
   // Listen for push events from ntfy ingest
   useEffect(() => {
     const listener = (): void => {
-      void fetchPosts()
+      void fetchPosts({ silent: true })
     }
     return window.api.on(IPC.REDDIT_NTFY_INGEST_COMPLETE, listener)
   }, [fetchPosts])
 
   useEffect(() => {
     const listener = (): void => {
-      void fetchPosts()
+      void fetchPosts({ silent: true })
     }
     return window.api.on(IPC.REDDIT_UPDATED, listener)
   }, [fetchPosts])

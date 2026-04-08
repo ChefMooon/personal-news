@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react'
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useSavedPosts } from '../../hooks/useSavedPosts'
@@ -9,10 +9,11 @@ import {
 import { useNtfyStaleness } from '../../hooks/useNtfyStaleness'
 import { useWidgetInstance } from '../../contexts/WidgetInstanceContext'
 import { SavedPostsSettingsPanel } from './SavedPostsSettingsPanel'
+import { SavedPostItemActions } from './SavedPostItemActions'
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card'
 import { Badge } from '../../components/ui/badge'
 import { Button } from '../../components/ui/button'
-import { Bookmark, ArrowUp, Clock, Settings2, RotateCcw, RefreshCcw, X, Circle, CircleCheck } from 'lucide-react'
+import { Bookmark, ArrowUp, Clock, Settings2, RotateCcw, RefreshCcw, X } from 'lucide-react'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -46,84 +47,96 @@ function formatAuthor(post: SavedPost): string | null {
 
 function PostCard({
   post,
+  allTags,
   config,
   onOpen,
-  onToggleViewed
+  onToggleViewed,
+  onAfterMutation
 }: {
   post: SavedPost
+  allTags: string[]
   config: { showMetadata: boolean; showSourceBadge: boolean; showUrl: boolean; showBodyPreview: boolean; cardDensity: 'compact' | 'detailed' }
   onOpen: (post: SavedPost) => void
   onToggleViewed: (post: SavedPost, viewed: boolean) => void
+  onAfterMutation: () => Promise<void> | void
 }): React.ReactElement {
   const author = formatAuthor(post)
   const isViewed = post.viewed_at !== null
   return (
-    <div
-      className={
-        config.cardDensity === 'compact'
-          ? 'flex items-start gap-2 py-1 w-full'
-          : 'flex items-start gap-2 py-2 px-2 rounded bg-muted/30 w-full hover:bg-muted/50 transition-colors'
-      }
+    <SavedPostItemActions
+      post={post}
+      allTags={allTags}
+      onOpenPost={onOpen}
+      onSetViewed={onToggleViewed}
+      onAfterMutation={onAfterMutation}
     >
-      <button
-        type="button"
-        onClick={() => onOpen(post)}
-        className="flex-1 text-left hover:opacity-80 transition-opacity"
-      >
-      <div className="flex items-center gap-1.5 flex-wrap">
-        {config.showSourceBadge && (
-          <Badge variant="outline" className="text-xs shrink-0">
-            {SOURCE_LABELS[post.source]}
-          </Badge>
-        )}
-        {post.source === 'reddit' && post.subreddit && config.showMetadata && (
-          <Badge variant="secondary" className="text-xs shrink-0">
-            r/{post.subreddit}
-          </Badge>
-        )}
-        {author && config.showMetadata && (
-          <span className="text-xs text-muted-foreground">{author}</span>
-        )}
-      </div>
-      <div
-        className={
-          config.cardDensity === 'compact'
-            ? `text-sm font-medium line-clamp-2 flex-1 ${isViewed ? 'text-foreground/70' : ''}`
-            : `text-sm font-medium ${isViewed ? 'text-foreground/70' : ''}`
-        }
-      >
-        {post.title}
-      </div>
-      {config.showUrl && (
-        <p className="text-xs text-muted-foreground truncate max-w-full">{post.url}</p>
-      )}
-      {config.showBodyPreview && post.body && (
-        <p className="text-xs text-muted-foreground line-clamp-2">{post.body}</p>
-      )}
-      <div className="flex items-center gap-2 text-xs">
-        {post.score !== null && config.showMetadata && (
-          <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-muted/60 text-foreground/80 whitespace-nowrap">
-            <ArrowUp className="h-3 w-3" />
-            <span>{post.score.toLocaleString()}</span>
+      {({ onContextMenu, trigger, viewedToggle }) => (
+        <div
+          className={
+            config.cardDensity === 'compact'
+              ? 'flex items-start gap-2 py-1 w-full'
+              : 'flex items-start gap-2 py-2 px-2 rounded bg-muted/30 w-full hover:bg-muted/50 transition-colors'
+          }
+          onContextMenu={onContextMenu}
+        >
+          <button
+            type="button"
+            onClick={() => onOpen(post)}
+            className="flex-1 text-left hover:opacity-80 transition-opacity"
+          >
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {config.showSourceBadge && (
+                <Badge variant="outline" className="text-xs shrink-0">
+                  {SOURCE_LABELS[post.source]}
+                </Badge>
+              )}
+              {post.source === 'reddit' && post.subreddit && config.showMetadata && (
+                <Badge variant="secondary" className="text-xs shrink-0">
+                  r/{post.subreddit}
+                </Badge>
+              )}
+              {author && config.showMetadata && (
+                <span className="text-xs text-muted-foreground">{author}</span>
+              )}
+            </div>
+            <div
+              className={
+                config.cardDensity === 'compact'
+                  ? `text-sm font-medium line-clamp-2 flex-1 ${isViewed ? 'text-foreground/70' : ''}`
+                  : `text-sm font-medium ${isViewed ? 'text-foreground/70' : ''}`
+              }
+            >
+              {post.title}
+            </div>
+            {post.note && (
+              <p className="mt-1 text-xs text-muted-foreground italic line-clamp-2">{post.note}</p>
+            )}
+            {config.showUrl && (
+              <p className="text-xs text-muted-foreground truncate max-w-full">{post.url}</p>
+            )}
+            {config.showBodyPreview && post.body && (
+              <p className="text-xs text-muted-foreground line-clamp-2">{post.body}</p>
+            )}
+            <div className="flex items-center gap-2 text-xs">
+              {post.score !== null && config.showMetadata && (
+                <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-muted/60 text-foreground/80 whitespace-nowrap">
+                  <ArrowUp className="h-3 w-3" />
+                  <span>{post.score.toLocaleString()}</span>
+                </div>
+              )}
+              <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-muted/60 text-foreground/80 whitespace-nowrap" title={new Date(post.saved_at * 1000).toLocaleString()}>
+                <Clock className="h-3 w-3" />
+                <span>{formatRelativeTime(post.saved_at)}</span>
+              </div>
+            </div>
+          </button>
+          <div className="mt-0.5 flex items-center gap-1 shrink-0">
+            {viewedToggle}
+            {trigger}
           </div>
-        )}
-        <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-muted/60 text-foreground/80 whitespace-nowrap" title={new Date(post.saved_at * 1000).toLocaleString()}>
-          <Clock className="h-3 w-3" />
-          <span>{formatRelativeTime(post.saved_at)}</span>
         </div>
-      </div>
-      </button>
-      <button
-        type="button"
-        onClick={() => onToggleViewed(post, !isViewed)}
-        className="mt-0.5 p-1 rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-        aria-label={isViewed ? 'Mark post as unviewed' : 'Mark post as viewed'}
-        aria-pressed={isViewed}
-        title={isViewed ? 'Viewed - click to mark unviewed' : 'Unviewed - click to mark viewed'}
-      >
-        {isViewed ? <CircleCheck className="h-4 w-4 text-emerald-400" /> : <Circle className="h-4 w-4" />}
-      </button>
-    </div>
+      )}
+    </SavedPostItemActions>
   )
 }
 
@@ -267,9 +280,7 @@ function SavedPostsWidget(): React.ReactElement {
 
   const handleOpenExternal = (post: SavedPost): void => {
     if (post.viewed_at === null) {
-      window.api.invoke(IPC.REDDIT_SET_SAVED_POST_VIEWED, post.post_id, true).then(() => {
-        void refetch()
-      }).catch((err) => {
+      window.api.invoke(IPC.REDDIT_SET_SAVED_POST_VIEWED, post.post_id, true).catch((err) => {
         toast.error(err instanceof Error ? err.message : 'Failed to update viewed state.')
       })
     }
@@ -288,12 +299,14 @@ function SavedPostsWidget(): React.ReactElement {
           toast.error(payload.error ?? 'Failed to update viewed state.')
           return
         }
-        void refetch()
       })
       .catch((err) => {
         toast.error(err instanceof Error ? err.message : 'Failed to update viewed state.')
       })
   }
+
+  const handleAfterMutation = useCallback(async (): Promise<void> => {
+  }, [])
 
   function handleOpenEdit(): void {
     const currentHeight = cardContentRef.current?.getBoundingClientRect().height
@@ -337,16 +350,18 @@ function SavedPostsWidget(): React.ReactElement {
         <PostCard
           key={post.post_id}
           post={post}
+          allTags={allTags}
           config={cardConfig}
           onOpen={handleOpenExternal}
           onToggleViewed={handleToggleViewed}
+          onAfterMutation={handleAfterMutation}
         />
       ))}
     </div>
   )
 
   const renderPreviewContent = (): React.ReactNode => {
-    if (loading) {
+    if (loading && posts.length === 0) {
       return <p className="text-sm text-muted-foreground">Loading...</p>
     }
 

@@ -8,6 +8,7 @@ import { useNtfyStaleness } from '../hooks/useNtfyStaleness'
 import { useSavedPostsEnabled } from '../contexts/SavedPostsEnabledContext'
 import { StaleWarning } from '../modules/saved-posts/StaleWarning'
 import { NtfyOnboardingWizard } from '../modules/saved-posts/NtfyOnboardingWizard'
+import { SavedPostItemActions } from '../modules/saved-posts/SavedPostItemActions'
 import { TagManagementModal } from '../modules/saved-posts/TagManagementModal'
 import {
   AlertDialog,
@@ -29,7 +30,7 @@ import {
   SelectTrigger,
   SelectValue
 } from '../components/ui/select'
-import { Bookmark, Search, Tags, RefreshCw, Plus, X, Circle, CircleCheck, Trash2 } from 'lucide-react'
+import { Bookmark, Search, Tags, RefreshCw, Plus, X, Trash2 } from 'lucide-react'
 import { formatRelativeTime } from '../lib/time'
 import { toRedditPostUrl } from '../lib/utils'
 
@@ -198,15 +199,22 @@ function SavedPostsContent(): React.ReactElement {
     }
   }, [search, subreddit, tag, source])
 
-  const refreshAnalytics = useCallback((): void => {
-    setAnalyticsLoading(true)
+  const refreshAnalytics = useCallback((options?: { silent?: boolean }): void => {
+    const silent = options?.silent ?? false
+    if (!silent) {
+      setAnalyticsLoading(true)
+    }
     window.api
       .invoke(IPC.REDDIT_GET_SAVED_VIEWED_ANALYTICS, analyticsScope)
       .then((data) => setAnalytics(data as ViewedAnalytics))
       .catch((err) => {
         toast.error(err instanceof Error ? err.message : 'Failed to load Saved Posts analytics.')
       })
-      .finally(() => setAnalyticsLoading(false))
+      .finally(() => {
+        if (!silent) {
+          setAnalyticsLoading(false)
+        }
+      })
   }, [analyticsScope])
 
   useEffect(() => {
@@ -270,8 +278,7 @@ function SavedPostsContent(): React.ReactElement {
           toast.error(payload.error ?? 'Failed to update viewed state.')
           return
         }
-        void refetch()
-        refreshAnalytics()
+        refreshAnalytics({ silent: true })
       })
       .catch((err) => {
         toast.error(err instanceof Error ? err.message : 'Failed to update viewed state.')
@@ -292,8 +299,7 @@ function SavedPostsContent(): React.ReactElement {
           return
         }
         toast.success(`Marked ${payload.updatedCount} posts as viewed.`)
-        void refetch()
-        refreshAnalytics()
+        refreshAnalytics({ silent: true })
       })
       .catch((err) => {
         toast.error(err instanceof Error ? err.message : 'Failed to mark posts as viewed.')
@@ -314,8 +320,7 @@ function SavedPostsContent(): React.ReactElement {
         toast.success(`Deleted ${payload.deletedCount} post${payload.deletedCount === 1 ? '' : 's'}.`)
         setSelectedPostIds(new Set())
         setManageMode(false)
-        void refetch()
-        refreshAnalytics()
+        refreshAnalytics({ silent: true })
       })
       .catch((err) => {
         toast.error(err instanceof Error ? err.message : 'Failed to delete posts.')
@@ -325,6 +330,10 @@ function SavedPostsContent(): React.ReactElement {
         setShowDeleteConfirm(false)
       })
   }
+
+  const handleSavedPostMutation = useCallback(async (): Promise<void> => {
+    refreshAnalytics({ silent: true })
+  }, [refreshAnalytics])
 
   return (
     <div className="flex flex-col h-full px-6 py-4">
@@ -410,10 +419,15 @@ function SavedPostsContent(): React.ReactElement {
       )}
 
       <div className="mb-3 p-2 rounded-md border bg-muted/20 text-xs">
-        {analyticsLoading || !analytics ? (
+        {!analytics ? (
           <span className="text-muted-foreground" role="status" aria-live="polite">Loading analytics...</span>
         ) : (
-          <div className="flex items-center gap-4 flex-wrap" role="status" aria-live="polite">
+          <div
+            className="flex items-center gap-4 flex-wrap"
+            role="status"
+            aria-live="polite"
+            aria-busy={analyticsLoading}
+          >
             <span>Total: {analytics.total}</span>
             <span>Viewed: {analytics.viewed}</span>
             <span>Unviewed: {analytics.unviewed}</span>
@@ -517,95 +531,108 @@ function SavedPostsContent(): React.ReactElement {
         ) : (
           <div className="space-y-1">
             {posts.map((post) => (
-              <div
+              <SavedPostItemActions
                 key={post.post_id}
-                className="flex items-start gap-3 py-3 px-3 rounded-md hover:bg-muted/50 border-b last:border-0"
+                post={post}
+                allTags={allTags}
+                onOpenPost={(currentPost) => {
+                  if (currentPost.viewed_at === null) {
+                    setPostViewed(currentPost.post_id, true)
+                  }
+                  const url = currentPost.source === 'reddit' ? toRedditPostUrl(currentPost.permalink) : currentPost.url
+                  window.api.invoke(IPC.SHELL_OPEN_EXTERNAL, url).catch((err) => {
+                    toast.error(err instanceof Error ? err.message : 'Failed to open link.')
+                  })
+                }}
+                onSetViewed={(currentPost, viewed) => setPostViewed(currentPost.post_id, viewed)}
+                onAfterMutation={handleSavedPostMutation}
               >
-                {manageMode && (
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-border cursor-pointer accent-primary mt-1 shrink-0"
-                    checked={selectedPostIds.has(post.post_id)}
-                    onChange={() => {
-                      setSelectedPostIds((prev) => {
-                        const next = new Set(prev)
-                        if (next.has(post.post_id)) {
-                          next.delete(post.post_id)
-                        } else {
-                          next.add(post.post_id)
-                        }
-                        return next
-                      })
-                    }}
-                    aria-label={`Select post: ${post.title}`}
-                  />
-                )}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <Badge variant="outline" className="text-xs shrink-0">
-                      {SOURCE_LABELS[post.source]}
-                    </Badge>
-                    {post.source === 'reddit' && post.subreddit && (
-                      <Badge variant="secondary" className="text-xs shrink-0">
-                        r/{post.subreddit}
-                      </Badge>
-                    )}
-                    {post.author && (
-                      <span className="text-xs text-muted-foreground">
-                        {post.source === 'reddit' ? `u/${post.author}` : post.source === 'x' ? `@${post.author}` : post.author}
-                      </span>
-                    )}
-                    {post.score != null && (
-                      <span className="text-xs text-muted-foreground">
-                        {post.score} pts
-                      </span>
-                    )}
-                    <span className="text-xs text-muted-foreground">
-                      {formatRelativeTime(post.saved_at)}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (post.viewed_at === null) {
-                        setPostViewed(post.post_id, true)
-                      }
-                      const url = post.source === 'reddit' ? toRedditPostUrl(post.permalink) : post.url
-                      window.api.invoke('shell:openExternal', url).catch((err) => {
-                        toast.error(err instanceof Error ? err.message : 'Failed to open link.')
-                      })
-                    }}
-                    className={`text-sm font-medium text-left hover:text-primary transition-colors line-clamp-2 w-full ${
-                      post.viewed_at ? 'text-foreground/70' : ''
-                    }`}
-                    aria-label={`Open saved post: ${post.title}`}
+                {({ onContextMenu, trigger, viewedToggle }) => (
+                  <div
+                    className="flex items-start gap-3 py-3 px-3 rounded-md hover:bg-muted/50 border-b last:border-0"
+                    onContextMenu={onContextMenu}
                   >
-                    {post.title}
-                  </button>
-                  {post.note && (
-                    <p className="text-xs text-muted-foreground italic mt-1 line-clamp-2">
-                      {post.note}
-                    </p>
-                  )}
-                  <div className="mt-1.5">
-                    <PostTagEditor
-                      post={post}
-                      allTags={allTags}
-                      onUpdate={() => void refetch()}
-                    />
+                    {manageMode && (
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-border cursor-pointer accent-primary mt-1 shrink-0"
+                        checked={selectedPostIds.has(post.post_id)}
+                        onChange={() => {
+                          setSelectedPostIds((prev) => {
+                            const next = new Set(prev)
+                            if (next.has(post.post_id)) {
+                              next.delete(post.post_id)
+                            } else {
+                              next.add(post.post_id)
+                            }
+                            return next
+                          })
+                        }}
+                        aria-label={`Select post: ${post.title}`}
+                      />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <Badge variant="outline" className="text-xs shrink-0">
+                          {SOURCE_LABELS[post.source]}
+                        </Badge>
+                        {post.source === 'reddit' && post.subreddit && (
+                          <Badge variant="secondary" className="text-xs shrink-0">
+                            r/{post.subreddit}
+                          </Badge>
+                        )}
+                        {post.author && (
+                          <span className="text-xs text-muted-foreground">
+                            {post.source === 'reddit' ? `u/${post.author}` : post.source === 'x' ? `@${post.author}` : post.author}
+                          </span>
+                        )}
+                        {post.score != null && (
+                          <span className="text-xs text-muted-foreground">
+                            {post.score} pts
+                          </span>
+                        )}
+                        <span className="text-xs text-muted-foreground">
+                          {formatRelativeTime(post.saved_at)}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (post.viewed_at === null) {
+                            setPostViewed(post.post_id, true)
+                          }
+                          const url = post.source === 'reddit' ? toRedditPostUrl(post.permalink) : post.url
+                          window.api.invoke(IPC.SHELL_OPEN_EXTERNAL, url).catch((err) => {
+                            toast.error(err instanceof Error ? err.message : 'Failed to open link.')
+                          })
+                        }}
+                        className={`text-sm font-medium text-left hover:text-primary transition-colors line-clamp-2 w-full ${
+                          post.viewed_at ? 'text-foreground/70' : ''
+                        }`}
+                        aria-label={`Open saved post: ${post.title}`}
+                      >
+                        {post.title}
+                      </button>
+                      {post.note && (
+                        <p className="text-xs text-muted-foreground italic mt-1 line-clamp-2">
+                          {post.note}
+                        </p>
+                      )}
+                      <div className="mt-1.5">
+                        <PostTagEditor
+                          post={post}
+                          allTags={allTags}
+                          onUpdate={() => void handleSavedPostMutation()}
+                        />
+                      </div>
+                    </div>
+                    <div className="mt-0.5 flex items-center gap-1 shrink-0">
+                      {viewedToggle}
+                      {trigger}
+                    </div>
                   </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setPostViewed(post.post_id, post.viewed_at === null)}
-                  className="mt-0.5 p-1 rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-                  aria-label={post.viewed_at ? 'Mark post as unviewed' : 'Mark post as viewed'}
-                  aria-pressed={post.viewed_at !== null}
-                  title={post.viewed_at ? 'Viewed - click to mark unviewed' : 'Unviewed - click to mark viewed'}
-                >
-                  {post.viewed_at ? <CircleCheck className="h-4 w-4 text-emerald-400" /> : <Circle className="h-4 w-4" />}
-                </button>
-              </div>
+                )}
+              </SavedPostItemActions>
             ))}
 
             {hasMore && (

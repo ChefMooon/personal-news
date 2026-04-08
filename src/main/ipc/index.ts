@@ -1604,6 +1604,21 @@ export function registerIpcHandlers(): void {
     }
   )
 
+  // reddit:updateSavedPostNote
+  ipcMain.handle(
+    IPC.REDDIT_UPDATE_SAVED_POST_NOTE,
+    (_event, postId: string, note: string | null): IpcMutationResult => {
+      const db = getDb()
+      const normalizedNote = note?.trim() ? note.trim() : null
+      const result = db.prepare('UPDATE saved_posts SET note = ? WHERE post_id = ?').run(normalizedNote, postId)
+      if (result.changes === 0) {
+        return { ok: false, error: 'Saved post not found.' }
+      }
+      emitRedditUpdated()
+      return { ok: true, error: null }
+    }
+  )
+
   // reddit:updatePostTags
   ipcMain.handle(
     IPC.REDDIT_UPDATE_POST_TAGS,
@@ -1613,6 +1628,7 @@ export function registerIpcHandlers(): void {
         JSON.stringify(tags),
         postId
       )
+      emitRedditUpdated()
       return { ok: true }
     }
   )
@@ -1680,6 +1696,8 @@ export function registerIpcHandlers(): void {
         }
       })
       remove()
+
+      emitRedditUpdated()
 
       return { affectedPosts: rows.length }
     }
