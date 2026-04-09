@@ -148,7 +148,7 @@ export default function SportsPage(): React.ReactElement {
         return
       }
 
-      toast.success('Sports refresh started.')
+      toast.success('Sports refresh complete.')
     } catch (error) {
       setUpdating(false)
       toast.error(error instanceof Error ? error.message : 'Failed to refresh sports data.')

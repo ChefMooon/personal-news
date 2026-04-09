@@ -183,7 +183,7 @@ function SportsWidget(): React.ReactElement {
         toast.error(failed.error ?? 'Failed to refresh Sports data.')
         return
       }
-      toast.success('Sports data refresh started.')
+      toast.success('Sports data refresh complete.')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to refresh Sports data.')
     } finally {
