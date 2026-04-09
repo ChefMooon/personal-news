@@ -16,8 +16,25 @@ export const SPORTS_WIDGET_OPTIONS = [
 ] as const
 
 export const DEFAULT_SPORT: SupportedSport = SPORTS_OPTIONS[0].id
+export const MIN_SPORTS_POLL_INTERVAL_MINUTES = 1
+export const MAX_SPORTS_POLL_INTERVAL_MINUTES = 1440
+export const DEFAULT_SPORTS_POLL_INTERVAL_MINUTES = 5
+export const MIN_SPORTS_STARTUP_REFRESH_STALE_MINUTES = 1
+export const MAX_SPORTS_STARTUP_REFRESH_STALE_MINUTES = 1440
+export const DEFAULT_SPORTS_STARTUP_REFRESH_STALE_MINUTES = 10
 
 export const SUPPORTED_SPORTS = SPORTS_OPTIONS.map((option) => option.id) as SupportedSport[]
+
+export function normalizeSportsPollIntervalMinutes(value: number): number {
+  return Math.max(MIN_SPORTS_POLL_INTERVAL_MINUTES, Math.min(MAX_SPORTS_POLL_INTERVAL_MINUTES, Math.round(value)))
+}
+
+export function normalizeSportsStartupRefreshStaleMinutes(value: number): number {
+  return Math.max(
+    MIN_SPORTS_STARTUP_REFRESH_STALE_MINUTES,
+    Math.min(MAX_SPORTS_STARTUP_REFRESH_STALE_MINUTES, Math.round(value))
+  )
+}
 
 export function isSupportedSport(value: string): value is SupportedSport {
   return SUPPORTED_SPORTS.includes(value as SupportedSport)

@@ -42,6 +42,7 @@ import { useSavedPostsEnabled } from '../contexts/SavedPostsEnabledContext'
 import { useRedditDigestEnabled } from '../contexts/RedditDigestEnabledContext'
 import { useSportsEnabled } from '../contexts/SportsEnabledContext'
 import { useWeatherEnabled } from '../contexts/WeatherEnabledContext'
+import { normalizeSportsViewConfig } from '../hooks/useSportsViewConfig'
 import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { DashboardGlyph } from '../lib/dashboard-icons'
 import { DashboardViewDialog } from '../components/DashboardViewDialog'
@@ -55,11 +56,46 @@ import {
   AlertDialogHeader,
   AlertDialogTitle
 } from '../components/ui/alert-dialog'
-import type { DashboardIcon } from '../../../shared/ipc-types'
+import { IPC, type DashboardIcon, type IpcMutationResult, type SportsSettings, type SportsViewConfig, type SportSyncStatus } from '../../../shared/ipc-types'
+import {
+  ALL_SPORTS_ID,
+  DEFAULT_SPORTS_STARTUP_REFRESH_STALE_MINUTES,
+  SUPPORTED_SPORTS,
+  isSupportedSport,
+  normalizeSportsStartupRefreshStaleMinutes,
+  type SupportedSport
+} from '../../../shared/sports'
 
 const DASHBOARD_TAB_DROP_PREFIX = 'dashboard-tab:'
 const DASHBOARD_INSERT_DROP_PREFIX = 'dashboard-insert:'
 const TAB_AUTO_SWITCH_DELAY_MS = 450
+
+function getSportsForWidget(rawConfig: unknown): SupportedSport[] {
+  let parsedConfig: Partial<SportsViewConfig> = {}
+
+  if (typeof rawConfig === 'string') {
+    try {
+      parsedConfig = JSON.parse(rawConfig) as Partial<SportsViewConfig>
+    } catch {
+      parsedConfig = {}
+    }
+  }
+
+  const normalizedConfig = normalizeSportsViewConfig(parsedConfig)
+  if (normalizedConfig.sport === ALL_SPORTS_ID) {
+    return SUPPORTED_SPORTS
+  }
+
+  return isSupportedSport(normalizedConfig.sport) ? [normalizedConfig.sport] : []
+}
+
+function isSportStatusStale(status: SportSyncStatus | undefined, staleAfterMs: number): boolean {
+  if (status?.lastFetchedAt == null) {
+    return true
+  }
+
+  return Date.now() - status.lastFetchedAt * 1000 >= staleAfterMs
+}
 
 function getDashboardTabDropViewId(rawId: string): string | null {
   return rawId.startsWith(DASHBOARD_TAB_DROP_PREFIX)
@@ -203,6 +239,8 @@ export default function Dashboard(): React.ReactElement {
   const [draggingWidgetId, setDraggingWidgetId] = useState<string | null>(null)
   const tabSwitchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pendingTabSwitchViewIdRef = useRef<string | null>(null)
+  const initialDashboardViewIdRef = useRef<string | null>(null)
+  const startupSportsRefreshHandledRef = useRef(false)
 
   const layout = activeView.layout
   const activeViewIndex = dashboardViews.findIndex((view) => view.id === activeViewId)
@@ -225,6 +263,100 @@ export default function Dashboard(): React.ReactElement {
       }
     }
   }, [])
+
+  useEffect(() => {
+    if (loading || initialDashboardViewIdRef.current !== null) {
+      return
+    }
+
+    initialDashboardViewIdRef.current = activeViewId
+  }, [activeViewId, loading])
+
+  useEffect(() => {
+    if (loading || startupSportsRefreshHandledRef.current) {
+      return
+    }
+
+    const initialDashboardViewId = initialDashboardViewIdRef.current ?? activeViewId
+    if (activeViewId !== initialDashboardViewId) {
+      return
+    }
+
+    startupSportsRefreshHandledRef.current = true
+
+    if (!sportsEnabled) {
+      return
+    }
+
+    const sportsWidgetInstanceIds = Object.values(activeView.layout.widget_instances)
+      .filter((instance) => instance.moduleId === 'sports')
+      .map((instance) => instance.instanceId)
+
+    if (sportsWidgetInstanceIds.length === 0) {
+      return
+    }
+
+    let cancelled = false
+
+    const refreshInitialDashboardSports = async (): Promise<void> => {
+      try {
+        const [rawConfigs, statusList, sportsSettings] = await Promise.all([
+          Promise.all(
+            sportsWidgetInstanceIds.map((instanceId) => window.api.invoke(IPC.SETTINGS_GET, `sports_view_config:${instanceId}`))
+          ),
+          window.api.invoke(IPC.SPORTS_GET_STATUS),
+          window.api.invoke(IPC.SETTINGS_GET_SPORTS_SETTINGS)
+        ])
+
+        if (cancelled) {
+          return
+        }
+
+        const selectedSports = new Set<SupportedSport>()
+        for (const rawConfig of rawConfigs) {
+          for (const sport of getSportsForWidget(rawConfig)) {
+            selectedSports.add(sport)
+          }
+        }
+
+        if (selectedSports.size === 0) {
+          return
+        }
+
+        const statusBySport = new Map(
+          (statusList as SportSyncStatus[]).map((status) => [status.sport, status] as const)
+        )
+        const startupRefreshStaleMinutes = normalizeSportsStartupRefreshStaleMinutes(
+          (sportsSettings as Partial<SportsSettings>).startupRefreshStaleMinutes ?? DEFAULT_SPORTS_STARTUP_REFRESH_STALE_MINUTES
+        )
+        const startupRefreshStaleAfterMs = startupRefreshStaleMinutes * 60 * 1000
+        const staleSports = Array.from(selectedSports).filter((sport) =>
+          isSportStatusStale(statusBySport.get(sport), startupRefreshStaleAfterMs)
+        )
+
+        if (staleSports.length === 0) {
+          return
+        }
+
+        const results = (await Promise.all(
+          staleSports.map((sport) => window.api.invoke(IPC.SPORTS_REFRESH, { sport }))
+        )) as IpcMutationResult[]
+        const failed = results.find((result) => !result.ok)
+
+        if (failed) {
+          console.error('[Dashboard] Startup sports refresh failed:', failed.error ?? 'Unknown error')
+        }
+      } catch (error) {
+        console.error('[Dashboard] Failed to refresh startup sports widgets:', error)
+      }
+    }
+
+    void refreshInitialDashboardSports()
+
+    return () => {
+      cancelled = true
+    }
+  }, [activeView, activeViewId, loading, sportsEnabled])
 
   function clearPendingTabSwitch(): void {
     if (tabSwitchTimerRef.current) {

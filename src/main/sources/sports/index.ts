@@ -14,7 +14,15 @@ import type {
   TrackedTeam
 } from '../../../shared/ipc-types'
 import { IPC } from '../../../shared/ipc-types'
-import { DEFAULT_SPORT, SUPPORTED_SPORTS, type SupportedSport } from '../../../shared/sports'
+import {
+  DEFAULT_SPORT,
+  DEFAULT_SPORTS_POLL_INTERVAL_MINUTES,
+  DEFAULT_SPORTS_STARTUP_REFRESH_STALE_MINUTES,
+  SUPPORTED_SPORTS,
+  normalizeSportsPollIntervalMinutes,
+  normalizeSportsStartupRefreshStaleMinutes,
+  type SupportedSport
+} from '../../../shared/sports'
 import { getSetting, setSetting } from '../../settings/store'
 import type { DataSourceModule } from '../registry'
 import {
@@ -57,7 +65,7 @@ import {
 
 const SPORTS_ENABLED_KEY = 'sports_enabled'
 const SPORTS_POLL_INTERVAL_KEY = 'sports_poll_interval_minutes'
-const DEFAULT_POLL_INTERVAL_MINUTES = 5
+const SPORTS_STARTUP_REFRESH_STALE_MINUTES_KEY = 'sports_startup_refresh_stale_minutes'
 const LIVE_REFRESH_INTERVAL_MS = 60_000
 const BADGE_REFRESH_INTERVAL_SECONDS = 7 * 24 * 60 * 60
 const DEFAULT_ENABLED_LEAGUE_IDS: Partial<Record<SupportedSport, Set<string>>> = {
@@ -100,10 +108,20 @@ function getPollIntervalMinutes(): number {
   const raw = getSetting(SPORTS_POLL_INTERVAL_KEY)
   const parsed = raw ? Number.parseInt(raw, 10) : Number.NaN
   if (!Number.isFinite(parsed)) {
-    return DEFAULT_POLL_INTERVAL_MINUTES
+    return DEFAULT_SPORTS_POLL_INTERVAL_MINUTES
   }
 
-  return Math.max(1, Math.min(1440, Math.round(parsed)))
+  return normalizeSportsPollIntervalMinutes(parsed)
+}
+
+function getStartupRefreshStaleMinutes(): number {
+  const raw = getSetting(SPORTS_STARTUP_REFRESH_STALE_MINUTES_KEY)
+  const parsed = raw ? Number.parseInt(raw, 10) : Number.NaN
+  if (!Number.isFinite(parsed)) {
+    return DEFAULT_SPORTS_STARTUP_REFRESH_STALE_MINUTES
+  }
+
+  return normalizeSportsStartupRefreshStaleMinutes(parsed)
 }
 
 function clearLiveRefreshTimer(sport: string): void {
@@ -519,13 +537,21 @@ export async function getSportsEventDetails(eventId: string): Promise<SportEvent
 }
 
 export function getSportsSettings(): SportsSettings {
-  return { pollIntervalMinutes: getPollIntervalMinutes() }
+  return {
+    pollIntervalMinutes: getPollIntervalMinutes(),
+    startupRefreshStaleMinutes: getStartupRefreshStaleMinutes()
+  }
 }
 
 export function updateSportsSettings(settings: Partial<SportsSettings>): SportsSettings {
   if (settings.pollIntervalMinutes !== undefined) {
-    const clamped = Math.max(1, Math.min(1440, Math.round(settings.pollIntervalMinutes)))
+    const clamped = normalizeSportsPollIntervalMinutes(settings.pollIntervalMinutes)
     setSetting(SPORTS_POLL_INTERVAL_KEY, String(clamped))
+  }
+
+  if (settings.startupRefreshStaleMinutes !== undefined) {
+    const clamped = normalizeSportsStartupRefreshStaleMinutes(settings.startupRefreshStaleMinutes)
+    setSetting(SPORTS_STARTUP_REFRESH_STALE_MINUTES_KEY, String(clamped))
   }
 
   if (isSportsEnabled()) {

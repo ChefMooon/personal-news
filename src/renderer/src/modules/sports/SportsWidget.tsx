@@ -16,7 +16,16 @@ import {
 } from '../../components/ui/alert-dialog'
 import { useWidgetInstance } from '../../contexts/WidgetInstanceContext'
 import { DEFAULT_SPORTS_VIEW_CONFIG, useSportsViewConfig } from '../../hooks/useSportsViewConfig'
-import { IPC, type IpcMutationResult, type SportEvent, type SportLeague, type SportsDataUpdatedEvent, type SportTeamEvents, type TrackedTeam } from '../../../../shared/ipc-types'
+import {
+  IPC,
+  type IpcMutationResult,
+  type SportEvent,
+  type SportLeague,
+  type SportsDataUpdatedEvent,
+  type SportSyncStatus,
+  type SportTeamEvents,
+  type TrackedTeam
+} from '../../../../shared/ipc-types'
 import { ALL_SPORTS_ID, SUPPORTED_SPORTS, getSportLabel } from '../../../../shared/sports'
 import { AllGamesView } from './AllGamesView'
 import { getLeagueKey } from './league-display'
@@ -42,6 +51,35 @@ function sortUpcomingEvents(a: SportEvent, b: SportEvent): number {
   return aValue - bValue
 }
 
+function formatLastSynced(timestamp: number | null): string {
+  if (timestamp == null) {
+    return 'Never'
+  }
+
+  const date = new Date(timestamp * 1000)
+  const today = new Date()
+  const yesterday = new Date()
+  yesterday.setDate(yesterday.getDate() - 1)
+  const timeLabel = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+  const sameDay = date.toDateString() === today.toDateString()
+  const isYesterday = date.toDateString() === yesterday.toDateString()
+
+  if (sameDay) {
+    return `Today at ${timeLabel}`
+  }
+
+  if (isYesterday) {
+    return `Yesterday at ${timeLabel}`
+  }
+
+  return date.toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit'
+  })
+}
+
 function SportsWidget(): React.ReactElement {
   const { instanceId, label } = useWidgetInstance()
   const widgetTitle = label ?? 'Sports'
@@ -55,6 +93,7 @@ function SportsWidget(): React.ReactElement {
   const [todayEvents, setTodayEvents] = useState<SportEvent[]>([])
   const [trackedTeams, setTrackedTeams] = useState<TrackedTeam[]>([])
   const [leagues, setLeagues] = useState<SportLeague[]>([])
+  const [syncStatusBySport, setSyncStatusBySport] = useState<Record<string, SportSyncStatus>>({})
   const [teamEventsById, setTeamEventsById] = useState<Record<string, SportTeamEvents>>({})
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -85,15 +124,19 @@ function SportsWidget(): React.ReactElement {
     }
 
     try {
-      const [eventResults, leagueResults, allTeams] = await Promise.all([
+      const [eventResults, leagueResults, allTeams, statusList] = await Promise.all([
         Promise.all(selectedSports.map((sport) => window.api.invoke(IPC.SPORTS_GET_TODAY_EVENTS, { sport }))),
         Promise.all(selectedSports.map((sport) => window.api.invoke(IPC.SPORTS_GET_LEAGUES, { sport }))),
-        window.api.invoke(IPC.SPORTS_GET_TRACKED_TEAMS)
+        window.api.invoke(IPC.SPORTS_GET_TRACKED_TEAMS),
+        window.api.invoke(IPC.SPORTS_GET_STATUS)
       ])
 
       const selectedSportSet = new Set(selectedSports)
       const sportTeams = (allTeams as TrackedTeam[]).filter((team) => selectedSportSet.has(team.sport))
       const nextTeamEventsById = await loadTeamEvents(sportTeams)
+      const nextStatusBySport = Object.fromEntries(
+        (statusList as SportSyncStatus[]).map((status) => [status.sport, status] as const)
+      )
 
       if (loadId !== latestLoadIdRef.current) {
         return
@@ -102,6 +145,7 @@ function SportsWidget(): React.ReactElement {
       setTodayEvents((eventResults as SportEvent[][]).flat())
       setLeagues((leagueResults as SportLeague[][]).flat())
       setTrackedTeams(sportTeams)
+      setSyncStatusBySport(nextStatusBySport)
       setTeamEventsById(nextTeamEventsById)
       hasLoadedDataRef.current = true
     } catch (err) {
@@ -172,6 +216,20 @@ function SportsWidget(): React.ReactElement {
       .sort(sortUpcomingEvents)
   }, [enabledTeams, leagues, teamEventsById])
 
+  const lastUpdatedAt = useMemo(() => {
+    const timestamps = selectedSports
+      .map((sport) => syncStatusBySport[sport]?.lastFetchedAt ?? null)
+      .filter((timestamp): timestamp is number => timestamp != null)
+
+    if (timestamps.length === 0) {
+      return null
+    }
+
+    return Math.max(...timestamps)
+  }, [selectedSports, syncStatusBySport])
+
+  const lastUpdatedLabel = useMemo(() => formatLastSynced(lastUpdatedAt), [lastUpdatedAt])
+
   const refreshNow = async (): Promise<void> => {
     setRefreshing(true)
     try {
@@ -226,6 +284,7 @@ function SportsWidget(): React.ReactElement {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <p className="text-[11px] text-muted-foreground">Updated: {lastUpdatedLabel}</p>
             <Button variant="ghost" size="icon" onClick={() => void refreshNow()} disabled={refreshing} aria-label="Refresh sports data">
               <RefreshCcw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
             </Button>

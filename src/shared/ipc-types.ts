@@ -512,6 +512,7 @@ export interface WeatherViewConfig {
 
 export interface SportsSettings {
   pollIntervalMinutes: number
+  startupRefreshStaleMinutes: number
 }
 
 export interface SportEvent {

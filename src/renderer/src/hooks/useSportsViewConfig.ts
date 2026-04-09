@@ -22,7 +22,7 @@ export const DEFAULT_SPORTS_VIEW_CONFIG: SportsViewConfig = {
   showTime: true
 }
 
-function normalizeSportsViewConfig(config: Partial<SportsViewConfig>): SportsViewConfig {
+export function normalizeSportsViewConfig(config: Partial<SportsViewConfig>): SportsViewConfig {
   const sport = config.sport
   const storedViewMode = (config as { viewMode?: string }).viewMode
   const rawViewMode = storedViewMode === 'my_teams' ? 'today' : storedViewMode

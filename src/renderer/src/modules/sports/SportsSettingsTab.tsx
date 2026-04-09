@@ -29,7 +29,19 @@ import {
   type TeamSearchResult,
   type TrackedTeam
 } from '../../../../shared/ipc-types'
-import { DEFAULT_SPORT, SPORTS_OPTIONS, SUPPORTED_SPORTS, getSportLabel, type SupportedSport } from '../../../../shared/sports'
+import {
+  DEFAULT_SPORT,
+  DEFAULT_SPORTS_POLL_INTERVAL_MINUTES,
+  DEFAULT_SPORTS_STARTUP_REFRESH_STALE_MINUTES,
+  MAX_SPORTS_POLL_INTERVAL_MINUTES,
+  MAX_SPORTS_STARTUP_REFRESH_STALE_MINUTES,
+  MIN_SPORTS_POLL_INTERVAL_MINUTES,
+  MIN_SPORTS_STARTUP_REFRESH_STALE_MINUTES,
+  SPORTS_OPTIONS,
+  SUPPORTED_SPORTS,
+  getSportLabel,
+  type SupportedSport
+} from '../../../../shared/sports'
 import { getLeagueKey, getTrackedTeamMeta } from './league-display'
 import { SPORTS_PAGE_SPORT_ORDER_KEY, normalizeSportOrder } from './sport-order'
 
@@ -72,9 +84,13 @@ export function SportsSettingsTab(): React.ReactElement {
   const [searching, setSearching] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [refreshingBadges, setRefreshingBadges] = useState(false)
-  const [sportsSettings, setSportsSettings] = useState<SportsSettings>({ pollIntervalMinutes: 5 })
-  const [pollIntervalValue, setPollIntervalValue] = useState('5')
-  const [savingPollInterval, setSavingPollInterval] = useState(false)
+  const [sportsSettings, setSportsSettings] = useState<SportsSettings>({
+    pollIntervalMinutes: DEFAULT_SPORTS_POLL_INTERVAL_MINUTES,
+    startupRefreshStaleMinutes: DEFAULT_SPORTS_STARTUP_REFRESH_STALE_MINUTES
+  })
+  const [pollIntervalValue, setPollIntervalValue] = useState(String(DEFAULT_SPORTS_POLL_INTERVAL_MINUTES))
+  const [startupRefreshStaleValue, setStartupRefreshStaleValue] = useState(String(DEFAULT_SPORTS_STARTUP_REFRESH_STALE_MINUTES))
+  const [savingRefreshSettings, setSavingRefreshSettings] = useState(false)
   const [browseLeaguesOpen, setBrowseLeaguesOpen] = useState(false)
   const [orderReady, setOrderReady] = useState(false)
 
@@ -115,6 +131,7 @@ export function SportsSettingsTab(): React.ReactElement {
       setLeagues((sportLeagues as SportLeague[]).sort((a, b) => Number(b.enabled) - Number(a.enabled) || a.name.localeCompare(b.name)))
       setSportsSettings(currentSettings as SportsSettings)
       setPollIntervalValue(String((currentSettings as SportsSettings).pollIntervalMinutes))
+      setStartupRefreshStaleValue(String((currentSettings as SportsSettings).startupRefreshStaleMinutes))
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to load Sports settings.')
     }
@@ -182,26 +199,40 @@ export function SportsSettingsTab(): React.ReactElement {
     }
   }
 
-  const savePollInterval = async (): Promise<void> => {
+  const saveRefreshSettings = async (): Promise<void> => {
     const parsed = Number.parseInt(pollIntervalValue, 10)
-    if (!Number.isFinite(parsed) || parsed < 1 || parsed > 1440) {
-      toast.error('Refresh interval must be between 1 and 1440 minutes.')
+    if (!Number.isFinite(parsed) || parsed < MIN_SPORTS_POLL_INTERVAL_MINUTES || parsed > MAX_SPORTS_POLL_INTERVAL_MINUTES) {
+      toast.error(`Refresh interval must be between ${MIN_SPORTS_POLL_INTERVAL_MINUTES} and ${MAX_SPORTS_POLL_INTERVAL_MINUTES} minutes.`)
       return
     }
 
-    setSavingPollInterval(true)
+    const parsedStartupStale = Number.parseInt(startupRefreshStaleValue, 10)
+    if (
+      !Number.isFinite(parsedStartupStale)
+      || parsedStartupStale < MIN_SPORTS_STARTUP_REFRESH_STALE_MINUTES
+      || parsedStartupStale > MAX_SPORTS_STARTUP_REFRESH_STALE_MINUTES
+    ) {
+      toast.error(
+        `Startup freshness threshold must be between ${MIN_SPORTS_STARTUP_REFRESH_STALE_MINUTES} and ${MAX_SPORTS_STARTUP_REFRESH_STALE_MINUTES} minutes.`
+      )
+      return
+    }
+
+    setSavingRefreshSettings(true)
     try {
       const nextSettings = (await window.api.invoke(IPC.SETTINGS_UPDATE_SPORTS_SETTINGS, {
-        pollIntervalMinutes: parsed
+        pollIntervalMinutes: parsed,
+        startupRefreshStaleMinutes: parsedStartupStale
       })) as SportsSettings
       setSportsSettings(nextSettings)
       setPollIntervalValue(String(nextSettings.pollIntervalMinutes))
-      toast.success('Sports refresh interval saved.')
+      setStartupRefreshStaleValue(String(nextSettings.startupRefreshStaleMinutes))
+      toast.success('Sports refresh settings saved.')
       await loadData()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to save sports refresh interval.')
+      toast.error(err instanceof Error ? err.message : 'Failed to save sports refresh settings.')
     } finally {
-      setSavingPollInterval(false)
+      setSavingRefreshSettings(false)
     }
   }
 
@@ -395,11 +426,26 @@ export function SportsSettingsTab(): React.ReactElement {
                 className="w-28"
                 aria-label="Sports refresh interval in minutes"
               />
-              <Button variant="outline" size="sm" onClick={() => void savePollInterval()} disabled={savingPollInterval}>
-                {savingPollInterval ? 'Saving...' : 'Save Interval'}
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Current setting: every {sportsSettings.pollIntervalMinutes} minute{sportsSettings.pollIntervalMinutes === 1 ? '' : 's'}.
+            </p>
+            <p className="mt-4 text-xs text-muted-foreground">Startup refresh when cached data is older than ___ minutes.</p>
+            <div className="mt-3 flex items-center gap-2">
+              <Input
+                value={startupRefreshStaleValue}
+                onChange={(event) => setStartupRefreshStaleValue(event.target.value)}
+                inputMode="numeric"
+                className="w-28"
+                aria-label="Sports startup freshness threshold in minutes"
+              />
+              <Button variant="outline" size="sm" onClick={() => void saveRefreshSettings()} disabled={savingRefreshSettings}>
+                {savingRefreshSettings ? 'Saving...' : 'Save Refresh Settings'}
               </Button>
             </div>
-            <p className="mt-2 text-xs text-muted-foreground">Current setting: every {sportsSettings.pollIntervalMinutes} minute{sportsSettings.pollIntervalMinutes === 1 ? '' : 's'}.</p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Startup threshold: {sportsSettings.startupRefreshStaleMinutes} minute{sportsSettings.startupRefreshStaleMinutes === 1 ? '' : 's'}.
+            </p>
             <div className="mt-3 flex flex-wrap gap-2">
               <Button variant="outline" size="sm" onClick={() => void refreshNow()} disabled={refreshing}>
                 <RefreshCcw className={`mr-1 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
