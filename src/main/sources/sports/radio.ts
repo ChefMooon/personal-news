@@ -177,7 +177,7 @@ async function probeStream(url: string): Promise<Response> {
       signal: AbortSignal.timeout(STREAM_RESOLVE_TIMEOUT_MS),
       headers: {
         Accept: 'audio/*,*/*;q=0.8',
-        'User-Agent': 'PersonalNews/1.1.0'
+        'User-Agent': 'PersonalNews/1.2.0'
       }
     })
     // Only trust a HEAD response when it gives us a meaningful content-type.
@@ -199,7 +199,7 @@ async function probeStream(url: string): Promise<Response> {
       Accept: 'audio/*,*/*;q=0.8',
       'Icy-MetaData': '1',
       Range: 'bytes=0-2047',
-      'User-Agent': 'PersonalNews/1.1.0'
+      'User-Agent': 'PersonalNews/1.2.0'
     }
   })
 }
