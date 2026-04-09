@@ -1,10 +1,21 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { RefreshCcw, Settings2, X } from 'lucide-react'
+import { RefreshCcw, RotateCcw, Settings2, X } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
 import { Button } from '../../components/ui/button'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger
+} from '../../components/ui/alert-dialog'
 import { useWidgetInstance } from '../../contexts/WidgetInstanceContext'
-import { useSportsViewConfig } from '../../hooks/useSportsViewConfig'
+import { DEFAULT_SPORTS_VIEW_CONFIG, useSportsViewConfig } from '../../hooks/useSportsViewConfig'
 import { IPC, type IpcMutationResult, type SportEvent, type SportLeague, type SportsDataUpdatedEvent, type SportTeamEvents, type TrackedTeam } from '../../../../shared/ipc-types'
 import { ALL_SPORTS_ID, SUPPORTED_SPORTS, getSportLabel } from '../../../../shared/sports'
 import { AllGamesView } from './AllGamesView'
@@ -48,8 +59,11 @@ function SportsWidget(): React.ReactElement {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
+  const [snapshotConfig, setSnapshotConfig] = useState(config)
+  const [editContentHeight, setEditContentHeight] = useState<number | null>(null)
   const hasLoadedDataRef = useRef(false)
   const latestLoadIdRef = useRef(0)
+  const cardContentRef = useRef<HTMLDivElement | null>(null)
 
   const loadTeamEvents = useCallback(async (teams: TrackedTeam[]): Promise<Record<string, SportTeamEvents>> => {
     const pairs = await Promise.all(
@@ -122,6 +136,21 @@ function SportsWidget(): React.ReactElement {
     })
   }, [loadData, selectedSports])
 
+  useEffect(() => {
+    if (!isEditing) {
+      return
+    }
+
+    const handler = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') {
+        handleClose()
+      }
+    }
+
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [isEditing]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const leaguesById = useMemo(
     () => Object.fromEntries(leagues.map((league) => [getLeagueKey(league.sport, league.leagueId), league] as const)),
     [leagues]
@@ -162,6 +191,30 @@ function SportsWidget(): React.ReactElement {
     }
   }
 
+  function handleOpenEdit(): void {
+    const currentHeight = cardContentRef.current?.getBoundingClientRect().height
+    if (currentHeight && currentHeight > 0) {
+      setEditContentHeight(currentHeight)
+    }
+    setSnapshotConfig(config)
+    setIsEditing(true)
+  }
+
+  function handleClose(): void {
+    setIsEditing(false)
+    setEditContentHeight(null)
+    setSnapshotConfig(config)
+  }
+
+  function handleReset(): void {
+    setConfig(snapshotConfig)
+  }
+
+  function handleFactoryReset(): void {
+    setConfig(DEFAULT_SPORTS_VIEW_CONFIG)
+    setSnapshotConfig(DEFAULT_SPORTS_VIEW_CONFIG)
+  }
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -176,13 +229,69 @@ function SportsWidget(): React.ReactElement {
             <Button variant="ghost" size="icon" onClick={() => void refreshNow()} disabled={refreshing} aria-label="Refresh sports data">
               <RefreshCcw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
             </Button>
-            <Button variant="ghost" size="icon" onClick={() => setIsEditing((current) => !current)} aria-label={isEditing ? 'Close sports settings panel' : 'Open sports settings panel'}>
-              {isEditing ? <X className="h-4 w-4" /> : <Settings2 className="h-4 w-4" />}
-            </Button>
+            {isEditing ? (
+              <div className="flex items-center gap-0.5">
+                <button
+                  type="button"
+                  className="p-1 rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                  onClick={handleReset}
+                  title="Reset to when you opened this"
+                  aria-label="Reset settings"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                </button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <button
+                      type="button"
+                      className="p-1 rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                      title="Restore defaults"
+                      aria-label="Restore default settings"
+                    >
+                      <RefreshCcw className="h-4 w-4" />
+                    </button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Restore Defaults</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Reset all Sports widget settings to their defaults? This cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleFactoryReset}>Confirm</AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+                <button
+                  type="button"
+                  className="p-1 rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                  onClick={handleClose}
+                  title="Close settings"
+                  aria-label="Close settings"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="p-1 rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                onClick={handleOpenEdit}
+                aria-label="Sports widget settings"
+              >
+                <Settings2 className="h-4 w-4" />
+              </button>
+            )}
           </div>
         </div>
       </CardHeader>
-      <CardContent className="pt-0">
+      <CardContent
+        ref={cardContentRef}
+        className="pt-0"
+        style={isEditing && editContentHeight ? { height: editContentHeight, overflow: 'hidden' } : undefined}
+      >
         {isEditing ? (
           <div className="sports-card-edit">
             <div className="sports-card-edit__preview">

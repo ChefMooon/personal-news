@@ -89,6 +89,8 @@ export const IPC = {
   SCRIPTS_UPDATED: 'scripts:updated',
   SETTINGS_GET_WIDGET_LAYOUT: 'settings:getWidgetLayout',
   SETTINGS_SET_WIDGET_LAYOUT: 'settings:setWidgetLayout',
+  SETTINGS_GET_DASHBOARD_VIEWS: 'settings:getDashboardViews',
+  SETTINGS_SET_DASHBOARD_VIEWS: 'settings:setDashboardViews',
   SETTINGS_GET_THEME_SYNC: 'settings:getThemeSync',
   SETTINGS_GET_THEME: 'settings:getTheme',
   SETTINGS_SET_THEME: 'settings:setTheme',
@@ -337,6 +339,41 @@ export interface WidgetLayout {
   widget_order: string[]
   widget_visibility: Record<string, boolean>
   widget_instances: Record<string, WidgetInstance>
+}
+
+export type DashboardIcon =
+  | 'layout'
+  | 'youtube'
+  | 'newspaper'
+  | 'bookmark'
+  | 'trophy'
+  | 'cloud'
+  | 'terminal'
+  | 'bell'
+  | 'star'
+  | 'flame'
+
+export interface DashboardView {
+  id: string
+  name: string
+  icon: DashboardIcon | null
+  layout: WidgetLayout
+}
+
+export interface DashboardViewsState {
+  view_order: string[]
+  views: Record<string, DashboardView>
+}
+
+export interface DashboardConfigCloneOperation {
+  sourceInstanceId: string
+  targetInstanceId: string
+}
+
+export interface DashboardViewsMutation {
+  state: DashboardViewsState
+  deleteInstanceIds?: string[]
+  cloneInstanceConfigs?: DashboardConfigCloneOperation[]
 }
 
 export interface ThemeInfo {

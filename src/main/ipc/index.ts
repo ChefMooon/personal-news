@@ -31,6 +31,8 @@ import type {
   ScriptOutputChunk,
   ScriptNotification,
   ScriptNotificationsReadResult,
+  DashboardViewsMutation,
+  DashboardViewsState,
   WidgetLayout,
   WidgetInstance,
   ThemeInfo,
@@ -91,6 +93,9 @@ import {
 
 const YOUTUBE_API_KEY_SETTING = 'youtube_api_key_encrypted'
 const YOUTUBE_VIEW_CONFIG_KEY_PREFIX = 'youtube_view_config:'
+const SAVED_POSTS_VIEW_CONFIG_KEY_PREFIX = 'saved_posts_view_config:'
+const REDDIT_DIGEST_VIEW_CONFIG_KEY_PREFIX = 'reddit_digest_view_config:'
+const DASHBOARD_VIEWS_SETTING = 'dashboard_views_state'
 const REDDIT_DIGEST_SUBREDDITS_SETTING = 'reddit_digest_subreddits'
 const xmlParser = new XMLParser({
   ignoreAttributes: false,
@@ -307,6 +312,129 @@ const DEFAULT_YOUTUBE_VIEW_CONFIG: YouTubeViewConfig = {
   collapseChannelsByDefault: false,
   hideWatched: false,
   perChannelMediaOverrides: {}
+}
+
+const DASHBOARD_CONFIG_KEY_PREFIXES = [
+  YOUTUBE_VIEW_CONFIG_KEY_PREFIX,
+  SAVED_POSTS_VIEW_CONFIG_KEY_PREFIX,
+  REDDIT_DIGEST_VIEW_CONFIG_KEY_PREFIX
+] as const
+
+const LEGACY_INSTANCE_CONFIG_KEYS: Partial<Record<(typeof DASHBOARD_CONFIG_KEY_PREFIXES)[number], string>> = {
+  [YOUTUBE_VIEW_CONFIG_KEY_PREFIX]: 'youtube_view_config',
+  [REDDIT_DIGEST_VIEW_CONFIG_KEY_PREFIX]: 'reddit_digest_view_config'
+}
+
+function getDefaultWidgetLayout(): WidgetLayout {
+  return {
+    widget_order: ['youtube_1', 'reddit_digest_1', 'saved_posts_1'],
+    widget_visibility: {
+      youtube_1: true,
+      reddit_digest_1: true,
+      saved_posts_1: true
+    },
+    widget_instances: {
+      youtube_1: { instanceId: 'youtube_1', moduleId: 'youtube', label: null },
+      reddit_digest_1: { instanceId: 'reddit_digest_1', moduleId: 'reddit_digest', label: null },
+      saved_posts_1: { instanceId: 'saved_posts_1', moduleId: 'saved_posts', label: null }
+    }
+  }
+}
+
+function getLegacyWidgetLayout(): WidgetLayout {
+  const orderRaw = getSetting('widget_order') ?? '["youtube","reddit_digest","saved_posts"]'
+  const visibilityRaw =
+    getSetting('widget_visibility') ??
+    '{"youtube":true,"reddit_digest":true,"saved_posts":true}'
+  const instancesRaw = getSetting('widget_instances') ?? '{}'
+
+  return {
+    widget_order: JSON.parse(orderRaw) as string[],
+    widget_visibility: JSON.parse(visibilityRaw) as Record<string, boolean>,
+    widget_instances: JSON.parse(instancesRaw) as Record<string, WidgetInstance>
+  }
+}
+
+function getDefaultDashboardViewsState(): DashboardViewsState {
+  return {
+    view_order: ['dashboard_home'],
+    views: {
+      dashboard_home: {
+        id: 'dashboard_home',
+        name: 'Home',
+        icon: null,
+        layout: getDefaultWidgetLayout()
+      }
+    }
+  }
+}
+
+function getDashboardViewsState(): DashboardViewsState {
+  const raw = getSetting(DASHBOARD_VIEWS_SETTING)
+  if (raw) {
+    return JSON.parse(raw) as DashboardViewsState
+  }
+
+  return {
+    view_order: ['dashboard_home'],
+    views: {
+      dashboard_home: {
+        id: 'dashboard_home',
+        name: 'Home',
+        icon: null,
+        layout: getLegacyWidgetLayout()
+      }
+    }
+  }
+}
+
+function readInstanceConfigForClone(prefix: (typeof DASHBOARD_CONFIG_KEY_PREFIXES)[number], instanceId: string): string | null {
+  const specificKey = `${prefix}${instanceId}`
+  const specificValue = getSetting(specificKey)
+  if (specificValue !== null) {
+    return specificValue
+  }
+
+  const legacyKey = LEGACY_INSTANCE_CONFIG_KEYS[prefix]
+  if (!legacyKey) {
+    return null
+  }
+
+  return getSetting(legacyKey)
+}
+
+function deleteWidgetInstanceConfigs(instanceIds: string[]): void {
+  const uniqueIds = Array.from(new Set(instanceIds.filter((value) => value.trim().length > 0)))
+  for (const instanceId of uniqueIds) {
+    for (const prefix of DASHBOARD_CONFIG_KEY_PREFIXES) {
+      deleteSetting(`${prefix}${instanceId}`)
+    }
+  }
+}
+
+function cloneWidgetInstanceConfigs(cloneOperations: DashboardViewsMutation['cloneInstanceConfigs']): void {
+  if (!cloneOperations || cloneOperations.length === 0) {
+    return
+  }
+
+  for (const operation of cloneOperations) {
+    if (!operation.sourceInstanceId || !operation.targetInstanceId) {
+      continue
+    }
+
+    for (const prefix of DASHBOARD_CONFIG_KEY_PREFIXES) {
+      const value = readInstanceConfigForClone(prefix, operation.sourceInstanceId)
+      if (value !== null) {
+        setSetting(`${prefix}${operation.targetInstanceId}`, value)
+      }
+    }
+  }
+}
+
+function persistDashboardViewsMutation(mutation: DashboardViewsMutation): void {
+  setSetting(DASHBOARD_VIEWS_SETTING, JSON.stringify(mutation.state))
+  cloneWidgetInstanceConfigs(mutation.cloneInstanceConfigs)
+  deleteWidgetInstanceConfigs(mutation.deleteInstanceIds ?? [])
 }
 
 function getDecryptedYouTubeApiKey(): string | null {
@@ -2017,16 +2145,7 @@ export function registerIpcHandlers(): void {
 
   // settings:getWidgetLayout
   ipcMain.handle(IPC.SETTINGS_GET_WIDGET_LAYOUT, (): WidgetLayout => {
-    const orderRaw = getSetting('widget_order') ?? '["youtube","reddit_digest","saved_posts"]'
-    const visibilityRaw =
-      getSetting('widget_visibility') ??
-      '{"youtube":true,"reddit_digest":true,"saved_posts":true}'
-    const instancesRaw = getSetting('widget_instances') ?? '{}'
-    return {
-      widget_order: JSON.parse(orderRaw) as string[],
-      widget_visibility: JSON.parse(visibilityRaw) as Record<string, boolean>,
-      widget_instances: JSON.parse(instancesRaw) as Record<string, WidgetInstance>
-    }
+    return getLegacyWidgetLayout()
   })
 
   // settings:setWidgetLayout
@@ -2034,6 +2153,24 @@ export function registerIpcHandlers(): void {
     setSetting('widget_order', JSON.stringify(layout.widget_order))
     setSetting('widget_visibility', JSON.stringify(layout.widget_visibility))
     setSetting('widget_instances', JSON.stringify(layout.widget_instances))
+  })
+
+  // settings:getDashboardViews
+  ipcMain.handle(IPC.SETTINGS_GET_DASHBOARD_VIEWS, (): DashboardViewsState => {
+    try {
+      const state = getDashboardViewsState()
+      if (state.view_order.length > 0) {
+        return state
+      }
+    } catch {
+    }
+
+    return getDefaultDashboardViewsState()
+  })
+
+  // settings:setDashboardViews
+  ipcMain.handle(IPC.SETTINGS_SET_DASHBOARD_VIEWS, (_event, mutation: DashboardViewsMutation): void => {
+    persistDashboardViewsMutation(mutation)
   })
 
   // settings:getTheme

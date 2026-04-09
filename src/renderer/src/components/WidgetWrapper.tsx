@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { GripVertical, Eye, EyeOff, Trash2, Pencil, ChevronUp, ChevronDown } from 'lucide-react'
+import { WidgetTransferButton } from './WidgetTransferButton'
 import { WidgetErrorBoundary } from './WidgetErrorBoundary'
 
 interface WidgetWrapperProps {
@@ -105,6 +106,8 @@ export function WidgetWrapper({
           >
             <ChevronDown className="h-4 w-4" />
           </button>
+
+          <WidgetTransferButton instanceId={id} />
 
           {/* Visibility toggle */}
           <button

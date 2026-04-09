@@ -61,7 +61,7 @@ Example header structure (normal mode):
 
 ### 3.2 Edit mode
 
-The `<Settings2>` button is replaced by a three-button row (no extra wrapper padding between items, `gap-0.5`):
+The `<Settings2>` button is replaced by a three-control row (no extra wrapper padding between items, `gap-0.5`):
 
 | Position | Icon | Action | Tooltip / aria-label |
 |----------|------|--------|----------------------|
@@ -69,7 +69,9 @@ The `<Settings2>` button is replaced by a three-button row (no extra wrapper pad
 | 2nd | `<RefreshCcw>` | Restore factory defaults (requires confirmation) | "Restore defaults" |
 | 3rd | `<X>` | Close settings panel | "Close settings" |
 
-All three use the same button class as the settings trigger above.
+All controls use the same button class as the settings trigger above.
+
+Move or copy to another dashboard is handled from the per-widget dashboard layout edit toolbar, not from the inline widget settings header. In that toolbar, place the transfer control between the down-arrow reorder button and the visibility toggle.
 
 The `<RefreshCcw>` factory reset button **must** be wrapped in an `<AlertDialog>` with:
 
