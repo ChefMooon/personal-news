@@ -4,6 +4,28 @@ All notable changes to this project are documented in this file.
 
 The format follows Keep a Changelog, and this project uses Semantic Versioning.
 
+## [1.2.0] - 2026-04-08
+
+### Added
+
+- Added a Weather widget with dashboard integration, shared location management, widget-level settings, and multiple compact forecast display modes.
+- Added a Sports widget with tracked teams, league and event data, configurable widget views, and a Today games strip for quick access to live and upcoming matchups.
+- Added dashboard view management, including creating, editing, duplicating, and deleting views, plus moving or copying widgets between views.
+- Added editing for Saved Posts notes and tags, along with expanded saved-post actions and analytics handling.
+- Added one-off subreddit syncs in Reddit Digest settings for manual refreshes on demand.
+
+### Changed
+
+- Expanded sports settings with configurable poll intervals, startup refresh staleness thresholds, clearer refresh success messages, and improved sport selection and widget defaults.
+- Improved YouTube video handling with better livestream lifecycle support and database updates for video state management.
+- Optimized weather hourly forecast mapping and indexing for more efficient weather data handling.
+- Added dashboard icon mappings and supporting resources for broader icon coverage across the app.
+
+### Fixed
+
+- Fixed broken tray icon assets.
+- Updated YouTube IPC refresh behavior so the app emits a post-check update event after channel checks complete.
+
 ## [1.1.0] - 2026-03-30
 
 ### Changed
