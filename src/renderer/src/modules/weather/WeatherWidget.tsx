@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { toast } from 'sonner'
 import {
   AlertTriangle,
   Cloud,
@@ -39,6 +40,7 @@ import { cn } from '../../lib/utils'
 import { WeatherSettingsPanel } from './WeatherSettingsPanel'
 import { registerRendererModule } from '../registry'
 import type { WeatherDailyPoint, WeatherHourlyPoint, WeatherSettings, WeatherSnapshot, WeatherViewConfig } from '../../../../shared/ipc-types'
+import { IPC, type IpcMutationResult } from '../../../../shared/ipc-types'
 
 function weatherIcon(code: number | null, isDay: boolean): React.ReactElement {
   if (code == null) return <Cloud className="h-8 w-8 text-muted-foreground" />
@@ -95,6 +97,19 @@ function formatHourLabel(value: number, settings: WeatherSettings): string {
     hour: 'numeric',
     hour12
   })
+}
+
+function formatLastSynced(timestamp: number | null, settings: WeatherSettings): string {
+  if (timestamp == null) return 'Never'
+  const date = new Date(timestamp * 1000)
+  const today = new Date()
+  const yesterday = new Date()
+  yesterday.setDate(yesterday.getDate() - 1)
+  const hour12 = settings.timeFormat === 'system' ? undefined : settings.timeFormat === '12h'
+  const timeLabel = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12 })
+  if (date.toDateString() === today.toDateString()) return `Today at ${timeLabel}`
+  if (date.toDateString() === yesterday.toDateString()) return `Yesterday at ${timeLabel}`
+  return date.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12 })
 }
 
 function hourlyCount(config: WeatherViewConfig): number {
@@ -197,6 +212,18 @@ function HourlyTimeline({
           ))}
         </div>
       )}
+
+      {config.detailLevel === 'detailed' && config.showHumidity && (
+        <div className="weather-timeline-scroll mt-1 flex gap-1.5 overflow-x-auto">
+          {visible.map((point) => (
+            <div key={point.time} className="min-w-[40px] flex-1 text-center">
+              <span className="text-[9px] text-sky-400">
+                {point.relativeHumidity != null ? `${point.relativeHumidity}%` : '—'}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
     </>
   )
 }
@@ -279,6 +306,12 @@ function DailyForecast({
                 {formatNumber(point.windSpeedMax, windUnit(settings))}
               </span>
             )}
+
+            {config.detailLevel !== 'summary' && config.showPrecipitation && (point.snowfallSum ?? 0) > 0 && (
+              <span className="shrink-0 text-[9px] text-sky-300" title={`Snowfall: ${formatNumber(point.snowfallSum, precipUnit(settings))}`}>
+                ❄️
+              </span>
+            )}
           </div>
         )
       })}
@@ -298,6 +331,8 @@ function WeatherWidget(): React.ReactElement {
   const [snapshotConfig, setSnapshotConfig] = useState<WeatherViewConfig | null>(null)
   const [editContentHeight, setEditContentHeight] = useState<number | null>(null)
   const [alertDismissed, setAlertDismissed] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+  const lastManualRefreshAt = useRef<number | null>(null)
   const cardContentRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -320,6 +355,35 @@ function WeatherWidget(): React.ReactElement {
     if (!config.showAlerts || !settings.showAlertsInWidgets) return []
     return snapshot.alerts
   }, [config.showAlerts, settings.showAlertsInWidgets, snapshot])
+
+  const lastUpdatedLabel = useMemo(
+    () => formatLastSynced(snapshot?.fetchedAt ?? null, settings),
+    [snapshot?.fetchedAt, settings]
+  )
+
+  const refreshNow = async (): Promise<void> => {
+    const now = Date.now()
+    if (lastManualRefreshAt.current != null && now - lastManualRefreshAt.current < 60_000) {
+      const secsLeft = Math.ceil((60_000 - (now - lastManualRefreshAt.current)) / 1000)
+      toast.warning(`Please wait ${secsLeft}s before refreshing again.`)
+      return
+    }
+
+    setRefreshing(true)
+    lastManualRefreshAt.current = now
+    try {
+      const result = (await window.api.invoke(IPC.WEATHER_REFRESH, effectiveLocationId)) as IpcMutationResult
+      if (!result.ok) {
+        toast.error(result.error ?? 'Failed to refresh weather data.')
+        return
+      }
+      toast.success('Weather data refreshed.')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to refresh weather data.')
+    } finally {
+      setRefreshing(false)
+    }
+  }
 
   function handleOpenEdit(): void {
     const currentHeight = cardContentRef.current?.getBoundingClientRect().height
@@ -378,8 +442,7 @@ function WeatherWidget(): React.ReactElement {
                 <p className="mt-0.5 text-xs text-muted-foreground">{formatLocationName(snapshot)}</p>
               </div>
             </div>
-            <div className="shrink-0 space-y-1 text-right text-xs text-muted-foreground">
-              {snapshot.fetchedAt && <p>Updated {formatTime(snapshot.fetchedAt, settings)}</p>}
+            <div className="shrink-0 text-right">
               {snapshot.stale && <Badge variant="secondary">Stale</Badge>}
             </div>
           </div>
@@ -429,8 +492,6 @@ function WeatherWidget(): React.ReactElement {
             </div>
           )}
 
-          {(config.displayMode === 'current_hourly' || config.displayMode === 'current_daily') && <Separator />}
-
           {config.showSunTimes && snapshot.daily[0] && (
             <div className="flex items-center gap-3 rounded-md border px-3 py-2 text-xs text-muted-foreground">
               <span>Sunrise {formatTime(snapshot.daily[0].sunrise, settings)}</span>
@@ -438,11 +499,53 @@ function WeatherWidget(): React.ReactElement {
             </div>
           )}
 
-          {config.displayMode === 'current_hourly' && (
-            <HourlyTimeline points={snapshot.hourly} config={config} settings={settings} />
-          )}
-          {config.displayMode === 'current_daily' && (
-            <DailyForecast points={snapshot.daily} config={config} settings={settings} />
+          {config.displayMode !== 'current' && (
+            <>
+              <Separator />
+              {config.displayMode === 'current_all' && (
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex rounded-md border overflow-hidden text-[11px]">
+                    {(['all', 'hourly', 'daily'] as const).map((tab) => (
+                      <button
+                        key={tab}
+                        type="button"
+                        className={cn(
+                          'px-2.5 py-1 transition-colors',
+                          config.forecastView === tab
+                            ? 'bg-accent text-foreground font-medium'
+                            : 'text-muted-foreground hover:bg-accent/50'
+                        )}
+                        onClick={() => setConfig({ ...config, forecastView: tab })}
+                      >
+                        {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {config.displayMode === 'current_all' ? (
+                config.forecastView === 'all' ? (
+                  <div className="space-y-4">
+                    <HourlyTimeline points={snapshot.hourly} config={config} settings={settings} />
+                    <Separator />
+                    <DailyForecast points={snapshot.daily} config={config} settings={settings} />
+                  </div>
+                ) : (
+                  <div className="grid">
+                    <div className={cn('col-start-1 row-start-1', config.forecastView !== 'hourly' && 'invisible pointer-events-none')}>
+                      <HourlyTimeline points={snapshot.hourly} config={config} settings={settings} />
+                    </div>
+                    <div className={cn('col-start-1 row-start-1', config.forecastView !== 'daily' && 'invisible pointer-events-none')}>
+                      <DailyForecast points={snapshot.daily} config={config} settings={settings} />
+                    </div>
+                  </div>
+                )
+              ) : config.displayMode === 'current_hourly' ? (
+                <HourlyTimeline points={snapshot.hourly} config={config} settings={settings} />
+              ) : (
+                <DailyForecast points={snapshot.daily} config={config} settings={settings} />
+              )}
+            </>
           )}
         </>
       )}
@@ -452,66 +555,84 @@ function WeatherWidget(): React.ReactElement {
   return (
     <Card>
       <CardHeader className="pb-2">
-        <div className="flex items-center justify-between gap-2">
-          <CardTitle className="text-base flex items-center gap-2">
-            <CloudSun className="h-5 w-5 text-sky-500" />
-            {widgetTitle}
-          </CardTitle>
-          {isEditing ? (
-            <div className="flex items-center gap-0.5">
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <CardTitle className="text-base flex items-center gap-2">
+              <CloudSun className="h-5 w-5 text-sky-500" />
+              {widgetTitle}
+            </CardTitle>
+          </div>
+          <div className="flex items-center gap-2">
+            {!isEditing && (
+              <>
+                <p className="text-[11px] text-muted-foreground">Updated: {lastUpdatedLabel}</p>
+                <button
+                  type="button"
+                  className="p-1 rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                  onClick={() => void refreshNow()}
+                  disabled={refreshing}
+                  aria-label="Refresh weather data"
+                >
+                  <RefreshCcw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                </button>
+              </>
+            )}
+            {isEditing ? (
+              <div className="flex items-center gap-0.5">
+                <button
+                  type="button"
+                  className="p-1 rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                  onClick={handleReset}
+                  title="Reset to when you opened this"
+                  aria-label="Reset settings"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                </button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <button
+                      type="button"
+                      className="p-1 rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                      title="Restore defaults"
+                      aria-label="Restore default settings"
+                    >
+                      <RefreshCcw className="h-4 w-4" />
+                    </button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Restore Defaults</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Reset all Weather widget settings to their defaults? This cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleFactoryReset}>Confirm</AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+                <button
+                  type="button"
+                  className="p-1 rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                  onClick={handleClose}
+                  title="Close settings"
+                  aria-label="Close settings"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            ) : (
               <button
                 type="button"
                 className="p-1 rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                onClick={handleReset}
-                title="Reset to when you opened this"
-                aria-label="Reset settings"
+                aria-label="Weather widget settings"
+                onClick={handleOpenEdit}
               >
-                <RotateCcw className="h-4 w-4" />
+                <Settings2 className="h-4 w-4" />
               </button>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <button
-                    type="button"
-                    className="p-1 rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                    title="Restore defaults"
-                    aria-label="Restore default settings"
-                  >
-                    <RefreshCcw className="h-4 w-4" />
-                  </button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Restore Defaults</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      Reset all Weather widget settings to their defaults? This cannot be undone.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleFactoryReset}>Confirm</AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-              <button
-                type="button"
-                className="p-1 rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                onClick={handleClose}
-                title="Close settings"
-                aria-label="Close settings"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              className="p-1 rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-              aria-label="Weather widget settings"
-              onClick={handleOpenEdit}
-            >
-              <Settings2 className="h-4 w-4" />
-            </button>
-          )}
+            )}
+          </div>
         </div>
       </CardHeader>
       <CardContent

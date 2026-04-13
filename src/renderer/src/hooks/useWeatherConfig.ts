@@ -6,6 +6,7 @@ export const DEFAULT_WEATHER_VIEW_CONFIG: WeatherViewConfig = {
   locationId: null,
   detailLevel: 'standard',
   displayMode: 'current_hourly',
+  forecastView: 'all',
   showAlerts: true,
   showPrecipitation: true,
   showWind: true,
@@ -27,9 +28,14 @@ export function useWeatherConfig(instanceId: string): {
       .then((raw) => {
         if (raw) {
           try {
+            const parsed = JSON.parse(raw as string) as Partial<WeatherViewConfig>
+            // Migrate legacy combined mode to current_all
+            if ((parsed.displayMode as string) === 'current_both') {
+              parsed.displayMode = 'current_all'
+            }
             setConfigState({
               ...DEFAULT_WEATHER_VIEW_CONFIG,
-              ...(JSON.parse(raw as string) as Partial<WeatherViewConfig>)
+              ...parsed
             })
           } catch {
             // Use default on parse error

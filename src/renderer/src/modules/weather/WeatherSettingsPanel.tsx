@@ -175,6 +175,7 @@ export function WeatherSettingsPanel({
                   <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="current">Current only</SelectItem>
+                    <SelectItem value="current_all">Current + all</SelectItem>
                     <SelectItem value="current_hourly">Current + hourly</SelectItem>
                     <SelectItem value="current_daily">Current + daily</SelectItem>
                   </SelectContent>

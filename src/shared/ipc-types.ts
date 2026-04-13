@@ -501,7 +501,8 @@ export interface WeatherStatus {
 export interface WeatherViewConfig {
   locationId: string | null
   detailLevel: 'summary' | 'standard' | 'detailed'
-  displayMode: 'current' | 'current_hourly' | 'current_daily'
+  displayMode: 'current' | 'current_all' | 'current_hourly' | 'current_daily'
+  forecastView: 'all' | 'hourly' | 'daily'
   showAlerts: boolean
   showPrecipitation: boolean
   showWind: boolean
