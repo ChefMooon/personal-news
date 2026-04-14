@@ -4,6 +4,24 @@ All notable changes to this project are documented in this file.
 
 The format follows Keep a Changelog, and this project uses Semantic Versioning.
 
+## [1.3.0] - 2026-04-14
+
+### Added
+
+- Added a customizable app title bar with native window controls and a notifications button for quicker access to unread alerts.
+- Added a Sidebar settings tab that lets you reorder sidebar entries and hide optional sections without disabling their underlying features.
+- Added a `Current + all` Weather widget display mode so one widget can show current conditions alongside both hourly and daily forecasts.
+- Added a `No tags` filter in Saved Posts so you can quickly find items that still need tagging.
+
+### Changed
+
+- Improved the Reddit Digest page and widget column layouts so subreddit columns resize more naturally across available dashboard space.
+
+### Fixed
+
+- Tightened the Dashboard header layout and spacing to keep top-level controls more compact and usable.
+- Polished the Sports widget refresh control for a more consistent inline action in the widget header.
+
 ## [1.2.0] - 2026-04-08
 
 ### Added
