@@ -630,17 +630,14 @@ export default function Dashboard(): React.ReactElement {
       >
         <div className="min-h-full flex flex-col">
           <div className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-            <div className="flex flex-col gap-4 px-6 py-4">
+            <div className="flex flex-col gap-2 px-6 py-1">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div>
                   <h1 className="text-xl font-semibold">Dashboard</h1>
-                  <p className="text-sm text-muted-foreground">
-                    Switch between custom dashboard views focused on different subjects.
-                  </p>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-                  <Button variant="outline" size="sm" onClick={() => setDashboardDialogMode('create')}>
+                  <Button variant="outline" size="sm" className="h-8" onClick={() => setDashboardDialogMode('create')}>
                     <Plus className="mr-1 h-4 w-4" />
                     New Dashboard
                   </Button>
@@ -695,6 +692,7 @@ export default function Dashboard(): React.ReactElement {
                   <Button
                     variant={editMode ? 'default' : 'outline'}
                     size="sm"
+                    className="h-8"
                     onClick={() => setEditMode((value) => !value)}
                   >
                     {editMode ? (
@@ -719,7 +717,7 @@ export default function Dashboard(): React.ReactElement {
                       <DashboardTabDropTarget key={view.id} viewId={view.id} disabled={!editMode}>
                         <TabsTrigger
                           value={view.id}
-                          className="shrink-0 gap-2 rounded-md border border-transparent px-4 py-2 data-[state=active]:border-border"
+                          className="shrink-0 gap-2 rounded-md border border-transparent px-4 py-1 data-[state=active]:border-border"
                           title={editMode ? 'Drop a widget here to move it to this dashboard.' : undefined}
                         >
                           {view.icon ? <DashboardGlyph icon={view.icon} className="h-4 w-4" /> : null}
