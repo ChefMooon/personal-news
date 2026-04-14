@@ -750,6 +750,7 @@ export interface SavedPostsBulkSetViewedRequest {
   search?: string
   subreddit_filter?: string[]
   tag_filter?: string[]
+  no_tags_only?: boolean
   source_filter?: LinkSource[]
 }
 
@@ -772,6 +773,7 @@ export interface SavedPostsViewedAnalyticsRequest {
   search?: string
   subreddit_filter?: string[]
   tag_filter?: string[]
+  no_tags_only?: boolean
   source_filter?: LinkSource[]
 }
 
@@ -869,6 +871,7 @@ export interface GetSavedPostsRequest {
   search?: string
   subreddit_filter?: string[]
   tag_filter?: string[]
+  no_tags_only?: boolean
   source_filter?: LinkSource[]
   hide_viewed?: boolean
   sort_by?: 'saved_at' | 'score'

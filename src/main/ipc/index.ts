@@ -231,6 +231,7 @@ function buildSavedPostsQueryParts(options?: {
   search?: string
   subreddit_filter?: string[]
   tag_filter?: string[]
+  no_tags_only?: boolean
   source_filter?: string[]
   hide_viewed?: boolean
 }): { fromClause: string; whereClause: string; params: unknown[] } {
@@ -261,6 +262,10 @@ function buildSavedPostsQueryParts(options?: {
       .join(' OR ')
     conditions.push(`(${tagConditions})`)
     params.push(...options.tag_filter)
+  }
+
+  if (options?.no_tags_only) {
+    conditions.push("(sp.tags IS NULL OR sp.tags = '[]' OR json_array_length(sp.tags) = 0)")
   }
 
   if (options?.hide_viewed) {
@@ -1590,6 +1595,7 @@ export function registerIpcHandlers(): void {
         subreddit_filter?: string[]
         tag?: string
         tag_filter?: string[]
+        no_tags_only?: boolean
         source_filter?: string[]
         hide_viewed?: boolean
         sort_by?: 'saved_at' | 'score'
@@ -1605,6 +1611,7 @@ export function registerIpcHandlers(): void {
         search: options?.search,
         subreddit_filter: subredditFilter,
         tag_filter: tagFilter,
+        no_tags_only: options?.no_tags_only,
         source_filter: options?.source_filter,
         hide_viewed: options?.hide_viewed
       })

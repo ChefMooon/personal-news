@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import type { SavedPost, LinkSource } from '../../../shared/ipc-types'
 import { IPC, type GetSavedPostsRequest } from '../../../shared/ipc-types'
 
+const NO_TAGS_FILTER_VALUE = '__no_tags__'
+
 interface UseSavedPostsOptions {
   limit?: number
   offset?: number
@@ -80,7 +82,11 @@ export function useSavedPosts(options?: UseSavedPostsOptions): UseSavedPostsResu
       }
 
       if (tag) {
-        request.tag_filter = [tag]
+        if (tag === NO_TAGS_FILTER_VALUE) {
+          request.no_tags_only = true
+        } else {
+          request.tag_filter = [tag]
+        }
       } else if (tagFilter) {
         request.tag_filter = tagFilter
       }

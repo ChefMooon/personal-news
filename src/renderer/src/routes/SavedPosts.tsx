@@ -130,6 +130,8 @@ const SOURCE_LABELS: Record<LinkSource, string> = {
   generic: 'Link'
 }
 
+const NO_TAGS_FILTER_VALUE = '__no_tags__'
+
 export default function SavedPosts(): React.ReactElement {
   const { enabled } = useSavedPostsEnabled()
 
@@ -194,7 +196,8 @@ function SavedPostsContent(): React.ReactElement {
     return {
       search: search || undefined,
       subreddit_filter: subreddit ? [subreddit] : undefined,
-      tag_filter: tag ? [tag] : undefined,
+      tag_filter: tag && tag !== NO_TAGS_FILTER_VALUE ? [tag] : undefined,
+      no_tags_only: tag === NO_TAGS_FILTER_VALUE ? true : undefined,
       source_filter: source ? [source as LinkSource] : undefined
     }
   }, [search, subreddit, tag, source])
@@ -487,6 +490,7 @@ function SavedPostsContent(): React.ReactElement {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="_all">All tags</SelectItem>
+            <SelectItem value={NO_TAGS_FILTER_VALUE}>No tags</SelectItem>
             {allTags.map((t) => (
               <SelectItem key={t} value={t}>
                 {t}
