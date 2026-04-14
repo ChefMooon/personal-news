@@ -79,6 +79,11 @@ All settings are stored locally in the app. To reconfigure:
 - [How to Build, Package, and Release](docs/HOW-TO-RUN.md) — Source setup plus the verified Windows release workflow
 - [Product Specification](docs/PRD.md) — Current product scope and requirements
 
+## Asset Maintenance
+
+- Run `npm run generate:icons` after updating `resources/icon.svg` to regenerate every non-tray app, favicon, manifest, and installer icon.
+- Tray icons under `resources/tray/` are maintained separately and are not touched by the generator.
+
 ## Support
 
 Found a bug or have a feature request? [Open an issue](https://github.com/ChefMooon/personal-news/issues).
