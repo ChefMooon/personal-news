@@ -51,6 +51,13 @@ type PersistedWindowBounds = {
   isMaximized?: boolean
 }
 
+function getDesktopPlatform(): 'darwin' | 'win32' | 'linux' {
+  if (process.platform === 'darwin' || process.platform === 'win32') {
+    return process.platform
+  }
+  return 'linux'
+}
+
 function isSmokeTestRun(): boolean {
   return process.argv.includes(SMOKE_TEST_FLAG)
 }
@@ -388,11 +395,24 @@ function showTrayCloseHint(mainWindow: BrowserWindow): boolean {
   return true
 }
 
+function emitWindowStateChanged(mainWindow: BrowserWindow): void {
+  if (mainWindow.isDestroyed()) {
+    return
+  }
+
+  mainWindow.webContents.send(IPC.WINDOW_STATE_CHANGED, {
+    platform: getDesktopPlatform(),
+    isMaximized: mainWindow.isMaximized(),
+    isFullScreen: mainWindow.isFullScreen()
+  })
+}
+
 function setupWindowLifecycle(mainWindow: BrowserWindow): void {
   mainWindowRef = mainWindow
 
   mainWindow.on('show', () => {
     createTray()
+    emitWindowStateChanged(mainWindow)
   })
 
   mainWindow.on('hide', () => {
@@ -401,6 +421,7 @@ function setupWindowLifecycle(mainWindow: BrowserWindow): void {
   })
 
   mainWindow.on('minimize' as any, () => {
+    emitWindowStateChanged(mainWindow)
     const minimizeToTray = getBooleanSetting('app_minimize_to_tray', false)
     if (!minimizeToTray) {
       return
@@ -430,10 +451,20 @@ function setupWindowLifecycle(mainWindow: BrowserWindow): void {
 
   mainWindow.on('maximize', () => {
     queuePersistWindowBounds(mainWindow)
+    emitWindowStateChanged(mainWindow)
   })
 
   mainWindow.on('unmaximize', () => {
     queuePersistWindowBounds(mainWindow)
+    emitWindowStateChanged(mainWindow)
+  })
+
+  mainWindow.on('enter-full-screen', () => {
+    emitWindowStateChanged(mainWindow)
+  })
+
+  mainWindow.on('leave-full-screen', () => {
+    emitWindowStateChanged(mainWindow)
   })
 }
 
@@ -447,7 +478,9 @@ function createWindow(): BrowserWindow {
     minWidth: MIN_WINDOW_WIDTH,
     minHeight: MIN_WINDOW_HEIGHT,
     show: false,
+    frame: process.platform === 'darwin',
     autoHideMenuBar: true,
+    ...(process.platform === 'darwin' ? { titleBarStyle: 'hiddenInset' } : {}),
     ...(process.platform === 'darwin' ? {} : { icon: getWindowIconPath() }),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),

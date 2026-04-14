@@ -3,7 +3,7 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { XMLParser } from 'fast-xml-parser'
 import { getDb } from '../db/database'
 import { deleteSetting, getSetting, setSetting } from '../settings/store'
-import { IPC } from '../../shared/ipc-types'
+import { IPC, DEFAULT_SIDEBAR_CONFIG, normalizeSidebarConfig } from '../../shared/ipc-types'
 import type {
   WeatherSearchResult,
   WeatherSettings,
@@ -33,6 +33,7 @@ import type {
   ScriptNotificationsReadResult,
   DashboardViewsMutation,
   DashboardViewsState,
+  SidebarConfig,
   WidgetLayout,
   WidgetInstance,
   ThemeInfo,
@@ -51,7 +52,8 @@ import type {
   NotificationPreferences,
   DigestViewedChangedEvent,
   YoutubeVideoWatchedChangedEvent,
-  UpdateStatusEvent
+  UpdateStatusEvent,
+  WindowState
 } from '../../shared/ipc-types'
 import {
   applyYouTubePollInterval,
@@ -96,6 +98,7 @@ const YOUTUBE_VIEW_CONFIG_KEY_PREFIX = 'youtube_view_config:'
 const SAVED_POSTS_VIEW_CONFIG_KEY_PREFIX = 'saved_posts_view_config:'
 const REDDIT_DIGEST_VIEW_CONFIG_KEY_PREFIX = 'reddit_digest_view_config:'
 const DASHBOARD_VIEWS_SETTING = 'dashboard_views_state'
+const SIDEBAR_CONFIG_SETTING = 'sidebar_config'
 const REDDIT_DIGEST_SUBREDDITS_SETTING = 'reddit_digest_subreddits'
 const xmlParser = new XMLParser({
   ignoreAttributes: false,
@@ -103,6 +106,13 @@ const xmlParser = new XMLParser({
 })
 const BUILT_IN_THEME_IDS = new Set(['system', 'light', 'dark'])
 const THEME_TOKEN_KEY_PATTERN = /^--[a-z0-9-]+$/i
+
+function getDesktopPlatform(): 'darwin' | 'win32' | 'linux' {
+  if (process.platform === 'darwin' || process.platform === 'win32') {
+    return process.platform
+  }
+  return 'linux'
+}
 
 function normalizeDigestSubredditList(input: unknown): string[] {
   if (!Array.isArray(input)) {
@@ -1195,6 +1205,14 @@ function getCurrentThemeInfo(): ThemeInfo {
 export function registerIpcHandlers(): void {
   registerSportsIpcHandlers()
 
+  function getSenderWindowOrThrow(sender: Electron.WebContents): BrowserWindow {
+    const window = BrowserWindow.fromWebContents(sender)
+    if (!window) {
+      throw new Error('Window not found.')
+    }
+    return window
+  }
+
   ipcMain.on(IPC.SETTINGS_GET_THEME_SYNC, (event): void => {
     event.returnValue = getCurrentThemeInfo()
   })
@@ -1204,6 +1222,36 @@ export function registerIpcHandlers(): void {
       win.webContents.send(IPC.UPDATES_STATUS, event)
     }
   }
+
+  ipcMain.handle(IPC.WINDOW_MINIMIZE, (event): void => {
+    getSenderWindowOrThrow(event.sender).minimize()
+  })
+
+  ipcMain.handle(IPC.WINDOW_TOGGLE_MAXIMIZE, (event): void => {
+    const window = getSenderWindowOrThrow(event.sender)
+    if (window.isFullScreen()) {
+      window.setFullScreen(false)
+      return
+    }
+    if (window.isMaximized()) {
+      window.unmaximize()
+      return
+    }
+    window.maximize()
+  })
+
+  ipcMain.handle(IPC.WINDOW_CLOSE, (event): void => {
+    getSenderWindowOrThrow(event.sender).close()
+  })
+
+  ipcMain.handle(IPC.WINDOW_GET_STATE, (event): WindowState => {
+    const window = getSenderWindowOrThrow(event.sender)
+    return {
+      platform: getDesktopPlatform(),
+      isMaximized: window.isMaximized(),
+      isFullScreen: window.isFullScreen()
+    }
+  })
 
   setUpdateStatusListener(emitUpdateStatus)
 
@@ -2178,6 +2226,26 @@ export function registerIpcHandlers(): void {
   // settings:setDashboardViews
   ipcMain.handle(IPC.SETTINGS_SET_DASHBOARD_VIEWS, (_event, mutation: DashboardViewsMutation): void => {
     persistDashboardViewsMutation(mutation)
+  })
+
+  // settings:getSidebarConfig
+  ipcMain.handle(IPC.SETTINGS_GET_SIDEBAR_CONFIG, (): SidebarConfig => {
+    const raw = getSetting(SIDEBAR_CONFIG_SETTING)
+    if (!raw) {
+      return DEFAULT_SIDEBAR_CONFIG
+    }
+
+    try {
+      return normalizeSidebarConfig(JSON.parse(raw))
+    } catch {
+      return DEFAULT_SIDEBAR_CONFIG
+    }
+  })
+
+  // settings:setSidebarConfig
+  ipcMain.handle(IPC.SETTINGS_SET_SIDEBAR_CONFIG, (_event, config: SidebarConfig): IpcMutationResult => {
+    setSetting(SIDEBAR_CONFIG_SETTING, JSON.stringify(normalizeSidebarConfig(config)))
+    return { ok: true, error: null }
   })
 
   // settings:getTheme

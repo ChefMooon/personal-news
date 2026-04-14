@@ -1,19 +1,51 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent
+} from '@dnd-kit/core'
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs'
 import { Input } from '../components/ui/input'
 import { Button } from '../components/ui/button'
 import { Switch } from '../components/ui/switch'
 import { useTheme } from '../providers/ThemeProvider'
 import { useYouTubeChannels } from '../hooks/useYouTubeChannels'
+import { useSidebarConfig } from '../hooks/useSidebarConfig'
 import { useRedditDigestEnabled } from '../contexts/RedditDigestEnabledContext'
 import { useSavedPostsEnabled } from '../contexts/SavedPostsEnabledContext'
 import { useSportsEnabled } from '../contexts/SportsEnabledContext'
 import { useWeatherEnabled } from '../contexts/WeatherEnabledContext'
-import { Download, Eye, EyeOff, ExternalLink, Pencil, Plus, Trash2, Upload } from 'lucide-react'
+import {
+  ArrowDown,
+  ArrowUp,
+  Download,
+  Eye,
+  EyeOff,
+  ExternalLink,
+  GripVertical,
+  Pencil,
+  Plus,
+  Trash2,
+  Upload
+} from 'lucide-react'
+import { cn } from '../lib/utils'
 import { ThemeCreatorDialog, readThemeTokensFromDocument } from '../components/ThemeCreatorDialog'
 import {
+  CUSTOMIZABLE_SIDEBAR_ITEM_IDS,
   IPC,
   type IpcMutationResult,
   type ThemeImportResult,
@@ -21,6 +53,7 @@ import {
   type YouTubeApiKeyStatus,
   type DigestWeekSummary,
   type NotificationPreferences,
+  type SidebarItemId,
   type ScriptRunCompleteEvent,
   type ThemeRow,
   type UpdateStatusEvent
@@ -2118,6 +2151,251 @@ function NotificationsTab(): React.ReactElement {
   )
 }
 
+interface SortableSidebarListItemProps {
+  item: {
+    id: SidebarItemId
+    label: string
+    description: string
+    available: boolean
+  }
+  visible: boolean
+  isFirst: boolean
+  isLast: boolean
+  statusLabel: string
+  onMoveItem: (itemId: SidebarItemId, direction: 'up' | 'down') => void
+  onSetItemHidden: (itemId: SidebarItemId, hidden: boolean) => void
+}
+
+function SortableSidebarListItem({
+  item,
+  visible,
+  isFirst,
+  isLast,
+  statusLabel,
+  onMoveItem,
+  onSetItemHidden
+}: SortableSidebarListItemProps): React.ReactElement {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: item.id
+  })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1
+  }
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        'flex flex-col gap-3 rounded-md border px-4 py-3 md:flex-row md:items-center md:justify-between',
+        isDragging ? 'border-primary/60 bg-accent/30 shadow-sm' : undefined
+      )}
+    >
+      <div className="flex min-w-0 items-center gap-3">
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          className="shrink-0 cursor-grab rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground active:cursor-grabbing"
+          aria-label={`Drag to reorder ${item.label}`}
+        >
+          <GripVertical className="h-4 w-4" />
+        </button>
+
+        <div className="min-w-0 space-y-1">
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-medium">{item.label}</p>
+            {!item.available && (
+              <span className="rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground">
+                Disabled feature
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground">{item.description}</p>
+          <p className="text-xs text-muted-foreground">{statusLabel}</p>
+        </div>
+      </div>
+
+      <div className="flex w-full flex-col gap-2 md:w-48">
+        <div className="grid w-full grid-cols-2 gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => onMoveItem(item.id, 'up')}
+            disabled={isFirst}
+            aria-label={`Move ${item.label} up`}
+            className="w-full justify-center"
+          >
+            <ArrowUp className="mr-1 h-4 w-4" />
+            Up
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => onMoveItem(item.id, 'down')}
+            disabled={isLast}
+            aria-label={`Move ${item.label} down`}
+            className="w-full justify-center"
+          >
+            <ArrowDown className="mr-1 h-4 w-4" />
+            Down
+          </Button>
+        </div>
+        <div className="flex w-full items-center justify-between rounded-md border px-3 py-2">
+          <span className="text-xs text-muted-foreground">Show in sidebar</span>
+          <Switch
+            checked={visible}
+            onCheckedChange={(checked) => onSetItemHidden(item.id, !checked)}
+            aria-label={`Show ${item.label} in sidebar`}
+          />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SidebarTab(): React.ReactElement {
+  const { config, loading, moveItem, resetConfig, setItemHidden, setItemOrder } = useSidebarConfig()
+  const { enabled: redditDigestEnabled } = useRedditDigestEnabled()
+  const { enabled: savedPostsEnabled } = useSavedPostsEnabled()
+  const { enabled: sportsEnabled } = useSportsEnabled()
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates
+    })
+  )
+
+  const sidebarItems: Array<{
+    id: SidebarItemId
+    label: string
+    description: string
+    available: boolean
+  }> = [
+    {
+      id: 'dashboard',
+      label: 'Dashboard',
+      description: 'The main dashboard route with dashboard views and widget layouts.',
+      available: true
+    },
+    {
+      id: 'youtube',
+      label: 'YouTube',
+      description: 'Dedicated page for subscribed channel videos and livestreams.',
+      available: true
+    },
+    {
+      id: 'reddit-digest',
+      label: 'Reddit Digest',
+      description: 'Digest page for bundled Reddit Digest script output.',
+      available: redditDigestEnabled
+    },
+    {
+      id: 'saved-posts',
+      label: 'Saved Posts',
+      description: 'Page for ntfy-synced Reddit saved posts.',
+      available: savedPostsEnabled
+    },
+    {
+      id: 'sports',
+      label: 'Sports',
+      description: 'Dedicated sports page and related widgets.',
+      available: sportsEnabled
+    },
+    {
+      id: 'scripts',
+      label: 'Script Manager',
+      description: 'Manage custom scripts, schedules, and stale script warnings.',
+      available: true
+    }
+  ]
+
+  const hiddenItemIds = new Set(config.hiddenItemIds)
+  const orderedItems = config.itemOrder
+    .map((itemId) => sidebarItems.find((item) => item.id === itemId))
+    .filter((item): item is (typeof sidebarItems)[number] => item != null)
+
+  const handleDragEnd = (event: DragEndEvent): void => {
+    const { active, over } = event
+    if (!over || active.id === over.id) {
+      return
+    }
+
+    const oldIndex = config.itemOrder.indexOf(active.id as SidebarItemId)
+    const newIndex = config.itemOrder.indexOf(over.id as SidebarItemId)
+    if (oldIndex === -1 || newIndex === -1) {
+      return
+    }
+
+    setItemOrder(arrayMove(config.itemOrder, oldIndex, newIndex))
+  }
+
+  if (loading) {
+    return <p className="text-sm text-muted-foreground">Loading sidebar settings...</p>
+  }
+
+  return (
+    <div className="space-y-6 max-w-2xl pb-8">
+      <div className="flex flex-wrap items-start justify-between gap-3 rounded-md border px-4 py-3">
+        <div className="space-y-1">
+          <h3 className="text-sm font-medium">Sidebar layout</h3>
+          <p className="text-xs text-muted-foreground max-w-xl">
+            Reorder sidebar entries and hide any optional item, including Dashboard. Settings stays
+            pinned so the app remains configurable even if every other entry is hidden.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Hidden items remain directly routable and feature-disabled modules still stay hidden.
+          </p>
+        </div>
+        <Button variant="outline" onClick={resetConfig}>Reset to default</Button>
+      </div>
+
+      <div className="space-y-2" onPointerDown={(event) => event.stopPropagation()}>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={orderedItems.map((item) => item.id)} strategy={verticalListSortingStrategy}>
+            {orderedItems.map((item, index) => {
+              const visible = !hiddenItemIds.has(item.id)
+              const isFirst = index === 0
+              const isLast = index === orderedItems.length - 1
+              const statusLabel = item.available
+                ? visible
+                  ? 'Visible in sidebar'
+                  : 'Hidden from sidebar'
+                : visible
+                  ? 'Feature disabled in General settings; will stay hidden until re-enabled'
+                  : 'Hidden from sidebar and feature currently disabled'
+
+              return (
+                <SortableSidebarListItem
+                  key={item.id}
+                  item={item}
+                  visible={visible}
+                  isFirst={isFirst}
+                  isLast={isLast}
+                  statusLabel={statusLabel}
+                  onMoveItem={moveItem}
+                  onSetItemHidden={setItemHidden}
+                />
+              )
+            })}
+          </SortableContext>
+        </DndContext>
+      </div>
+
+      <div className="rounded-md border px-4 py-3 text-xs text-muted-foreground">
+        <p>Settings is always pinned at the bottom of the sidebar and is not part of the reorder list.</p>
+        <p className="mt-1">Current configurable entries: {CUSTOMIZABLE_SIDEBAR_ITEM_IDS.join(', ')}.</p>
+        <p className="mt-1">Drag the grip handle to reorder, or use the Up and Down buttons for precise changes.</p>
+      </div>
+    </div>
+  )
+}
+
 export default function Settings(): React.ReactElement {
   const [searchParams] = useSearchParams()
   const { enabled: redditDigestEnabled } = useRedditDigestEnabled()
@@ -2136,6 +2414,7 @@ export default function Settings(): React.ReactElement {
       <Tabs defaultValue={selectedTab} className="flex-1">
         <TabsList>
           <TabsTrigger value="general">General</TabsTrigger>
+          <TabsTrigger value="sidebar">Sidebar</TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
           <TabsTrigger value="youtube">YouTube</TabsTrigger>
           {sportsEnabled && <TabsTrigger value="sports">Sports</TabsTrigger>}
@@ -2147,6 +2426,9 @@ export default function Settings(): React.ReactElement {
         </TabsList>
         <TabsContent value="general" className="mt-4">
           <GeneralTab />
+        </TabsContent>
+        <TabsContent value="sidebar" className="mt-4">
+          <SidebarTab />
         </TabsContent>
         <TabsContent value="notifications" className="mt-4">
           <NotificationsTab />

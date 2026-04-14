@@ -1,15 +1,26 @@
-import React, { useRef, useState } from 'react'
+import React, { useState } from 'react'
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, Bookmark, Terminal, Settings, ChevronLeft, ChevronRight, Youtube, Newspaper, Bell, Trophy } from 'lucide-react'
+import {
+  LayoutDashboard,
+  Bookmark,
+  Terminal,
+  Settings,
+  ChevronLeft,
+  ChevronRight,
+  Youtube,
+  Newspaper,
+  Trophy
+} from 'lucide-react'
 import { cn } from '../lib/utils'
 import { useScripts } from '../hooks/useScripts'
+import { useSidebarConfig } from '../hooks/useSidebarConfig'
 import { useRedditDigestEnabled } from '../contexts/RedditDigestEnabledContext'
 import { useSavedPostsEnabled } from '../contexts/SavedPostsEnabledContext'
 import { useSportsEnabled } from '../contexts/SportsEnabledContext'
-import { useScriptNotifications } from '../hooks/useScriptNotifications'
-import { NotificationsFlyout } from './NotificationsFlyout'
+import type { SidebarItemId } from '../../../shared/ipc-types'
 
 interface NavItem {
+  id: SidebarItemId
   to: string
   label: string
   icon: React.ReactNode
@@ -18,54 +29,46 @@ interface NavItem {
 
 export function Sidebar(): React.ReactElement {
   const [collapsed, setCollapsed] = useState(false)
-  const [isNotifOpen, setIsNotifOpen] = useState(false)
-  const notificationsButtonRef = useRef<HTMLButtonElement>(null)
   const { scripts } = useScripts()
   const hasStaleScripts = scripts.some((s) => s.is_stale)
+  const { config } = useSidebarConfig()
   const { enabled: redditDigestEnabled } = useRedditDigestEnabled()
   const { enabled: savedPostsEnabled } = useSavedPostsEnabled()
   const { enabled: sportsEnabled } = useSportsEnabled()
-  const { notifications, unreadCount, markAllRead, markRead } = useScriptNotifications()
 
-  const navItems: NavItem[] = [
+  const allNavItems: NavItem[] = [
     {
+      id: 'dashboard',
       to: '/',
       label: 'Dashboard',
       icon: <LayoutDashboard className="h-5 w-5 shrink-0" />
     },
     {
+      id: 'youtube',
       to: '/youtube',
       label: 'YouTube',
       icon: <Youtube className="h-5 w-5 shrink-0" />
     },
-    ...(redditDigestEnabled
-      ? [
-          {
-            to: '/reddit-digest',
-            label: 'Reddit Digest',
-            icon: <Newspaper className="h-5 w-5 shrink-0" />
-          }
-        ]
-      : []),
-    ...(savedPostsEnabled
-      ? [
-          {
-            to: '/saved-posts',
-            label: 'Saved Posts',
-            icon: <Bookmark className="h-5 w-5 shrink-0" />
-          }
-        ]
-      : []),
-    ...(sportsEnabled
-      ? [
-          {
-            to: '/sports',
-            label: 'Sports',
-            icon: <Trophy className="h-5 w-5 shrink-0" />
-          }
-        ]
-      : []),
     {
+      id: 'reddit-digest',
+      to: '/reddit-digest',
+      label: 'Reddit Digest',
+      icon: <Newspaper className="h-5 w-5 shrink-0" />
+    },
+    {
+      id: 'saved-posts',
+      to: '/saved-posts',
+      label: 'Saved Posts',
+      icon: <Bookmark className="h-5 w-5 shrink-0" />
+    },
+    {
+      id: 'sports',
+      to: '/sports',
+      label: 'Sports',
+      icon: <Trophy className="h-5 w-5 shrink-0" />
+    },
+    {
+      id: 'scripts',
       to: '/scripts',
       label: 'Script Manager',
       icon: <Terminal className="h-5 w-5 shrink-0" />,
@@ -73,35 +76,39 @@ export function Sidebar(): React.ReactElement {
     }
   ]
 
-  const closeNotifications = (): void => {
-    setIsNotifOpen(false)
-    notificationsButtonRef.current?.focus()
-  }
+  const availableItemIds = new Set<SidebarItemId>([
+    'dashboard',
+    'youtube',
+    'scripts',
+    ...(redditDigestEnabled ? ['reddit-digest' as const] : []),
+    ...(savedPostsEnabled ? ['saved-posts' as const] : []),
+    ...(sportsEnabled ? ['sports' as const] : [])
+  ])
+  const hiddenItemIds = new Set(config.hiddenItemIds)
+  const navItems = config.itemOrder
+    .map((itemId) => allNavItems.find((item) => item.id === itemId))
+    .filter((item): item is NavItem => item != null)
+    .filter((item) => availableItemIds.has(item.id) && !hiddenItemIds.has(item.id))
 
   return (
     <div
       className={cn(
-        'flex flex-col h-full border-r bg-card transition-all duration-200',
+        'flex h-full flex-col overflow-hidden border-r bg-card transition-[width] duration-200 ease-out',
         collapsed ? 'w-14' : 'w-[200px]'
       )}
       style={{ flexShrink: 0 }}
     >
-      {/* Header */}
       <div
         className={cn(
-          'flex items-center border-b py-2',
-          collapsed ? '' : 'justify-between px-3'
+          'flex items-center border-b px-2 py-1.5',
+          collapsed ? 'justify-center' : 'justify-end'
         )}
       >
-        {!collapsed && (
-          <span className="text-sm font-semibold text-foreground truncate">Personal News</span>
-        )}
         <button
           type="button"
           onClick={() => setCollapsed((c) => !c)}
           className={cn(
-            'flex items-center justify-center px-3 py-2 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground transition-colors',
-            collapsed ? 'flex-1 mx-1' : 'ml-auto'
+            'flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground'
           )}
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           aria-pressed={collapsed}
@@ -123,7 +130,7 @@ export function Sidebar(): React.ReactElement {
             end={item.to === '/'}
             className={({ isActive }) =>
               cn(
-                'flex items-center gap-3 px-3 py-2 mx-1 rounded-md text-sm transition-colors',
+                'mx-1 flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
                 isActive
                   ? 'bg-primary text-primary-foreground'
                   : item.attention
@@ -134,16 +141,18 @@ export function Sidebar(): React.ReactElement {
           >
             {item.icon}
             {!collapsed && (
-              <span className="flex-1 truncate">{item.label}</span>
+              <span className="flex-1 truncate transition-opacity duration-150">{item.label}</span>
             )}
           </NavLink>
         ))}
+      </nav>
 
+      <div className="border-t py-2">
         <NavLink
           to="/settings"
           className={({ isActive }) =>
             cn(
-              'flex items-center gap-3 px-3 py-2 mx-1 rounded-md text-sm transition-colors',
+              'mx-1 flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
               isActive
                 ? 'bg-primary text-primary-foreground'
                 : 'text-muted-foreground hover:bg-accent hover:text-foreground'
@@ -152,43 +161,10 @@ export function Sidebar(): React.ReactElement {
         >
           <Settings className="h-5 w-5 shrink-0" />
           {!collapsed && (
-            <span className="flex-1 truncate">Settings</span>
+            <span className="flex-1 truncate transition-opacity duration-150">Settings</span>
           )}
         </NavLink>
-      </nav>
-
-      <div className="border-t py-2">
-        <button
-          ref={notificationsButtonRef}
-          type="button"
-          onClick={() => setIsNotifOpen((open) => !open)}
-          aria-label={unreadCount === 0 ? 'Notifications' : `Notifications, ${unreadCount} unread`}
-          aria-expanded={isNotifOpen}
-          className={cn(
-            'relative mx-1 flex w-[calc(100%-0.5rem)] items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
-            isNotifOpen
-              ? 'bg-primary text-primary-foreground'
-              : 'text-muted-foreground hover:bg-accent hover:text-foreground'
-          )}
-        >
-          <Bell className="h-5 w-5 shrink-0" />
-          {!collapsed && <span className="flex-1 truncate text-left">Notifications</span>}
-          {unreadCount > 0 && (
-            <span className="absolute right-0.5 top-0.5 h-2 w-2 rounded-full bg-red-500" />
-          )}
-        </button>
       </div>
-
-      {isNotifOpen && (
-        <NotificationsFlyout
-          onClose={closeNotifications}
-          sidebarCollapsed={collapsed}
-          notifications={notifications}
-          unreadCount={unreadCount}
-          markAllRead={markAllRead}
-          markRead={markRead}
-        />
-      )}
     </div>
   )
 }

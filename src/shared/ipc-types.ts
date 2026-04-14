@@ -2,6 +2,11 @@
 
 export const IPC = {
   APP_SHOW_TRAY_HINT: 'app:showTrayHint',
+  WINDOW_MINIMIZE: 'window:minimize',
+  WINDOW_TOGGLE_MAXIMIZE: 'window:toggleMaximize',
+  WINDOW_CLOSE: 'window:close',
+  WINDOW_GET_STATE: 'window:getState',
+  WINDOW_STATE_CHANGED: 'window:stateChanged',
   UPDATES_STATUS: 'updates:status',
   UPDATES_GET_STATUS: 'updates:getStatus',
   UPDATES_CHECK_FOR_UPDATES: 'updates:checkForUpdates',
@@ -91,6 +96,8 @@ export const IPC = {
   SETTINGS_SET_WIDGET_LAYOUT: 'settings:setWidgetLayout',
   SETTINGS_GET_DASHBOARD_VIEWS: 'settings:getDashboardViews',
   SETTINGS_SET_DASHBOARD_VIEWS: 'settings:setDashboardViews',
+  SETTINGS_GET_SIDEBAR_CONFIG: 'settings:getSidebarConfig',
+  SETTINGS_SET_SIDEBAR_CONFIG: 'settings:setSidebarConfig',
   SETTINGS_GET_THEME_SYNC: 'settings:getThemeSync',
   SETTINGS_GET_THEME: 'settings:getTheme',
   SETTINGS_SET_THEME: 'settings:setTheme',
@@ -376,6 +383,53 @@ export interface DashboardViewsMutation {
   cloneInstanceConfigs?: DashboardConfigCloneOperation[]
 }
 
+export const CUSTOMIZABLE_SIDEBAR_ITEM_IDS = [
+  'dashboard',
+  'youtube',
+  'reddit-digest',
+  'saved-posts',
+  'sports',
+  'scripts'
+] as const
+
+export type SidebarItemId = (typeof CUSTOMIZABLE_SIDEBAR_ITEM_IDS)[number]
+
+export interface SidebarConfig {
+  itemOrder: SidebarItemId[]
+  hiddenItemIds: SidebarItemId[]
+}
+
+export const DEFAULT_SIDEBAR_CONFIG: SidebarConfig = {
+  itemOrder: [...CUSTOMIZABLE_SIDEBAR_ITEM_IDS],
+  hiddenItemIds: []
+}
+
+export function isSidebarItemId(value: unknown): value is SidebarItemId {
+  return (
+    typeof value === 'string' &&
+    (CUSTOMIZABLE_SIDEBAR_ITEM_IDS as readonly string[]).includes(value)
+  )
+}
+
+export function normalizeSidebarConfig(raw: unknown): SidebarConfig {
+  const candidate = raw as Partial<SidebarConfig>
+  const itemOrder = Array.isArray(candidate.itemOrder)
+    ? candidate.itemOrder.filter(isSidebarItemId)
+    : []
+  const hiddenItemIds = Array.isArray(candidate.hiddenItemIds)
+    ? candidate.hiddenItemIds.filter(isSidebarItemId)
+    : []
+
+  const dedupedOrder = itemOrder.filter((value, index, values) => values.indexOf(value) === index)
+  const dedupedHidden = hiddenItemIds.filter((value, index, values) => values.indexOf(value) === index)
+  const missingItemIds = CUSTOMIZABLE_SIDEBAR_ITEM_IDS.filter((itemId) => !dedupedOrder.includes(itemId))
+
+  return {
+    itemOrder: [...dedupedOrder, ...missingItemIds],
+    hiddenItemIds: dedupedHidden
+  }
+}
+
 export interface ThemeInfo {
   id: string
   tokens: Record<string, string> | null
@@ -386,6 +440,14 @@ export interface ThemeRow {
   name: string
   tokens: Record<string, string>
   created_at: number
+}
+
+export type DesktopPlatform = 'darwin' | 'win32' | 'linux'
+
+export interface WindowState {
+  platform: DesktopPlatform
+  isMaximized: boolean
+  isFullScreen: boolean
 }
 
 export interface ThemeImportResult extends IpcMutationResult {

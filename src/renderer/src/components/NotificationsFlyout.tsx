@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react'
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { ScriptNotification } from '../../../shared/ipc-types'
 import { formatRelativeTime } from '../lib/time'
@@ -6,9 +6,14 @@ import { cn } from '../lib/utils'
 import { Button } from './ui/button'
 import { ScrollArea } from './ui/scroll-area'
 
+const FLYOUT_WIDTH_PX = 300
+const FLYOUT_HEIGHT_PX = 380
+const FLYOUT_GAP_PX = 8
+const VIEWPORT_MARGIN_PX = 8
+
 interface NotificationsFlyoutProps {
   onClose: () => void
-  sidebarCollapsed: boolean
+  anchorRef: React.RefObject<HTMLElement | null>
   notifications: ScriptNotification[]
   unreadCount: number
   markAllRead: () => Promise<void>
@@ -38,7 +43,7 @@ function SeverityDot({
 
 export function NotificationsFlyout({
   onClose,
-  sidebarCollapsed,
+  anchorRef,
   notifications,
   unreadCount,
   markAllRead,
@@ -46,21 +51,50 @@ export function NotificationsFlyout({
 }: NotificationsFlyoutProps): React.ReactElement {
   const navigate = useNavigate()
   const panelRef = useRef<HTMLDivElement>(null)
+  const [position, setPosition] = useState({ top: VIEWPORT_MARGIN_PX, left: VIEWPORT_MARGIN_PX })
 
   useEffect(() => {
     panelRef.current?.focus()
   }, [])
 
+  useLayoutEffect(() => {
+    const updatePosition = (): void => {
+      const anchor = anchorRef.current
+      if (!anchor) {
+        return
+      }
+
+      const rect = anchor.getBoundingClientRect()
+      const maxLeft = Math.max(VIEWPORT_MARGIN_PX, window.innerWidth - FLYOUT_WIDTH_PX - VIEWPORT_MARGIN_PX)
+      const maxTop = Math.max(VIEWPORT_MARGIN_PX, window.innerHeight - FLYOUT_HEIGHT_PX - VIEWPORT_MARGIN_PX)
+
+      setPosition({
+        top: Math.min(rect.bottom + FLYOUT_GAP_PX, maxTop),
+        left: Math.min(Math.max(rect.right - FLYOUT_WIDTH_PX, VIEWPORT_MARGIN_PX), maxLeft)
+      })
+    }
+
+    updatePosition()
+
+    window.addEventListener('resize', updatePosition)
+    return () => window.removeEventListener('resize', updatePosition)
+  }, [anchorRef])
+
   useEffect(() => {
     const handler = (event: MouseEvent): void => {
-      if (panelRef.current && !panelRef.current.contains(event.target as Node)) {
+      const target = event.target as Node
+      if (panelRef.current?.contains(target) || anchorRef.current?.contains(target)) {
+        return
+      }
+
+      if (panelRef.current) {
         onClose()
       }
     }
 
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
-  }, [onClose])
+  }, [anchorRef, onClose])
 
   useEffect(() => {
     const handler = (event: KeyboardEvent): void => {
@@ -88,7 +122,7 @@ export function NotificationsFlyout({
   }
 
   return (
-    <div className={cn('fixed bottom-2 z-50', sidebarCollapsed ? 'left-14' : 'left-[200px]')}>
+    <div className="fixed z-50" style={{ top: position.top, left: position.left }}>
       <div
         ref={panelRef}
         role="dialog"

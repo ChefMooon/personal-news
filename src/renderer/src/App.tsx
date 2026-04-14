@@ -11,9 +11,11 @@ import SportsPage from './routes/Sports'
 import { RedditDigestEnabledProvider } from './contexts/RedditDigestEnabledContext'
 import { RadioPlayerProvider } from './contexts/RadioPlayerContext'
 import { SavedPostsEnabledProvider } from './contexts/SavedPostsEnabledContext'
+import { SidebarConfigProvider } from './contexts/SidebarConfigContext'
 import { SportsEnabledProvider } from './contexts/SportsEnabledContext'
 import { WeatherEnabledProvider } from './contexts/WeatherEnabledContext'
 import { RadioPlayer } from './components/RadioPlayer'
+import { WindowTitleBar } from './components/WindowTitleBar'
 import { Toaster, toast } from 'sonner'
 import { IPC, type IpcMutationResult, type UpdateStatusEvent } from '../../shared/ipc-types'
 
@@ -102,29 +104,34 @@ export default function App(): React.ReactElement {
       <SavedPostsEnabledProvider>
         <SportsEnabledProvider>
           <WeatherEnabledProvider>
-            <RadioPlayerProvider>
-              <div className="flex h-screen w-screen overflow-hidden bg-background">
-                <Sidebar />
-                <main className="flex-1 overflow-auto">
-                  <Routes>
-                    <Route path="/" element={<Dashboard />} />
-                    <Route path="/reddit-digest" element={<RedditDigest />} />
-                    <Route path="/saved-posts" element={<SavedPosts />} />
-                    <Route path="/youtube" element={<YouTubePage />} />
-                    <Route path="/sports" element={<SportsPage />} />
-                    <Route path="/scripts" element={<ScriptManager />} />
-                    <Route path="/settings" element={<Settings />} />
-                  </Routes>
-                </main>
-                <RadioPlayer />
-              </div>
-              <Toaster
-                position="bottom-right"
-                richColors
-                containerAriaLabel="Notifications"
-                toastOptions={{ closeButtonAriaLabel: 'Close notification' }}
-              />
-            </RadioPlayerProvider>
+            <SidebarConfigProvider>
+              <RadioPlayerProvider>
+                <div className="flex h-screen w-screen flex-col overflow-hidden bg-background">
+                  <WindowTitleBar />
+                  <div className="flex flex-1 overflow-hidden">
+                    <Sidebar />
+                    <main className="flex-1 overflow-auto">
+                      <Routes>
+                        <Route path="/" element={<Dashboard />} />
+                        <Route path="/reddit-digest" element={<RedditDigest />} />
+                        <Route path="/saved-posts" element={<SavedPosts />} />
+                        <Route path="/youtube" element={<YouTubePage />} />
+                        <Route path="/sports" element={<SportsPage />} />
+                        <Route path="/scripts" element={<ScriptManager />} />
+                        <Route path="/settings" element={<Settings />} />
+                      </Routes>
+                    </main>
+                    <RadioPlayer />
+                  </div>
+                </div>
+                <Toaster
+                  position="bottom-right"
+                  richColors
+                  containerAriaLabel="Notifications"
+                  toastOptions={{ closeButtonAriaLabel: 'Close notification' }}
+                />
+              </RadioPlayerProvider>
+            </SidebarConfigProvider>
           </WeatherEnabledProvider>
         </SportsEnabledProvider>
       </SavedPostsEnabledProvider>
