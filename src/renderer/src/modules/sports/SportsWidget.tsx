@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { RefreshCcw, RotateCcw, Settings2, X } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
-import { Button } from '../../components/ui/button'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -285,9 +284,15 @@ function SportsWidget(): React.ReactElement {
           </div>
           <div className="flex items-center gap-2">
             <p className="text-[11px] text-muted-foreground">Updated: {lastUpdatedLabel}</p>
-            <Button variant="ghost" size="icon" onClick={() => void refreshNow()} disabled={refreshing} aria-label="Refresh sports data">
+            <button
+              type="button"
+              className="p-1 rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors disabled:opacity-50"
+              onClick={() => void refreshNow()}
+              disabled={refreshing}
+              aria-label="Refresh sports data"
+            >
               <RefreshCcw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-            </Button>
+            </button>
             {isEditing ? (
               <div className="flex items-center gap-0.5">
                 <button
