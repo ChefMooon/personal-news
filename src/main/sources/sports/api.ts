@@ -5,6 +5,7 @@ import type {
   SportStandingRow,
   TeamSearchResult
 } from '../../../shared/ipc-types'
+import { normalizeEventStatus } from './status'
 
 const SPORTS_DB_FREE_API_KEY = '123'
 const SPORTS_DB_BASE_URL = `https://www.thesportsdb.com/api/v1/json/${SPORTS_DB_FREE_API_KEY}`
@@ -162,28 +163,6 @@ function normalizeClockTime(value: string | null | undefined): string | null {
 
 function normalizeLookupKey(value: string | null | undefined): string {
   return (value ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '')
-}
-
-function isFinishedEventText(value: string | null | undefined): boolean {
-  return Boolean(value && /(finished|final|completed|game over|ended|after penalties|after extra time|full time|\bft\b|\baet\b)/i.test(value))
-}
-
-function isLiveProgressText(value: string | null | undefined): boolean {
-  return Boolean(
-    value
-      && /(live|in progress|half time|break|period|quarter|inning|set \d|overtime|extra time|top \d|bottom \d|\b(?:1st|2nd|3rd|4th)\b|\d{1,3}(?:\+\d{1,2})?['’])/i.test(value)
-  )
-}
-
-function normalizeEventStatus(status: string | null | undefined, progress: string | null | undefined): string | null {
-  const statusText = status?.trim() || null
-  const progressText = progress?.trim() || null
-
-  if (progressText && !isFinishedEventText(statusText) && (isLiveProgressText(progressText) || !statusText)) {
-    return progressText
-  }
-
-  return statusText ?? progressText
 }
 
 function extractRefId(ref: string | undefined): string | null {

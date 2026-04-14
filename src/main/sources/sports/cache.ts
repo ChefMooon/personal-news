@@ -6,6 +6,7 @@ import type {
   SportTeamEvents,
   TrackedTeam
 } from '../../../shared/ipc-types'
+import { isFinalSportEvent } from './status'
 
 type UpsertLeagueInput = {
   leagueId: string
@@ -107,10 +108,6 @@ function mapEvent(row: EventRow): SportEvent {
     status: row.status,
     venue: row.venue
   }
-}
-
-function isFinishedStatus(status: string | null): boolean {
-  return Boolean(status && /(finished|final|completed|game over|ended|after penalties|after extra time|full time|\bft\b|\baet\b)/i.test(status))
 }
 
 function eventSortValue(event: SportEvent): number {
@@ -405,11 +402,11 @@ export function getTeamEvents(db: Database.Database, teamId: string, today: stri
 
   const events = rows.map(mapEvent)
   const last = events
-    .filter((event) => event.eventDate < today || (event.eventDate === today && isFinishedStatus(event.status)))
+    .filter((event) => event.eventDate < today || (event.eventDate === today && isFinalSportEvent(event)))
     .sort((a, b) => eventSortValue(b) - eventSortValue(a))
     .slice(0, 5)
   const next = events
-    .filter((event) => event.eventDate > today || (event.eventDate === today && !isFinishedStatus(event.status)))
+    .filter((event) => event.eventDate > today || (event.eventDate === today && !isFinalSportEvent(event)))
     .sort((a, b) => eventSortValue(a) - eventSortValue(b))
     .slice(0, 5)
 

@@ -62,6 +62,7 @@ import {
   upsertOpponentBadge,
   upsertTrackedTeam
 } from './cache'
+import { isLiveSportEvent } from './status'
 
 const SPORTS_ENABLED_KEY = 'sports_enabled'
 const SPORTS_POLL_INTERVAL_KEY = 'sports_poll_interval_minutes'
@@ -94,14 +95,6 @@ function ensureDb(): Database.Database {
 
 function isSportsEnabled(): boolean {
   return getSetting(SPORTS_ENABLED_KEY) !== 'false'
-}
-
-function isLiveEventStatus(status: string | null): boolean {
-  return Boolean(
-    status
-      && !/(finished|final|completed|game over|ended|after penalties|after extra time|full time|\bft\b|\baet\b)/i.test(status)
-      && /(live|in progress|half time|break|period|quarter|inning|set \d|overtime|extra time|top \d|bottom \d|\b(?:1st|2nd|3rd|4th)\b|\d{1,3}(?:\+\d{1,2})?['’])/i.test(status)
-  )
 }
 
 function getPollIntervalMinutes(): number {
@@ -405,7 +398,7 @@ async function refreshTrackedTeam(team: TrackedTeam, fetchedDate: string): Promi
 function scheduleLiveRefreshIfNeeded(sport: string): void {
   const db = ensureDb()
   const today = getLocalDateString()
-  const hasLiveEvents = readTodayEvents(db, sport, today).some((event) => isLiveEventStatus(event.status))
+  const hasLiveEvents = readTodayEvents(db, sport, today).some((event) => isLiveSportEvent(event))
 
   if (!hasLiveEvents) {
     clearLiveRefreshTimer(sport)
@@ -427,7 +420,7 @@ function scheduleLiveRefreshIfNeeded(sport: string): void {
 async function doLiveRefresh(sport: string): Promise<void> {
   const db = ensureDb()
   const fetchDate = getLocalDateString()
-  const liveEvents = readTodayEvents(db, sport, fetchDate).filter((event) => isLiveEventStatus(event.status))
+  const liveEvents = readTodayEvents(db, sport, fetchDate).filter((event) => isLiveSportEvent(event))
   const refreshedEvents: SportEvent[] = []
 
   for (const event of liveEvents) {
