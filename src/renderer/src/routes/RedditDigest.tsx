@@ -418,7 +418,7 @@ export default function RedditDigest(): React.ReactElement {
         ) : pageViewMode === 'columns' ? (
           <div
             className="grid gap-6"
-            style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}
+            style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}
           >
             {groupKeys.map((key) => (
               <SubredditColumn key={key} label={key} posts={groups.get(key) ?? []} />

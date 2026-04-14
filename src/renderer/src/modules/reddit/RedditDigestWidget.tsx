@@ -181,7 +181,7 @@ function RedditDigestWidget(): React.ReactElement {
   ) : sortedPosts.length === 0 ? (
     <p className="text-sm text-muted-foreground">No posts match the current filter.</p>
   ) : config.layout_mode === 'columns' ? (
-    <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 220px))' }}>
+    <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
       {groupKeys.map((key) => (
         <SubredditColumn key={key} label={key} posts={groups.get(key) ?? []} maxPosts={config.max_posts_per_group} />
       ))}
