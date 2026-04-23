@@ -12,7 +12,7 @@ import { StandingsTable } from '../modules/sports/StandingsTable'
 import { TeamStatCard } from '../modules/sports/TeamStatCard'
 import { TodayGamesStrip } from '../modules/sports/TodayGamesStrip'
 import { getLeagueKey } from '../modules/sports/league-display'
-import { IPC, type IpcMutationResult, type SportEvent, type SportLeague, type SportStandingRow, type SportTeamEvents, type SportsDataUpdatedEvent, type TrackedTeam } from '../../../shared/ipc-types'
+import { IPC, type IpcMutationResult, type SportEvent, type SportLeague, type SportStandingRow, type SportTeamEvents, type SportsDataUpdatedEvent, type SportsDataFetchWarningEvent, type TrackedTeam } from '../../../shared/ipc-types'
 import { SUPPORTED_SPORTS, getSportLabel, type SupportedSport } from '../../../shared/sports'
 
 export default function SportsPage(): React.ReactElement {
@@ -132,6 +132,15 @@ export default function SportsPage(): React.ReactElement {
       void loadData({ preserveContent: true })
     })
   }, [loadData])
+
+  React.useEffect(() => {
+    return window.api.on(IPC.SPORTS_FETCH_WARNING, (event) => {
+      const payload = event as SportsDataFetchWarningEvent
+      toast.warning(payload.message, {
+        duration: 5000 // Auto-dismiss after 5 seconds
+      })
+    })
+  }, [])
 
   const refreshAll = async (): Promise<void> => {
     setRefreshing(true)

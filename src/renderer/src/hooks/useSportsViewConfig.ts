@@ -19,7 +19,8 @@ export const DEFAULT_SPORTS_VIEW_CONFIG: SportsViewConfig = {
   sport: DEFAULT_SPORT,
   viewMode: 'today',
   showVenue: false,
-  showTime: true
+  showTime: true,
+  showLiveStartTime: true
 }
 
 export function normalizeSportsViewConfig(config: Partial<SportsViewConfig>): SportsViewConfig {

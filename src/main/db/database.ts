@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3'
 import { app } from 'electron'
 import { join } from 'path'
-import { mkdirSync, readFileSync } from 'fs'
+import { existsSync, mkdirSync, readFileSync } from 'fs'
 
 let db: Database.Database
 
@@ -44,7 +44,8 @@ function runMigrations(database: Database.Database): void {
     2: '002_weather.sql',
     3: '003_sports.sql',
     4: '004_sports_team_cache.sql',
-    5: '005_youtube_livestream_lifecycle.sql'
+    5: '005_youtube_livestream_lifecycle.sql',
+    6: '006_sports_team_name_normalization.sql'
   }
 
   // Ensure meta table exists first
@@ -76,6 +77,10 @@ function runMigrations(database: Database.Database): void {
       migrationPath = join(process.resourcesPath, 'migrations', migrationFile)
     } else {
       migrationPath = join(__dirname, `../../src/main/db/migrations/${migrationFile}`)
+    }
+
+    if (!existsSync(migrationPath)) {
+      throw new Error(`[DB] Migration file not found: ${migrationPath}`)
     }
 
     const sql = readFileSync(migrationPath, 'utf-8')
@@ -126,6 +131,13 @@ function runMigrations(database: Database.Database): void {
         !columnExists(db, 'yt_videos', 'actual_start_time') ||
         !columnExists(db, 'yt_videos', 'actual_end_time') ||
         !columnExists(db, 'yt_videos', 'is_livestream')
+    },
+    {
+      name: 'sports-team-name-normalization',
+      file: '006_sports_team_name_normalization.sql',
+      shouldApply: (db) =>
+        !columnExists(db, 'sports_events', 'home_team_normalized') ||
+        !columnExists(db, 'sports_events', 'away_team_normalized')
     }
   ]
 

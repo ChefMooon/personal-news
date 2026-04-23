@@ -116,6 +116,46 @@ type EspnTeam = {
   displayName?: string
 }
 
+type EspnScoreboardTeam = {
+  id?: string | number
+  displayName?: string
+}
+
+type EspnScoreboardCompetitor = {
+  homeAway?: 'home' | 'away' | string
+  score?: string | number | null
+  team?: EspnScoreboardTeam
+}
+
+type EspnScoreboardStatusType = {
+  state?: string
+  shortDetail?: string
+  detail?: string
+  description?: string
+}
+
+type EspnScoreboardCompetitionStatus = {
+  type?: EspnScoreboardStatusType
+}
+
+type EspnScoreboardCompetition = {
+  competitors?: EspnScoreboardCompetitor[]
+  status?: EspnScoreboardCompetitionStatus
+  venue?: {
+    fullName?: string
+  }
+}
+
+type EspnScoreboardEvent = {
+  id?: string | number
+  date?: string
+  competitions?: EspnScoreboardCompetition[]
+}
+
+type EspnScoreboardResponse = {
+  events?: EspnScoreboardEvent[]
+}
+
 function parseInteger(value: string | number | null | undefined): number | null {
   if (value == null || value === '') {
     return null
@@ -389,6 +429,110 @@ function resolveEspnStandingsLeague(leagueId: string, sport: string, leagueName?
   return null
 }
 
+function toEspnDateParam(date: string): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return null
+  }
+
+  return date.replace(/-/g, '')
+}
+
+function normalizeHomeAway(value: string | null | undefined): 'home' | 'away' | null {
+  const normalized = value?.trim().toLowerCase()
+  if (normalized === 'home' || normalized === 'away') {
+    return normalized
+  }
+
+  return null
+}
+
+function toDatePartsFromIso(isoDate: string): { eventDate: string; eventTime: string | null } | null {
+  const parsed = new Date(isoDate)
+  if (Number.isNaN(parsed.getTime())) {
+    return null
+  }
+
+  const year = parsed.getUTCFullYear()
+  const month = String(parsed.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(parsed.getUTCDate()).padStart(2, '0')
+  const hour = String(parsed.getUTCHours()).padStart(2, '0')
+  const minute = String(parsed.getUTCMinutes()).padStart(2, '0')
+
+  return {
+    eventDate: `${year}-${month}-${day}`,
+    eventTime: `${hour}:${minute}`
+  }
+}
+
+function mapEspnScoreboardEvent(
+  row: EspnScoreboardEvent,
+  leagueId: string,
+  sport: string
+): SportEvent | null {
+  const competition = row.competitions?.[0]
+  const competitors = competition?.competitors ?? []
+  const home = competitors.find((entry) => normalizeHomeAway(entry.homeAway) === 'home')
+  const away = competitors.find((entry) => normalizeHomeAway(entry.homeAway) === 'away')
+  const homeName = home?.team?.displayName?.trim()
+  const awayName = away?.team?.displayName?.trim()
+  const dateParts = row.date ? toDatePartsFromIso(row.date) : null
+
+  if (!row.id || competitors.length < 2 || !homeName || !awayName || !dateParts) {
+    return null
+  }
+
+  const statusType = competition?.status?.type
+  const state = (statusType?.state ?? '').toLowerCase()
+  const statusText = statusType?.shortDetail?.trim() || statusType?.detail?.trim() || statusType?.description?.trim() || null
+  const isPre = state === 'pre'
+
+  return {
+    eventId: `espn:${row.id}`,
+    leagueId,
+    sport,
+    homeTeamId: home?.team?.id == null ? null : String(home.team.id),
+    awayTeamId: away?.team?.id == null ? null : String(away.team.id),
+    homeTeam: homeName,
+    awayTeam: awayName,
+    homeTeamBadgeUrl: null,
+    awayTeamBadgeUrl: null,
+    homeScore: isPre ? null : (home?.score == null ? null : String(home.score)),
+    awayScore: isPre ? null : (away?.score == null ? null : String(away.score)),
+    eventDate: dateParts.eventDate,
+    eventTime: dateParts.eventTime,
+    status: isPre ? 'Scheduled' : statusText,
+    venue: competition?.venue?.fullName ?? null
+  }
+}
+
+async function fetchEspnLeagueEventsForDate(date: string, leagueId: string, sport: string, leagueName?: string): Promise<SportEvent[] | null> {
+  const espnLeague = resolveEspnStandingsLeague(leagueId, sport, leagueName)
+  if (!espnLeague) {
+    return null
+  }
+
+  const dateParam = toEspnDateParam(date)
+  if (!dateParam) {
+    return []
+  }
+
+  const url = `https://site.api.espn.com/apis/site/v2/sports/${espnLeague.sportPath}/${espnLeague.leaguePath}/scoreboard?dates=${dateParam}`
+  const payload = await requestJsonFromUrl<EspnScoreboardResponse>(url)
+  const events = payload.events ?? []
+
+  return events
+    .map((event) => mapEspnScoreboardEvent(event, leagueId, sport))
+    .filter((item): item is SportEvent => item !== null)
+}
+
+function supportsLeagueFallback(sport: string, leagueId: string): boolean {
+  return (
+    (sport === 'Baseball' && leagueId === '4424')
+    || (sport === 'Basketball' && leagueId === '4387')
+    || (sport === 'Ice Hockey' && leagueId === '4380')
+  )
+}
+
 async function fetchEspnTeam(teamRef: string): Promise<EspnTeam | null> {
   const cached = espnTeamCache.get(teamRef)
   if (cached) {
@@ -458,7 +602,7 @@ async function fetchEspnStandings(
         win: getEspnStatInteger(primaryRecord, ['wins']) ?? 0,
         loss: getEspnStatInteger(primaryRecord, ['losses']) ?? 0,
         draw: sport === 'Ice Hockey'
-          ? (getEspnStatInteger(primaryRecord, ['overtimeLosses', 'otLosses', 'OTLosses']) ?? 0)
+          ? 0
           : (getEspnStatInteger(primaryRecord, ['ties']) ?? 0),
         points,
         goalsFor: getEspnStatInteger(primaryRecord, ['goalsFor', 'pointsFor', 'runsScored', 'avgPointsFor']),
@@ -599,6 +743,38 @@ export async function fetchLeaguesForSport(sport: string, forceRefresh = false):
 export async function fetchLeagueEventsForDate(date: string, leagueName: string): Promise<SportEvent[]> {
   const rows = await request<SportsDbEvent>('eventsday.php', { d: date, l: leagueName })
   return rows.map(mapEvent).filter((item): item is SportEvent => item !== null)
+}
+
+export async function fetchLeagueEventsForDateWithFallback(
+  date: string,
+  leagueId: string,
+  sport: string,
+  leagueName: string,
+  options?: { forceMergeEspn?: boolean }
+): Promise<SportEvent[]> {
+  const forceMergeEspn = options?.forceMergeEspn === true
+  const sportsDbEvents = await fetchLeagueEventsForDate(date, leagueName)
+
+  // Restrict fallback scope for performance and reliability unless explicitly requested.
+  const supportsFallback = forceMergeEspn || supportsLeagueFallback(sport, leagueId)
+  if (!supportsFallback) {
+    return sportsDbEvents
+  }
+
+  const espnEvents = await fetchEspnLeagueEventsForDate(date, leagueId, sport, leagueName)
+  if (!espnEvents || espnEvents.length === 0) {
+    return sportsDbEvents
+  }
+
+  const byId = new Map<string, SportEvent>()
+  for (const event of sportsDbEvents) {
+    byId.set(event.eventId, event)
+  }
+  for (const event of espnEvents) {
+    byId.set(event.eventId, event)
+  }
+
+  return Array.from(byId.values())
 }
 
 export async function fetchEventById(eventId: string): Promise<SportEvent | null> {

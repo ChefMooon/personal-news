@@ -68,6 +68,17 @@ export function SportsSettingsPanel({
         </div>
         <Switch checked={config.showVenue} onCheckedChange={(checked) => setConfig({ ...config, showVenue: checked })} />
       </div>
+
+      <div className="flex items-center justify-between rounded-md border px-3 py-2">
+        <div>
+          <p className="text-sm">Show live game start time</p>
+          <p className="text-xs text-muted-foreground">Display scheduled start time when games are live.</p>
+        </div>
+        <Switch
+          checked={config.showLiveStartTime}
+          onCheckedChange={(checked) => setConfig({ ...config, showLiveStartTime: checked })}
+        />
+      </div>
     </div>
   )
 }

@@ -6,6 +6,12 @@ import type {
   SportTeamEvents,
   TrackedTeam
 } from '../../../shared/ipc-types'
+import {
+  classifySportEventState,
+  getLocalDateKey,
+  getSportEventLocalDateKey,
+  shiftLocalDateKey
+} from '../../../shared/sports-event-utils'
 import { isFinalSportEvent } from './status'
 
 type UpsertLeagueInput = {
@@ -116,15 +122,64 @@ function eventSortValue(event: SportEvent): number {
   return Number.isNaN(value) ? 0 : value
 }
 
+export function normalizeTeamLookupKey(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, '')
+}
+
+function getMatchSignature(event: SportEvent): string {
+  return [
+    event.sport,
+    event.leagueId,
+    event.eventDate,
+    event.eventTime ?? '',
+    normalizeTeamLookupKey(event.homeTeam),
+    normalizeTeamLookupKey(event.awayTeam)
+  ].join('|')
+}
+
+function getEventQualityScore(event: SportEvent): number {
+  const state = classifySportEventState({
+    status: event.status,
+    homeScore: event.homeScore,
+    awayScore: event.awayScore,
+    eventDate: event.eventDate,
+    eventTime: event.eventTime
+  })
+  const stateScore = state === 'final' ? 30 : state === 'live' ? 20 : state === 'scheduled' ? 10 : 0
+  const hasScore = event.homeScore != null && event.homeScore !== '' && event.awayScore != null && event.awayScore !== ''
+  const scoreBonus = hasScore ? 5 : 0
+  const providerBonus = event.eventId.startsWith('espn:') ? 1 : 0
+  return stateScore + scoreBonus + providerBonus
+}
+
+function dedupeEventsByMatch(events: SportEvent[]): SportEvent[] {
+  const bySignature = new Map<string, SportEvent>()
+  for (const event of events) {
+    const signature = getMatchSignature(event)
+    const existing = bySignature.get(signature)
+    if (!existing) {
+      bySignature.set(signature, event)
+      continue
+    }
+
+    if (getEventQualityScore(event) >= getEventQualityScore(existing)) {
+      bySignature.set(signature, event)
+    }
+  }
+
+  return Array.from(bySignature.values())
+}
+
 function getBadgeCacheKey(sport: string, leagueId: string): string {
   return `badge:${sport}:${leagueId}`
 }
 
 export function getLocalDateString(date = new Date()): string {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
+  return getLocalDateKey(date)
+}
+
+export function getAdjacentLocalDateKeys(date: string): [string, string, string] {
+  return [shiftLocalDateKey(date, -1), date, shiftLocalDateKey(date, 1)]
 }
 
 export function listLeagues(db: Database.Database, sport: string): SportLeague[] {
@@ -287,9 +342,9 @@ export function upsertEvents(db: Database.Database, events: SportEvent[], fetche
   const insert = db.prepare(
     `INSERT INTO sports_events (
        event_id, league_id, sport, home_team_id, away_team_id,
-       home_team, away_team, home_score, away_score,
+       home_team, away_team, home_team_normalized, away_team_normalized, home_score, away_score,
        event_date, event_time, status, venue, fetched_date
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(event_id) DO UPDATE SET
        league_id = excluded.league_id,
        sport = excluded.sport,
@@ -297,6 +352,8 @@ export function upsertEvents(db: Database.Database, events: SportEvent[], fetche
        away_team_id = excluded.away_team_id,
        home_team = excluded.home_team,
        away_team = excluded.away_team,
+       home_team_normalized = excluded.home_team_normalized,
+       away_team_normalized = excluded.away_team_normalized,
        home_score = excluded.home_score,
        away_score = excluded.away_score,
        event_date = excluded.event_date,
@@ -308,6 +365,9 @@ export function upsertEvents(db: Database.Database, events: SportEvent[], fetche
 
   const apply = db.transaction((items: SportEvent[]) => {
     for (const event of items) {
+      const homeTeamNormalized = normalizeTeamLookupKey(event.homeTeam)
+      const awayTeamNormalized = normalizeTeamLookupKey(event.awayTeam)
+
       insert.run(
         event.eventId,
         event.leagueId,
@@ -316,6 +376,8 @@ export function upsertEvents(db: Database.Database, events: SportEvent[], fetche
         event.awayTeamId,
         event.homeTeam,
         event.awayTeam,
+        homeTeamNormalized,
+        awayTeamNormalized,
         event.homeScore,
         event.awayScore,
         event.eventDate,
@@ -359,6 +421,7 @@ export function upsertOpponentBadge(
 }
 
 export function getTodayEvents(db: Database.Database, sport: string, date: string): SportEvent[] {
+  const [previousDate, currentDate, nextDate] = getAdjacentLocalDateKeys(date)
   const rows = db
     .prepare(
       `SELECT se.event_id, se.league_id, se.sport, se.home_team_id, se.away_team_id,
@@ -374,16 +437,28 @@ export function getTodayEvents(db: Database.Database, sport: string, date: strin
          LEFT JOIN sports_opponent_cache hoc ON hoc.team_id = se.home_team_id
          LEFT JOIN sports_opponent_cache aoc ON aoc.team_id = se.away_team_id
         WHERE se.sport = ?
-          AND se.event_date = ?
+          AND se.event_date IN (?, ?, ?)
           AND sl.enabled = 1
         ORDER BY sl.sort_order ASC, se.event_time ASC, se.home_team COLLATE NOCASE ASC`
     )
-    .all(sport, date) as EventRow[]
+    .all(sport, previousDate, currentDate, nextDate) as EventRow[]
 
-  return rows.map(mapEvent)
+  // Phase 4 Fix: Use game start time for fetch-date key, not current time
+  // This ensures games crossing midnight stay in their correct cache date.
+  // Also dedupe by matchup signature so the Sports page + widget prefer the
+  // freshest provider row (live > scheduled, scored > unscored, ESPN > SportsDB)
+  // instead of surfacing a stale SportsDB record alongside a live ESPN one.
+  const filtered = rows
+    .map(mapEvent)
+    .filter((event) => getSportEventLocalDateKey(event.eventDate, event.eventTime) === date)
+  return dedupeEventsByMatch(filtered)
 }
 
 export function getTeamEvents(db: Database.Database, teamId: string, today: string): SportTeamEvents {
+  const trackedTeam = getTrackedTeam(db, teamId)
+  const teamName = trackedTeam?.name ?? null
+  const normalizedTeamName = teamName ? normalizeTeamLookupKey(teamName) : null
+
   const rows = db
     .prepare(
       `SELECT se.event_id, se.league_id, se.sport, se.home_team_id, se.away_team_id,
@@ -396,17 +471,29 @@ export function getTeamEvents(db: Database.Database, teamId: string, today: stri
          LEFT JOIN sports_teams at ON at.team_id = se.away_team_id
          LEFT JOIN sports_opponent_cache hoc ON hoc.team_id = se.home_team_id
          LEFT JOIN sports_opponent_cache aoc ON aoc.team_id = se.away_team_id
-        WHERE se.home_team_id = ? OR se.away_team_id = ?`
+        WHERE se.home_team_id = ?
+           OR se.away_team_id = ?
+           OR (? IS NOT NULL AND (se.home_team_normalized = ? OR se.away_team_normalized = ?))`
     )
-    .all(teamId, teamId) as EventRow[]
+      .all(teamId, teamId, normalizedTeamName, normalizedTeamName, normalizedTeamName) as EventRow[]
 
-  const events = rows.map(mapEvent)
+  const events = dedupeEventsByMatch(rows.map(mapEvent))
+  const getEventLocalDate = (event: SportEvent): string => {
+    return getSportEventLocalDateKey(event.eventDate, event.eventTime) ?? event.eventDate
+  }
+
   const last = events
-    .filter((event) => event.eventDate < today || (event.eventDate === today && isFinalSportEvent(event)))
+    .filter((event) => {
+      const eventLocalDate = getEventLocalDate(event)
+      return eventLocalDate < today || (eventLocalDate === today && isFinalSportEvent(event))
+    })
     .sort((a, b) => eventSortValue(b) - eventSortValue(a))
     .slice(0, 5)
   const next = events
-    .filter((event) => event.eventDate > today || (event.eventDate === today && !isFinalSportEvent(event)))
+    .filter((event) => {
+      const eventLocalDate = getEventLocalDate(event)
+      return eventLocalDate > today || (eventLocalDate === today && !isFinalSportEvent(event))
+    })
     .sort((a, b) => eventSortValue(a) - eventSortValue(b))
     .slice(0, 5)
 

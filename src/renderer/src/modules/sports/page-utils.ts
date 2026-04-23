@@ -1,4 +1,9 @@
 import type { SportEvent, SportStandingRow } from '../../../../shared/ipc-types'
+import {
+  getLocalDateKey,
+  isSportEventOnLocalDate,
+  parseSportEventTimestamp
+} from '../../../../shared/sports-event-utils'
 import { getGamePhase, isLiveStatus } from './utils'
 
 export type TeamOutcome = 'W' | 'L' | 'D'
@@ -21,24 +26,21 @@ export function getCurrentSeason(sport: string): string {
 }
 
 export function getEventStartAt(event: SportEvent): number {
-  const value = Date.parse(`${event.eventDate}T${event.eventTime ?? '12:00'}:00Z`)
-  return Number.isNaN(value) ? 0 : value
+  const value = parseSportEventTimestamp(event.eventDate, event.eventTime)
+  if (value == null) {
+    return 0
+  }
+
+  return value
 }
 
-export function getLocalDateKey(value: Date): string {
-  const year = value.getFullYear()
-  const month = String(value.getMonth() + 1).padStart(2, '0')
-  const day = String(value.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
+export function getLocalDateKeyForValue(value: Date): string {
+  return getLocalDateKey(value)
 }
 
 export function isEventOnLocalDate(event: SportEvent, value = new Date()): boolean {
-  const eventStartAt = getEventStartAt(event)
-  if (eventStartAt <= 0) {
-    return false
-  }
-
-  return getLocalDateKey(new Date(eventStartAt)) === getLocalDateKey(value)
+  const localDate = getLocalDateKeyForValue(value)
+  return isSportEventOnLocalDate(event.eventDate, event.eventTime, localDate)
 }
 
 export function filterEventsForLocalDate(events: SportEvent[], value = new Date()): SportEvent[] {

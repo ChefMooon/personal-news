@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react'
 import { Badge } from '../../components/ui/badge'
 import type { SportEvent, SportLeague } from '../../../../shared/ipc-types'
+import { getLocalDateKey, isSportEventOnLocalDate } from '../../../../shared/sports-event-utils'
 import { getSportLabel } from '../../../../shared/sports'
 import { GameCard } from './GameCard'
 import { getLeagueLabel } from './league-display'
@@ -68,13 +69,8 @@ function TeamLines({ game }: { game: SportEvent }): React.ReactElement {
   )
 }
 
-function getTodayString(): string {
-  const date = new Date()
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
-}
-
 function getTodayBadgeClasses(game: SportEvent): string {
-  if (getGamePhase(game) === 'scheduled' && game.eventDate === getTodayString()) {
+  if (getGamePhase(game) === 'scheduled' && isSportEventOnLocalDate(game.eventDate, game.eventTime, getLocalDateKey(new Date()))) {
     return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300'
   }
 
@@ -86,6 +82,7 @@ export function AllGamesView({
   leaguesById,
   showTime,
   showVenue,
+  showLiveStartTime,
   fallbackEvents,
   showSportLabels = false
 }: {
@@ -93,6 +90,7 @@ export function AllGamesView({
   leaguesById: Record<string, SportLeague>
   showTime: boolean
   showVenue: boolean
+  showLiveStartTime: boolean
   fallbackEvents: SportEvent[]
   showSportLabels?: boolean
 }): React.ReactElement {
@@ -119,14 +117,25 @@ export function AllGamesView({
         {fallbackEvents.length > 0 ? (
           <div className="space-y-2">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Next up</p>
-            {fallbackEvents.slice(0, 5).map((game) => (
+            {fallbackEvents.slice(0, 5).map((game) => {
+              const isLive = getGamePhase(game) === 'live'
+              const showStartTime = showLiveStartTime && isLive && !!game.eventTime
+              const detailsLabel = showStartTime
+                ? showVenue && game.venue
+                  ? `${formatEventTime(game)} · ${game.venue}`
+                  : formatEventTime(game)
+                : showVenue && game.venue
+                  ? game.venue
+                  : null
+
+              return (
               <GameCard
                 key={game.eventId}
                 header={
                   <>
                     <div>
                       <TeamLines game={game} />
-                      {showVenue && game.venue ? <p className="text-xs text-muted-foreground">{game.venue}</p> : null}
+                      {detailsLabel ? <p className="text-xs text-muted-foreground">{detailsLabel}</p> : null}
                       {showSportLabels ? <p className="text-xs text-muted-foreground">{getSportLabel(game.sport)}</p> : null}
                     </div>
                     <div className="shrink-0 text-right">
@@ -138,7 +147,7 @@ export function AllGamesView({
                   </>
                 }
               />
-            ))}
+            )})}
           </div>
         ) : null}
       </div>
@@ -166,7 +175,18 @@ export function AllGamesView({
             ) : null}
           </div>
           <div className="space-y-2">
-            {leagueEvents.map((game) => (
+            {leagueEvents.map((game) => {
+              const isLive = getGamePhase(game) === 'live'
+              const showStartTime = showLiveStartTime && isLive && !!game.eventTime
+              const detailsLabel = showStartTime
+                ? showVenue && game.venue
+                  ? `${formatEventTime(game)} · ${game.venue}`
+                  : formatEventTime(game)
+                : showVenue && game.venue
+                  ? game.venue
+                  : null
+
+              return (
               <GameCard
                 key={game.eventId}
                 tone={isLiveStatus(game.status) ? 'live' : 'default'}
@@ -174,7 +194,7 @@ export function AllGamesView({
                   <>
                     <div className="min-w-0">
                       <TeamLines game={game} />
-                      {showVenue && game.venue ? <p className="text-xs text-muted-foreground">{game.venue}</p> : null}
+                      {detailsLabel ? <p className="text-xs text-muted-foreground">{detailsLabel}</p> : null}
                     </div>
                     <div className="shrink-0 text-right">
                       <Badge variant="secondary" className={getTodayBadgeClasses(game)}>
@@ -194,7 +214,7 @@ export function AllGamesView({
                 }
                 footer={getGamePhase(game) === 'scheduled' && showTime ? `Date: ${game.eventDate}` : undefined}
               />
-            ))}
+            )})}
           </div>
         </section>
       )})}

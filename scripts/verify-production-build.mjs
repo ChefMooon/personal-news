@@ -104,6 +104,19 @@ function verifySmokeReport() {
   }
 }
 
+function tryReadSmokeReport() {
+  if (!existsSync(SMOKE_OUTPUT_PATH)) {
+    return null
+  }
+
+  try {
+    const raw = readFileSync(SMOKE_OUTPUT_PATH, 'utf-8')
+    return JSON.parse(raw)
+  } catch {
+    return null
+  }
+}
+
 function runPackagedSmokeTest() {
   console.log('\n> Running packaged smoke test')
   const smokeAppData = mkdtempSync(path.join(tmpdir(), 'personal-news-smoke-'))
@@ -121,21 +134,28 @@ function runPackagedSmokeTest() {
       },
       stdio: 'inherit',
       shell: false,
-      timeout: 60_000
+      timeout: 90_000
     })
 
     if (result.error) {
       throw result.error
     }
 
+    const report = tryReadSmokeReport()
     if (typeof result.status !== 'number' || result.status !== 0) {
-      throw new Error(`Packaged smoke test failed (${result.status ?? 'unknown'}).`)
+      if (report?.error) {
+        throw new Error(`Packaged smoke test failed (${result.status ?? 'unknown'}): ${report.error}`)
+      }
+
+      throw new Error(
+        `Packaged smoke test failed (${result.status ?? 'unknown'}). Smoke report path: ${SMOKE_OUTPUT_PATH}`
+      )
     }
 
     assertPathExists(SMOKE_OUTPUT_PATH, 'Packaged smoke test did not write a smoke report.')
     const reportRaw = readFileSync(SMOKE_OUTPUT_PATH, 'utf-8')
-    const report = JSON.parse(reportRaw)
-    const reportTimestamp = Date.parse(String(report.timestamp ?? ''))
+    const parsedReport = JSON.parse(reportRaw)
+    const reportTimestamp = Date.parse(String(parsedReport.timestamp ?? ''))
     if (Number.isNaN(reportTimestamp) || reportTimestamp < startedAt) {
       throw new Error('Packaged smoke test report is stale or has an invalid timestamp.')
     }

@@ -1,11 +1,23 @@
 import type { SportEvent } from '../../../../shared/ipc-types'
+import { classifySportEventState } from '../../../../shared/sports-event-utils'
 
 export function isFinishedStatus(status: string | null): boolean {
-  return Boolean(status && /(finished|final|completed|game over|ended|after penalties|after extra time|full time|\bft\b|\baet\b)/i.test(status))
+  return classifySportEventState({ status }) === 'final'
 }
 
 export function hasResolvedScore(game: SportEvent | null): boolean {
   if (!game) {
+    return false
+  }
+
+  const state = classifySportEventState({
+    status: game.status,
+    homeScore: game.homeScore,
+    awayScore: game.awayScore,
+    eventDate: game.eventDate,
+    eventTime: game.eventTime
+  })
+  if (state === 'scheduled') {
     return false
   }
 
@@ -15,11 +27,7 @@ export function hasResolvedScore(game: SportEvent | null): boolean {
 }
 
 export function isLiveStatus(status: string | null): boolean {
-  return Boolean(
-    status
-      && !isFinishedStatus(status)
-      && /(live|in progress|half time|break|period|quarter|inning|set \d|overtime|extra time|top \d|bottom \d|\b(?:1st|2nd|3rd|4th)\b|\d{1,3}(?:\+\d{1,2})?['’])/i.test(status)
-  )
+  return classifySportEventState({ status }) === 'live'
 }
 
 export type GamePhase = 'scheduled' | 'live' | 'finished'
@@ -39,11 +47,19 @@ export function getGamePhase(game: SportEvent | null): GamePhase {
     return 'scheduled'
   }
 
-  if (isLiveStatus(game.status)) {
+  const state = classifySportEventState({
+    status: game.status,
+    homeScore: game.homeScore,
+    awayScore: game.awayScore,
+    eventDate: game.eventDate,
+    eventTime: game.eventTime
+  })
+
+  if (state === 'live') {
     return 'live'
   }
 
-  if (isFinishedStatus(game.status) || hasResolvedScore(game)) {
+  if (state === 'final') {
     return 'finished'
   }
 
@@ -79,7 +95,7 @@ export function getGamePhaseHeadline(game: SportEvent | null): string {
 export function getGamePhaseBadgeClasses(game: SportEvent | null): string {
   const phase = getGamePhase(game)
   if (phase === 'live') {
-    return 'border-red-500/30 bg-red-500/10 text-red-500 dark:text-red-300'
+    return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300'
   }
 
   if (phase === 'finished') {
@@ -92,7 +108,7 @@ export function getGamePhaseBadgeClasses(game: SportEvent | null): string {
 export function getGamePhaseDotClasses(game: SportEvent | null): string {
   const phase = getGamePhase(game)
   if (phase === 'live') {
-    return 'bg-red-400 animate-pulse'
+    return 'bg-emerald-400 animate-pulse'
   }
 
   if (phase === 'finished') {

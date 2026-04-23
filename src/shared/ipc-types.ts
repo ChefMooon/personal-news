@@ -42,6 +42,7 @@ export const IPC = {
   SPORTS_SEARCH_RADIO_STATIONS: 'sports:searchRadioStations',
   SPORTS_RESOLVE_RADIO_STREAM: 'sports:resolveRadioStream',
   SPORTS_DATA_UPDATED: 'sports:dataUpdated',
+  SPORTS_FETCH_WARNING: 'sports:fetchWarning',
   YOUTUBE_GET_CHANNELS: 'youtube:getChannels',
   YOUTUBE_GET_VIDEOS: 'youtube:getVideos',
   YOUTUBE_GET_VIDEOS_FILTERED: 'youtube:getVideosFiltered',
@@ -667,6 +668,7 @@ export interface SportsViewConfig {
   viewMode: 'all_games' | 'today' | 'summarized' | 'standard' | 'detailed'
   showVenue: boolean
   showTime: boolean
+  showLiveStartTime: boolean
 }
 
 export interface SportTeamEvents {
@@ -687,6 +689,13 @@ export interface SportsDataUpdatedEvent {
   sport: string
   ok: boolean
   error: string | null
+}
+
+export interface SportsDataFetchWarningEvent {
+  sport: string
+  message: string
+  severity: 'warning' | 'error'
+  timestamp?: number
 }
 
 export interface ChannelMediaOverrides {

@@ -79,6 +79,19 @@ function formatLastSynced(timestamp: number | null): string {
   })
 }
 
+function formatUtcDateKey(value: Date): string {
+  const year = value.getUTCFullYear()
+  const month = String(value.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(value.getUTCDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function formatUtcTimeKey(value: Date): string {
+  const hours = String(value.getUTCHours()).padStart(2, '0')
+  const minutes = String(value.getUTCMinutes()).padStart(2, '0')
+  return `${hours}:${minutes}`
+}
+
 function SportsWidget(): React.ReactElement {
   const { instanceId, label } = useWidgetInstance()
   const widgetTitle = label ?? 'Sports'
@@ -96,12 +109,14 @@ function SportsWidget(): React.ReactElement {
   const [teamEventsById, setTeamEventsById] = useState<Record<string, SportTeamEvents>>({})
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [showDevMockLiveGame, setShowDevMockLiveGame] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [snapshotConfig, setSnapshotConfig] = useState(config)
   const [editContentHeight, setEditContentHeight] = useState<number | null>(null)
   const hasLoadedDataRef = useRef(false)
   const latestLoadIdRef = useRef(0)
   const cardContentRef = useRef<HTMLDivElement | null>(null)
+  const defaultMockSport = selectedSports[0] ?? 'Baseball'
 
   const loadTeamEvents = useCallback(async (teams: TrackedTeam[]): Promise<Record<string, SportTeamEvents>> => {
     const pairs = await Promise.all(
@@ -199,10 +214,108 @@ function SportsWidget(): React.ReactElement {
     [leagues]
   )
 
+  const mockTrackedTeam = useMemo<TrackedTeam>(() => {
+    const existingEnabled = trackedTeams.find((team) => team.enabled)
+    if (existingEnabled) {
+      return existingEnabled
+    }
+
+    return {
+      teamId: `dev-mock-team:${instanceId}`,
+      leagueId: 'dev-mock-league',
+      sport: defaultMockSport,
+      name: 'Toronto Blue Jays',
+      shortName: 'Blue Jays',
+      badgeUrl: null,
+      enabled: true,
+      sortOrder: -1
+    }
+  }, [defaultMockSport, instanceId, trackedTeams])
+
+  const mockLiveEvent = useMemo<SportEvent>(() => {
+    const startedAt = new Date(Date.now() - 2 * 60 * 60 * 1000)
+    return {
+      eventId: `dev-mock-live:${instanceId}`,
+      leagueId: mockTrackedTeam.leagueId,
+      sport: mockTrackedTeam.sport,
+      homeTeamId: null,
+      awayTeamId: mockTrackedTeam.teamId,
+      homeTeam: 'Los Angeles Angels',
+      awayTeam: mockTrackedTeam.name,
+      homeTeamBadgeUrl: null,
+      awayTeamBadgeUrl: mockTrackedTeam.badgeUrl,
+      homeScore: '3',
+      awayScore: '3',
+      eventDate: formatUtcDateKey(startedAt),
+      eventTime: formatUtcTimeKey(startedAt),
+      status: 'Live · Bot 7th',
+      venue: 'Angel Stadium'
+    }
+  }, [instanceId, mockTrackedTeam])
+
+  const displayTodayEvents = useMemo(() => {
+    if (!import.meta.env.DEV || !showDevMockLiveGame) {
+      return todayEvents
+    }
+
+    const sanitized = todayEvents.filter((event) => !event.eventId.startsWith('dev-mock-live:'))
+    return [mockLiveEvent, ...sanitized]
+  }, [mockLiveEvent, showDevMockLiveGame, todayEvents])
+
+  const displayLeaguesById = useMemo(() => {
+    if (!import.meta.env.DEV || !showDevMockLiveGame) {
+      return leaguesById
+    }
+
+    const leagueKey = getLeagueKey(mockLiveEvent.sport, mockLiveEvent.leagueId)
+    if (leaguesById[leagueKey]) {
+      return leaguesById
+    }
+
+    return {
+      ...leaguesById,
+      [leagueKey]: {
+        leagueId: mockLiveEvent.leagueId,
+        sport: mockLiveEvent.sport,
+        name: 'MLB (Dev Mock)',
+        country: null,
+        logoUrl: null,
+        enabled: true,
+        sortOrder: -1
+      }
+    }
+  }, [leaguesById, mockLiveEvent, showDevMockLiveGame])
+
   const enabledTeams = useMemo(
     () => trackedTeams.filter((team) => team.enabled).sort((a, b) => a.sortOrder - b.sortOrder),
     [trackedTeams]
   )
+
+  const displayEnabledTeams = useMemo(() => {
+    if (!import.meta.env.DEV || !showDevMockLiveGame || enabledTeams.length > 0) {
+      return enabledTeams
+    }
+
+    return [mockTrackedTeam]
+  }, [enabledTeams, mockTrackedTeam, showDevMockLiveGame])
+
+  const displayTeamEventsById = useMemo(() => {
+    if (!import.meta.env.DEV || !showDevMockLiveGame) {
+      return teamEventsById
+    }
+
+    const current = teamEventsById[mockTrackedTeam.teamId] ?? { last: [], next: [] }
+    const sanitizedLast = current.last.filter((event) => !event.eventId.startsWith('dev-mock-live:'))
+    const sanitizedNext = current.next.filter((event) => !event.eventId.startsWith('dev-mock-live:'))
+
+    return {
+      ...teamEventsById,
+      [mockTrackedTeam.teamId]: {
+        last: sanitizedLast,
+        next: [mockLiveEvent, ...sanitizedNext]
+      }
+    }
+  }, [mockLiveEvent, mockTrackedTeam.teamId, showDevMockLiveGame, teamEventsById])
 
   const fallbackEvents = useMemo(() => {
     const enabledLeagueIds = new Set(
@@ -284,6 +397,17 @@ function SportsWidget(): React.ReactElement {
           </div>
           <div className="flex items-center gap-2">
             <p className="text-[11px] text-muted-foreground">Updated: {lastUpdatedLabel}</p>
+            {import.meta.env.DEV ? (
+              <button
+                type="button"
+                className="rounded border px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                onClick={() => setShowDevMockLiveGame((value) => !value)}
+                aria-label="Toggle mock live game"
+                title="Toggle mock live game"
+              >
+                {showDevMockLiveGame ? 'Mock On' : 'Mock Off'}
+              </button>
+            ) : null}
             <button
               type="button"
               className="p-1 rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors disabled:opacity-50"
@@ -363,20 +487,22 @@ function SportsWidget(): React.ReactElement {
                 <p className="text-sm text-muted-foreground">Loading sports data...</p>
               ) : config.viewMode === 'all_games' ? (
                 <AllGamesView
-                  events={todayEvents}
-                  leaguesById={leaguesById}
+                  events={displayTodayEvents}
+                  leaguesById={displayLeaguesById}
                   showTime={config.showTime}
                   showVenue={config.showVenue}
+                  showLiveStartTime={config.showLiveStartTime}
                   fallbackEvents={fallbackEvents}
                   showSportLabels={showSportLabels}
                 />
               ) : (
                 <MyTeamsView
-                  teams={enabledTeams}
-                  teamEventsById={teamEventsById}
-                  leaguesById={leaguesById}
+                  teams={displayEnabledTeams}
+                  teamEventsById={displayTeamEventsById}
+                  leaguesById={displayLeaguesById}
                   showVenue={config.showVenue}
                   showTime={config.showTime}
+                  showLiveStartTime={config.showLiveStartTime}
                   viewMode={config.viewMode}
                   showSportLabels={showSportLabels}
                 />
@@ -390,20 +516,22 @@ function SportsWidget(): React.ReactElement {
           <p className="text-sm text-muted-foreground">Loading sports data...</p>
         ) : config.viewMode === 'all_games' ? (
           <AllGamesView
-            events={todayEvents}
-            leaguesById={leaguesById}
+            events={displayTodayEvents}
+            leaguesById={displayLeaguesById}
             showTime={config.showTime}
             showVenue={config.showVenue}
+            showLiveStartTime={config.showLiveStartTime}
             fallbackEvents={fallbackEvents}
             showSportLabels={showSportLabels}
           />
         ) : (
           <MyTeamsView
-            teams={enabledTeams}
-            teamEventsById={teamEventsById}
-            leaguesById={leaguesById}
+            teams={displayEnabledTeams}
+            teamEventsById={displayTeamEventsById}
+            leaguesById={displayLeaguesById}
             showVenue={config.showVenue}
             showTime={config.showTime}
+            showLiveStartTime={config.showLiveStartTime}
             viewMode={config.viewMode}
             showSportLabels={showSportLabels}
           />

@@ -35,6 +35,15 @@ let persistWindowBoundsTimer: ReturnType<typeof setTimeout> | null = null
 const SMOKE_TEST_FLAG = '--smoke-test'
 const SMOKE_TEST_OUTPUT_FLAG = '--smoke-output'
 
+type SmokeReportPayload = {
+  ok: boolean
+  packaged: boolean
+  timestamp: string
+  dbPath?: string | null
+  schemaVersion?: string | null
+  error?: string | null
+}
+
 const WINDOW_BOUNDS_SETTING_KEY = 'app_window_bounds'
 const RESTORE_WINDOW_BOUNDS_SETTING_KEY = 'app_restore_window_bounds'
 const START_MAXIMIZED_SETTING_KEY = 'app_start_maximized'
@@ -76,20 +85,13 @@ function getArgValue(flag: string): string | null {
   return null
 }
 
-function writeSmokeReport(dbPath: string, schemaVersion: string | null): void {
+function writeSmokeReport(payload: SmokeReportPayload): void {
   const outputPath = getArgValue(SMOKE_TEST_OUTPUT_FLAG)
   if (!outputPath) {
     return
   }
 
   try {
-    const payload = {
-      ok: true,
-      packaged: app.isPackaged,
-      dbPath,
-      schemaVersion,
-      timestamp: new Date().toISOString()
-    }
     writeFileSync(outputPath, JSON.stringify(payload, null, 2), 'utf-8')
   } catch (error) {
     console.error('[SmokeTest] Failed to write smoke report:', error)
@@ -558,7 +560,13 @@ app.whenReady().then(() => {
       console.log(
         `[SmokeTest] Database initialized at ${dbPath}; schema version ${schemaVersionRow?.value ?? 'unknown'}`
       )
-      writeSmokeReport(dbPath, schemaVersionRow?.value ?? null)
+      writeSmokeReport({
+        ok: true,
+        packaged: app.isPackaged,
+        dbPath,
+        schemaVersion: schemaVersionRow?.value ?? null,
+        timestamp: new Date().toISOString()
+      })
       app.exit(0)
       return
     }
@@ -604,6 +612,17 @@ app.whenReady().then(() => {
     })
   } catch (error) {
     console.error('[Main] App startup failed:', error)
+    if (isSmokeTestRun()) {
+      const message = error instanceof Error ? error.stack ?? error.message : String(error)
+      writeSmokeReport({
+        ok: false,
+        packaged: app.isPackaged,
+        error: message,
+        timestamp: new Date().toISOString(),
+        dbPath: process.env.PERSONAL_NEWS_DB_PATH?.trim() || null,
+        schemaVersion: null
+      })
+    }
     app.quit()
   }
 })

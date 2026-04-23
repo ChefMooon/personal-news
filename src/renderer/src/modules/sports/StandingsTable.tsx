@@ -107,11 +107,26 @@ export function StandingsTable({
 }): React.ReactElement {
   const season = React.useMemo(() => getCurrentSeason(league.sport), [league.sport])
   const [rows, setRows] = React.useState<SportStandingRow[]>([])
-  const [loading, setLoading] = React.useState(true)
+  const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   const [collapsed, setCollapsed] = React.useState(true)
+  const [hasLoaded, setHasLoaded] = React.useState(false)
 
+  // Reset load state if the league identity changes (e.g. season rollover)
   React.useEffect(() => {
+    setRows([])
+    setHasLoaded(false)
+    setLoading(false)
+    setError(null)
+  }, [league.leagueId, season])
+
+  // Lazy fetch: only load standings once the user expands the card the first time.
+  // Subsequent collapse/expand cycles reuse the cached rows.
+  React.useEffect(() => {
+    if (collapsed || hasLoaded || loading) {
+      return
+    }
+
     let cancelled = false
 
     const run = async (): Promise<void> => {
@@ -128,12 +143,14 @@ export function StandingsTable({
 
         if (!cancelled) {
           setRows(result)
+          setHasLoaded(true)
           onRowsLoaded?.(league.leagueId, result)
         }
       } catch (loadError) {
         if (!cancelled) {
           setError(loadError instanceof Error ? loadError.message : 'Failed to load standings.')
           setRows([])
+          setHasLoaded(true)
           onRowsLoaded?.(league.leagueId, [])
         }
       } finally {
@@ -148,7 +165,7 @@ export function StandingsTable({
     return () => {
       cancelled = true
     }
-  }, [league.leagueId, league.name, league.sport, onRowsLoaded, season])
+  }, [collapsed, hasLoaded, loading, league.leagueId, league.name, league.sport, onRowsLoaded, season])
 
   const trackedTeamIds = React.useMemo(() => new Set(trackedTeams.map((team) => team.teamId)), [trackedTeams])
   const trackedNames = React.useMemo(() => new Set(trackedTeams.map((team) => team.name.toLowerCase())), [trackedTeams])
@@ -167,8 +184,11 @@ export function StandingsTable({
           </div>
           <p className="mt-1 text-xs text-muted-foreground">League standings fetched live from upstream sports APIs.</p>
           {collapsed && loading ? <StandingsCollapsedLoading /> : null}
-          {collapsed && !loading && !error ? (
+          {collapsed && !loading && !error && hasLoaded ? (
             <p className="mt-2 truncate text-xs text-muted-foreground">{collapsedSummary}</p>
+          ) : null}
+          {collapsed && !loading && !error && !hasLoaded ? (
+            <p className="mt-2 truncate text-xs text-muted-foreground">Click Show to load standings.</p>
           ) : null}
         </div>
         <div className="flex items-center gap-2">

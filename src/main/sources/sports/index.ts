@@ -8,6 +8,7 @@ import type {
   SportStandingRow,
   SportsSettings,
   SportsDataUpdatedEvent,
+  SportsDataFetchWarningEvent,
   SportSyncStatus,
   SportTeamEvents,
   TeamSearchResult,
@@ -32,13 +33,14 @@ import {
   fetchTeamDetails,
   fetchLastEventsForTeam,
   fetchLeagueStandings,
-  fetchLeagueEventsForDate,
+  fetchLeagueEventsForDateWithFallback,
   fetchLeaguesForSport,
   fetchNextEventsForTeam,
   fetchTeamDetailsInLeague,
   searchTeams as searchTeamsFromApi
 } from './api'
 import {
+  getAdjacentLocalDateKeys,
   getBadgeCacheMeta,
   getCacheMeta,
   getLeagueById,
@@ -84,6 +86,19 @@ const refreshPromises = new Map<string, Promise<void>>()
 const badgeRefreshPromises = new Map<string, Promise<void>>()
 let pollTimer: ReturnType<typeof setInterval> | null = null
 const liveRefreshTimers = new Map<string, ReturnType<typeof setTimeout>>()
+
+// Live refresh state tracking for exponential backoff and staleness detection
+type LiveEventState = {
+  lastRefresh: number // timestamp in ms
+  lastScore: { home: string | null; away: string | null }
+  espnRetries: number // consecutive ESPN fallback failures
+  lastFailureTime: number | null // timestamp of last ESPN failure
+}
+const liveEventState = new Map<string, LiveEventState>()
+const STALENESS_THRESHOLD_MS = 5 * 60 * 1000 // 5 minutes
+const ESPN_RETRY_MAX_ATTEMPTS = 4
+const ESPN_FAILURE_NOTIFICATION_THRESHOLD = 3
+const SPORTS_WITH_ESPN = new Set(['Baseball', 'Basketball', 'Ice Hockey'])
 
 function ensureDb(): Database.Database {
   if (!dbRef) {
@@ -177,6 +192,38 @@ function normalizeTeamLookupKey(value: string): string {
 
 function normalizeLeagueLookupKey(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, '')
+}
+
+function normalizeMatchKey(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, '')
+}
+
+function isSameMatch(left: SportEvent, right: SportEvent): boolean {
+  const sameDate = left.eventDate === right.eventDate
+  if (!sameDate) {
+    return false
+  }
+
+  return (
+    normalizeMatchKey(left.homeTeam) === normalizeMatchKey(right.homeTeam)
+    && normalizeMatchKey(left.awayTeam) === normalizeMatchKey(right.awayTeam)
+  )
+}
+
+function pickBestLiveRefreshCandidate(current: SportEvent, candidates: SportEvent[]): SportEvent | null {
+  const exactById = candidates.find((item) => item.eventId === current.eventId)
+  if (exactById) {
+    return exactById
+  }
+
+  const matchCandidates = candidates.filter((item) => isSameMatch(current, item))
+  if (matchCandidates.length === 0) {
+    return null
+  }
+
+  // Prefer ESPN matchups when available because they are typically fresher for live data.
+  const preferredEspn = matchCandidates.find((item) => item.eventId.startsWith('espn:'))
+  return preferredEspn ?? matchCandidates[0]
 }
 
 async function searchTeamBadgeByName(
@@ -369,9 +416,75 @@ async function ensureLeagueCatalogLoaded(sport: string): Promise<SportLeague[]> 
   return syncLeagueCatalog(sport)
 }
 
+function isEventDataStale(event: SportEvent): boolean {
+  const state = liveEventState.get(event.eventId)
+  if (!state) {
+    return false
+  }
+
+  // Event is stale if scores haven't changed and enough time has passed
+  const scoresUnchanged =
+    state.lastScore.home === event.homeScore && state.lastScore.away === event.awayScore
+  const timeSinceLastRefresh = Date.now() - state.lastRefresh
+
+  return scoresUnchanged && timeSinceLastRefresh > STALENESS_THRESHOLD_MS
+}
+
+function shouldRetryEspnFallback(eventId: string): boolean {
+  const state = liveEventState.get(eventId)
+  if (!state || state.lastFailureTime === null) {
+    return true
+  }
+
+  if (state.espnRetries >= ESPN_RETRY_MAX_ATTEMPTS) {
+    return false
+  }
+
+  // Exponential backoff: 1s, 2s, 4s, 8s
+  const backoffMs = Math.pow(2, state.espnRetries) * 1000
+  const timeSinceLastFailure = Date.now() - state.lastFailureTime
+  return timeSinceLastFailure >= backoffMs
+}
+
+function updateLiveEventState(event: SportEvent): void {
+  const state = liveEventState.get(event.eventId) ?? {
+    lastRefresh: Date.now(),
+    lastScore: { home: event.homeScore, away: event.awayScore },
+    espnRetries: 0,
+    lastFailureTime: null
+  }
+
+  // Reset retry counter if scores changed
+  if (state.lastScore.home !== event.homeScore || state.lastScore.away !== event.awayScore) {
+    state.espnRetries = 0
+    state.lastFailureTime = null
+  }
+
+  state.lastRefresh = Date.now()
+  state.lastScore = { home: event.homeScore, away: event.awayScore }
+  liveEventState.set(event.eventId, state)
+}
+
+function recordEspnFallbackFailure(eventId: string): void {
+  const state = liveEventState.get(eventId)
+  if (!state) {
+    return
+  }
+
+  state.espnRetries++
+  state.lastFailureTime = Date.now()
+  liveEventState.set(eventId, state)
+}
+
 function emitSportsUpdated(payload: SportsDataUpdatedEvent): void {
   for (const win of BrowserWindow.getAllWindows()) {
     win.webContents.send(IPC.SPORTS_DATA_UPDATED, payload)
+  }
+}
+
+function emitSportsFetchWarning(payload: SportsDataFetchWarningEvent): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    win.webContents.send(IPC.SPORTS_FETCH_WARNING, payload)
   }
 }
 
@@ -398,9 +511,10 @@ async function refreshTrackedTeam(team: TrackedTeam, fetchedDate: string): Promi
 function scheduleLiveRefreshIfNeeded(sport: string): void {
   const db = ensureDb()
   const today = getLocalDateString()
-  const hasLiveEvents = readTodayEvents(db, sport, today).some((event) => isLiveSportEvent(event))
+  const todayEvents = readTodayEvents(db, sport, today)
+  const liveEvents = todayEvents.filter((event) => isLiveSportEvent(event))
 
-  if (!hasLiveEvents) {
+  if (liveEvents.length === 0) {
     clearLiveRefreshTimer(sport)
     return
   }
@@ -422,16 +536,60 @@ async function doLiveRefresh(sport: string): Promise<void> {
   const fetchDate = getLocalDateString()
   const liveEvents = readTodayEvents(db, sport, fetchDate).filter((event) => isLiveSportEvent(event))
   const refreshedEvents: SportEvent[] = []
+  const leagueNamesById = new Map(listEnabledLeagues(db, sport).map((league) => [league.leagueId, league.name] as const))
 
   for (const event of liveEvents) {
-    const refreshedEvent = await fetchEventById(event.eventId)
+    const isEspnBackedEvent = event.eventId.startsWith('espn:')
+    const refreshedEvent = isEspnBackedEvent ? null : await fetchEventById(event.eventId)
+    const shouldAttemptFallback =
+      SPORTS_WITH_ESPN.has(sport)
+      && shouldRetryEspnFallback(event.eventId)
+      && (
+        refreshedEvent == null
+        || isEspnBackedEvent
+        || isEventDataStale(refreshedEvent)
+      )
+
+    if (shouldAttemptFallback) {
+      try {
+        const leagueName = leagueNamesById.get(event.leagueId) ?? ''
+        const mergedEvents = await fetchLeagueEventsForDateWithFallback(
+          event.eventDate,
+          event.leagueId,
+          sport,
+          leagueName,
+          { forceMergeEspn: true }
+        )
+        const fallbackMatch = pickBestLiveRefreshCandidate(event, mergedEvents)
+        if (fallbackMatch) {
+          refreshedEvents.push(fallbackMatch)
+          updateLiveEventState(fallbackMatch)
+          continue
+        }
+      } catch (error) {
+        console.warn('[Sports] ESPN fallback failed:', error instanceof Error ? error.message : error)
+        recordEspnFallbackFailure(event.eventId)
+
+        // Emit warning after 3 consecutive failures
+        const state = liveEventState.get(event.eventId)
+        if (state && state.espnRetries === ESPN_FAILURE_NOTIFICATION_THRESHOLD) {
+          emitSportsFetchWarning({
+            sport,
+            message: 'Live sports data temporarily unavailable, using cached score',
+            severity: 'warning',
+            timestamp: Date.now()
+          })
+        }
+      }
+    }
+
     if (refreshedEvent) {
       refreshedEvents.push(refreshedEvent)
+      updateLiveEventState(refreshedEvent)
     }
   }
 
   if (refreshedEvents.length > 0) {
-    const leagueNamesById = new Map(listEnabledLeagues(db, sport).map((league) => [league.leagueId, league.name] as const))
     const eventsByLeague = new Map<string, SportEvent[]>()
     for (const item of refreshedEvents) {
       const existing = eventsByLeague.get(item.leagueId)
@@ -464,8 +622,34 @@ async function doRefreshSport(sport: string, force: boolean): Promise<void> {
   await refreshEnabledLeagueBadges(sport, false)
 
   const enabledLeagues = listEnabledLeagues(db, sport)
+  const fetchDates = getAdjacentLocalDateKeys(fetchDate)
   for (const league of enabledLeagues) {
-    const events = await fetchLeagueEventsForDate(fetchDate, league.name)
+    const eventsById = new Map<string, SportEvent>()
+    for (const eventDate of fetchDates) {
+      const eventsForDate = await fetchLeagueEventsForDateWithFallback(eventDate, league.leagueId, league.sport, league.name)
+      for (const event of eventsForDate) {
+        eventsById.set(event.eventId, event)
+      }
+    }
+
+    const dedupedByMatch = new Map<string, SportEvent>()
+    for (const event of eventsById.values()) {
+      const signature = [
+        event.sport,
+        event.leagueId,
+        event.eventDate,
+        event.eventTime ?? '',
+        event.homeTeam.toLowerCase(),
+        event.awayTeam.toLowerCase()
+      ].join('|')
+
+      const existing = dedupedByMatch.get(signature)
+      if (!existing || !existing.eventId.startsWith('espn:')) {
+        dedupedByMatch.set(signature, event)
+      }
+    }
+
+    const events = Array.from(dedupedByMatch.values())
     await backfillEventTeamBadges(db, events, sport, league.name)
     upsertEvents(db, events, fetchDate)
   }

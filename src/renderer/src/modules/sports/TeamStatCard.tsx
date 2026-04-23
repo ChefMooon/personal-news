@@ -1,6 +1,7 @@
 import React from 'react'
 import { Badge } from '../../components/ui/badge'
 import type { SportEvent, SportLeague, SportStandingRow, SportTeamEvents, TrackedTeam } from '../../../../shared/ipc-types'
+import { getLocalDateKey, isSportEventOnLocalDate } from '../../../../shared/sports-event-utils'
 import { cn } from '../../lib/utils'
 import { getLeagueLabel } from './league-display'
 import { TeamAvatar } from './TeamAvatar'
@@ -29,8 +30,47 @@ function getNextGame(events: SportEvent[]): SportEvent | null {
     .sort((left, right) => Date.parse(`${left.eventDate}T${left.eventTime ?? '12:00'}:00Z`) - Date.parse(`${right.eventDate}T${right.eventTime ?? '12:00'}:00Z`))[0] ?? null
 }
 
-function getOpponentName(event: SportEvent, teamId: string): string {
-  return event.homeTeamId === teamId ? event.awayTeam : event.homeTeam
+function getTodayFinishedGame(events: SportEvent[], today: string): SportEvent | null {
+  return [...events]
+    .filter((event) => getGamePhase(event) === 'finished' && isSportEventOnLocalDate(event.eventDate, event.eventTime, today))
+    .sort((left, right) => Date.parse(`${right.eventDate}T${right.eventTime ?? '12:00'}:00Z`) - Date.parse(`${left.eventDate}T${left.eventTime ?? '12:00'}:00Z`))[0] ?? null
+}
+
+function getMatchupCardData(events: SportTeamEvents | undefined): { label: string; game: SportEvent | null } {
+  const nextScheduled = getNextGame(events?.next ?? [])
+  if (nextScheduled) {
+    return { label: 'Next matchup', game: nextScheduled }
+  }
+
+  const todayFinished = getTodayFinishedGame(events?.last ?? [], getLocalDateKey(new Date()))
+  if (todayFinished) {
+    return { label: 'Today final', game: todayFinished }
+  }
+
+  return { label: 'Next matchup', game: null }
+}
+
+function normalizeTeamKey(value: string | null | undefined): string {
+  return (value ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '')
+}
+
+function getOpponentName(event: SportEvent, teamId: string, teamName: string): string {
+  if (event.homeTeamId === teamId) {
+    return event.awayTeam
+  }
+  if (event.awayTeamId === teamId) {
+    return event.homeTeam
+  }
+
+  const normalizedTeamName = normalizeTeamKey(teamName)
+  if (normalizeTeamKey(event.homeTeam) === normalizedTeamName && normalizeTeamKey(event.awayTeam) !== normalizedTeamName) {
+    return event.awayTeam
+  }
+  if (normalizeTeamKey(event.awayTeam) === normalizedTeamName && normalizeTeamKey(event.homeTeam) !== normalizedTeamName) {
+    return event.homeTeam
+  }
+
+  return event.awayTeam
 }
 
 function getStandingMetric(
@@ -87,7 +127,7 @@ export function TeamStatCard({
 }): React.ReactElement {
   const recentOutcomes = React.useMemo(() => getRecentOutcomes(events?.last ?? [], team.teamId), [events?.last, team.teamId])
   const streak = React.useMemo(() => getStreakLabel(recentOutcomes), [recentOutcomes])
-  const nextGame = React.useMemo(() => getNextGame(events?.next ?? []), [events?.next])
+  const matchupCard = React.useMemo(() => getMatchupCardData(events), [events])
   const record = getRecordLabel(standing, recentOutcomes)
   const standingMetric = React.useMemo(() => getStandingMetric(team.sport, standing), [standing, team.sport])
   const differentialLabel = React.useMemo(() => getDifferentialLabel(team.sport), [team.sport])
@@ -114,11 +154,11 @@ export function TeamStatCard({
           </div>
 
           <div className="mt-4 rounded-xl border bg-muted/20 px-3 py-3">
-            <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Next matchup</p>
-            {nextGame ? (
+            <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">{matchupCard.label}</p>
+            {matchupCard.game ? (
               <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm font-semibold">{getOpponentName(nextGame, team.teamId)}</p>
-                <p className="text-xs text-muted-foreground">{formatEventDateTime(nextGame)}</p>
+                <p className="text-sm font-semibold">{getOpponentName(matchupCard.game, team.teamId, team.name)}</p>
+                <p className="text-xs text-muted-foreground">{formatEventDateTime(matchupCard.game)}</p>
               </div>
             ) : (
               <p className="mt-1 text-sm text-muted-foreground">No upcoming games scheduled</p>
