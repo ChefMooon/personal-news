@@ -61,6 +61,8 @@ git push origin v1.2.0
 
 10. Open GitHub Releases and find the new release for `v1.2.0`.
 
+Before publishing the draft, populate its release notes from the matching `CHANGELOG.md` section with `npm run release:notes -- 1.2.0 release`. The helper strips the version heading, keeps the remaining markdown formatting intact (`### Added`, `### Changed`, `### Fixed`, and bullets), and applies those notes directly to the draft release.
+
 11. Publish the draft release:
 
 - Open the release entry
