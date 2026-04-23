@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 The format follows Keep a Changelog, and this project uses Semantic Versioning.
 
+## [1.3.1] - 2026-04-23
+
+### Changed
+
+- Improved Sports widget live score coverage by adding an ESPN fallback path and better team name matching, so updates are more reliable across different matchups.
+
 ## [1.3.0] - 2026-04-14
 
 ### Added
