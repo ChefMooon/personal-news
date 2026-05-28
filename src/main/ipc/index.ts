@@ -1217,6 +1217,20 @@ export function registerIpcHandlers(): void {
     event.returnValue = getCurrentThemeInfo()
   })
 
+  ipcMain.on(IPC.SETTINGS_GET_SIDEBAR_CONFIG_SYNC, (event): void => {
+    const raw = getSetting(SIDEBAR_CONFIG_SETTING)
+    if (!raw) {
+      event.returnValue = DEFAULT_SIDEBAR_CONFIG
+      return
+    }
+
+    try {
+      event.returnValue = normalizeSidebarConfig(JSON.parse(raw))
+    } catch {
+      event.returnValue = DEFAULT_SIDEBAR_CONFIG
+    }
+  })
+
   function emitUpdateStatus(event: UpdateStatusEvent): void {
     for (const win of BrowserWindow.getAllWindows()) {
       win.webContents.send(IPC.UPDATES_STATUS, event)

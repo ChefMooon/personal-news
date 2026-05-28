@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import { IPC, type ThemeInfo } from '../shared/ipc-types'
+import { IPC, normalizeSidebarConfig, type SidebarConfig, type ThemeInfo } from '../shared/ipc-types'
 
 function isThemeInfo(value: unknown): value is ThemeInfo {
   if (!value || typeof value !== 'object') {
@@ -13,6 +13,32 @@ function isThemeInfo(value: unknown): value is ThemeInfo {
     return true
   }
   return typeof candidate.tokens === 'object' && !Array.isArray(candidate.tokens)
+}
+
+function applyInitialSidebarStateSafely(): void {
+  let initialSidebarConfig: SidebarConfig = normalizeSidebarConfig(null)
+
+  try {
+    initialSidebarConfig = normalizeSidebarConfig(
+      ipcRenderer.sendSync(IPC.SETTINGS_GET_SIDEBAR_CONFIG_SYNC)
+    )
+  } catch {
+  }
+
+  const applyToDom = (): void => {
+    const root = document.documentElement
+    if (!root) {
+      return
+    }
+
+    root.setAttribute('data-sidebar-collapsed', initialSidebarConfig.collapsed ? 'true' : 'false')
+  }
+
+  if (document.documentElement) {
+    applyToDom()
+  } else {
+    window.addEventListener('DOMContentLoaded', applyToDom, { once: true })
+  }
 }
 
 function applyInitialThemeSafely(): void {
@@ -65,6 +91,11 @@ function applyInitialThemeSafely(): void {
 
 try {
   applyInitialThemeSafely()
+} catch {
+}
+
+try {
+  applyInitialSidebarStateSafely()
 } catch {
 }
 
