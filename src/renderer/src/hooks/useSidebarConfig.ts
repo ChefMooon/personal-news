@@ -8,6 +8,7 @@ export function useSidebarConfig(): {
   setItemOrder: (itemOrder: SidebarItemId[]) => void
   setItemHidden: (itemId: SidebarItemId, hidden: boolean) => void
   resetConfig: () => void
+  setCollapsed: (collapsed: boolean) => void
 } {
   return useSidebarConfigContext()
 }

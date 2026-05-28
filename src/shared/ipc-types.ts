@@ -398,11 +398,13 @@ export type SidebarItemId = (typeof CUSTOMIZABLE_SIDEBAR_ITEM_IDS)[number]
 export interface SidebarConfig {
   itemOrder: SidebarItemId[]
   hiddenItemIds: SidebarItemId[]
+  collapsed: boolean
 }
 
 export const DEFAULT_SIDEBAR_CONFIG: SidebarConfig = {
   itemOrder: [...CUSTOMIZABLE_SIDEBAR_ITEM_IDS],
-  hiddenItemIds: []
+  hiddenItemIds: [],
+  collapsed: false
 }
 
 export function isSidebarItemId(value: unknown): value is SidebarItemId {
@@ -427,7 +429,8 @@ export function normalizeSidebarConfig(raw: unknown): SidebarConfig {
 
   return {
     itemOrder: [...dedupedOrder, ...missingItemIds],
-    hiddenItemIds: dedupedHidden
+    hiddenItemIds: dedupedHidden,
+    collapsed: typeof candidate.collapsed === 'boolean' ? candidate.collapsed : false
   }
 }
 

@@ -16,6 +16,7 @@ interface SidebarConfigContextValue {
   setItemOrder: (itemOrder: SidebarItemId[]) => void
   setItemHidden: (itemId: SidebarItemId, hidden: boolean) => void
   resetConfig: () => void
+  setCollapsed: (collapsed: boolean) => void
 }
 
 const SidebarConfigContext = createContext<SidebarConfigContextValue>({
@@ -24,7 +25,8 @@ const SidebarConfigContext = createContext<SidebarConfigContextValue>({
   moveItem: () => {},
   setItemOrder: () => {},
   setItemHidden: () => {},
-  resetConfig: () => {}
+  resetConfig: () => {},
+  setCollapsed: () => {}
 })
 
 export function SidebarConfigProvider({
@@ -121,6 +123,16 @@ export function SidebarConfigProvider({
     persistConfig(DEFAULT_SIDEBAR_CONFIG)
   }
 
+  const setCollapsed = (collapsed: boolean): void => {
+    const currentConfig = configRef.current
+    persistConfig(
+      normalizeSidebarConfig({
+        ...currentConfig,
+        collapsed
+      })
+    )
+  }
+
   return (
     <SidebarConfigContext.Provider
       value={{
@@ -129,7 +141,8 @@ export function SidebarConfigProvider({
         moveItem,
         setItemOrder,
         setItemHidden,
-        resetConfig
+        resetConfig,
+        setCollapsed
       }}
     >
       {children}

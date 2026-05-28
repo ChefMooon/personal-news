@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React from 'react'
 import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard,
@@ -28,10 +28,10 @@ interface NavItem {
 }
 
 export function Sidebar(): React.ReactElement {
-  const [collapsed, setCollapsed] = useState(false)
   const { scripts } = useScripts()
   const hasStaleScripts = scripts.some((s) => s.is_stale)
-  const { config } = useSidebarConfig()
+  const { config, setCollapsed } = useSidebarConfig()
+  const collapsed = config.collapsed
   const { enabled: redditDigestEnabled } = useRedditDigestEnabled()
   const { enabled: savedPostsEnabled } = useSavedPostsEnabled()
   const { enabled: sportsEnabled } = useSportsEnabled()
@@ -106,7 +106,7 @@ export function Sidebar(): React.ReactElement {
       >
         <button
           type="button"
-          onClick={() => setCollapsed((c) => !c)}
+          onClick={() => setCollapsed(!collapsed)}
           className={cn(
             'flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground'
           )}
