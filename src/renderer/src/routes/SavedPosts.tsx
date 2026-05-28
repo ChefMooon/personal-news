@@ -56,11 +56,27 @@ function PostTagEditor({
     onUpdate()
   }
 
+  const handlePickSuggestion = async (tag: string): Promise<void> => {
+    const updated = [...post.tags, tag]
+    await window.api.invoke(IPC.REDDIT_UPDATE_POST_TAGS, post.post_id, updated)
+    setNewTag('')
+    setAdding(false)
+    onUpdate()
+  }
+
   const handleRemoveTag = async (tag: string): Promise<void> => {
     const updated = post.tags.filter((t) => t !== tag)
     await window.api.invoke(IPC.REDDIT_UPDATE_POST_TAGS, post.post_id, updated)
     onUpdate()
   }
+
+  const managedTagSuggestions = allTags
+    .filter((tag) => !post.tags.includes(tag))
+    .filter((tag) => {
+      const query = newTag.trim().toLowerCase()
+      return query ? tag.toLowerCase().includes(query) : true
+    })
+    .slice(0, 8)
 
   return (
     <div className="flex items-center gap-1 flex-wrap">
@@ -78,36 +94,50 @@ function PostTagEditor({
         </Badge>
       ))}
       {adding ? (
-        <div className="flex items-center gap-1">
-          <Input
-            value={newTag}
-            onChange={(e) => setNewTag(e.target.value)}
-            className="h-6 w-24 text-xs"
-            placeholder="tag name"
-            aria-label="New tag name"
-            list="tag-suggestions"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') void handleAddTag()
-              if (e.key === 'Escape') setAdding(false)
-            }}
-            autoFocus
-          />
-          <datalist id="tag-suggestions">
-            {allTags
-              .filter((t) => !post.tags.includes(t))
-              .map((t) => (
-                <option key={t} value={t} />
-              ))}
-          </datalist>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-6 w-6 p-0"
-            onClick={() => void handleAddTag()}
-            aria-label="Add tag"
-          >
-            <Plus className="h-3 w-3" />
-          </Button>
+        <div className="space-y-2">
+          <div className="flex items-start gap-1">
+            <Input
+              value={newTag}
+              onChange={(e) => setNewTag(e.target.value)}
+              className="h-6 w-24 text-xs"
+              placeholder="tag name"
+              aria-label="New tag name"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void handleAddTag()
+                if (e.key === 'Escape') setAdding(false)
+              }}
+              autoFocus
+            />
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 w-6 shrink-0 p-0"
+              onClick={() => void handleAddTag()}
+              aria-label="Add tag"
+            >
+              <Plus className="h-3 w-3" />
+            </Button>
+          </div>
+          {managedTagSuggestions.length > 0 ? (
+            <div className="rounded-md border bg-background p-2 shadow-sm">
+              <div className="mb-2 flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                <span>Managed tags</span>
+                <span>{managedTagSuggestions.length} suggestions</span>
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {managedTagSuggestions.map((tag) => (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => void handlePickSuggestion(tag)}
+                    className="rounded-full border border-border bg-muted px-2 py-1 text-[11px] text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                  >
+                    {tag}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
       ) : (
         <button

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { toast } from 'sonner'
 import { MoreHorizontal, ExternalLink, Circle, CircleCheck, PencilLine, Trash2, Plus, X } from 'lucide-react'
@@ -92,7 +92,6 @@ export function SavedPostItemActions({
   const [newTag, setNewTag] = useState('')
   const triggerRef = useRef<HTMLButtonElement | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
-  const suggestionsId = useId()
   const isViewed = post.viewed_at !== null
 
   useEffect(() => {
@@ -174,6 +173,11 @@ export function SavedPostItemActions({
     setNewTag('')
   }, [newTag])
 
+  const pickSuggestion = useCallback((tag: string): void => {
+    setDraftTags((current) => normalizeTags([...current, tag]))
+    setNewTag('')
+  }, [])
+
   const removeTag = useCallback((tag: string): void => {
     setDraftTags((current) => current.filter((value) => value !== tag))
   }, [])
@@ -244,10 +248,14 @@ export function SavedPostItemActions({
     }
   }, [closeMenu, onAfterMutation, post.post_id])
 
-  const availableTagSuggestions = useMemo(
-    () => allTags.filter((tag) => !draftTags.includes(tag)),
-    [allTags, draftTags]
-  )
+  const managedTagSuggestions = useMemo(() => {
+    const query = newTag.trim().toLowerCase()
+
+    return allTags
+      .filter((tag) => !draftTags.includes(tag))
+      .filter((tag) => (query ? tag.toLowerCase().includes(query) : true))
+      .slice(0, 8)
+  }, [allTags, draftTags, newTag])
 
   const trigger = (
     <button
@@ -405,29 +413,47 @@ export function SavedPostItemActions({
                   <span className="text-xs text-muted-foreground">No tags yet.</span>
                 )}
               </div>
-              <div className="flex items-center gap-2">
-                <Input
-                  value={newTag}
-                  onChange={(event) => setNewTag(event.target.value)}
-                  placeholder="Add a tag"
-                  list={suggestionsId}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') {
-                      event.preventDefault()
-                      addTag()
-                    }
-                  }}
-                />
-                <Button type="button" variant="outline" onClick={addTag}>
-                  <Plus className="h-4 w-4" />
-                  Add tag
-                </Button>
+              <div className="space-y-2">
+                <div className="flex items-start gap-2">
+                  <div className="flex-1 space-y-2">
+                    <Input
+                      value={newTag}
+                      onChange={(event) => setNewTag(event.target.value)}
+                      placeholder="Add a tag"
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault()
+                          addTag()
+                        }
+                      }}
+                    />
+                    {managedTagSuggestions.length > 0 ? (
+                      <div className="rounded-md border bg-background p-2 shadow-sm">
+                        <div className="mb-2 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                          <span>Managed tags</span>
+                          <span>{managedTagSuggestions.length} suggestions</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {managedTagSuggestions.map((tag) => (
+                            <button
+                              key={tag}
+                              type="button"
+                              onClick={() => pickSuggestion(tag)}
+                              className="rounded-full border border-border bg-muted px-2 py-1 text-xs text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                            >
+                              {tag}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                  <Button type="button" variant="outline" onClick={addTag} className="shrink-0">
+                    <Plus className="h-4 w-4" />
+                    Add tag
+                  </Button>
+                </div>
               </div>
-              <datalist id={suggestionsId}>
-                {availableTagSuggestions.map((tag) => (
-                  <option key={tag} value={tag} />
-                ))}
-              </datalist>
             </div>
           </div>
           <DialogFooter>
