@@ -99,6 +99,7 @@ export const IPC = {
   SETTINGS_SET_DASHBOARD_VIEWS: 'settings:setDashboardViews',
   SETTINGS_GET_SIDEBAR_CONFIG: 'settings:getSidebarConfig',
   SETTINGS_SET_SIDEBAR_CONFIG: 'settings:setSidebarConfig',
+  SETTINGS_GET_SIDEBAR_CONFIG_SYNC: 'settings:getSidebarConfigSync',
   SETTINGS_GET_THEME_SYNC: 'settings:getThemeSync',
   SETTINGS_GET_THEME: 'settings:getTheme',
   SETTINGS_SET_THEME: 'settings:setTheme',
