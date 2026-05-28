@@ -38,6 +38,3 @@ __pycache__/
 *.pyc
 *.pyo
 resources/scripts/__pycache__/
-
-# Github
-.github/copilot/copilot-instructions.md

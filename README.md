@@ -16,7 +16,8 @@ An Electron desktop application that brings YouTube, Reddit, saved links, and ma
 
 ## Prerequisites
 
-- **Windows 10+**, macOS 10.15+, or Linux (Ubuntu 16.04+)
+- **Windows 10+** for the current packaged release workflow
+- macOS 10.15+ or Linux (Ubuntu 16.04+) for source-based development and local builds
 - **API Keys** (required to configure data sources):
   - [YouTube Data API v3 key](https://developers.google.com/youtube/registering_an_application) (for YouTube channels)
   - [ntfy.sh topic](https://ntfy.sh/docs/subscribe/#web) (for saving links from mobile)
@@ -24,9 +25,11 @@ An Electron desktop application that brings YouTube, Reddit, saved links, and ma
 
 ## Installation
 
-1. Download the latest installer from [GitHub Releases](https://github.com/ChefMooon/personal-news/releases)
-2. Run the installer (`Personal News-*.exe` on Windows, `.dmg` on macOS, `.deb` or AppImage on Linux)
+1. Download the latest Windows installer from [GitHub Releases](https://github.com/ChefMooon/personal-news/releases)
+2. Run the installer (`Personal News-*.exe`)
 3. Launch the app — it will open to the Dashboard
+
+The repository currently has a verified and automated Windows release workflow. macOS and Linux build commands exist for local use, but this README does not claim equivalent published release artifacts for those targets.
 
 ## First-Run Setup
 
@@ -76,7 +79,8 @@ All settings are stored locally in the app. To reconfigure:
 - [Changelog](CHANGELOG.md) — Release history and tracked updates
 - [Architecture Overview](docs/architecture/overview.md) — System design and data flows
 - [Data Sources Reference](docs/data-sources.md) — Detailed configuration for each source
-- [How to Build, Package, and Release](docs/HOW-TO-RUN.md) — Source setup plus the verified Windows release workflow
+- [How to Run, Package, and Release](docs/HOW-TO-RUN.md) — Source setup, packaging, and the verified Windows pre-release workflow
+- [How to Release](docs/HOW-TO-RELEASE.md) — Tag-triggered GitHub release process for Windows builds
 - [Product Specification](docs/PRD.md) — Current product scope and requirements
 
 ## Asset Maintenance
