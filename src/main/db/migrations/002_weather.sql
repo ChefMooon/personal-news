@@ -33,5 +33,5 @@ CREATE TABLE IF NOT EXISTS weather_alert_state (
 INSERT OR IGNORE INTO settings VALUES ('weather_enabled', 'true');
 INSERT OR IGNORE INTO settings VALUES (
     'weather_settings_json',
-    '{"pollIntervalMinutes":30,"defaultLocationId":null,"temperatureUnit":"celsius","windSpeedUnit":"kmh","precipitationUnit":"mm","timeFormat":"system","showAlertsInWidgets":true,"thresholds":{"rainMm":10,"snowCm":5,"windKph":45,"freezeTempC":0,"heatTempC":32}}'
+    '{"pollIntervalMinutes":15,"defaultLocationId":null,"temperatureUnit":"celsius","windSpeedUnit":"kmh","precipitationUnit":"mm","timeFormat":"system","showAlertsInWidgets":true,"thresholds":{"rainMm":10,"snowCm":5,"windKph":45,"freezeTempC":0,"heatTempC":32}}'
 );

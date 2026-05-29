@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { floorUnixSecondsToHour, splitYesterdayFromDaily, takeUpcomingHourly } from '../forecast-utils'
+import { floorUnixSecondsToHour, mapCurrentConditions, splitYesterdayFromDaily, takeUpcomingHourly } from '../forecast-utils'
 
 describe('weather forecast utilities', () => {
   it('floors unix seconds to the current hour', () => {
@@ -37,5 +37,50 @@ describe('weather forecast utilities', () => {
 
     expect(result.yesterday).toBeNull()
     expect(result.daily[0]).toEqual({ date: 'day-0' })
+  })
+
+  it('prefers 15-minutely current values for current-condition details', () => {
+    const current = mapCurrentConditions(
+      {
+        time: '2026-05-29T12:15',
+        surface_pressure: 1002.5,
+        visibility: 14_000,
+        uv_index: 7.1,
+        dew_point_2m: 12.4
+      },
+      {
+        surfacePressure: 999,
+        visibility: 10_000,
+        uvIndex: 4,
+        dewPoint: 8
+      },
+      42,
+      1_000
+    )
+
+    expect(current.surfacePressure).toBe(1002.5)
+    expect(current.visibility).toBe(14_000)
+    expect(current.uvIndex).toBe(7.1)
+    expect(current.dewPoint).toBe(12.4)
+    expect(current.airQuality).toBe(42)
+  })
+
+  it('falls back to hourly values when current-condition details are missing', () => {
+    const current = mapCurrentConditions(
+      { time: '2026-05-29T12:15' },
+      {
+        surfacePressure: 999,
+        visibility: 10_000,
+        uvIndex: 4,
+        dewPoint: 8
+      },
+      null,
+      1_000
+    )
+
+    expect(current.surfacePressure).toBe(999)
+    expect(current.visibility).toBe(10_000)
+    expect(current.uvIndex).toBe(4)
+    expect(current.dewPoint).toBe(8)
   })
 })

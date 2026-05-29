@@ -16,14 +16,14 @@ import type {
 import { getSetting, setSetting } from '../../settings/store'
 import { notifyWeatherAlerts } from '../../notifications/notification-service'
 import type { DataSourceModule } from '../registry'
-import { floorUnixSecondsToHour, splitYesterdayFromDaily, takeUpcomingHourly } from './forecast-utils'
+import { floorUnixSecondsToHour, mapCurrentConditions, splitYesterdayFromDaily, takeUpcomingHourly } from './forecast-utils'
 
 const WEATHER_SETTINGS_KEY = 'weather_settings_json'
 const WEATHER_ENABLED_KEY = 'weather_enabled'
 const WEATHER_STALE_SECONDS = 60 * 60 * 3
 
 const DEFAULT_WEATHER_SETTINGS: WeatherSettings = {
-  pollIntervalMinutes: 30,
+  pollIntervalMinutes: 15,
   defaultLocationId: null,
   temperatureUnit: 'celsius',
   windSpeedUnit: 'kmh',
@@ -442,8 +442,8 @@ async function fetchForecast(location: WeatherLocation, settings: WeatherSetting
     latitude: String(location.latitude),
     longitude: String(location.longitude),
     timezone: location.timezone,
-    current: 'temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,weather_code,is_day,wind_speed_10m,wind_gusts_10m',
-    hourly: 'temperature_2m,precipitation,precipitation_probability,weather_code,wind_speed_10m,relative_humidity_2m,dew_point_2m,uv_index,visibility,surface_pressure',
+    current: 'temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,weather_code,is_day,wind_speed_10m,wind_gusts_10m,surface_pressure,visibility,uv_index,dew_point_2m',
+    hourly: 'temperature_2m,precipitation,precipitation_probability,weather_code,wind_speed_10m,relative_humidity_2m',
     daily: 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,snowfall_sum,wind_speed_10m_max,sunrise,sunset',
     forecast_days: '7',
     past_days: '1',
@@ -469,22 +469,17 @@ async function fetchForecast(location: WeatherLocation, settings: WeatherSetting
   const currentHourlyIndex = hourlyTimes.findIndex((time) => toUnixSeconds(String(time)) === currentHour)
   const airQuality = await fetchAirQuality(location)
 
-  const current: WeatherCurrentConditions = {
-    time: currentTime,
-    temperature: toNullableNumber(payload.current?.temperature_2m),
-    apparentTemperature: toNullableNumber(payload.current?.apparent_temperature),
-    relativeHumidity: toNullableNumber(payload.current?.relative_humidity_2m),
-    precipitation: toNullableNumber(payload.current?.precipitation),
-    weatherCode: toNullableNumber(payload.current?.weather_code),
-    isDay: payload.current?.is_day === 1,
-    windSpeed: toNullableNumber(payload.current?.wind_speed_10m),
-    windGusts: toNullableNumber(payload.current?.wind_gusts_10m),
-    surfacePressure: currentHourlyIndex >= 0 ? numberAt(payload.hourly?.surface_pressure, currentHourlyIndex) : null,
-    visibility: currentHourlyIndex >= 0 ? numberAt(payload.hourly?.visibility, currentHourlyIndex) : null,
-    uvIndex: currentHourlyIndex >= 0 ? numberAt(payload.hourly?.uv_index, currentHourlyIndex) : null,
-    dewPoint: currentHourlyIndex >= 0 ? numberAt(payload.hourly?.dew_point_2m, currentHourlyIndex) : null,
-    airQuality
-  }
+  const current = mapCurrentConditions(
+    payload.current,
+    {
+      surfacePressure: currentHourlyIndex >= 0 ? numberAt(payload.hourly?.surface_pressure, currentHourlyIndex) : null,
+      visibility: currentHourlyIndex >= 0 ? numberAt(payload.hourly?.visibility, currentHourlyIndex) : null,
+      uvIndex: currentHourlyIndex >= 0 ? numberAt(payload.hourly?.uv_index, currentHourlyIndex) : null,
+      dewPoint: currentHourlyIndex >= 0 ? numberAt(payload.hourly?.dew_point_2m, currentHourlyIndex) : null
+    },
+    airQuality,
+    currentTime
+  )
 
   const mappedHourly = hourlyTimes.map((time, index) => ({
     time: toUnixSeconds(String(time)) ?? Math.floor(Date.now() / 1000),
