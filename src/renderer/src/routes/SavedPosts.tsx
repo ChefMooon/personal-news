@@ -193,6 +193,13 @@ function SavedPostsContent(): React.ReactElement {
   const [analytics, setAnalytics] = useState<ViewedAnalytics | null>(null)
   const [analyticsLoading, setAnalyticsLoading] = useState(false)
   const [bulkLoading, setBulkLoading] = useState(false)
+  const savedPostsOptions = useMemo(
+    () => ({
+      source_filter: source ? [source as LinkSource] : undefined,
+      hide_viewed: hideViewed
+    }),
+    [hideViewed, source]
+  )
   const {
     posts,
     total,
@@ -206,10 +213,7 @@ function SavedPostsContent(): React.ReactElement {
     offset,
     setOffset,
     refetch
-  } = useSavedPosts({
-    source_filter: source ? [source as LinkSource] : undefined,
-    hide_viewed: hideViewed
-  })
+  } = useSavedPosts(savedPostsOptions)
   const staleness = useNtfyStaleness()
   const [showOnboarding, setShowOnboarding] = useState(false)
   const [showTagManager, setShowTagManager] = useState(false)
@@ -221,6 +225,7 @@ function SavedPostsContent(): React.ReactElement {
   const [deleting, setDeleting] = useState(false)
   const [allTags, setAllTags] = useState<string[]>([])
   const [subreddits, setSubreddits] = useState<string[]>([])
+  const showSubredditFilter = source === null || source === 'reddit'
 
   const analyticsScope = useMemo(() => {
     return {
@@ -275,6 +280,12 @@ function SavedPostsContent(): React.ReactElement {
   }, [posts])
 
   useEffect(() => {
+    if (!showSubredditFilter && subreddit) {
+      setSubreddit(null)
+    }
+  }, [showSubredditFilter, subreddit])
+
+  useEffect(() => {
     refreshAnalytics()
   }, [refreshAnalytics])
 
@@ -316,6 +327,11 @@ function SavedPostsContent(): React.ReactElement {
       .catch((err) => {
         toast.error(err instanceof Error ? err.message : 'Failed to update viewed state.')
       })
+  }
+
+  const handleSourceChange = (value: string): void => {
+    setSource(value === '_all' ? null : value)
+    setOffset(0)
   }
 
   const handleBulkMarkViewed = (): void => {
@@ -496,19 +512,18 @@ function SavedPostsContent(): React.ReactElement {
           />
         </div>
         <Select
-          value={subreddit ?? '_all'}
-          onValueChange={(val) => setSubreddit(val === '_all' ? null : val)}
+          value={source ?? '_all'}
+          onValueChange={handleSourceChange}
         >
-          <SelectTrigger className="w-[160px] h-9" aria-label="Filter by subreddit">
-            <SelectValue placeholder="All subreddits" />
+          <SelectTrigger className="w-[140px] h-9" aria-label="Filter by source">
+            <SelectValue placeholder="All sources" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="_all">All subreddits</SelectItem>
-            {subreddits.map((s) => (
-              <SelectItem key={s} value={s}>
-                r/{s}
-              </SelectItem>
-            ))}
+            <SelectItem value="_all">All sources</SelectItem>
+            <SelectItem value="reddit">Reddit</SelectItem>
+            <SelectItem value="x">X (Twitter)</SelectItem>
+            <SelectItem value="bsky">Bluesky</SelectItem>
+            <SelectItem value="generic">Other Links</SelectItem>
           </SelectContent>
         </Select>
         <Select
@@ -528,21 +543,24 @@ function SavedPostsContent(): React.ReactElement {
             ))}
           </SelectContent>
         </Select>
-        <Select
-          value={source ?? '_all'}
-          onValueChange={(val) => setSource(val === '_all' ? null : val)}
-        >
-          <SelectTrigger className="w-[140px] h-9" aria-label="Filter by source">
-            <SelectValue placeholder="All sources" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="_all">All sources</SelectItem>
-            <SelectItem value="reddit">Reddit</SelectItem>
-            <SelectItem value="x">X (Twitter)</SelectItem>
-            <SelectItem value="bsky">Bluesky</SelectItem>
-            <SelectItem value="generic">Other Links</SelectItem>
-          </SelectContent>
-        </Select>
+        {showSubredditFilter && (
+          <Select
+            value={subreddit ?? '_all'}
+            onValueChange={(val) => setSubreddit(val === '_all' ? null : val)}
+          >
+            <SelectTrigger className="w-[160px] h-9" aria-label="Filter by subreddit">
+              <SelectValue placeholder="All subreddits" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="_all">All subreddits</SelectItem>
+              {subreddits.map((s) => (
+                <SelectItem key={s} value={s}>
+                  r/{s}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
       {/* Post list */}
