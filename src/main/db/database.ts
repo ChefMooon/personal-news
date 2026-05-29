@@ -46,7 +46,8 @@ function runMigrations(database: Database.Database): void {
     4: '004_sports_team_cache.sql',
     5: '005_youtube_livestream_lifecycle.sql',
     6: '006_sports_team_name_normalization.sql',
-    7: '007_weather_poll_interval_default.sql'
+    7: '007_weather_poll_interval_default.sql',
+    8: '008_saved_posts_subreddit_tags.sql'
   }
 
   // Ensure meta table exists first

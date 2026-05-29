@@ -23,7 +23,12 @@ const SOURCE_DEFINITIONS: SourceDefinition[] = [
     },
     fetchMetadata: async (url, note) => {
       const post = await fetchRedditPost(url)
-      return { ...post, note, source: 'reddit' }
+      return {
+        ...post,
+        note,
+        source: 'reddit',
+        tags: post.subreddit ? [normalizeAutoTag(post.subreddit)] : null
+      }
     }
   },
   {
@@ -36,9 +41,10 @@ const SOURCE_DEFINITIONS: SourceDefinition[] = [
     },
     fetchMetadata: async (url, note) => {
       const handle = extractXHandle(url)
+      const title = note || (handle ? `Post by @${handle}` : url)
       return {
         postId: extractXPostId(url),
-        title: note || url,
+        title,
         url,
         permalink: url,
         subreddit: null,
@@ -48,7 +54,7 @@ const SOURCE_DEFINITIONS: SourceDefinition[] = [
         source: 'x' as LinkSource,
         savedAt: Math.floor(Date.now() / 1000),
         note,
-        tags: null
+        tags: handle ? [normalizeAutoTag(handle)] : null
       }
     }
   },
@@ -63,9 +69,10 @@ const SOURCE_DEFINITIONS: SourceDefinition[] = [
     fetchMetadata: async (url, note) => {
       const handle = extractBskyHandle(url)
       const postId = extractBskyPostId(url)
+      const title = note || (handle ? `Post by @${handle}` : url)
       return {
         postId,
-        title: note || url,
+        title,
         url,
         permalink: url,
         subreddit: null,
@@ -75,7 +82,7 @@ const SOURCE_DEFINITIONS: SourceDefinition[] = [
         source: 'bsky' as LinkSource,
         savedAt: Math.floor(Date.now() / 1000),
         note,
-        tags: null
+        tags: handle ? [normalizeAutoTag(handle)] : null
       }
     }
   }
@@ -132,6 +139,10 @@ function hashUrl(url: string): string {
     hash = (hash * 31 + url.charCodeAt(i)) >>> 0
   }
   return `link_${hash.toString(36)}`
+}
+
+function normalizeAutoTag(value: string): string {
+  return value.trim().toLowerCase()
 }
 
 function extractXHandle(url: string): string | null {

@@ -903,7 +903,7 @@ export interface SavedPostInput {
   source: LinkSource
   savedAt: number
   note: string | null
-  tags: null
+  tags: string[] | null
 }
 
 export interface NtfyStaleness {

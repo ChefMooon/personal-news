@@ -121,7 +121,7 @@ export async function pollNtfy(db: Database.Database): Promise<{ postsIngested: 
         post.score,
         post.body,
         post.savedAt,
-        null,
+        post.tags ? JSON.stringify(post.tags) : null,
         post.note,
         post.source
       )
