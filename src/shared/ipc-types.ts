@@ -498,11 +498,17 @@ export interface WeatherCurrentConditions {
   isDay: boolean
   windSpeed: number | null
   windGusts: number | null
+  surfacePressure: number | null
+  visibility: number | null
+  uvIndex: number | null
+  dewPoint: number | null
+  airQuality: number | null
 }
 
 export interface WeatherHourlyPoint {
   time: number
   temperature: number | null
+  precipitation: number | null
   precipitationProbability: number | null
   weatherCode: number | null
   windSpeed: number | null
@@ -537,6 +543,8 @@ export interface WeatherSnapshot {
   current: WeatherCurrentConditions | null
   hourly: WeatherHourlyPoint[]
   daily: WeatherDailyPoint[]
+  yesterday: WeatherDailyPoint | null
+  airQuality: number | null
   alerts: WeatherAlert[]
 }
 
@@ -570,12 +578,19 @@ export interface WeatherViewConfig {
   detailLevel: 'summary' | 'standard' | 'detailed'
   displayMode: 'current' | 'current_all' | 'current_hourly' | 'current_daily'
   forecastView: 'all' | 'hourly' | 'daily'
+  hourlyMetric: 'overview' | 'precipitation' | 'wind' | 'humidity'
   showAlerts: boolean
   showPrecipitation: boolean
   showWind: boolean
   showHumidity: boolean
   showFeelsLike: boolean
   showSunTimes: boolean
+  showYesterday: boolean
+  showAirQuality: boolean
+  showVisibility: boolean
+  showUvIndex: boolean
+  showPressure: boolean
+  showDewPoint: boolean
 }
 
 export interface SportsSettings {

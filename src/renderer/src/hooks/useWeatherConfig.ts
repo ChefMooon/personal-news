@@ -7,12 +7,19 @@ export const DEFAULT_WEATHER_VIEW_CONFIG: WeatherViewConfig = {
   detailLevel: 'standard',
   displayMode: 'current_hourly',
   forecastView: 'all',
+  hourlyMetric: 'overview',
   showAlerts: true,
   showPrecipitation: true,
   showWind: true,
   showHumidity: false,
   showFeelsLike: true,
-  showSunTimes: false
+  showSunTimes: false,
+  showYesterday: false,
+  showAirQuality: true,
+  showVisibility: true,
+  showUvIndex: true,
+  showPressure: true,
+  showDewPoint: true
 }
 
 export function useWeatherConfig(instanceId: string): {

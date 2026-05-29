@@ -24,7 +24,6 @@ import { useWeatherSettings } from '../../hooks/useWeatherSettings'
 import { useWeatherSnapshot } from '../../hooks/useWeatherSnapshot'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
 import { Badge } from '../../components/ui/badge'
-import { Separator } from '../../components/ui/separator'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -74,15 +73,29 @@ function precipUnit(settings: WeatherSettings): string {
 }
 
 function formatTemp(value: number | null, settings: WeatherSettings): string {
-  return value == null ? '—' : `${Math.round(value)}°${tempUnit(settings)}`
+  return value == null ? '-' : `${Math.round(value)}°${tempUnit(settings)}`
 }
 
 function formatNumber(value: number | null, suffix: string): string {
-  return value == null ? '—' : `${Math.round(value)} ${suffix}`
+  return value == null ? '-' : `${Math.round(value)} ${suffix}`
+}
+
+function formatCompactNumber(value: number | null, suffix = ''): string {
+  return value == null ? '-' : `${Math.round(value)}${suffix}`
+}
+
+function formatVisibility(value: number | null): string {
+  if (value == null) return '-'
+  const km = value / 1000
+  return `${km >= 10 ? Math.round(km) : km.toFixed(1)} km`
+}
+
+function formatAqi(value: number | null): string {
+  return value == null ? '-' : String(Math.round(value))
 }
 
 function formatTime(value: number | null, settings: WeatherSettings): string {
-  if (value == null) return '—'
+  if (value == null) return '-'
   const hour12 = settings.timeFormat === 'system' ? undefined : settings.timeFormat === '12h'
   return new Date(value * 1000).toLocaleTimeString([], {
     hour: 'numeric',
@@ -113,9 +126,9 @@ function formatLastSynced(timestamp: number | null, settings: WeatherSettings): 
 }
 
 function hourlyCount(config: WeatherViewConfig): number {
-  if (config.detailLevel === 'summary') return 4
-  if (config.detailLevel === 'detailed') return 8
-  return 6
+  if (config.detailLevel === 'summary') return 6
+  if (config.detailLevel === 'detailed') return 24
+  return 12
 }
 
 function dailyCount(config: WeatherViewConfig): number {
@@ -124,197 +137,248 @@ function dailyCount(config: WeatherViewConfig): number {
   return 5
 }
 
-function StatChip({ icon, label }: { icon: string; label: string }): React.ReactElement {
+function CurrentDetailGrid({ snapshot, config, settings }: { snapshot: WeatherSnapshot; config: WeatherViewConfig; settings: WeatherSettings }): React.ReactElement {
+  const current = snapshot.current
+  if (!current) return <></>
+
+  const details: Array<{ key: string; label: string; value: string; visible: boolean }> = [
+    { key: 'aqi', label: 'Air quality', value: formatAqi(snapshot.airQuality), visible: config.showAirQuality },
+    { key: 'precip', label: 'Precip', value: formatNumber(current.precipitation, precipUnit(settings)), visible: config.showPrecipitation },
+    { key: 'wind', label: 'Wind', value: formatNumber(current.windSpeed, windUnit(settings)), visible: config.showWind },
+    { key: 'humidity', label: 'Humidity', value: formatCompactNumber(current.relativeHumidity, '%'), visible: config.showHumidity },
+    { key: 'feels', label: 'Feels like', value: formatTemp(current.apparentTemperature, settings), visible: config.showFeelsLike },
+    { key: 'visibility', label: 'Visibility', value: formatVisibility(current.visibility), visible: config.showVisibility && config.detailLevel !== 'summary' },
+    { key: 'uv', label: 'UV index', value: formatCompactNumber(current.uvIndex), visible: config.showUvIndex && config.detailLevel !== 'summary' },
+    { key: 'pressure', label: 'Pressure', value: formatNumber(current.surfacePressure, 'hPa'), visible: config.showPressure && config.detailLevel !== 'summary' },
+    { key: 'dew', label: 'Dew point', value: formatTemp(current.dewPoint, settings), visible: config.showDewPoint && config.detailLevel !== 'summary' }
+  ].filter((detail) => detail.visible)
+
+  if (details.length === 0) return <></>
+
   return (
-    <div className="flex items-center gap-1 rounded-md bg-muted/30 px-2 py-1">
-      <span className="text-xs">{icon}</span>
-      <span className="text-[11px] text-muted-foreground">{label}</span>
+    <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3 lg:grid-cols-4">
+      {details.map((detail) => (
+        <div key={detail.key} className="min-w-0">
+          <p className="truncate text-[10px] font-medium text-muted-foreground">{detail.label}</p>
+          <p className="truncate text-xs font-semibold leading-tight">{detail.value}</p>
+        </div>
+      ))}
     </div>
+  )
+}
+
+function TemperatureAreaChart({ points, settings, gradientId }: { points: WeatherHourlyPoint[]; settings: WeatherSettings; gradientId: string }): React.ReactElement {
+  if (points.length === 0) return <></>
+
+  const width = Math.max(points.length * 58, 340)
+  const height = 94
+  const chartTop = 10
+  const chartBottom = 88
+  const chartLeft = 18
+  const chartRight = width - 8
+  const temps = points.map((point) => point.temperature ?? 0)
+  const minTemp = Math.min(...temps)
+  const maxTemp = Math.max(...temps)
+  const tempRange = maxTemp - minTemp || 1
+  const step = points.length > 1 ? (chartRight - chartLeft) / (points.length - 1) : 0
+  const coords = points.map((point, index) => {
+    const temp = point.temperature ?? minTemp
+    const x = chartLeft + step * index
+    const y = chartBottom - ((temp - minTemp) / tempRange) * (chartBottom - chartTop)
+    return { x, y }
+  })
+  const linePath = coords.map((coord, index) => `${index === 0 ? 'M' : 'L'} ${coord.x.toFixed(2)} ${coord.y.toFixed(2)}`).join(' ')
+  const areaPath = `${linePath} L ${coords[coords.length - 1].x.toFixed(2)} ${chartBottom} L ${coords[0].x.toFixed(2)} ${chartBottom} Z`
+
+  return (
+    <svg className="block" width={width} height={height} viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Hourly temperature trend">
+      <defs>
+        <linearGradient id={gradientId} x1="0" x2="1" y1="0" y2="0">
+          <stop offset="0%" stopColor="hsl(199 89% 55% / 0.36)" />
+          <stop offset="52%" stopColor="hsl(38 92% 60% / 0.46)" />
+          <stop offset="100%" stopColor="hsl(199 89% 55% / 0.30)" />
+        </linearGradient>
+      </defs>
+      {[minTemp, (minTemp + maxTemp) / 2, maxTemp].map((temp) => {
+        const y = chartBottom - ((temp - minTemp) / tempRange) * (chartBottom - chartTop)
+        return (
+          <g key={temp}>
+            <line x1={chartLeft} x2={chartRight} y1={y} y2={y} stroke="hsl(var(--border) / 0.35)" strokeDasharray="2 3" />
+            <text x={0} y={y + 3} fill="hsl(var(--muted-foreground))" fontSize="9">
+              {formatTemp(temp, settings)}
+            </text>
+          </g>
+        )
+      })}
+      <path d={areaPath} fill={`url(#${gradientId})`} />
+      <path d={linePath} fill="none" stroke="hsl(38 92% 62% / 0.9)" strokeWidth="1.5" />
+    </svg>
   )
 }
 
 function HourlyTimeline({
   points,
   config,
-  settings
+  settings,
+  onMetricChange
 }: {
   points: WeatherHourlyPoint[]
   config: WeatherViewConfig
   settings: WeatherSettings
+  onMetricChange: (metric: WeatherViewConfig['hourlyMetric']) => void
 }): React.ReactElement {
+  const gradientId = React.useId()
   const visible = points.slice(0, hourlyCount(config))
 
   if (visible.length === 0) {
     return <p className="text-xs text-muted-foreground">No hourly forecast available.</p>
   }
 
-  const temps = visible.map((point) => point.temperature ?? 0)
-  const minTemp = Math.min(...temps)
-  const maxTemp = Math.max(...temps)
-  const tempRange = maxTemp - minTemp || 1
+  const contentWidth = Math.max(visible.length * 58, 340)
+  const layoutWidth = Math.min(contentWidth, 760)
+  const gridStyle: React.CSSProperties = {
+    width: contentWidth,
+    gridTemplateColumns: `repeat(${visible.length}, minmax(0, 1fr))`
+  }
+  const tabs: Array<{ key: WeatherViewConfig['hourlyMetric']; label: string }> = [
+    { key: 'overview', label: 'Overview' },
+    { key: 'precipitation', label: 'Precipitation' },
+    { key: 'wind', label: 'Wind' },
+    { key: 'humidity', label: 'Humidity' }
+  ]
 
   return (
-    <>
-      <div className="weather-timeline-scroll flex gap-1.5 overflow-x-auto">
-        {visible.map((point, index) => {
-          const temp = point.temperature ?? 0
-          const rain = point.precipitationProbability ?? 0
-          const dotBottomPct = ((temp - minTemp) / tempRange) * 55 + 8
-
-          return (
-            <div key={point.time} className="flex min-w-[40px] flex-1 flex-col items-center gap-1">
-              <span className="text-[11px] font-semibold leading-none">
-                {formatTemp(point.temperature, settings)}
-              </span>
-
-              <div className="relative h-14 w-full overflow-hidden rounded-md bg-muted/10">
-                {config.showPrecipitation && (
-                  <div
-                    className="absolute right-0 bottom-0 left-0 rounded-md transition-all"
-                    style={{
-                      height: `${rain}%`,
-                      backgroundColor: rain > 40 ? 'hsl(199 89% 48% / 0.35)' : 'hsl(199 89% 48% / 0.16)'
-                    }}
-                  />
+    <div className="w-fit max-w-full space-y-2 rounded-md border bg-muted/5 p-2.5">
+      <div className="mr-auto w-full max-w-[760px] space-y-2">
+        <div className="flex max-w-full items-center justify-between gap-2" style={{ width: layoutWidth }}>
+          <h4 className="text-xs font-semibold">Hourly</h4>
+          <div className="flex overflow-hidden rounded-md border text-[10px]">
+            {tabs.map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                className={cn(
+                  'px-2 py-1 transition-colors',
+                  config.hourlyMetric === tab.key ? 'bg-accent text-foreground font-medium' : 'text-muted-foreground hover:bg-accent/50'
                 )}
-                <div
-                  className="absolute left-1/2 h-[5px] w-[5px] -translate-x-1/2 rounded-full"
-                  style={{
-                    bottom: `${dotBottomPct}%`,
-                    backgroundColor: index === 0 ? 'hsl(199 89% 68%)' : 'hsl(215 16% 47% / 0.8)',
-                    boxShadow: index === 0 ? '0 0 5px hsl(199 89% 68% / 0.8)' : 'none'
-                  }}
-                />
+                aria-pressed={config.hourlyMetric === tab.key}
+                onClick={() => onMetricChange(tab.key)}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="weather-timeline-scroll overflow-x-auto">
+          <div className="grid gap-0.5" style={gridStyle}>
+            {visible.map((point, index) => (
+              <div key={point.time} className="flex min-w-0 flex-col items-center gap-0.5 text-center">
+                <span className="text-[10px] leading-none text-muted-foreground">
+                  {index === 0 ? 'Now' : formatHourLabel(point.time, settings)}
+                </span>
+                <div className="[&_svg]:h-3.5 [&_svg]:w-3.5">{weatherIcon(point.weatherCode, true)}</div>
+                <span className="text-[10px] font-semibold leading-none">{formatTemp(point.temperature, settings)}</span>
               </div>
+            ))}
+          </div>
 
-              {config.showPrecipitation && config.detailLevel !== 'summary' && (
-                <span className="text-[9px] leading-none text-sky-500">{rain}%</span>
+          {config.hourlyMetric === 'overview' ? (
+            <>
+              <TemperatureAreaChart points={visible} settings={settings} gradientId={gradientId} />
+              {config.showPrecipitation && (
+                <div className="mt-0.5 grid gap-0.5" style={gridStyle}>
+                  {visible.map((point) => {
+                    const rain = Math.max(0, Math.min(100, Math.round(point.precipitationProbability ?? 0)))
+                    return (
+                      <div
+                        key={`${point.time}:rain`}
+                        className="relative h-4 overflow-hidden rounded-full bg-muted/30"
+                        title={`${rain}% chance of precipitation`}
+                      >
+                        <div className="absolute inset-y-0 left-0 rounded-full bg-sky-500/40" style={{ width: `${rain}%` }} />
+                        <span className="absolute inset-0 flex items-center justify-center text-[8px] font-medium leading-none text-muted-foreground">
+                          {rain}%
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
               )}
-
-              <div className="[&_svg]:h-3.5 [&_svg]:w-3.5">{weatherIcon(point.weatherCode, true)}</div>
-
-              <span className="text-[9.5px] leading-none text-muted-foreground">
-                {formatHourLabel(point.time, settings)}
-              </span>
+            </>
+          ) : (
+            <div className="mt-2 grid gap-0.5" style={gridStyle}>
+              {visible.map((point) => (
+                <div key={`${point.time}:${config.hourlyMetric}`} className="rounded-md bg-muted/20 px-1.5 py-2 text-center">
+                  {config.hourlyMetric === 'precipitation' && (
+                    <>
+                      <p className="text-[11px] font-semibold">{formatNumber(point.precipitation, precipUnit(settings))}</p>
+                      <p className="text-[9px] text-sky-400">{formatCompactNumber(point.precipitationProbability, '%')}</p>
+                    </>
+                  )}
+                  {config.hourlyMetric === 'wind' && <p className="text-[11px] font-semibold">{formatNumber(point.windSpeed, windUnit(settings))}</p>}
+                  {config.hourlyMetric === 'humidity' && <p className="text-[11px] font-semibold">{formatCompactNumber(point.relativeHumidity, '%')}</p>}
+                </div>
+              ))}
             </div>
-          )
-        })}
+          )}
+        </div>
       </div>
-
-      {config.detailLevel === 'detailed' && config.showWind && (
-        <div className="weather-timeline-scroll mt-1 flex gap-1.5 overflow-x-auto">
-          {visible.map((point) => (
-            <div key={point.time} className="min-w-[40px] flex-1 text-center">
-              <span className="text-[9px] text-muted-foreground">
-                {formatNumber(point.windSpeed, windUnit(settings))}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {config.detailLevel === 'detailed' && config.showHumidity && (
-        <div className="weather-timeline-scroll mt-1 flex gap-1.5 overflow-x-auto">
-          {visible.map((point) => (
-            <div key={point.time} className="min-w-[40px] flex-1 text-center">
-              <span className="text-[9px] text-sky-400">
-                {point.relativeHumidity != null ? `${point.relativeHumidity}%` : '—'}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
-    </>
+    </div>
   )
 }
 
 function DailyForecast({
   points,
+  yesterday,
   config,
   settings
 }: {
   points: WeatherDailyPoint[]
+  yesterday: WeatherDailyPoint | null
   config: WeatherViewConfig
   settings: WeatherSettings
 }): React.ReactElement {
-  const visible = points.slice(0, dailyCount(config))
+  const visible = [
+    ...(config.showYesterday && yesterday ? [{ point: yesterday, label: 'Yesterday', muted: true, isToday: false }] : []),
+    ...points.slice(0, dailyCount(config)).map((point, index) => ({
+      point,
+      label: index === 0 ? 'Today' : new Date(`${point.date}T12:00:00`).toLocaleDateString([], { weekday: 'short' }),
+      muted: false,
+      isToday: index === 0
+    }))
+  ]
 
   if (visible.length === 0) {
     return <p className="text-xs text-muted-foreground">No daily forecast available.</p>
   }
 
-  const allLo = visible.map((point) => point.tempMin ?? 0)
-  const allHi = visible.map((point) => point.tempMax ?? 0)
-  const globalMin = Math.min(...allLo)
-  const globalMax = Math.max(...allHi)
-  const globalRange = globalMax - globalMin || 1
-
   return (
-    <div className="space-y-1.5">
-      {visible.map((point, index) => {
-        const lo = point.tempMin ?? globalMin
-        const hi = point.tempMax ?? globalMax
-        const rain = point.precipitationProbabilityMax ?? 0
-        const loPos = ((lo - globalMin) / globalRange) * 100
-        const hiPos = ((hi - globalMin) / globalRange) * 100
-        const isWarm = hi > 5
-
-        return (
-          <div key={point.date} className="flex items-center gap-2">
-            <span
-              className={cn(
-                'w-8 shrink-0 text-[10px]',
-                index === 0 ? 'font-bold text-sky-400' : 'text-muted-foreground'
-              )}
-            >
-              {index === 0
-                ? 'Today'
-                : new Date(`${point.date}T12:00:00`).toLocaleDateString([], { weekday: 'short' })}
-            </span>
-
-            <div className="shrink-0 [&_svg]:h-3.5 [&_svg]:w-3.5">{weatherIcon(point.weatherCode, true)}</div>
-
+    <div className="weather-timeline-scroll flex gap-2 overflow-x-auto pb-0.5">
+      {visible.map(({ point, label, muted, isToday }) => (
+        <div
+          key={`${point.date}:${label}`}
+          className={cn(
+            'flex min-w-[92px] flex-col gap-2 rounded-md px-3 py-2',
+            isToday ? 'border border-primary/40 bg-primary/10 ring-1 ring-primary/20' : 'bg-muted/20',
+            muted && 'opacity-70'
+          )}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <span className={cn('text-[10px] font-semibold', isToday ? 'text-primary' : muted ? 'text-muted-foreground' : 'text-foreground')}>{label}</span>
             {config.detailLevel !== 'summary' && config.showPrecipitation && (
-              <span className="w-7 shrink-0 text-right text-[9.5px] text-sky-500">{rain}%</span>
-            )}
-
-            <div className="relative h-[5px] flex-1 rounded-full bg-muted/20">
-              <div
-                className="absolute top-0 h-full rounded-full"
-                style={{
-                  left: `${loPos}%`,
-                  width: `${Math.max(hiPos - loPos, 2)}%`,
-                  background: isWarm
-                    ? 'linear-gradient(90deg, hsl(217 91% 70%), hsl(38 92% 60%))'
-                    : 'linear-gradient(90deg, hsl(217 91% 60%), hsl(199 89% 70%))'
-                }}
-              />
-            </div>
-
-            {config.detailLevel !== 'summary' && (
-              <span className="w-7 shrink-0 text-right text-[10px] text-muted-foreground">
-                {formatTemp(point.tempMin, settings)}
-              </span>
-            )}
-
-            <span className="w-7 shrink-0 text-right text-[11px] font-semibold">
-              {formatTemp(point.tempMax, settings)}
-            </span>
-
-            {config.detailLevel === 'detailed' && config.showWind && (
-              <span className="w-12 shrink-0 text-right text-[9px] text-muted-foreground">
-                {formatNumber(point.windSpeedMax, windUnit(settings))}
-              </span>
-            )}
-
-            {config.detailLevel !== 'summary' && config.showPrecipitation && (point.snowfallSum ?? 0) > 0 && (
-              <span className="shrink-0 text-[9px] text-sky-300" title={`Snowfall: ${formatNumber(point.snowfallSum, precipUnit(settings))}`}>
-                ❄️
-              </span>
+              <span className="text-[9px] text-sky-400">{formatCompactNumber(point.precipitationProbabilityMax, '%')}</span>
             )}
           </div>
-        )
-      })}
+          <div className="flex items-center justify-between gap-2">
+            <div className="[&_svg]:h-6 [&_svg]:w-6">{weatherIcon(point.weatherCode, true)}</div>
+            <div className="text-right leading-tight">
+              <p className="text-sm font-bold">{formatTemp(point.tempMax, settings)}</p>
+              <p className="text-xs text-muted-foreground">{formatTemp(point.tempMin, settings)}</p>
+            </div>
+          </div>
+        </div>
+      ))}
     </div>
   )
 }
@@ -411,26 +475,30 @@ function WeatherWidget(): React.ReactElement {
     setSnapshotConfig(DEFAULT_WEATHER_VIEW_CONFIG)
   }
 
+  const updateHourlyMetric = (hourlyMetric: WeatherViewConfig['hourlyMetric']): void => {
+    setConfig({ ...config, hourlyMetric })
+  }
+
   const preview = (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {!effectiveLocationId ? (
         <div className="rounded-md border border-dashed px-4 py-5 text-sm text-muted-foreground">
-          Choose a location in widget settings, or set a default location in Settings → Weather.
+          Choose a location in widget settings, or set a default location in Settings - Weather.
         </div>
       ) : loading ? (
         <p className="text-sm text-muted-foreground">Loading weather...</p>
       ) : !snapshot?.current ? (
         <div className="rounded-md border border-dashed px-4 py-5 text-sm text-muted-foreground">
-          No weather data cached yet. Use Settings → Weather to refresh now, or wait for the next scheduled update.
+          No weather data cached yet. Use Settings - Weather to refresh now, or wait for the next scheduled update.
         </div>
       ) : (
         <>
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5">
-              <div className="shrink-0 [&_svg]:h-7 [&_svg]:w-7">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-5">
+            <div className="flex items-start gap-2.5 sm:shrink-0">
+              <div className="shrink-0 [&_svg]:h-9 [&_svg]:w-9">
                 {weatherIcon(snapshot.current.weatherCode, snapshot.current.isDay)}
               </div>
-              <div>
+              <div className="min-w-0">
                 <div className="flex items-baseline gap-1.5 leading-none">
                   <span className="text-3xl font-light">{formatTemp(snapshot.current.temperature, settings)}</span>
                   {config.showFeelsLike && (
@@ -440,26 +508,13 @@ function WeatherWidget(): React.ReactElement {
                   )}
                 </div>
                 <p className="mt-0.5 text-xs text-muted-foreground">{formatLocationName(snapshot)}</p>
+                {snapshot.stale && <Badge variant="secondary" className="mt-1.5">Stale</Badge>}
               </div>
             </div>
-            <div className="shrink-0 text-right">
-              {snapshot.stale && <Badge variant="secondary">Stale</Badge>}
-            </div>
-          </div>
 
-          <div className="flex flex-wrap gap-1.5">
-            {config.showPrecipitation && (
-              <StatChip label={formatNumber(snapshot.current.precipitation, precipUnit(settings))} icon="💧" />
-            )}
-            {config.showWind && (
-              <StatChip label={formatNumber(snapshot.current.windSpeed, windUnit(settings))} icon="💨" />
-            )}
-            {config.showWind && config.detailLevel !== 'summary' && (
-              <StatChip label={`${formatNumber(snapshot.current.windGusts, windUnit(settings))} gusts`} icon="🌬️" />
-            )}
-            {config.showHumidity && (
-              <StatChip label={formatNumber(snapshot.current.relativeHumidity, '%')} icon="💦" />
-            )}
+            <div className="min-w-0 flex-1 sm:max-w-[42rem]">
+              <CurrentDetailGrid snapshot={snapshot} config={config} settings={settings} />
+            </div>
           </div>
 
           {visibleAlerts.length > 0 && !alertDismissed && (
@@ -501,10 +556,9 @@ function WeatherWidget(): React.ReactElement {
 
           {config.displayMode !== 'current' && (
             <>
-              <Separator />
               {config.displayMode === 'current_all' && (
                 <div className="flex items-center justify-between gap-2">
-                  <div className="flex rounded-md border overflow-hidden text-[11px]">
+                  <div className="flex overflow-hidden rounded-md border text-[11px]">
                     {(['all', 'hourly', 'daily'] as const).map((tab) => (
                       <button
                         key={tab}
@@ -525,25 +579,19 @@ function WeatherWidget(): React.ReactElement {
               )}
               {config.displayMode === 'current_all' ? (
                 config.forecastView === 'all' ? (
-                  <div className="space-y-4">
-                    <HourlyTimeline points={snapshot.hourly} config={config} settings={settings} />
-                    <Separator />
-                    <DailyForecast points={snapshot.daily} config={config} settings={settings} />
+                  <div className="space-y-3">
+                    <DailyForecast points={snapshot.daily} yesterday={snapshot.yesterday} config={config} settings={settings} />
+                    <HourlyTimeline points={snapshot.hourly} config={config} settings={settings} onMetricChange={updateHourlyMetric} />
                   </div>
+                ) : config.forecastView === 'hourly' ? (
+                  <HourlyTimeline points={snapshot.hourly} config={config} settings={settings} onMetricChange={updateHourlyMetric} />
                 ) : (
-                  <div className="grid">
-                    <div className={cn('col-start-1 row-start-1', config.forecastView !== 'hourly' && 'invisible pointer-events-none')}>
-                      <HourlyTimeline points={snapshot.hourly} config={config} settings={settings} />
-                    </div>
-                    <div className={cn('col-start-1 row-start-1', config.forecastView !== 'daily' && 'invisible pointer-events-none')}>
-                      <DailyForecast points={snapshot.daily} config={config} settings={settings} />
-                    </div>
-                  </div>
+                  <DailyForecast points={snapshot.daily} yesterday={snapshot.yesterday} config={config} settings={settings} />
                 )
               ) : config.displayMode === 'current_hourly' ? (
-                <HourlyTimeline points={snapshot.hourly} config={config} settings={settings} />
+                <HourlyTimeline points={snapshot.hourly} config={config} settings={settings} onMetricChange={updateHourlyMetric} />
               ) : (
-                <DailyForecast points={snapshot.daily} config={config} settings={settings} />
+                <DailyForecast points={snapshot.daily} yesterday={snapshot.yesterday} config={config} settings={settings} />
               )}
             </>
           )}

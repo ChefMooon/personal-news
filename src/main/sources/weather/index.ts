@@ -16,6 +16,7 @@ import type {
 import { getSetting, setSetting } from '../../settings/store'
 import { notifyWeatherAlerts } from '../../notifications/notification-service'
 import type { DataSourceModule } from '../registry'
+import { floorUnixSecondsToHour, splitYesterdayFromDaily, takeUpcomingHourly } from './forecast-utils'
 
 const WEATHER_SETTINGS_KEY = 'weather_settings_json'
 const WEATHER_ENABLED_KEY = 'weather_enabled'
@@ -92,6 +93,18 @@ function toUnixSeconds(value: string | null | undefined): number | null {
 
   const millis = Date.parse(value)
   return Number.isNaN(millis) ? null : Math.floor(millis / 1000)
+}
+
+function toNullableNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+function numberAt(source: unknown, index: number): number | null {
+  return Array.isArray(source) ? toNullableNumber(source[index]) : null
+}
+
+function unixSecondsAt(source: unknown, index: number): number | null {
+  return Array.isArray(source) ? toUnixSeconds(String(source[index] ?? '')) : null
 }
 
 function normalizeLocationId(result: WeatherSearchResult): string {
@@ -308,15 +321,39 @@ function getSnapshot(locationId: string): WeatherSnapshot | null {
     last_fetched_at: row.fetched_at
   })
 
+  const cachedCurrent = row.current_json
+    ? (JSON.parse(row.current_json) as WeatherCurrentConditions & { yesterday?: WeatherDailyPoint | null })
+    : null
+  const yesterday = cachedCurrent?.yesterday ?? null
+  const current = cachedCurrent
+    ? ({ ...cachedCurrent, yesterday: undefined } as WeatherCurrentConditions)
+    : null
   const now = Math.floor(Date.now() / 1000)
   return {
     location,
     fetchedAt: row.fetched_at,
     stale: row.fetched_at == null ? true : now - row.fetched_at > WEATHER_STALE_SECONDS,
-    current: row.current_json ? (JSON.parse(row.current_json) as WeatherCurrentConditions) : null,
+    current,
     hourly: row.hourly_json ? (JSON.parse(row.hourly_json) as WeatherHourlyPoint[]) : [],
     daily: row.daily_json ? (JSON.parse(row.daily_json) as WeatherDailyPoint[]) : [],
+    yesterday,
+    airQuality: current?.airQuality ?? null,
     alerts: row.alerts_json ? (JSON.parse(row.alerts_json) as WeatherAlert[]) : []
+  }
+}
+
+function mapDailyPoint(payload: Record<string, unknown>, date: unknown, index: number): WeatherDailyPoint {
+  return {
+    date: String(date),
+    weatherCode: numberAt(payload.weather_code, index),
+    tempMin: numberAt(payload.temperature_2m_min, index),
+    tempMax: numberAt(payload.temperature_2m_max, index),
+    precipitationSum: numberAt(payload.precipitation_sum, index),
+    snowfallSum: numberAt(payload.snowfall_sum, index),
+    precipitationProbabilityMax: numberAt(payload.precipitation_probability_max, index),
+    windSpeedMax: numberAt(payload.wind_speed_10m_max, index),
+    sunrise: unixSecondsAt(payload.sunrise, index),
+    sunset: unixSecondsAt(payload.sunset, index)
   }
 }
 
@@ -398,6 +435,7 @@ async function fetchForecast(location: WeatherLocation, settings: WeatherSetting
   current: WeatherCurrentConditions
   hourly: WeatherHourlyPoint[]
   daily: WeatherDailyPoint[]
+  yesterday: WeatherDailyPoint | null
   alerts: WeatherAlert[]
 }> {
   const params = new URLSearchParams({
@@ -405,9 +443,10 @@ async function fetchForecast(location: WeatherLocation, settings: WeatherSetting
     longitude: String(location.longitude),
     timezone: location.timezone,
     current: 'temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,weather_code,is_day,wind_speed_10m,wind_gusts_10m',
-    hourly: 'temperature_2m,precipitation_probability,weather_code,wind_speed_10m,relative_humidity_2m',
+    hourly: 'temperature_2m,precipitation,precipitation_probability,weather_code,wind_speed_10m,relative_humidity_2m,dew_point_2m,uv_index,visibility,surface_pressure',
     daily: 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,snowfall_sum,wind_speed_10m_max,sunrise,sunset',
     forecast_days: '7',
+    past_days: '1',
     temperature_unit: settings.temperatureUnit,
     wind_speed_unit: settings.windSpeedUnit,
     precipitation_unit: settings.precipitationUnit
@@ -424,85 +463,73 @@ async function fetchForecast(location: WeatherLocation, settings: WeatherSetting
     daily?: Record<string, unknown>
   }
 
+  const hourlyTimes = Array.isArray(payload.hourly?.time) ? payload.hourly.time : []
+  const currentTime = toUnixSeconds(String(payload.current?.time ?? '')) ?? Math.floor(Date.now() / 1000)
+  const currentHour = floorUnixSecondsToHour(currentTime)
+  const currentHourlyIndex = hourlyTimes.findIndex((time) => toUnixSeconds(String(time)) === currentHour)
+  const airQuality = await fetchAirQuality(location)
+
   const current: WeatherCurrentConditions = {
-    time: toUnixSeconds(String(payload.current?.time ?? '')) ?? Math.floor(Date.now() / 1000),
-    temperature: typeof payload.current?.temperature_2m === 'number' ? payload.current.temperature_2m : null,
-    apparentTemperature:
-      typeof payload.current?.apparent_temperature === 'number'
-        ? payload.current.apparent_temperature
-        : null,
-    relativeHumidity:
-      typeof payload.current?.relative_humidity_2m === 'number'
-        ? payload.current.relative_humidity_2m
-        : null,
-    precipitation:
-      typeof payload.current?.precipitation === 'number' ? payload.current.precipitation : null,
-    weatherCode: typeof payload.current?.weather_code === 'number' ? payload.current.weather_code : null,
+    time: currentTime,
+    temperature: toNullableNumber(payload.current?.temperature_2m),
+    apparentTemperature: toNullableNumber(payload.current?.apparent_temperature),
+    relativeHumidity: toNullableNumber(payload.current?.relative_humidity_2m),
+    precipitation: toNullableNumber(payload.current?.precipitation),
+    weatherCode: toNullableNumber(payload.current?.weather_code),
     isDay: payload.current?.is_day === 1,
-    windSpeed: typeof payload.current?.wind_speed_10m === 'number' ? payload.current.wind_speed_10m : null,
-    windGusts: typeof payload.current?.wind_gusts_10m === 'number' ? payload.current.wind_gusts_10m : null
+    windSpeed: toNullableNumber(payload.current?.wind_speed_10m),
+    windGusts: toNullableNumber(payload.current?.wind_gusts_10m),
+    surfacePressure: currentHourlyIndex >= 0 ? numberAt(payload.hourly?.surface_pressure, currentHourlyIndex) : null,
+    visibility: currentHourlyIndex >= 0 ? numberAt(payload.hourly?.visibility, currentHourlyIndex) : null,
+    uvIndex: currentHourlyIndex >= 0 ? numberAt(payload.hourly?.uv_index, currentHourlyIndex) : null,
+    dewPoint: currentHourlyIndex >= 0 ? numberAt(payload.hourly?.dew_point_2m, currentHourlyIndex) : null,
+    airQuality
   }
 
-  const hourlyTimes = Array.isArray(payload.hourly?.time) ? payload.hourly.time : []
   const mappedHourly = hourlyTimes.map((time, index) => ({
     time: toUnixSeconds(String(time)) ?? Math.floor(Date.now() / 1000),
-    temperature: Array.isArray(payload.hourly?.temperature_2m)
-      ? Number(payload.hourly.temperature_2m[index] ?? null)
-      : null,
-    precipitationProbability: Array.isArray(payload.hourly?.precipitation_probability)
-      ? Number(payload.hourly.precipitation_probability[index] ?? null)
-      : null,
-    weatherCode: Array.isArray(payload.hourly?.weather_code)
-      ? Number(payload.hourly.weather_code[index] ?? null)
-      : null,
-    windSpeed: Array.isArray(payload.hourly?.wind_speed_10m)
-      ? Number(payload.hourly.wind_speed_10m[index] ?? null)
-      : null,
-    relativeHumidity: Array.isArray(payload.hourly?.relative_humidity_2m)
-      ? Number(payload.hourly.relative_humidity_2m[index] ?? null)
-      : null
+    temperature: numberAt(payload.hourly?.temperature_2m, index),
+    precipitation: numberAt(payload.hourly?.precipitation, index),
+    precipitationProbability: numberAt(payload.hourly?.precipitation_probability, index),
+    weatherCode: numberAt(payload.hourly?.weather_code, index),
+    windSpeed: numberAt(payload.hourly?.wind_speed_10m, index),
+    relativeHumidity: numberAt(payload.hourly?.relative_humidity_2m, index)
   }))
-  const firstUpcomingHourlyIndex = mappedHourly.findIndex((point) => point.time >= current.time)
-  const hourlyStartIndex = firstUpcomingHourlyIndex >= 0 ? firstUpcomingHourlyIndex : 0
-  const hourly = mappedHourly.slice(hourlyStartIndex, hourlyStartIndex + 12)
+  const hourly = takeUpcomingHourly(mappedHourly, current.time, 24)
 
   const dailyTimes = Array.isArray(payload.daily?.time) ? payload.daily.time : []
-  const daily = dailyTimes.slice(0, 7).map((date, index) => ({
-    date: String(date),
-    weatherCode: Array.isArray(payload.daily?.weather_code)
-      ? Number(payload.daily.weather_code[index] ?? null)
-      : null,
-    tempMin: Array.isArray(payload.daily?.temperature_2m_min)
-      ? Number(payload.daily.temperature_2m_min[index] ?? null)
-      : null,
-    tempMax: Array.isArray(payload.daily?.temperature_2m_max)
-      ? Number(payload.daily.temperature_2m_max[index] ?? null)
-      : null,
-    precipitationSum: Array.isArray(payload.daily?.precipitation_sum)
-      ? Number(payload.daily.precipitation_sum[index] ?? null)
-      : null,
-    snowfallSum: Array.isArray(payload.daily?.snowfall_sum)
-      ? Number(payload.daily.snowfall_sum[index] ?? null)
-      : null,
-    precipitationProbabilityMax: Array.isArray(payload.daily?.precipitation_probability_max)
-      ? Number(payload.daily.precipitation_probability_max[index] ?? null)
-      : null,
-    windSpeedMax: Array.isArray(payload.daily?.wind_speed_10m_max)
-      ? Number(payload.daily.wind_speed_10m_max[index] ?? null)
-      : null,
-    sunrise: Array.isArray(payload.daily?.sunrise)
-      ? toUnixSeconds(String(payload.daily.sunrise[index] ?? ''))
-      : null,
-    sunset: Array.isArray(payload.daily?.sunset)
-      ? toUnixSeconds(String(payload.daily.sunset[index] ?? ''))
-      : null
-  }))
+  const mappedDaily = dailyTimes.map((date, index) => mapDailyPoint(payload.daily ?? {}, date, index))
+  const { yesterday, daily } = splitYesterdayFromDaily(mappedDaily, 7)
 
   return {
     current,
     hourly,
     daily,
+    yesterday,
     alerts: evaluateAlerts(location, current, daily, settings)
+  }
+}
+
+async function fetchAirQuality(location: WeatherLocation): Promise<number | null> {
+  const params = new URLSearchParams({
+    latitude: String(location.latitude),
+    longitude: String(location.longitude),
+    timezone: location.timezone,
+    current: 'us_aqi'
+  })
+
+  try {
+    const response = await fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?${params.toString()}`)
+    if (!response.ok) {
+      console.error(`[Weather] Air quality request failed with HTTP ${response.status}.`)
+      return null
+    }
+
+    const payload = (await response.json()) as { current?: Record<string, unknown> }
+    return toNullableNumber(payload.current?.us_aqi)
+  } catch (error) {
+    console.error('[Weather] Air quality request failed:', error)
+    return null
   }
 }
 
@@ -522,7 +549,7 @@ async function refreshLocation(location: WeatherLocation, settings: WeatherSetti
        fetched_at = excluded.fetched_at`
   ).run(
     location.id,
-    JSON.stringify(result.current),
+    JSON.stringify({ ...result.current, yesterday: result.yesterday }),
     JSON.stringify(result.hourly),
     JSON.stringify(result.daily),
     JSON.stringify(result.alerts),

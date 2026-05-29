@@ -49,6 +49,7 @@ export function WeatherSettingsPanel({
     const currentDefault = locations.find((location) => location.id === defaultLocationId)
     return currentDefault ? formatLocationLabel(currentDefault) : 'Use app default location'
   }, [defaultLocationId, locations])
+  const showsHourly = config.displayMode === 'current_all' || config.displayMode === 'current_hourly'
 
   const runSearch = async (): Promise<void> => {
     const trimmed = searchQuery.trim()
@@ -181,6 +182,27 @@ export function WeatherSettingsPanel({
                   </SelectContent>
                 </Select>
               </div>
+
+              {showsHourly && (
+                <div>
+                  <label className="text-sm block mb-2">Hourly metric</label>
+                  <Select
+                    value={config.hourlyMetric}
+                    onValueChange={(value) => onChange({
+                      ...config,
+                      hourlyMetric: value as WeatherViewConfig['hourlyMetric']
+                    })}
+                  >
+                    <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="overview">Overview</SelectItem>
+                      <SelectItem value="precipitation">Precipitation</SelectItem>
+                      <SelectItem value="wind">Wind</SelectItem>
+                      <SelectItem value="humidity">Humidity</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
           </div>
 
@@ -229,6 +251,48 @@ export function WeatherSettingsPanel({
                 <Switch
                   checked={config.showSunTimes}
                   onCheckedChange={(checked) => onChange({ ...config, showSunTimes: checked })}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <label className="text-sm">Show yesterday</label>
+                <Switch
+                  checked={config.showYesterday}
+                  onCheckedChange={(checked) => onChange({ ...config, showYesterday: checked })}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <label className="text-sm">Show air quality</label>
+                <Switch
+                  checked={config.showAirQuality}
+                  onCheckedChange={(checked) => onChange({ ...config, showAirQuality: checked })}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <label className="text-sm">Show visibility</label>
+                <Switch
+                  checked={config.showVisibility}
+                  onCheckedChange={(checked) => onChange({ ...config, showVisibility: checked })}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <label className="text-sm">Show UV index</label>
+                <Switch
+                  checked={config.showUvIndex}
+                  onCheckedChange={(checked) => onChange({ ...config, showUvIndex: checked })}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <label className="text-sm">Show pressure</label>
+                <Switch
+                  checked={config.showPressure}
+                  onCheckedChange={(checked) => onChange({ ...config, showPressure: checked })}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <label className="text-sm">Show dew point</label>
+                <Switch
+                  checked={config.showDewPoint}
+                  onCheckedChange={(checked) => onChange({ ...config, showDewPoint: checked })}
                 />
               </div>
             </div>
