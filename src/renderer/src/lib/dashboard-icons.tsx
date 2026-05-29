@@ -1,4 +1,4 @@
-import type { LucideIcon } from 'lucide-react'
+import type { LucideIcon } from "lucide-react";
 import {
   Bell,
   Bookmark,
@@ -9,9 +9,9 @@ import {
   Star,
   Terminal,
   Trophy,
-  Youtube
-} from 'lucide-react'
-import type { DashboardIcon } from '../../../shared/ipc-types'
+  Youtube,
+} from "lucide-react";
+import type { DashboardIcon } from "../../../shared/ipc-types";
 
 const DASHBOARD_ICON_COMPONENTS: Record<DashboardIcon, LucideIcon> = {
   layout: LayoutDashboard,
@@ -23,28 +23,34 @@ const DASHBOARD_ICON_COMPONENTS: Record<DashboardIcon, LucideIcon> = {
   terminal: Terminal,
   bell: Bell,
   star: Star,
-  flame: Flame
-}
+  flame: Flame,
+};
 
-export const DASHBOARD_ICON_OPTIONS: Array<{ value: DashboardIcon; label: string }> = [
-  { value: 'layout', label: 'Layout' },
-  { value: 'youtube', label: 'YouTube' },
-  { value: 'newspaper', label: 'News' },
-  { value: 'bookmark', label: 'Bookmarks' },
-  { value: 'trophy', label: 'Sports' },
-  { value: 'cloud', label: 'Weather' },
-  { value: 'terminal', label: 'Scripts' },
-  { value: 'bell', label: 'Alerts' },
-  { value: 'star', label: 'Highlights' },
-  { value: 'flame', label: 'Trending' }
-]
+export const DASHBOARD_ICON_OPTIONS: Array<{
+  value: DashboardIcon;
+  label: string;
+}> = [
+  { value: "layout", label: "Layout" },
+  { value: "youtube", label: "YouTube" },
+  { value: "newspaper", label: "News" },
+  { value: "bookmark", label: "Bookmarks" },
+  { value: "trophy", label: "Sports" },
+  { value: "cloud", label: "Weather" },
+  { value: "terminal", label: "Scripts" },
+  { value: "bell", label: "Alerts" },
+  { value: "star", label: "Highlights" },
+  { value: "flame", label: "Trending" },
+];
 
 interface DashboardGlyphProps {
-  icon: DashboardIcon
-  className?: string
+  icon: DashboardIcon;
+  className?: string;
 }
 
-export function DashboardGlyph({ icon, className }: DashboardGlyphProps): React.ReactElement {
-  const Icon = DASHBOARD_ICON_COMPONENTS[icon]
-  return <Icon className={className} />
+export function DashboardGlyph({
+  icon,
+  className,
+}: DashboardGlyphProps): React.ReactElement {
+  const Icon = DASHBOARD_ICON_COMPONENTS[icon];
+  return <Icon className={className} />;
 }

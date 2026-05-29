@@ -1,42 +1,51 @@
-import type { SportEvent, SportTeamEvents } from '../../../../shared/ipc-types'
-import { isSportEventOnLocalDate } from '../../../../shared/sports-event-utils'
+import type { SportEvent, SportTeamEvents } from "../../../../shared/ipc-types";
+import { isSportEventOnLocalDate } from "../../../../shared/sports-event-utils";
 
 export function normalizeTeamKey(value: string | null | undefined): string {
-  return (value ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '')
+  return (value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "");
 }
 
 export function resolveTrackedTeamSide(
   game: SportEvent,
   teamId: string,
-  teamName?: string | null
-): 'home' | 'away' | null {
+  teamName?: string | null,
+): "home" | "away" | null {
   if (game.homeTeamId === teamId) {
-    return 'home'
+    return "home";
   }
 
   if (game.awayTeamId === teamId) {
-    return 'away'
+    return "away";
   }
 
-  const normalizedTeamName = normalizeTeamKey(teamName)
+  const normalizedTeamName = normalizeTeamKey(teamName);
   if (!normalizedTeamName) {
-    return null
+    return null;
   }
 
-  const homeMatches = normalizeTeamKey(game.homeTeam) === normalizedTeamName
-  const awayMatches = normalizeTeamKey(game.awayTeam) === normalizedTeamName
+  const homeMatches = normalizeTeamKey(game.homeTeam) === normalizedTeamName;
+  const awayMatches = normalizeTeamKey(game.awayTeam) === normalizedTeamName;
   if (homeMatches === awayMatches) {
-    return null
+    return null;
   }
 
-  return homeMatches ? 'home' : 'away'
+  return homeMatches ? "home" : "away";
 }
 
-export function getTodayGame(events: SportTeamEvents | undefined, today: string): SportEvent | null {
-  const nextToday = events?.next.find((event) => isSportEventOnLocalDate(event.eventDate, event.eventTime, today))
+export function getTodayGame(
+  events: SportTeamEvents | undefined,
+  today: string,
+): SportEvent | null {
+  const nextToday = events?.next.find((event) =>
+    isSportEventOnLocalDate(event.eventDate, event.eventTime, today),
+  );
   if (nextToday) {
-    return nextToday
+    return nextToday;
   }
 
-  return events?.last.find((event) => isSportEventOnLocalDate(event.eventDate, event.eventTime, today)) ?? null
+  return (
+    events?.last.find((event) =>
+      isSportEventOnLocalDate(event.eventDate, event.eventTime, today),
+    ) ?? null
+  );
 }

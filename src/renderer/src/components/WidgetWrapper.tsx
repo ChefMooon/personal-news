@@ -1,24 +1,32 @@
-import React, { useState, useRef, useEffect } from 'react'
-import { useSortable } from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
-import { GripVertical, Eye, EyeOff, Trash2, Pencil, ChevronUp, ChevronDown } from 'lucide-react'
-import { WidgetTransferButton } from './WidgetTransferButton'
-import { WidgetErrorBoundary } from './WidgetErrorBoundary'
+import React, { useState, useRef, useEffect } from "react";
+import { useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import {
+  GripVertical,
+  Eye,
+  EyeOff,
+  Trash2,
+  Pencil,
+  ChevronUp,
+  ChevronDown,
+} from "lucide-react";
+import { WidgetTransferButton } from "./WidgetTransferButton";
+import { WidgetErrorBoundary } from "./WidgetErrorBoundary";
 
 interface WidgetWrapperProps {
-  id: string
-  label: string | null
-  defaultLabel: string
-  editMode: boolean
-  visible: boolean
-  isFirst: boolean
-  isLast: boolean
-  onToggleVisibility: (id: string) => void
-  onRename: (id: string, newLabel: string | null) => void
-  onRemove: (id: string) => void
-  onMoveUp: (id: string) => void
-  onMoveDown: (id: string) => void
-  children: React.ReactNode
+  id: string;
+  label: string | null;
+  defaultLabel: string;
+  editMode: boolean;
+  visible: boolean;
+  isFirst: boolean;
+  isLast: boolean;
+  onToggleVisibility: (id: string) => void;
+  onRename: (id: string, newLabel: string | null) => void;
+  onRemove: (id: string) => void;
+  onMoveUp: (id: string) => void;
+  onMoveDown: (id: string) => void;
+  children: React.ReactNode;
 }
 
 export function WidgetWrapper({
@@ -34,44 +42,47 @@ export function WidgetWrapper({
   onRemove,
   onMoveUp,
   onMoveDown,
-  children
+  children,
 }: WidgetWrapperProps): React.ReactElement {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
-  const [renaming, setRenaming] = useState(false)
-  const [draftLabel, setDraftLabel] = useState('')
-  const inputRef = useRef<HTMLInputElement>(null)
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id });
+  const [renaming, setRenaming] = useState(false);
+  const [draftLabel, setDraftLabel] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (renaming && inputRef.current) {
-      inputRef.current.focus()
-      inputRef.current.select()
+      inputRef.current.focus();
+      inputRef.current.select();
     }
-  }, [renaming])
+  }, [renaming]);
 
   function startRename(): void {
-    setDraftLabel(label ?? defaultLabel)
-    setRenaming(true)
+    setDraftLabel(label ?? defaultLabel);
+    setRenaming(true);
   }
 
   function commitRename(): void {
-    const trimmed = draftLabel.trim()
+    const trimmed = draftLabel.trim();
     // Treat empty or unchanged-from-default as "no custom label"
-    onRename(id, trimmed === '' || trimmed === defaultLabel ? null : trimmed)
-    setRenaming(false)
+    onRename(id, trimmed === "" || trimmed === defaultLabel ? null : trimmed);
+    setRenaming(false);
   }
 
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.5 : 1
-  }
+    opacity: isDragging ? 0.5 : 1,
+  };
 
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className="relative"
-    >
+    <div ref={setNodeRef} style={style} className="relative">
       {editMode && (
         <div className="flex items-center gap-1 mb-1 px-1">
           {/* Drag handle */}
@@ -114,10 +125,14 @@ export function WidgetWrapper({
             type="button"
             onClick={() => onToggleVisibility(id)}
             className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-accent"
-            aria-label={visible ? 'Hide widget' : 'Show widget'}
+            aria-label={visible ? "Hide widget" : "Show widget"}
             aria-pressed={!visible}
           >
-            {visible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+            {visible ? (
+              <Eye className="h-4 w-4" />
+            ) : (
+              <EyeOff className="h-4 w-4" />
+            )}
           </button>
 
           {/* Inline rename */}
@@ -128,8 +143,8 @@ export function WidgetWrapper({
               onChange={(e) => setDraftLabel(e.target.value)}
               onBlur={commitRename}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') commitRename()
-                if (e.key === 'Escape') setRenaming(false)
+                if (e.key === "Enter") commitRename();
+                if (e.key === "Escape") setRenaming(false);
               }}
               className="flex-1 text-xs bg-background border border-border rounded px-2 py-0.5 text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
             />
@@ -160,7 +175,9 @@ export function WidgetWrapper({
       {editMode && !visible ? (
         <div className="rounded-lg border border-dashed border-border bg-muted/30 px-4 py-3 flex items-center gap-3 text-muted-foreground select-none">
           <EyeOff className="h-4 w-4 shrink-0" />
-          <span className="text-sm">Widget hidden — click the eye icon above to show it again.</span>
+          <span className="text-sm">
+            Widget hidden — click the eye icon above to show it again.
+          </span>
         </div>
       ) : (
         visible && (
@@ -173,5 +190,5 @@ export function WidgetWrapper({
         )
       )}
     </div>
-  )
+  );
 }

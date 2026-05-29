@@ -1,32 +1,38 @@
-import React, { useEffect, useMemo, useState } from 'react'
-import type { DashboardView } from '../../../shared/ipc-types'
-import { Button } from './ui/button'
+import React, { useEffect, useMemo, useState } from "react";
+import type { DashboardView } from "../../../shared/ipc-types";
+import { Button } from "./ui/button";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogTitle
-} from './ui/dialog'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select'
-import { Switch } from './ui/switch'
-import { getModule } from '../modules/registry'
+  DialogTitle,
+} from "./ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./ui/select";
+import { Switch } from "./ui/switch";
+import { getModule } from "../modules/registry";
 
-type WidgetTransferMode = 'move' | 'copy'
-type WidgetTransferPosition = 'top' | 'bottom' | { afterId: string }
+type WidgetTransferMode = "move" | "copy";
+type WidgetTransferPosition = "top" | "bottom" | { afterId: string };
 
 interface WidgetTransferDialogProps {
-  open: boolean
-  currentViewId: string
-  dashboardViews: DashboardView[]
-  onOpenChange: (open: boolean) => void
+  open: boolean;
+  currentViewId: string;
+  dashboardViews: DashboardView[];
+  onOpenChange: (open: boolean) => void;
   onSubmit: (input: {
-    mode: WidgetTransferMode
-    targetViewId: string
-    position: WidgetTransferPosition
-    switchToTarget: boolean
-  }) => boolean
+    mode: WidgetTransferMode;
+    targetViewId: string;
+    position: WidgetTransferPosition;
+    switchToTarget: boolean;
+  }) => boolean;
 }
 
 export function WidgetTransferDialog({
@@ -34,94 +40,99 @@ export function WidgetTransferDialog({
   currentViewId,
   dashboardViews,
   onOpenChange,
-  onSubmit
+  onSubmit,
 }: WidgetTransferDialogProps): React.ReactElement {
   const availableViews = useMemo(
     () => dashboardViews.filter((view) => view.id !== currentViewId),
-    [currentViewId, dashboardViews]
-  )
-  const [mode, setMode] = useState<WidgetTransferMode>('move')
-  const [targetViewId, setTargetViewId] = useState('')
-  const [positionValue, setPositionValue] = useState('bottom')
-  const [switchToTarget, setSwitchToTarget] = useState(false)
+    [currentViewId, dashboardViews],
+  );
+  const [mode, setMode] = useState<WidgetTransferMode>("move");
+  const [targetViewId, setTargetViewId] = useState("");
+  const [positionValue, setPositionValue] = useState("bottom");
+  const [switchToTarget, setSwitchToTarget] = useState(false);
 
   const selectedTargetView = useMemo(
     () => availableViews.find((view) => view.id === targetViewId) ?? null,
-    [availableViews, targetViewId]
-  )
+    [availableViews, targetViewId],
+  );
 
   const positionOptions = useMemo(() => {
-    const targetLayout = selectedTargetView?.layout
+    const targetLayout = selectedTargetView?.layout;
     if (!targetLayout) {
-      return [{ value: 'bottom', label: 'Bottom of dashboard' }]
+      return [{ value: "bottom", label: "Bottom of dashboard" }];
     }
 
     const options: Array<{ value: string; label: string }> = [
-      { value: 'top', label: 'Top of dashboard' }
-    ]
+      { value: "top", label: "Top of dashboard" },
+    ];
 
     for (const instanceId of targetLayout.widget_order) {
       if (targetLayout.widget_visibility[instanceId] === false) {
-        continue
+        continue;
       }
 
-      const instance = targetLayout.widget_instances[instanceId]
+      const instance = targetLayout.widget_instances[instanceId];
       if (!instance) {
-        continue
+        continue;
       }
 
-      const mod = getModule(instance.moduleId)
-      const widgetLabel = instance.label ?? mod?.displayName ?? instanceId
-      options.push({ value: `after:${instanceId}`, label: `After "${widgetLabel}"` })
+      const mod = getModule(instance.moduleId);
+      const widgetLabel = instance.label ?? mod?.displayName ?? instanceId;
+      options.push({
+        value: `after:${instanceId}`,
+        label: `After "${widgetLabel}"`,
+      });
     }
 
-    options.push({ value: 'bottom', label: 'Bottom of dashboard' })
-    return options
-  }, [selectedTargetView])
+    options.push({ value: "bottom", label: "Bottom of dashboard" });
+    return options;
+  }, [selectedTargetView]);
 
   useEffect(() => {
     if (!open) {
-      return
+      return;
     }
 
-    setMode('move')
-    setTargetViewId(availableViews[0]?.id ?? '')
-    setPositionValue('bottom')
-    setSwitchToTarget(false)
-  }, [availableViews, open])
+    setMode("move");
+    setTargetViewId(availableViews[0]?.id ?? "");
+    setPositionValue("bottom");
+    setSwitchToTarget(false);
+  }, [availableViews, open]);
 
   useEffect(() => {
     if (!selectedTargetView) {
-      return
+      return;
     }
 
-    const optionValues = new Set(positionOptions.map((option) => option.value))
+    const optionValues = new Set(positionOptions.map((option) => option.value));
     if (!optionValues.has(positionValue)) {
-      setPositionValue(positionOptions[positionOptions.length - 1]?.value ?? 'bottom')
+      setPositionValue(
+        positionOptions[positionOptions.length - 1]?.value ?? "bottom",
+      );
     }
-  }, [positionOptions, positionValue, selectedTargetView])
+  }, [positionOptions, positionValue, selectedTargetView]);
 
-  const hasTargets = availableViews.length > 0
+  const hasTargets = availableViews.length > 0;
   const description =
-    mode === 'move'
-      ? 'Move this widget to another dashboard and optionally switch there right away.'
-      : 'Copy this widget to another dashboard with its current settings, then optionally switch there.'
+    mode === "move"
+      ? "Move this widget to another dashboard and optionally switch there right away."
+      : "Copy this widget to another dashboard with its current settings, then optionally switch there.";
 
   const handleSubmit = (): void => {
     if (!targetViewId) {
-      return
+      return;
     }
 
-    const position: WidgetTransferPosition = positionValue.startsWith('after:')
-      ? { afterId: positionValue.slice('after:'.length) }
-      : positionValue === 'top'
-        ? 'top'
-        : 'bottom'
+    const position: WidgetTransferPosition = positionValue.startsWith("after:")
+      ? { afterId: positionValue.slice("after:".length) }
+      : positionValue === "top"
+        ? "top"
+        : "bottom";
 
     if (onSubmit({ mode, targetViewId, position, switchToTarget })) {
-      onOpenChange(false)
+      onOpenChange(false);
     }
-  }
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -134,11 +145,20 @@ export function WidgetTransferDialog({
         {hasTargets ? (
           <div className="space-y-4">
             <div className="space-y-2">
-              <label htmlFor="widget-transfer-mode" className="text-sm font-medium text-foreground">
+              <label
+                htmlFor="widget-transfer-mode"
+                className="text-sm font-medium text-foreground"
+              >
                 Action
               </label>
-              <Select value={mode} onValueChange={(value) => setMode(value as WidgetTransferMode)}>
-                <SelectTrigger id="widget-transfer-mode" aria-label="Transfer action">
+              <Select
+                value={mode}
+                onValueChange={(value) => setMode(value as WidgetTransferMode)}
+              >
+                <SelectTrigger
+                  id="widget-transfer-mode"
+                  aria-label="Transfer action"
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -149,11 +169,17 @@ export function WidgetTransferDialog({
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="widget-transfer-destination" className="text-sm font-medium text-foreground">
+              <label
+                htmlFor="widget-transfer-destination"
+                className="text-sm font-medium text-foreground"
+              >
                 Destination
               </label>
               <Select value={targetViewId} onValueChange={setTargetViewId}>
-                <SelectTrigger id="widget-transfer-destination" aria-label="Destination dashboard">
+                <SelectTrigger
+                  id="widget-transfer-destination"
+                  aria-label="Destination dashboard"
+                >
                   <SelectValue placeholder="Choose a dashboard" />
                 </SelectTrigger>
                 <SelectContent>
@@ -167,11 +193,17 @@ export function WidgetTransferDialog({
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="widget-transfer-position" className="text-sm font-medium text-foreground">
+              <label
+                htmlFor="widget-transfer-position"
+                className="text-sm font-medium text-foreground"
+              >
                 Insert at
               </label>
               <Select value={positionValue} onValueChange={setPositionValue}>
-                <SelectTrigger id="widget-transfer-position" aria-label="Insertion position">
+                <SelectTrigger
+                  id="widget-transfer-position"
+                  aria-label="Insertion position"
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -186,7 +218,9 @@ export function WidgetTransferDialog({
 
             <div className="flex items-center justify-between gap-4 rounded-lg border border-border px-3 py-2">
               <div className="space-y-1">
-                <p className="text-sm font-medium text-foreground">Switch after transfer</p>
+                <p className="text-sm font-medium text-foreground">
+                  Switch after transfer
+                </p>
                 <p className="text-xs text-muted-foreground">
                   Open the destination dashboard after the action completes.
                 </p>
@@ -200,19 +234,28 @@ export function WidgetTransferDialog({
           </div>
         ) : (
           <div className="rounded-lg border border-dashed border-border bg-muted/40 px-4 py-4 text-sm text-muted-foreground">
-            Create another dashboard first. There is nowhere to move or copy this widget yet.
+            Create another dashboard first. There is nowhere to move or copy
+            this widget yet.
           </div>
         )}
 
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+          >
             Cancel
           </Button>
-          <Button type="button" onClick={handleSubmit} disabled={!hasTargets || !targetViewId}>
-            {mode === 'move' ? 'Move widget' : 'Copy widget'}
+          <Button
+            type="button"
+            onClick={handleSubmit}
+            disabled={!hasTargets || !targetViewId}
+          >
+            {mode === "move" ? "Move widget" : "Copy widget"}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  )
+  );
 }

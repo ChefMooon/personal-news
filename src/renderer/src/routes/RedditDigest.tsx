@@ -1,208 +1,264 @@
-import React, { useMemo, useState, useEffect, useCallback } from 'react'
-import { Link } from 'react-router-dom'
-import { toast } from 'sonner'
-import { useRedditDigestEnabled } from '../contexts/RedditDigestEnabledContext'
-import { useRedditDigest } from '../hooks/useRedditDigest'
-import { useRedditDigestConfig } from '../hooks/useRedditDigestConfig'
-import { useRedditDigestWeeks } from '../hooks/useRedditDigestWeeks'
-import { SubredditColumn } from '../modules/reddit/SubredditColumn'
-import { DigestPostRow } from '../modules/reddit/DigestPostRow'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs'
-import { Button } from '../components/ui/button'
-import { Input } from '../components/ui/input'
+import React, { useMemo, useState, useEffect, useCallback } from "react";
+import { Link } from "react-router-dom";
+import { toast } from "sonner";
+import { useRedditDigestEnabled } from "../contexts/RedditDigestEnabledContext";
+import { useRedditDigest } from "../hooks/useRedditDigest";
+import { useRedditDigestConfig } from "../hooks/useRedditDigestConfig";
+import { useRedditDigestWeeks } from "../hooks/useRedditDigestWeeks";
+import { SubredditColumn } from "../modules/reddit/SubredditColumn";
+import { DigestPostRow } from "../modules/reddit/DigestPostRow";
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+} from "../components/ui/tabs";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue
-} from '../components/ui/select'
-import { IPC } from '../../../shared/ipc-types'
-import type { DigestPost, DigestViewConfig, ViewedAnalytics } from '../../../shared/ipc-types'
+  SelectValue,
+} from "../components/ui/select";
+import { IPC } from "../../../shared/ipc-types";
+import type {
+  DigestPost,
+  DigestViewConfig,
+  ViewedAnalytics,
+} from "../../../shared/ipc-types";
 
-type PageViewMode = 'columns' | 'tabs' | 'flat'
+type PageViewMode = "columns" | "tabs" | "flat";
 
 export default function RedditDigest(): React.ReactElement {
-  const { enabled } = useRedditDigestEnabled()
-  const [pageViewMode, setPageViewMode] = useState<PageViewMode>('columns')
-  const [viewModeLoaded, setViewModeLoaded] = useState(false)
-  const [search, setSearch] = useState('')
-  const [flatSubreddits, setFlatSubreddits] = useState<string[]>([])
-  const [analytics, setAnalytics] = useState<ViewedAnalytics | null>(null)
-  const [analyticsLoading, setAnalyticsLoading] = useState(false)
-  const [bulkLoading, setBulkLoading] = useState(false)
+  const { enabled } = useRedditDigestEnabled();
+  const [pageViewMode, setPageViewMode] = useState<PageViewMode>("columns");
+  const [viewModeLoaded, setViewModeLoaded] = useState(false);
+  const [search, setSearch] = useState("");
+  const [flatSubreddits, setFlatSubreddits] = useState<string[]>([]);
+  const [analytics, setAnalytics] = useState<ViewedAnalytics | null>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [bulkLoading, setBulkLoading] = useState(false);
 
-  const { config, setConfig } = useRedditDigestConfig('reddit_digest_page')
-  const { weeks, loading: weeksLoading } = useRedditDigestWeeks()
-  const latestWeek = weeks[0]?.week_start_date ?? null
+  const { config, setConfig } = useRedditDigestConfig("reddit_digest_page");
+  const { weeks, loading: weeksLoading } = useRedditDigestWeeks();
+  const latestWeek = weeks[0]?.week_start_date ?? null;
 
   const requestWeek = useMemo(() => {
-    if (config.week_mode === 'latest') return latestWeek
-    if (config.week_mode === 'specific') return config.selected_week ?? latestWeek
-    return null // range mode: fetch all, then filter by rangeWeekSet
-  }, [config.week_mode, config.selected_week, latestWeek])
+    if (config.week_mode === "latest") return latestWeek;
+    if (config.week_mode === "specific")
+      return config.selected_week ?? latestWeek;
+    return null; // range mode: fetch all, then filter by rangeWeekSet
+  }, [config.week_mode, config.selected_week, latestWeek]);
 
-  const { posts, loading: postsLoading } = useRedditDigest(requestWeek, config.hide_viewed)
+  const { posts, loading: postsLoading } = useRedditDigest(
+    requestWeek,
+    config.hide_viewed,
+  );
 
   useEffect(() => {
     window.api
-      .invoke(IPC.SETTINGS_GET, 'reddit_digest_page_view_mode')
+      .invoke(IPC.SETTINGS_GET, "reddit_digest_page_view_mode")
       .then((raw) => {
-        if (raw === 'tabs' || raw === 'flat' || raw === 'columns') {
-          setPageViewMode(raw as PageViewMode)
+        if (raw === "tabs" || raw === "flat" || raw === "columns") {
+          setPageViewMode(raw as PageViewMode);
         }
       })
       .catch((err) => {
-        toast.error(err instanceof Error ? err.message : 'Failed to load Reddit Digest page view mode.')
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : "Failed to load Reddit Digest page view mode.",
+        );
       })
-      .finally(() => setViewModeLoaded(true))
-  }, [])
+      .finally(() => setViewModeLoaded(true));
+  }, []);
 
   const saveViewMode = (mode: PageViewMode): void => {
-    setPageViewMode(mode)
-    window.api.invoke(IPC.SETTINGS_SET, 'reddit_digest_page_view_mode', mode).catch((err) => {
-      toast.error(err instanceof Error ? err.message : 'Failed to save Reddit Digest page view mode.')
-    })
-  }
+    setPageViewMode(mode);
+    window.api
+      .invoke(IPC.SETTINGS_SET, "reddit_digest_page_view_mode", mode)
+      .catch((err) => {
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : "Failed to save Reddit Digest page view mode.",
+        );
+      });
+  };
 
   const rangeWeekSet = useMemo(() => {
-    if (config.week_mode !== 'range') return null
-    return new Set(weeks.slice(0, config.week_range_count).map((w) => w.week_start_date))
-  }, [config.week_mode, config.week_range_count, weeks])
+    if (config.week_mode !== "range") return null;
+    return new Set(
+      weeks.slice(0, config.week_range_count).map((w) => w.week_start_date),
+    );
+  }, [config.week_mode, config.week_range_count, weeks]);
 
   const visiblePosts = useMemo(() => {
-    if (config.week_mode !== 'range' || !rangeWeekSet) return posts
-    return posts.filter((p) => rangeWeekSet.has(p.week_start_date))
-  }, [config.week_mode, posts, rangeWeekSet])
+    if (config.week_mode !== "range" || !rangeWeekSet) return posts;
+    return posts.filter((p) => rangeWeekSet.has(p.week_start_date));
+  }, [config.week_mode, posts, rangeWeekSet]);
 
   const sortedPosts = useMemo(() => {
     return [...visiblePosts].sort((a, b) => {
-      const aVal = a[config.sort_by] ?? 0
-      const bVal = b[config.sort_by] ?? 0
-      return config.sort_dir === 'desc'
+      const aVal = a[config.sort_by] ?? 0;
+      const bVal = b[config.sort_by] ?? 0;
+      return config.sort_dir === "desc"
         ? (bVal as number) - (aVal as number)
-        : (aVal as number) - (bVal as number)
-    })
-  }, [visiblePosts, config.sort_by, config.sort_dir])
+        : (aVal as number) - (bVal as number);
+    });
+  }, [visiblePosts, config.sort_by, config.sort_dir]);
 
   const availableSubreddits = useMemo(
     () => [...new Set(sortedPosts.map((p) => p.subreddit))].sort(),
-    [sortedPosts]
-  )
+    [sortedPosts],
+  );
 
   const groups = useMemo((): Map<string, DigestPost[]> => {
-    const map = new Map<string, DigestPost[]>()
+    const map = new Map<string, DigestPost[]>();
     for (const post of sortedPosts) {
-      const existing = map.get(post.subreddit) ?? []
-      existing.push(post)
-      map.set(post.subreddit, existing)
+      const existing = map.get(post.subreddit) ?? [];
+      existing.push(post);
+      map.set(post.subreddit, existing);
     }
-    return map
-  }, [sortedPosts])
+    return map;
+  }, [sortedPosts]);
 
   const scopedSubreddits = useMemo(() => {
-    if (pageViewMode === 'flat' && flatSubreddits.length > 0) {
-      return flatSubreddits
+    if (pageViewMode === "flat" && flatSubreddits.length > 0) {
+      return flatSubreddits;
     }
-    if (config.subreddit_mode === 'selected' && config.selected_subreddits.length > 0) {
-      return config.selected_subreddits
+    if (
+      config.subreddit_mode === "selected" &&
+      config.selected_subreddits.length > 0
+    ) {
+      return config.selected_subreddits;
     }
-    return [] as string[]
-  }, [config.selected_subreddits, config.subreddit_mode, flatSubreddits, pageViewMode])
+    return [] as string[];
+  }, [
+    config.selected_subreddits,
+    config.subreddit_mode,
+    flatSubreddits,
+    pageViewMode,
+  ]);
 
   const analyticsScope = useMemo(() => {
     const base: {
-      week_start_date?: string | null
-      week_start_dates?: string[]
-      subreddit_filter?: string[]
-      search?: string
-    } = {}
+      week_start_date?: string | null;
+      week_start_dates?: string[];
+      subreddit_filter?: string[];
+      search?: string;
+    } = {};
 
-    if (config.week_mode === 'latest' || config.week_mode === 'specific') {
-      base.week_start_date = requestWeek
+    if (config.week_mode === "latest" || config.week_mode === "specific") {
+      base.week_start_date = requestWeek;
     }
-    if (config.week_mode === 'range' && rangeWeekSet) {
-      base.week_start_dates = Array.from(rangeWeekSet)
+    if (config.week_mode === "range" && rangeWeekSet) {
+      base.week_start_dates = Array.from(rangeWeekSet);
     }
     if (scopedSubreddits.length > 0) {
-      base.subreddit_filter = scopedSubreddits
+      base.subreddit_filter = scopedSubreddits;
     }
-    if (pageViewMode === 'flat' && search.trim()) {
-      base.search = search.trim()
+    if (pageViewMode === "flat" && search.trim()) {
+      base.search = search.trim();
     }
 
-    return base
-  }, [config.week_mode, pageViewMode, rangeWeekSet, requestWeek, scopedSubreddits, search])
+    return base;
+  }, [
+    config.week_mode,
+    pageViewMode,
+    rangeWeekSet,
+    requestWeek,
+    scopedSubreddits,
+    search,
+  ]);
 
   const refreshAnalytics = useCallback(() => {
-    setAnalyticsLoading(true)
+    setAnalyticsLoading(true);
     window.api
       .invoke(IPC.REDDIT_GET_DIGEST_VIEWED_ANALYTICS, analyticsScope)
       .then((data) => setAnalytics(data as ViewedAnalytics))
       .catch((err) => {
-        toast.error(err instanceof Error ? err.message : 'Failed to load Reddit Digest analytics.')
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : "Failed to load Reddit Digest analytics.",
+        );
       })
-      .finally(() => setAnalyticsLoading(false))
-  }, [analyticsScope])
+      .finally(() => setAnalyticsLoading(false));
+  }, [analyticsScope]);
 
   useEffect(() => {
-    refreshAnalytics()
-  }, [refreshAnalytics])
+    refreshAnalytics();
+  }, [refreshAnalytics]);
 
   useEffect(() => {
-    const unsubscribeViewedChanged = window.api.on(IPC.REDDIT_DIGEST_VIEWED_CHANGED, () => {
-      refreshAnalytics()
-    })
+    const unsubscribeViewedChanged = window.api.on(
+      IPC.REDDIT_DIGEST_VIEWED_CHANGED,
+      () => {
+        refreshAnalytics();
+      },
+    );
     const unsubscribeRedditUpdated = window.api.on(IPC.REDDIT_UPDATED, () => {
-      refreshAnalytics()
-    })
+      refreshAnalytics();
+    });
 
     return () => {
-      unsubscribeViewedChanged()
-      unsubscribeRedditUpdated()
-    }
-  }, [refreshAnalytics])
+      unsubscribeViewedChanged();
+      unsubscribeRedditUpdated();
+    };
+  }, [refreshAnalytics]);
 
   const handleBulkMarkViewed = (): void => {
-    setBulkLoading(true)
+    setBulkLoading(true);
     window.api
-      .invoke(IPC.REDDIT_BULK_SET_DIGEST_VIEWED, { ...analyticsScope, viewed: true })
+      .invoke(IPC.REDDIT_BULK_SET_DIGEST_VIEWED, {
+        ...analyticsScope,
+        viewed: true,
+      })
       .then((result) => {
-        const payload = result as { ok: boolean; error: string | null; updatedCount: number }
+        const payload = result as {
+          ok: boolean;
+          error: string | null;
+          updatedCount: number;
+        };
         if (!payload.ok) {
-          toast.error(payload.error ?? 'Failed to mark posts viewed.')
-          return
+          toast.error(payload.error ?? "Failed to mark posts viewed.");
+          return;
         }
-        toast.success(`Marked ${payload.updatedCount} posts as viewed.`)
-        refreshAnalytics()
+        toast.success(`Marked ${payload.updatedCount} posts as viewed.`);
+        refreshAnalytics();
       })
       .catch((err) => {
-        toast.error(err instanceof Error ? err.message : 'Failed to mark posts viewed.')
+        toast.error(
+          err instanceof Error ? err.message : "Failed to mark posts viewed.",
+        );
       })
-      .finally(() => setBulkLoading(false))
-  }
+      .finally(() => setBulkLoading(false));
+  };
 
-  const groupKeys = useMemo(() => [...groups.keys()].sort(), [groups])
+  const groupKeys = useMemo(() => [...groups.keys()].sort(), [groups]);
 
   const flatPosts = useMemo(() => {
-    let result = sortedPosts
+    let result = sortedPosts;
     if (flatSubreddits.length > 0) {
-      result = result.filter((p) => flatSubreddits.includes(p.subreddit))
+      result = result.filter((p) => flatSubreddits.includes(p.subreddit));
     }
     if (search.trim()) {
-      const q = search.trim().toLowerCase()
-      result = result.filter((p) => p.title.toLowerCase().includes(q))
+      const q = search.trim().toLowerCase();
+      result = result.filter((p) => p.title.toLowerCase().includes(q));
     }
-    return result
-  }, [sortedPosts, flatSubreddits, search])
+    return result;
+  }, [sortedPosts, flatSubreddits, search]);
 
   const toggleFlatSubreddit = (sr: string): void => {
     setFlatSubreddits((prev) =>
-      prev.includes(sr) ? prev.filter((s) => s !== sr) : [...prev, sr]
-    )
-  }
+      prev.includes(sr) ? prev.filter((s) => s !== sr) : [...prev, sr],
+    );
+  };
 
-  const loading = postsLoading || weeksLoading || !viewModeLoaded
+  const loading = postsLoading || weeksLoading || !viewModeLoaded;
 
   if (!enabled) {
     return (
@@ -212,8 +268,11 @@ export default function RedditDigest(): React.ReactElement {
           <div className="text-center space-y-3 max-w-sm">
             <p className="text-muted-foreground">Reddit Digest is disabled.</p>
             <p className="text-sm text-muted-foreground">
-              Enable it in{' '}
-              <Link to="/settings?tab=features" className="underline hover:text-foreground">
+              Enable it in{" "}
+              <Link
+                to="/settings?tab=features"
+                className="underline hover:text-foreground"
+              >
                 Settings → Features
               </Link>
               .
@@ -221,7 +280,7 @@ export default function RedditDigest(): React.ReactElement {
           </div>
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -231,23 +290,33 @@ export default function RedditDigest(): React.ReactElement {
         <h1 className="text-xl font-semibold">Reddit Digest</h1>
         <div className="flex items-center gap-2 flex-wrap">
           <Button
-            variant={config.hide_viewed ? 'default' : 'outline'}
+            variant={config.hide_viewed ? "default" : "outline"}
             size="sm"
-            onClick={() => setConfig({ ...config, hide_viewed: !config.hide_viewed })}
+            onClick={() =>
+              setConfig({ ...config, hide_viewed: !config.hide_viewed })
+            }
             aria-pressed={config.hide_viewed}
           >
-            {config.hide_viewed ? 'Showing Unviewed Only' : 'Hide Viewed'}
+            {config.hide_viewed ? "Showing Unviewed Only" : "Hide Viewed"}
           </Button>
 
-          <Button variant="outline" size="sm" onClick={handleBulkMarkViewed} disabled={bulkLoading}>
-            {bulkLoading ? 'Marking...' : 'Mark All Viewed'}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleBulkMarkViewed}
+            disabled={bulkLoading}
+          >
+            {bulkLoading ? "Marking..." : "Mark All Viewed"}
           </Button>
 
           {/* Week mode */}
           <Select
             value={config.week_mode}
             onValueChange={(val) =>
-              setConfig({ ...config, week_mode: val as DigestViewConfig['week_mode'] })
+              setConfig({
+                ...config,
+                week_mode: val as DigestViewConfig["week_mode"],
+              })
             }
           >
             <SelectTrigger className="w-36" aria-label="Week mode">
@@ -260,11 +329,14 @@ export default function RedditDigest(): React.ReactElement {
             </SelectContent>
           </Select>
 
-          {config.week_mode === 'range' && (
+          {config.week_mode === "range" && (
             <Select
               value={String(config.week_range_count)}
               onValueChange={(val) =>
-                setConfig({ ...config, week_range_count: Number.parseInt(val, 10) })
+                setConfig({
+                  ...config,
+                  week_range_count: Number.parseInt(val, 10),
+                })
               }
             >
               <SelectTrigger className="w-28" aria-label="Week range count">
@@ -280,10 +352,12 @@ export default function RedditDigest(): React.ReactElement {
             </Select>
           )}
 
-          {config.week_mode === 'specific' && (
+          {config.week_mode === "specific" && (
             <Select
-              value={config.selected_week ?? latestWeek ?? ''}
-              onValueChange={(val) => setConfig({ ...config, selected_week: val })}
+              value={config.selected_week ?? latestWeek ?? ""}
+              onValueChange={(val) =>
+                setConfig({ ...config, selected_week: val })
+              }
             >
               <SelectTrigger className="w-40" aria-label="Specific week">
                 <SelectValue placeholder="Select week" />
@@ -302,7 +376,10 @@ export default function RedditDigest(): React.ReactElement {
           <Select
             value={config.sort_by}
             onValueChange={(val) =>
-              setConfig({ ...config, sort_by: val as DigestViewConfig['sort_by'] })
+              setConfig({
+                ...config,
+                sort_by: val as DigestViewConfig["sort_by"],
+              })
             }
           >
             <SelectTrigger className="w-36" aria-label="Sort field">
@@ -321,17 +398,22 @@ export default function RedditDigest(): React.ReactElement {
             variant="outline"
             size="sm"
             onClick={() =>
-              setConfig({ ...config, sort_dir: config.sort_dir === 'desc' ? 'asc' : 'desc' })
+              setConfig({
+                ...config,
+                sort_dir: config.sort_dir === "desc" ? "asc" : "desc",
+              })
             }
-            title={config.sort_dir === 'desc' ? 'Descending' : 'Ascending'}
-            aria-label={config.sort_dir === 'desc' ? 'Sort descending' : 'Sort ascending'}
+            title={config.sort_dir === "desc" ? "Descending" : "Ascending"}
+            aria-label={
+              config.sort_dir === "desc" ? "Sort descending" : "Sort ascending"
+            }
           >
-            {config.sort_dir === 'desc' ? '↓' : '↑'}
+            {config.sort_dir === "desc" ? "↓" : "↑"}
           </Button>
 
           {/* View mode toggle */}
           <div className="flex rounded-md border overflow-hidden">
-            {(['columns', 'tabs', 'flat'] as PageViewMode[]).map((mode) => (
+            {(["columns", "tabs", "flat"] as PageViewMode[]).map((mode) => (
               <button
                 key={mode}
                 type="button"
@@ -340,8 +422,8 @@ export default function RedditDigest(): React.ReactElement {
                 aria-label={`Switch to ${mode} view`}
                 className={`px-3 py-1.5 text-xs font-medium transition-colors ${
                   pageViewMode === mode
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
                 }`}
               >
                 {mode.charAt(0).toUpperCase() + mode.slice(1)}
@@ -362,28 +444,39 @@ export default function RedditDigest(): React.ReactElement {
           </div>
         ) : (
           <div
-            className={`flex items-center gap-3 text-xs h-7 transition-opacity ${analyticsLoading ? 'opacity-80' : 'opacity-100'}`}
+            className={`flex items-center gap-3 text-xs h-7 transition-opacity ${analyticsLoading ? "opacity-80" : "opacity-100"}`}
             aria-busy={analyticsLoading}
             aria-live="polite"
             role="status"
           >
-            <span className="px-2 py-1 rounded bg-background border w-24 tabular-nums">Total: {analytics.total}</span>
-            <span className="px-2 py-1 rounded bg-background border w-24 tabular-nums">Viewed: {analytics.viewed}</span>
-            <span className="px-2 py-1 rounded bg-background border w-24 tabular-nums">Unviewed: {analytics.unviewed}</span>
+            <span className="px-2 py-1 rounded bg-background border w-24 tabular-nums">
+              Total: {analytics.total}
+            </span>
+            <span className="px-2 py-1 rounded bg-background border w-24 tabular-nums">
+              Viewed: {analytics.viewed}
+            </span>
+            <span className="px-2 py-1 rounded bg-background border w-24 tabular-nums">
+              Unviewed: {analytics.unviewed}
+            </span>
             <span className="px-2 py-1 rounded bg-background border w-28 tabular-nums">
               Rate: {(analytics.viewed_rate * 100).toFixed(1)}%
             </span>
             <span className="text-muted-foreground flex-1 min-w-0 whitespace-nowrap overflow-hidden text-ellipsis">
-              7d trend: {analytics.trend.map((point) => `${point.day.slice(5)} ${point.viewed_count}`).join(' | ') || 'No viewed activity'}
+              7d trend:{" "}
+              {analytics.trend
+                .map((point) => `${point.day.slice(5)} ${point.viewed_count}`)
+                .join(" | ") || "No viewed activity"}
             </span>
           </div>
         )}
       </div>
 
       {/* Flat mode filter bar */}
-      {pageViewMode === 'flat' && (
+      {pageViewMode === "flat" && (
         <div className="flex items-center gap-2 px-6 py-3 border-b flex-wrap">
-          <label htmlFor="reddit-digest-search" className="sr-only">Search posts</label>
+          <label htmlFor="reddit-digest-search" className="sr-only">
+            Search posts
+          </label>
           <Input
             id="reddit-digest-search"
             placeholder="Search posts..."
@@ -395,7 +488,7 @@ export default function RedditDigest(): React.ReactElement {
             {availableSubreddits.map((sr) => (
               <Button
                 key={sr}
-                variant={flatSubreddits.includes(sr) ? 'default' : 'outline'}
+                variant={flatSubreddits.includes(sr) ? "default" : "outline"}
                 size="sm"
                 onClick={() => toggleFlatSubreddit(sr)}
                 className="text-xs h-8"
@@ -415,16 +508,22 @@ export default function RedditDigest(): React.ReactElement {
           <p className="text-sm text-muted-foreground">
             No digest posts yet. Run the Reddit Digest script to populate.
           </p>
-        ) : pageViewMode === 'columns' ? (
+        ) : pageViewMode === "columns" ? (
           <div
             className="grid gap-6"
-            style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}
+            style={{
+              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+            }}
           >
             {groupKeys.map((key) => (
-              <SubredditColumn key={key} label={key} posts={groups.get(key) ?? []} />
+              <SubredditColumn
+                key={key}
+                label={key}
+                posts={groups.get(key) ?? []}
+              />
             ))}
           </div>
-        ) : pageViewMode === 'tabs' ? (
+        ) : pageViewMode === "tabs" ? (
           <Tabs defaultValue={groupKeys[0]}>
             <TabsList className="mb-4 flex-wrap h-auto">
               {groupKeys.map((key) => (
@@ -440,7 +539,9 @@ export default function RedditDigest(): React.ReactElement {
             ))}
           </Tabs>
         ) : flatPosts.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No posts match your filters.</p>
+          <p className="text-sm text-muted-foreground">
+            No posts match your filters.
+          </p>
         ) : (
           <div className="max-w-3xl">
             {flatPosts.map((post) => (
@@ -455,5 +556,5 @@ export default function RedditDigest(): React.ReactElement {
         )}
       </div>
     </div>
-  )
+  );
 }

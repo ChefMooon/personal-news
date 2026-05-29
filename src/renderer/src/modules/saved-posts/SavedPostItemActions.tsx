@@ -1,19 +1,39 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
-import { toast } from 'sonner'
-import { MoreHorizontal, ExternalLink, Circle, CircleCheck, PencilLine, Trash2, Plus, X } from 'lucide-react'
-import { IPC, type DeleteSavedPostsResult, type IpcMutationResult, type SavedPost } from '../../../../shared/ipc-types'
-import { Badge } from '../../components/ui/badge'
-import { Button } from '../../components/ui/button'
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { createPortal } from "react-dom";
+import { toast } from "sonner";
+import {
+  MoreHorizontal,
+  ExternalLink,
+  Circle,
+  CircleCheck,
+  PencilLine,
+  Trash2,
+  Plus,
+  X,
+} from "lucide-react";
+import {
+  IPC,
+  type DeleteSavedPostsResult,
+  type IpcMutationResult,
+  type SavedPost,
+} from "../../../../shared/ipc-types";
+import { Badge } from "../../components/ui/badge";
+import { Button } from "../../components/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogTitle
-} from '../../components/ui/dialog'
-import { Input } from '../../components/ui/input'
+  DialogTitle,
+} from "../../components/ui/dialog";
+import { Input } from "../../components/ui/input";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,56 +42,62 @@ import {
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
-  AlertDialogTitle
-} from '../../components/ui/alert-dialog'
-import { cn } from '../../lib/utils'
+  AlertDialogTitle,
+} from "../../components/ui/alert-dialog";
+import { cn } from "../../lib/utils";
 
 interface SavedPostItemActionsProps {
-  post: SavedPost
-  allTags: string[]
-  onOpenPost: (post: SavedPost) => void
-  onSetViewed: (post: SavedPost, viewed: boolean) => void
-  onAfterMutation: () => Promise<void> | void
+  post: SavedPost;
+  allTags: string[];
+  onOpenPost: (post: SavedPost) => void;
+  onSetViewed: (post: SavedPost, viewed: boolean) => void;
+  onAfterMutation: () => Promise<void> | void;
   children: (controls: {
-    onContextMenu: (event: React.MouseEvent<HTMLElement>) => void
-    trigger: React.ReactElement
-    viewedToggle: React.ReactElement
-  }) => React.ReactNode
+    onContextMenu: (event: React.MouseEvent<HTMLElement>) => void;
+    trigger: React.ReactElement;
+    viewedToggle: React.ReactElement;
+  }) => React.ReactNode;
 }
 
 interface MenuPosition {
-  x: number
-  y: number
+  x: number;
+  y: number;
 }
 
-const MENU_WIDTH = 208
-const MENU_HEIGHT = 176
-const VIEWPORT_PADDING = 12
+const MENU_WIDTH = 208;
+const MENU_HEIGHT = 176;
+const VIEWPORT_PADDING = 12;
 
 function normalizeTags(tags: string[]): string[] {
-  const seen = new Set<string>()
-  const normalized: string[] = []
+  const seen = new Set<string>();
+  const normalized: string[] = [];
 
   for (const tag of tags) {
-    const trimmed = tag.trim()
-    if (!trimmed) continue
-    const key = trimmed.toLowerCase()
-    if (seen.has(key)) continue
-    seen.add(key)
-    normalized.push(trimmed)
+    const trimmed = tag.trim();
+    if (!trimmed) continue;
+    const key = trimmed.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    normalized.push(trimmed);
   }
 
-  return normalized
+  return normalized;
 }
 
 function clampMenuPosition(x: number, y: number): MenuPosition {
-  const maxX = Math.max(VIEWPORT_PADDING, window.innerWidth - MENU_WIDTH - VIEWPORT_PADDING)
-  const maxY = Math.max(VIEWPORT_PADDING, window.innerHeight - MENU_HEIGHT - VIEWPORT_PADDING)
+  const maxX = Math.max(
+    VIEWPORT_PADDING,
+    window.innerWidth - MENU_WIDTH - VIEWPORT_PADDING,
+  );
+  const maxY = Math.max(
+    VIEWPORT_PADDING,
+    window.innerHeight - MENU_HEIGHT - VIEWPORT_PADDING,
+  );
 
   return {
     x: Math.min(Math.max(x, VIEWPORT_PADDING), maxX),
-    y: Math.min(Math.max(y, VIEWPORT_PADDING), maxY)
-  }
+    y: Math.min(Math.max(y, VIEWPORT_PADDING), maxY),
+  };
 }
 
 export function SavedPostItemActions({
@@ -80,199 +106,216 @@ export function SavedPostItemActions({
   onOpenPost,
   onSetViewed,
   onAfterMutation,
-  children
+  children,
 }: SavedPostItemActionsProps): React.ReactElement {
-  const [menuPosition, setMenuPosition] = useState<MenuPosition | null>(null)
-  const [editorOpen, setEditorOpen] = useState(false)
-  const [deleteOpen, setDeleteOpen] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [deleting, setDeleting] = useState(false)
-  const [draftNote, setDraftNote] = useState(post.note ?? '')
-  const [draftTags, setDraftTags] = useState<string[]>(post.tags)
-  const [newTag, setNewTag] = useState('')
-  const triggerRef = useRef<HTMLButtonElement | null>(null)
-  const menuRef = useRef<HTMLDivElement | null>(null)
-  const isViewed = post.viewed_at !== null
+  const [menuPosition, setMenuPosition] = useState<MenuPosition | null>(null);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [draftNote, setDraftNote] = useState(post.note ?? "");
+  const [draftTags, setDraftTags] = useState<string[]>(post.tags);
+  const [newTag, setNewTag] = useState("");
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const isViewed = post.viewed_at !== null;
 
   useEffect(() => {
-    setDraftNote(post.note ?? '')
-    setDraftTags(post.tags)
-    setNewTag('')
-  }, [post.note, post.post_id, post.tags])
+    setDraftNote(post.note ?? "");
+    setDraftTags(post.tags);
+    setNewTag("");
+  }, [post.note, post.post_id, post.tags]);
 
   const openMenuAt = useCallback((x: number, y: number): void => {
-    setMenuPosition(clampMenuPosition(x, y))
-  }, [])
+    setMenuPosition(clampMenuPosition(x, y));
+  }, []);
 
   const closeMenu = useCallback((): void => {
-    setMenuPosition(null)
-  }, [])
+    setMenuPosition(null);
+  }, []);
 
   useEffect(() => {
-    if (!menuPosition) return
+    if (!menuPosition) return;
 
     const handlePointerDown = (event: MouseEvent | TouchEvent): void => {
-      const target = event.target as Node | null
+      const target = event.target as Node | null;
       if (
         target &&
-        (menuRef.current?.contains(target) || triggerRef.current?.contains(target))
+        (menuRef.current?.contains(target) ||
+          triggerRef.current?.contains(target))
       ) {
-        return
+        return;
       }
-      closeMenu()
-    }
+      closeMenu();
+    };
 
     const handleKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') {
-        closeMenu()
+      if (event.key === "Escape") {
+        closeMenu();
       }
-    }
+    };
 
     const handleViewportChange = (): void => {
-      closeMenu()
-    }
+      closeMenu();
+    };
 
-    window.addEventListener('mousedown', handlePointerDown)
-    window.addEventListener('touchstart', handlePointerDown)
-    window.addEventListener('keydown', handleKeyDown)
-    window.addEventListener('resize', handleViewportChange)
-    window.addEventListener('scroll', handleViewportChange, true)
+    window.addEventListener("mousedown", handlePointerDown);
+    window.addEventListener("touchstart", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("resize", handleViewportChange);
+    window.addEventListener("scroll", handleViewportChange, true);
 
     return () => {
-      window.removeEventListener('mousedown', handlePointerDown)
-      window.removeEventListener('touchstart', handlePointerDown)
-      window.removeEventListener('keydown', handleKeyDown)
-      window.removeEventListener('resize', handleViewportChange)
-      window.removeEventListener('scroll', handleViewportChange, true)
-    }
-  }, [closeMenu, menuPosition])
+      window.removeEventListener("mousedown", handlePointerDown);
+      window.removeEventListener("touchstart", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("resize", handleViewportChange);
+      window.removeEventListener("scroll", handleViewportChange, true);
+    };
+  }, [closeMenu, menuPosition]);
 
   const openFromTrigger = useCallback((): void => {
-    const rect = triggerRef.current?.getBoundingClientRect()
+    const rect = triggerRef.current?.getBoundingClientRect();
     if (!rect) {
-      openMenuAt(VIEWPORT_PADDING, VIEWPORT_PADDING)
-      return
+      openMenuAt(VIEWPORT_PADDING, VIEWPORT_PADDING);
+      return;
     }
 
-    openMenuAt(rect.right - MENU_WIDTH, rect.bottom + 8)
-  }, [openMenuAt])
+    openMenuAt(rect.right - MENU_WIDTH, rect.bottom + 8);
+  }, [openMenuAt]);
 
   const handleContextMenu = useCallback(
     (event: React.MouseEvent<HTMLElement>): void => {
-      event.preventDefault()
-      openMenuAt(event.clientX, event.clientY)
+      event.preventDefault();
+      openMenuAt(event.clientX, event.clientY);
     },
-    [openMenuAt]
-  )
+    [openMenuAt],
+  );
 
   const addTag = useCallback((): void => {
-    const candidate = newTag.trim()
-    if (!candidate) return
+    const candidate = newTag.trim();
+    if (!candidate) return;
 
-    setDraftTags((current) => normalizeTags([...current, candidate]))
-    setNewTag('')
-  }, [newTag])
+    setDraftTags((current) => normalizeTags([...current, candidate]));
+    setNewTag("");
+  }, [newTag]);
 
   const pickSuggestion = useCallback((tag: string): void => {
-    setDraftTags((current) => normalizeTags([...current, tag]))
-    setNewTag('')
-  }, [])
+    setDraftTags((current) => normalizeTags([...current, tag]));
+    setNewTag("");
+  }, []);
 
   const removeTag = useCallback((tag: string): void => {
-    setDraftTags((current) => current.filter((value) => value !== tag))
-  }, [])
+    setDraftTags((current) => current.filter((value) => value !== tag));
+  }, []);
 
   const saveEdits = useCallback(async (): Promise<void> => {
-    const normalizedTags = normalizeTags(draftTags)
-    const normalizedNote = draftNote.trim()
-    const nextNote = normalizedNote.length > 0 ? normalizedNote : null
-    const previousNote = post.note ?? null
-    const previousTags = normalizeTags(post.tags)
+    const normalizedTags = normalizeTags(draftTags);
+    const normalizedNote = draftNote.trim();
+    const nextNote = normalizedNote.length > 0 ? normalizedNote : null;
+    const previousNote = post.note ?? null;
+    const previousTags = normalizeTags(post.tags);
     const tagsChanged =
       normalizedTags.length !== previousTags.length ||
-      normalizedTags.some((tag, index) => tag !== previousTags[index])
+      normalizedTags.some((tag, index) => tag !== previousTags[index]);
 
     if (!tagsChanged && nextNote === previousNote) {
-      setEditorOpen(false)
-      return
+      setEditorOpen(false);
+      return;
     }
 
-    setSaving(true)
+    setSaving(true);
     try {
       if (nextNote !== previousNote) {
         const result = (await window.api.invoke(
           IPC.REDDIT_UPDATE_SAVED_POST_NOTE,
           post.post_id,
-          nextNote
-        )) as IpcMutationResult
+          nextNote,
+        )) as IpcMutationResult;
         if (!result.ok) {
-          toast.error(result.error ?? 'Failed to update note.')
-          return
+          toast.error(result.error ?? "Failed to update note.");
+          return;
         }
       }
 
       if (tagsChanged) {
-        await window.api.invoke(IPC.REDDIT_UPDATE_POST_TAGS, post.post_id, normalizedTags)
+        await window.api.invoke(
+          IPC.REDDIT_UPDATE_POST_TAGS,
+          post.post_id,
+          normalizedTags,
+        );
       }
 
-      await onAfterMutation()
-      toast.success('Saved post updated.')
-      setEditorOpen(false)
-      closeMenu()
+      await onAfterMutation();
+      toast.success("Saved post updated.");
+      setEditorOpen(false);
+      closeMenu();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to update saved post.')
+      toast.error(
+        err instanceof Error ? err.message : "Failed to update saved post.",
+      );
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
-  }, [closeMenu, draftNote, draftTags, onAfterMutation, post.note, post.post_id, post.tags])
+  }, [
+    closeMenu,
+    draftNote,
+    draftTags,
+    onAfterMutation,
+    post.note,
+    post.post_id,
+    post.tags,
+  ]);
 
   const handleDelete = useCallback(async (): Promise<void> => {
-    setDeleting(true)
+    setDeleting(true);
     try {
       const result = (await window.api.invoke(IPC.REDDIT_DELETE_SAVED_POSTS, {
-        post_ids: [post.post_id]
-      })) as DeleteSavedPostsResult
+        post_ids: [post.post_id],
+      })) as DeleteSavedPostsResult;
       if (!result.ok) {
-        toast.error(result.error ?? 'Failed to delete saved post.')
-        return
+        toast.error(result.error ?? "Failed to delete saved post.");
+        return;
       }
 
-      await onAfterMutation()
-      toast.success('Saved post deleted.')
-      setDeleteOpen(false)
-      closeMenu()
+      await onAfterMutation();
+      toast.success("Saved post deleted.");
+      setDeleteOpen(false);
+      closeMenu();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to delete saved post.')
+      toast.error(
+        err instanceof Error ? err.message : "Failed to delete saved post.",
+      );
     } finally {
-      setDeleting(false)
+      setDeleting(false);
     }
-  }, [closeMenu, onAfterMutation, post.post_id])
+  }, [closeMenu, onAfterMutation, post.post_id]);
 
   const managedTagSuggestions = useMemo(() => {
-    const query = newTag.trim().toLowerCase()
+    const query = newTag.trim().toLowerCase();
 
     return allTags
       .filter((tag) => !draftTags.includes(tag))
       .filter((tag) => (query ? tag.toLowerCase().includes(query) : true))
-      .slice(0, 8)
-  }, [allTags, draftTags, newTag])
+      .slice(0, 8);
+  }, [allTags, draftTags, newTag]);
 
   const trigger = (
     <button
       ref={triggerRef}
       type="button"
       onClick={(event) => {
-        event.stopPropagation()
+        event.stopPropagation();
         if (menuPosition) {
-          closeMenu()
+          closeMenu();
         } else {
-          openFromTrigger()
+          openFromTrigger();
         }
       }}
       onContextMenu={(event) => {
-        event.preventDefault()
-        event.stopPropagation()
-        openMenuAt(event.clientX, event.clientY)
+        event.preventDefault();
+        event.stopPropagation();
+        openMenuAt(event.clientX, event.clientY);
       }}
       className="mt-0.5 p-1 rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
       aria-label="Saved post actions"
@@ -282,23 +325,31 @@ export function SavedPostItemActions({
     >
       <MoreHorizontal className="h-4 w-4" />
     </button>
-  )
+  );
 
   const viewedToggle = (
     <button
       type="button"
       onClick={(event) => {
-        event.stopPropagation()
-        onSetViewed(post, !isViewed)
+        event.stopPropagation();
+        onSetViewed(post, !isViewed);
       }}
       className="mt-0.5 inline-flex items-center justify-center rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-      aria-label={isViewed ? 'Mark post as unviewed' : 'Mark post as viewed'}
+      aria-label={isViewed ? "Mark post as unviewed" : "Mark post as viewed"}
       aria-pressed={isViewed}
-      title={isViewed ? 'Viewed - click to mark unviewed' : 'Unviewed - click to mark viewed'}
+      title={
+        isViewed
+          ? "Viewed - click to mark unviewed"
+          : "Unviewed - click to mark viewed"
+      }
     >
-      {isViewed ? <CircleCheck className="h-4 w-4 text-emerald-400" /> : <Circle className="h-4 w-4" />}
+      {isViewed ? (
+        <CircleCheck className="h-4 w-4 text-emerald-400" />
+      ) : (
+        <Circle className="h-4 w-4" />
+      )}
     </button>
-  )
+  );
 
   return (
     <>
@@ -317,8 +368,8 @@ export function SavedPostItemActions({
                 role="menuitem"
                 className="flex w-full items-center gap-2 px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground"
                 onClick={() => {
-                  onOpenPost(post)
-                  closeMenu()
+                  onOpenPost(post);
+                  closeMenu();
                 }}
               >
                 <ExternalLink className="h-4 w-4" />
@@ -329,20 +380,24 @@ export function SavedPostItemActions({
                 role="menuitem"
                 className="flex w-full items-center gap-2 px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground"
                 onClick={() => {
-                  onSetViewed(post, !isViewed)
-                  closeMenu()
+                  onSetViewed(post, !isViewed);
+                  closeMenu();
                 }}
               >
-                {isViewed ? <Circle className="h-4 w-4" /> : <CircleCheck className="h-4 w-4 text-emerald-500" />}
-                {isViewed ? 'Mark unviewed' : 'Mark viewed'}
+                {isViewed ? (
+                  <Circle className="h-4 w-4" />
+                ) : (
+                  <CircleCheck className="h-4 w-4 text-emerald-500" />
+                )}
+                {isViewed ? "Mark unviewed" : "Mark viewed"}
               </button>
               <button
                 type="button"
                 role="menuitem"
                 className="flex w-full items-center gap-2 px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground"
                 onClick={() => {
-                  setEditorOpen(true)
-                  closeMenu()
+                  setEditorOpen(true);
+                  closeMenu();
                 }}
               >
                 <PencilLine className="h-4 w-4" />
@@ -354,15 +409,15 @@ export function SavedPostItemActions({
                 role="menuitem"
                 className="flex w-full items-center gap-2 px-3 py-2 text-sm text-left text-destructive hover:bg-destructive/10"
                 onClick={() => {
-                  setDeleteOpen(true)
-                  closeMenu()
+                  setDeleteOpen(true);
+                  closeMenu();
                 }}
               >
                 <Trash2 className="h-4 w-4" />
                 Delete
               </button>
             </div>,
-            document.body
+            document.body,
           )
         : null}
 
@@ -383,8 +438,8 @@ export function SavedPostItemActions({
                 rows={5}
                 placeholder="Add a note for this saved post"
                 className={cn(
-                  'flex min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background',
-                  'placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2'
+                  "flex min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background",
+                  "placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                 )}
               />
             </div>
@@ -392,12 +447,18 @@ export function SavedPostItemActions({
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-sm font-medium">Tags</p>
-                <p className="text-xs text-muted-foreground">{draftTags.length} selected</p>
+                <p className="text-xs text-muted-foreground">
+                  {draftTags.length} selected
+                </p>
               </div>
               <div className="flex min-h-10 flex-wrap gap-1 rounded-md border border-dashed px-3 py-2">
                 {draftTags.length > 0 ? (
                   draftTags.map((tag) => (
-                    <Badge key={tag} variant="secondary" className="gap-1 text-xs">
+                    <Badge
+                      key={tag}
+                      variant="secondary"
+                      className="gap-1 text-xs"
+                    >
                       {tag}
                       <button
                         type="button"
@@ -410,7 +471,9 @@ export function SavedPostItemActions({
                     </Badge>
                   ))
                 ) : (
-                  <span className="text-xs text-muted-foreground">No tags yet.</span>
+                  <span className="text-xs text-muted-foreground">
+                    No tags yet.
+                  </span>
                 )}
               </div>
               <div className="space-y-2">
@@ -421,9 +484,9 @@ export function SavedPostItemActions({
                       onChange={(event) => setNewTag(event.target.value)}
                       placeholder="Add a tag"
                       onKeyDown={(event) => {
-                        if (event.key === 'Enter') {
-                          event.preventDefault()
-                          addTag()
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          addTag();
                         }
                       }}
                     />
@@ -431,7 +494,9 @@ export function SavedPostItemActions({
                       <div className="rounded-md border bg-background p-2 shadow-sm">
                         <div className="mb-2 flex items-center justify-between gap-2 text-xs text-muted-foreground">
                           <span>Managed tags</span>
-                          <span>{managedTagSuggestions.length} suggestions</span>
+                          <span>
+                            {managedTagSuggestions.length} suggestions
+                          </span>
                         </div>
                         <div className="flex flex-wrap gap-1">
                           {managedTagSuggestions.map((tag) => (
@@ -448,7 +513,12 @@ export function SavedPostItemActions({
                       </div>
                     ) : null}
                   </div>
-                  <Button type="button" variant="outline" onClick={addTag} className="shrink-0">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={addTag}
+                    className="shrink-0"
+                  >
                     <Plus className="h-4 w-4" />
                     Add tag
                   </Button>
@@ -457,11 +527,20 @@ export function SavedPostItemActions({
             </div>
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setEditorOpen(false)} disabled={saving}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setEditorOpen(false)}
+              disabled={saving}
+            >
               Cancel
             </Button>
-            <Button type="button" onClick={() => void saveEdits()} disabled={saving}>
-              {saving ? 'Saving...' : 'Save changes'}
+            <Button
+              type="button"
+              onClick={() => void saveEdits()}
+              disabled={saving}
+            >
+              {saving ? "Saving..." : "Save changes"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -482,11 +561,11 @@ export function SavedPostItemActions({
               disabled={deleting}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {deleting ? 'Deleting...' : 'Delete'}
+              {deleting ? "Deleting..." : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </>
-  )
+  );
 }

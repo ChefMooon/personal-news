@@ -1,9 +1,17 @@
-import React from 'react'
-import type { SportEvent, SportLeague, SportTeamEvents, TrackedTeam } from '../../../../shared/ipc-types'
-import { getLocalDateKey, isSportEventOnLocalDate } from '../../../../shared/sports-event-utils'
-import { cn } from '../../lib/utils'
-import { getTrackedTeamMeta, type LeaguesById } from './league-display'
-import { TeamAvatar } from './TeamAvatar'
+import React from "react";
+import type {
+  SportEvent,
+  SportLeague,
+  SportTeamEvents,
+  TrackedTeam,
+} from "../../../../shared/ipc-types";
+import {
+  getLocalDateKey,
+  isSportEventOnLocalDate,
+} from "../../../../shared/sports-event-utils";
+import { cn } from "../../lib/utils";
+import { getTrackedTeamMeta, type LeaguesById } from "./league-display";
+import { TeamAvatar } from "./TeamAvatar";
 import {
   getGamePhase,
   getGamePhaseBadgeClasses,
@@ -12,167 +20,276 @@ import {
   getGamePhaseLabel,
   hasResolvedScore,
   type GamePhase,
-  isLiveStatus
-} from './utils'
-import { getTodayGame, resolveTrackedTeamSide } from './side-resolution'
+  isLiveStatus,
+} from "./utils";
+import { getTodayGame, resolveTrackedTeamSide } from "./side-resolution";
 
 function formatDateLabel(date: string): string {
   return new Date(`${date}T12:00:00`).toLocaleDateString([], {
-    month: 'short',
-    day: 'numeric'
-  })
+    month: "short",
+    day: "numeric",
+  });
 }
 
 function formatDateTime(game: SportEvent, showTime: boolean): string {
-  const dateLabel = new Date(`${game.eventDate}T12:00:00`).toLocaleDateString([], {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric'
-  })
+  const dateLabel = new Date(`${game.eventDate}T12:00:00`).toLocaleDateString(
+    [],
+    {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+    },
+  );
   if (!showTime || !game.eventTime) {
-    return dateLabel
+    return dateLabel;
   }
 
-  const timeLabel = new Date(`${game.eventDate}T${game.eventTime}:00Z`).toLocaleTimeString([], {
-    hour: 'numeric',
-    minute: '2-digit'
-  })
-  return `${dateLabel} ${timeLabel}`
+  const timeLabel = new Date(
+    `${game.eventDate}T${game.eventTime}:00Z`,
+  ).toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  return `${dateLabel} ${timeLabel}`;
 }
 
 function formatTime(game: SportEvent): string {
   if (!game.eventTime) {
-    return ''
+    return "";
   }
 
-  return new Date(`${game.eventDate}T${game.eventTime}:00Z`).toLocaleTimeString([], {
-    hour: 'numeric',
-    minute: '2-digit'
-  })
+  return new Date(`${game.eventDate}T${game.eventTime}:00Z`).toLocaleTimeString(
+    [],
+    {
+      hour: "numeric",
+      minute: "2-digit",
+    },
+  );
 }
 
-function getLiveStartTimeText(game: SportEvent | null, showLiveStartTime: boolean): string | null {
-  if (!game || !showLiveStartTime || getGamePhase(game) !== 'live' || !game.eventTime) {
-    return null
+function getLiveStartTimeText(
+  game: SportEvent | null,
+  showLiveStartTime: boolean,
+): string | null {
+  if (
+    !game ||
+    !showLiveStartTime ||
+    getGamePhase(game) !== "live" ||
+    !game.eventTime
+  ) {
+    return null;
   }
 
-  return formatTime(game)
+  return formatTime(game);
 }
 
 function getTodayString(): string {
-  return getLocalDateKey(new Date())
+  return getLocalDateKey(new Date());
 }
 
-function getOpponent(game: SportEvent, teamId: string, teamName?: string | null): string {
-  const side = resolveTrackedTeamSide(game, teamId, teamName)
-  if (side === 'home') {
-    return game.awayTeam
+function getOpponent(
+  game: SportEvent,
+  teamId: string,
+  teamName?: string | null,
+): string {
+  const side = resolveTrackedTeamSide(game, teamId, teamName);
+  if (side === "home") {
+    return game.awayTeam;
   }
-  if (side === 'away') {
-    return game.homeTeam
+  if (side === "away") {
+    return game.homeTeam;
   }
 
-  return game.awayTeam
+  return game.awayTeam;
 }
 
-function getOpponentBadgeUrl(game: SportEvent, teamId: string, teamName?: string | null): string | null {
-  const side = resolveTrackedTeamSide(game, teamId, teamName)
-  if (side === 'home') {
-    return game.awayTeamBadgeUrl
+function getOpponentBadgeUrl(
+  game: SportEvent,
+  teamId: string,
+  teamName?: string | null,
+): string | null {
+  const side = resolveTrackedTeamSide(game, teamId, teamName);
+  if (side === "home") {
+    return game.awayTeamBadgeUrl;
   }
-  if (side === 'away') {
-    return game.homeTeamBadgeUrl
+  if (side === "away") {
+    return game.homeTeamBadgeUrl;
   }
 
-  return game.awayTeamBadgeUrl
+  return game.awayTeamBadgeUrl;
 }
 
-function getOutcome(game: SportEvent, teamId: string, teamName?: string | null): 'W' | 'L' | 'T' | null {
-  const side = resolveTrackedTeamSide(game, teamId, teamName)
-  const isHome = side === 'home'
-  const teamScore = Number.parseInt(isHome ? game.homeScore ?? '' : game.awayScore ?? '', 10)
-  const opponentScore = Number.parseInt(isHome ? game.awayScore ?? '' : game.homeScore ?? '', 10)
+function getOutcome(
+  game: SportEvent,
+  teamId: string,
+  teamName?: string | null,
+): "W" | "L" | "T" | null {
+  const side = resolveTrackedTeamSide(game, teamId, teamName);
+  const isHome = side === "home";
+  const teamScore = Number.parseInt(
+    isHome ? (game.homeScore ?? "") : (game.awayScore ?? ""),
+    10,
+  );
+  const opponentScore = Number.parseInt(
+    isHome ? (game.awayScore ?? "") : (game.homeScore ?? ""),
+    10,
+  );
   if (!Number.isFinite(teamScore) || !Number.isFinite(opponentScore)) {
-    return null
+    return null;
   }
 
-  if (game.sport === 'Ice Hockey' && teamScore === opponentScore) {
-    return null
+  if (game.sport === "Ice Hockey" && teamScore === opponentScore) {
+    return null;
   }
 
-  return teamScore > opponentScore ? 'W' : teamScore < opponentScore ? 'L' : 'T'
+  return teamScore > opponentScore
+    ? "W"
+    : teamScore < opponentScore
+      ? "L"
+      : "T";
 }
 
-function getScore(game: SportEvent, teamId: string, teamName?: string | null): string {
-  const side = resolveTrackedTeamSide(game, teamId, teamName)
-  const isHome = side === 'home'
-  const teamScore = isHome ? game.homeScore : game.awayScore
-  const opponentScore = isHome ? game.awayScore : game.homeScore
+function getScore(
+  game: SportEvent,
+  teamId: string,
+  teamName?: string | null,
+): string {
+  const side = resolveTrackedTeamSide(game, teamId, teamName);
+  const isHome = side === "home";
+  const teamScore = isHome ? game.homeScore : game.awayScore;
+  const opponentScore = isHome ? game.awayScore : game.homeScore;
   if (!teamScore || !opponentScore) {
-    return '—'
+    return "—";
   }
 
-  return `${teamScore}-${opponentScore}`
+  return `${teamScore}-${opponentScore}`;
 }
 
-function getFirstDifferentGame(events: SportEvent[] | undefined, excludedEventId: string | null): SportEvent | null {
+function getFirstDifferentGame(
+  events: SportEvent[] | undefined,
+  excludedEventId: string | null,
+): SportEvent | null {
   if (!events) {
-    return null
+    return null;
   }
 
-  return events.find((event) => event.eventId !== excludedEventId) ?? null
+  return events.find((event) => event.eventId !== excludedEventId) ?? null;
 }
 
-function computeStreak(lastGames: SportEvent[], teamId: string, teamName: string): string {
+function computeStreak(
+  lastGames: SportEvent[],
+  teamId: string,
+  teamName: string,
+): string {
   if (!lastGames.length) {
-    return ''
+    return "";
   }
 
-  const results = lastGames.map((game) => getOutcome(game, teamId, teamName))
-  const first = results[0]
+  const results = lastGames.map((game) => getOutcome(game, teamId, teamName));
+  const first = results[0];
   if (!first) {
-    return ''
+    return "";
   }
 
-  let count = 0
+  let count = 0;
   for (const result of results) {
     if (result === first) {
-      count += 1
-      continue
+      count += 1;
+      continue;
     }
-    break
+    break;
   }
 
-  return `${first}${count}`
+  return `${first}${count}`;
 }
 
-function outcomeClasses(outcome: 'W' | 'L' | 'T' | null): { text: string; bg: string; border: string } {
-  if (outcome === 'W') {
-    return { text: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20' }
+function outcomeClasses(outcome: "W" | "L" | "T" | null): {
+  text: string;
+  bg: string;
+  border: string;
+} {
+  if (outcome === "W") {
+    return {
+      text: "text-emerald-400",
+      bg: "bg-emerald-500/10",
+      border: "border-emerald-500/20",
+    };
   }
-  if (outcome === 'L') {
-    return { text: 'text-red-400', bg: 'bg-red-500/10', border: 'border-red-500/20' }
+  if (outcome === "L") {
+    return {
+      text: "text-red-400",
+      bg: "bg-red-500/10",
+      border: "border-red-500/20",
+    };
   }
-  if (outcome === 'T') {
-    return { text: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/20' }
+  if (outcome === "T") {
+    return {
+      text: "text-amber-400",
+      bg: "bg-amber-500/10",
+      border: "border-amber-500/20",
+    };
   }
-  return { text: 'text-muted-foreground', bg: 'bg-muted/30', border: 'border-muted' }
+  return {
+    text: "text-muted-foreground",
+    bg: "bg-muted/30",
+    border: "border-muted",
+  };
 }
 
-function getTeamMeta(team: TrackedTeam, leaguesById: LeaguesById, showSportLabels: boolean): string {
-  return getTrackedTeamMeta(team, leaguesById, showSportLabels)
+function getTeamMeta(
+  team: TrackedTeam,
+  leaguesById: LeaguesById,
+  showSportLabels: boolean,
+): string {
+  return getTrackedTeamMeta(team, leaguesById, showSportLabels);
 }
 
-function TeamBadge({ team, size = 'md' }: { team: TrackedTeam; size?: 'sm' | 'md' | 'lg' }): React.ReactElement {
-  const sizeClass = size === 'sm' ? 'h-7 w-7 text-xs' : size === 'lg' ? 'h-11 w-11 text-sm' : 'h-9 w-9 text-xs'
+function TeamBadge({
+  team,
+  size = "md",
+}: {
+  team: TrackedTeam;
+  size?: "sm" | "md" | "lg";
+}): React.ReactElement {
+  const sizeClass =
+    size === "sm"
+      ? "h-7 w-7 text-xs"
+      : size === "lg"
+        ? "h-11 w-11 text-sm"
+        : "h-9 w-9 text-xs";
 
-  return <TeamAvatar name={team.shortName ?? team.name} src={team.badgeUrl} className={cn('rounded-full', sizeClass)} />
+  return (
+    <TeamAvatar
+      name={team.shortName ?? team.name}
+      src={team.badgeUrl}
+      className={cn("rounded-full", sizeClass)}
+    />
+  );
 }
 
-function OpponentBadge({ name, badgeUrl, size = 'md' }: { name: string; badgeUrl: string | null; size?: 'sm' | 'md' | 'lg' }): React.ReactElement {
-  const sizeClass = size === 'sm' ? 'h-7 w-7 text-xs' : size === 'lg' ? 'h-11 w-11 text-sm' : 'h-9 w-9 text-xs'
+function OpponentBadge({
+  name,
+  badgeUrl,
+  size = "md",
+}: {
+  name: string;
+  badgeUrl: string | null;
+  size?: "sm" | "md" | "lg";
+}): React.ReactElement {
+  const sizeClass =
+    size === "sm"
+      ? "h-7 w-7 text-xs"
+      : size === "lg"
+        ? "h-11 w-11 text-sm"
+        : "h-9 w-9 text-xs";
 
-  return <TeamAvatar name={name} src={badgeUrl} className={cn('rounded-full', sizeClass)} />
+  return (
+    <TeamAvatar
+      name={name}
+      src={badgeUrl}
+      className={cn("rounded-full", sizeClass)}
+    />
+  );
 }
 
 function GameStateDisplay({
@@ -180,66 +297,70 @@ function GameStateDisplay({
   teamId,
   teamName,
   showTime,
-  scheduledFallback = 'Today'
+  scheduledFallback = "Today",
 }: {
-  game: SportEvent
-  teamId: string
-  teamName?: string | null
-  showTime: boolean
-  scheduledFallback?: string
+  game: SportEvent;
+  teamId: string;
+  teamName?: string | null;
+  showTime: boolean;
+  scheduledFallback?: string;
 }): React.ReactElement {
   if (isLiveStatus(game.status)) {
     return (
       <div className="flex items-center gap-1.5">
         <span className="text-xs text-red-500 animate-pulse">●</span>
-        <span className="text-sm font-semibold tabular-nums">{getScore(game, teamId, teamName)}</span>
-        <span className="text-xs text-muted-foreground">{game.status ?? 'Live'}</span>
+        <span className="text-sm font-semibold tabular-nums">
+          {getScore(game, teamId, teamName)}
+        </span>
+        <span className="text-xs text-muted-foreground">
+          {game.status ?? "Live"}
+        </span>
       </div>
-    )
+    );
   }
 
-  if (getGamePhase(game) === 'finished') {
-    const outcome = getOutcome(game, teamId, teamName)
-    const classes = outcomeClasses(outcome)
+  if (getGamePhase(game) === "finished") {
+    const outcome = getOutcome(game, teamId, teamName);
+    const classes = outcomeClasses(outcome);
 
     return (
-      <div className={cn('text-sm font-semibold tabular-nums', classes.text)}>
+      <div className={cn("text-sm font-semibold tabular-nums", classes.text)}>
         {getScore(game, teamId, teamName)}
-        {outcome ? ` · ${outcome}` : ''}
+        {outcome ? ` · ${outcome}` : ""}
       </div>
-    )
+    );
   }
 
   return (
     <div className="text-xs text-muted-foreground">
       {showTime && game.eventTime ? formatTime(game) : scheduledFallback}
     </div>
-  )
+  );
 }
 
 type TodayGameDisplayData = {
-  phase: GamePhase
-  opponent: string
-  opponentBadgeUrl: string | null
-  isHome: boolean
-  outcome: 'W' | 'L' | 'T' | null
-  score: string
-  primaryText: string
-  secondaryText: string
-}
+  phase: GamePhase;
+  opponent: string;
+  opponentBadgeUrl: string | null;
+  isHome: boolean;
+  outcome: "W" | "L" | "T" | null;
+  score: string;
+  primaryText: string;
+  secondaryText: string;
+};
 
 function getTodayGameDisplayData(
   game: SportEvent,
   teamId: string,
   teamName: string,
-  showTime: boolean
+  showTime: boolean,
 ): TodayGameDisplayData {
-  const phase = getGamePhase(game)
-  const side = resolveTrackedTeamSide(game, teamId, teamName)
-  const isHome = side === 'home'
-  const outcome = getOutcome(game, teamId, teamName)
+  const phase = getGamePhase(game);
+  const side = resolveTrackedTeamSide(game, teamId, teamName);
+  const isHome = side === "home";
+  const outcome = getOutcome(game, teamId, teamName);
 
-  if (phase === 'live') {
+  if (phase === "live") {
     return {
       phase,
       opponent: getOpponent(game, teamId, teamName),
@@ -248,11 +369,11 @@ function getTodayGameDisplayData(
       outcome,
       score: getScore(game, teamId, teamName),
       primaryText: getScore(game, teamId, teamName),
-      secondaryText: game.status ?? 'Live'
-    }
+      secondaryText: game.status ?? "Live",
+    };
   }
 
-  if (phase === 'finished') {
+  if (phase === "finished") {
     return {
       phase,
       opponent: getOpponent(game, teamId, teamName),
@@ -261,8 +382,8 @@ function getTodayGameDisplayData(
       outcome,
       score: getScore(game, teamId, teamName),
       primaryText: getScore(game, teamId, teamName),
-      secondaryText: outcome ? `${outcome} · Final score` : 'Final score'
-    }
+      secondaryText: outcome ? `${outcome} · Final score` : "Final score",
+    };
   }
 
   return {
@@ -272,25 +393,33 @@ function getTodayGameDisplayData(
     isHome,
     outcome,
     score: getScore(game, teamId, teamName),
-    primaryText: showTime && game.eventTime ? formatTime(game) : 'Today',
-    secondaryText: `${formatDateLabel(game.eventDate)} · Today`
-  }
+    primaryText: showTime && game.eventTime ? formatTime(game) : "Today",
+    secondaryText: `${formatDateLabel(game.eventDate)} · Today`,
+  };
 }
 
 function getTodayBadgeClasses(game: SportEvent | null): string {
-  if (game && getGamePhase(game) === 'scheduled' && isSportEventOnLocalDate(game.eventDate, game.eventTime, getTodayString())) {
-    return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300'
+  if (
+    game &&
+    getGamePhase(game) === "scheduled" &&
+    isSportEventOnLocalDate(game.eventDate, game.eventTime, getTodayString())
+  ) {
+    return "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300";
   }
 
-  return getGamePhaseBadgeClasses(game)
+  return getGamePhaseBadgeClasses(game);
 }
 
 function getTodayDotClasses(game: SportEvent | null): string {
-  if (game && getGamePhase(game) === 'scheduled' && isSportEventOnLocalDate(game.eventDate, game.eventTime, getTodayString())) {
-    return 'bg-emerald-400'
+  if (
+    game &&
+    getGamePhase(game) === "scheduled" &&
+    isSportEventOnLocalDate(game.eventDate, game.eventTime, getTodayString())
+  ) {
+    return "bg-emerald-400";
   }
 
-  return getGamePhaseDotClasses(game)
+  return getGamePhaseDotClasses(game);
 }
 
 function SummarizedTeamCard({
@@ -300,24 +429,26 @@ function SummarizedTeamCard({
   nextGame,
   showTime,
   showSportLabels,
-  leaguesById
+  leaguesById,
 }: {
-  team: TrackedTeam
-  lastGame: SportEvent | null
-  todayGame: SportEvent | null
-  nextGame: SportEvent | null
-  showTime: boolean
-  showSportLabels: boolean
-  leaguesById: Record<string, SportLeague>
+  team: TrackedTeam;
+  lastGame: SportEvent | null;
+  todayGame: SportEvent | null;
+  nextGame: SportEvent | null;
+  showTime: boolean;
+  showSportLabels: boolean;
+  leaguesById: Record<string, SportLeague>;
 }): React.ReactElement {
-  const displayGame = todayGame ?? lastGame
-  const displayPhase = getGamePhase(displayGame)
-  const outcome = displayGame ? getOutcome(displayGame, team.teamId, team.name) : null
+  const displayGame = todayGame ?? lastGame;
+  const displayPhase = getGamePhase(displayGame);
+  const outcome = displayGame
+    ? getOutcome(displayGame, team.teamId, team.name)
+    : null;
   const opponent = todayGame
     ? getOpponent(todayGame, team.teamId, team.name)
     : nextGame
       ? getOpponent(nextGame, team.teamId, team.name)
-      : null
+      : null;
 
   return (
     <div className="flex items-center gap-3 rounded-lg border px-3 py-2.5">
@@ -325,37 +456,53 @@ function SummarizedTeamCard({
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
-            <span className="block truncate text-sm font-semibold">{team.name}</span>
-            <span className="block truncate text-[11px] text-muted-foreground">{getTeamMeta(team, leaguesById, showSportLabels)}</span>
+            <span className="block truncate text-sm font-semibold">
+              {team.name}
+            </span>
+            <span className="block truncate text-[11px] text-muted-foreground">
+              {getTeamMeta(team, leaguesById, showSportLabels)}
+            </span>
           </div>
           {displayGame ? (
-            <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-xs font-bold', getTodayBadgeClasses(displayGame))}>
-              {todayGame && displayPhase === 'scheduled' ? 'Today' : getGamePhaseLabel(displayGame)}
+            <span
+              className={cn(
+                "shrink-0 rounded-full px-2 py-0.5 text-xs font-bold",
+                getTodayBadgeClasses(displayGame),
+              )}
+            >
+              {todayGame && displayPhase === "scheduled"
+                ? "Today"
+                : getGamePhaseLabel(displayGame)}
             </span>
           ) : null}
         </div>
         <p className="mt-0.5 truncate text-xs text-muted-foreground">
           {todayGame && opponent ? (
             <>
-              Today: <span className="text-foreground/80">{opponent}</span> ·
-              {' '}
-              {displayPhase === 'live'
-                ? `${getScore(todayGame, team.teamId, team.name)} · ${todayGame.status ?? 'Live'}`
-                : displayPhase === 'finished'
-                  ? `Final score ${getScore(todayGame, team.teamId, team.name)}${outcome ? ` · ${outcome}` : ''}`
+              Today: <span className="text-foreground/80">{opponent}</span> ·{" "}
+              {displayPhase === "live"
+                ? `${getScore(todayGame, team.teamId, team.name)} · ${todayGame.status ?? "Live"}`
+                : displayPhase === "finished"
+                  ? `Final score ${getScore(todayGame, team.teamId, team.name)}${outcome ? ` · ${outcome}` : ""}`
                   : showTime && todayGame.eventTime
-                      ? `${formatTime(todayGame)} · Today`
-                      : 'Today'}
+                    ? `${formatTime(todayGame)} · Today`
+                    : "Today"}
             </>
           ) : nextGame ? (
             <>
-              Next: <span className="text-foreground/80">{getOpponent(nextGame, team.teamId, team.name)}</span> · {formatDateTime(nextGame, showTime)}
+              Next:{" "}
+              <span className="text-foreground/80">
+                {getOpponent(nextGame, team.teamId, team.name)}
+              </span>{" "}
+              · {formatDateTime(nextGame, showTime)}
             </>
-          ) : 'No upcoming games'}
+          ) : (
+            "No upcoming games"
+          )}
         </p>
       </div>
     </div>
-  )
+  );
 }
 
 function StandardTeamCard({
@@ -367,25 +514,28 @@ function StandardTeamCard({
   showVenue,
   showLiveStartTime,
   showSportLabels,
-  leaguesById
+  leaguesById,
 }: {
-  team: TrackedTeam
-  lastGame: SportEvent | null
-  todayGame: SportEvent | null
-  nextGame: SportEvent | null
-  showTime: boolean
-  showVenue: boolean
-  showLiveStartTime: boolean
-  showSportLabels: boolean
-  leaguesById: Record<string, SportLeague>
+  team: TrackedTeam;
+  lastGame: SportEvent | null;
+  todayGame: SportEvent | null;
+  nextGame: SportEvent | null;
+  showTime: boolean;
+  showVenue: boolean;
+  showLiveStartTime: boolean;
+  showSportLabels: boolean;
+  leaguesById: Record<string, SportLeague>;
 }): React.ReactElement {
-  const displayGame = todayGame && hasResolvedScore(todayGame) ? todayGame : lastGame
-  const outcome = displayGame ? getOutcome(displayGame, team.teamId, team.name) : null
-  const classes = outcomeClasses(outcome)
-  const startTimeText = getLiveStartTimeText(todayGame, showLiveStartTime)
-  const hasStartTime = Boolean(startTimeText)
-  const hasVenue = showVenue && Boolean(todayGame?.venue)
-  const footerSectionCount = Number(hasStartTime) + Number(hasVenue)
+  const displayGame =
+    todayGame && hasResolvedScore(todayGame) ? todayGame : lastGame;
+  const outcome = displayGame
+    ? getOutcome(displayGame, team.teamId, team.name)
+    : null;
+  const classes = outcomeClasses(outcome);
+  const startTimeText = getLiveStartTimeText(todayGame, showLiveStartTime);
+  const hasStartTime = Boolean(startTimeText);
+  const hasVenue = showVenue && Boolean(todayGame?.venue);
+  const footerSectionCount = Number(hasStartTime) + Number(hasVenue);
 
   return (
     <div className="overflow-hidden rounded-lg border">
@@ -393,42 +543,75 @@ function StandardTeamCard({
         <TeamBadge team={team} size="md" />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-bold">{team.name}</p>
-          <p className="text-xs text-muted-foreground">{getTeamMeta(team, leaguesById, showSportLabels)}</p>
+          <p className="text-xs text-muted-foreground">
+            {getTeamMeta(team, leaguesById, showSportLabels)}
+          </p>
         </div>
         {displayGame && outcome ? (
-          <div className={cn('flex shrink-0 flex-col items-center rounded-md px-2.5 py-1', classes.bg)}>
-            <span className={cn('text-base font-extrabold leading-none', classes.text)}>{outcome}</span>
-            <span className={cn('text-[10px] font-semibold', classes.text)}>{getScore(displayGame, team.teamId, team.name)}</span>
+          <div
+            className={cn(
+              "flex shrink-0 flex-col items-center rounded-md px-2.5 py-1",
+              classes.bg,
+            )}
+          >
+            <span
+              className={cn(
+                "text-base font-extrabold leading-none",
+                classes.text,
+              )}
+            >
+              {outcome}
+            </span>
+            <span className={cn("text-[10px] font-semibold", classes.text)}>
+              {getScore(displayGame, team.teamId, team.name)}
+            </span>
           </div>
         ) : null}
       </div>
       <div className="grid grid-cols-2 divide-x text-xs">
         <div className="px-3 py-2">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Last Game</p>
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Last Game
+          </p>
           {lastGame ? (
             <>
-              <p className="mt-1 text-sm text-foreground/80">vs. {getOpponent(lastGame, team.teamId, team.name)}</p>
-              <p className="text-muted-foreground">{formatDateLabel(lastGame.eventDate)}</p>
+              <p className="mt-1 text-sm text-foreground/80">
+                vs. {getOpponent(lastGame, team.teamId, team.name)}
+              </p>
+              <p className="text-muted-foreground">
+                {formatDateLabel(lastGame.eventDate)}
+              </p>
             </>
           ) : (
             <p className="mt-1 text-muted-foreground">No recent games</p>
           )}
         </div>
         <div className="px-3 py-2">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{todayGame ? 'Today' : 'Next Game'}</p>
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            {todayGame ? "Today" : "Next Game"}
+          </p>
           {todayGame ? (
             <>
-              <p className="mt-1 text-sm text-foreground/80">vs. {getOpponent(todayGame, team.teamId, team.name)}</p>
+              <p className="mt-1 text-sm text-foreground/80">
+                vs. {getOpponent(todayGame, team.teamId, team.name)}
+              </p>
               <div className="mt-1">
-                <GameStateDisplay game={todayGame} teamId={team.teamId} teamName={team.name} showTime={showTime} />
+                <GameStateDisplay
+                  game={todayGame}
+                  teamId={team.teamId}
+                  teamName={team.name}
+                  showTime={showTime}
+                />
               </div>
             </>
           ) : nextGame ? (
             <>
-              <p className="mt-1 text-sm text-foreground/80">vs. {getOpponent(nextGame, team.teamId, team.name)}</p>
+              <p className="mt-1 text-sm text-foreground/80">
+                vs. {getOpponent(nextGame, team.teamId, team.name)}
+              </p>
               <p className="text-muted-foreground">
                 {formatDateTime(nextGame, showTime)}
-                {showVenue && nextGame.venue ? ` · ${nextGame.venue}` : ''}
+                {showVenue && nextGame.venue ? ` · ${nextGame.venue}` : ""}
               </p>
             </>
           ) : (
@@ -436,30 +619,34 @@ function StandardTeamCard({
           )}
         </div>
       </div>
-      {(hasStartTime || hasVenue) ? (
+      {hasStartTime || hasVenue ? (
         <div
           className={cn(
-            'grid border-t bg-muted/10 text-xs',
-            footerSectionCount >= 2 ? 'divide-x' : null,
-            footerSectionCount === 2 ? 'grid-cols-2' : 'grid-cols-1'
+            "grid border-t bg-muted/10 text-xs",
+            footerSectionCount >= 2 ? "divide-x" : null,
+            footerSectionCount === 2 ? "grid-cols-2" : "grid-cols-1",
           )}
         >
           {hasStartTime ? (
             <div className="px-3 py-2">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Start Time</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Start Time
+              </p>
               <p className="mt-0.5 text-foreground/80">{startTimeText}</p>
             </div>
           ) : null}
           {hasVenue ? (
             <div className="px-3 py-2">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Venue</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Venue
+              </p>
               <p className="mt-0.5 text-foreground/80">{todayGame?.venue}</p>
             </div>
           ) : null}
         </div>
       ) : null}
     </div>
-  )
+  );
 }
 
 function DetailedTeamCard({
@@ -472,27 +659,29 @@ function DetailedTeamCard({
   showVenue,
   showLiveStartTime,
   showSportLabels,
-  leaguesById
+  leaguesById,
 }: {
-  team: TrackedTeam
-  lastGame: SportEvent | null
-  todayGame: SportEvent | null
-  nextGame: SportEvent | null
-  streak: string
-  showTime: boolean
-  showVenue: boolean
-  showLiveStartTime: boolean
-  showSportLabels: boolean
-  leaguesById: Record<string, SportLeague>
+  team: TrackedTeam;
+  lastGame: SportEvent | null;
+  todayGame: SportEvent | null;
+  nextGame: SportEvent | null;
+  streak: string;
+  showTime: boolean;
+  showVenue: boolean;
+  showLiveStartTime: boolean;
+  showSportLabels: boolean;
+  leaguesById: Record<string, SportLeague>;
 }): React.ReactElement {
-  const featuredGame = todayGame ?? lastGame
-  const outcome = featuredGame ? getOutcome(featuredGame, team.teamId, team.name) : null
-  const classes = outcomeClasses(outcome)
-  const streakIsWin = streak.startsWith('W')
-  const startTimeText = getLiveStartTimeText(todayGame, showLiveStartTime)
-  const hasStartTime = Boolean(startTimeText)
-  const hasVenue = showVenue && Boolean(todayGame?.venue)
-  const middleSectionCount = Number(hasStartTime) + Number(hasVenue)
+  const featuredGame = todayGame ?? lastGame;
+  const outcome = featuredGame
+    ? getOutcome(featuredGame, team.teamId, team.name)
+    : null;
+  const classes = outcomeClasses(outcome);
+  const streakIsWin = streak.startsWith("W");
+  const startTimeText = getLiveStartTimeText(todayGame, showLiveStartTime);
+  const hasStartTime = Boolean(startTimeText);
+  const hasVenue = showVenue && Boolean(todayGame?.venue);
+  const middleSectionCount = Number(hasStartTime) + Number(hasVenue);
 
   return (
     <div className="overflow-hidden rounded-lg border">
@@ -500,12 +689,21 @@ function DetailedTeamCard({
         <TeamBadge team={team} size="lg" />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-bold">{team.name}</p>
-          <p className="text-xs text-muted-foreground">{getTeamMeta(team, leaguesById, showSportLabels)}</p>
+          <p className="text-xs text-muted-foreground">
+            {getTeamMeta(team, leaguesById, showSportLabels)}
+          </p>
         </div>
         {streak ? (
           <div className="shrink-0 text-right">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Streak</p>
-            <p className={cn('text-sm font-extrabold', streakIsWin ? 'text-emerald-400' : 'text-red-400')}>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Streak
+            </p>
+            <p
+              className={cn(
+                "text-sm font-extrabold",
+                streakIsWin ? "text-emerald-400" : "text-red-400",
+              )}
+            >
               {streak}
             </p>
           </div>
@@ -514,52 +712,91 @@ function DetailedTeamCard({
 
       <div className="flex items-center gap-3 border-b px-3 py-2.5">
         {outcome ? (
-          <div className={cn('flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-lg border', classes.bg, classes.border)}>
-            <span className={cn('text-sm font-extrabold leading-none', classes.text)}>{outcome}</span>
-            <span className={cn('text-[10px] font-semibold', classes.text)}>{featuredGame ? getScore(featuredGame, team.teamId, team.name) : ''}</span>
+          <div
+            className={cn(
+              "flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-lg border",
+              classes.bg,
+              classes.border,
+            )}
+          >
+            <span
+              className={cn(
+                "text-sm font-extrabold leading-none",
+                classes.text,
+              )}
+            >
+              {outcome}
+            </span>
+            <span className={cn("text-[10px] font-semibold", classes.text)}>
+              {featuredGame
+                ? getScore(featuredGame, team.teamId, team.name)
+                : ""}
+            </span>
           </div>
         ) : null}
         <div className="min-w-0 flex-1">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-            {todayGame ? 'Today' : 'Last Game'}{featuredGame ? ` · ${formatDateLabel(featuredGame.eventDate)}` : ''}
+            {todayGame ? "Today" : "Last Game"}
+            {featuredGame
+              ? ` · ${formatDateLabel(featuredGame.eventDate)}`
+              : ""}
           </p>
           {featuredGame ? (
             <>
-              <p className="mt-0.5 text-sm font-medium">vs. {getOpponent(featuredGame, team.teamId, team.name)}</p>
+              <p className="mt-0.5 text-sm font-medium">
+                vs. {getOpponent(featuredGame, team.teamId, team.name)}
+              </p>
               {todayGame ? (
                 <div className="mt-1">
-                  <GameStateDisplay game={todayGame} teamId={team.teamId} teamName={team.name} showTime={showTime} />
+                  <GameStateDisplay
+                    game={todayGame}
+                    teamId={team.teamId}
+                    teamName={team.name}
+                    showTime={showTime}
+                  />
                 </div>
               ) : null}
               {!todayGame && outcome ? (
-                <span className={cn('mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-bold', classes.text, classes.bg)}>
-                  {outcome === 'W' ? 'Win' : outcome === 'L' ? 'Loss' : 'Tie'}
+                <span
+                  className={cn(
+                    "mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-bold",
+                    classes.text,
+                    classes.bg,
+                  )}
+                >
+                  {outcome === "W" ? "Win" : outcome === "L" ? "Loss" : "Tie"}
                 </span>
               ) : null}
             </>
           ) : (
-            <p className="mt-0.5 text-sm text-muted-foreground">No recent games</p>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              No recent games
+            </p>
           )}
         </div>
       </div>
 
-      {(hasStartTime || hasVenue) ? (
+      {hasStartTime || hasVenue ? (
         <div
           className={cn(
-            'grid border-b bg-muted/10 text-xs',
-            middleSectionCount >= 2 ? 'divide-x' : null,
-            middleSectionCount === 2 ? 'grid-cols-2' : 'grid-cols-1'
+            "grid border-b bg-muted/10 text-xs",
+            middleSectionCount >= 2 ? "divide-x" : null,
+            middleSectionCount === 2 ? "grid-cols-2" : "grid-cols-1",
           )}
         >
           {hasStartTime ? (
             <div className="px-3 py-2">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Start Time</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Start Time
+              </p>
               <p className="mt-0.5 text-foreground/80">{startTimeText}</p>
             </div>
           ) : null}
           {hasVenue ? (
             <div className="px-3 py-2">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Venue</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Venue
+              </p>
               <p className="mt-0.5 text-foreground/80">{todayGame?.venue}</p>
             </div>
           ) : null}
@@ -571,22 +808,28 @@ function DetailedTeamCard({
           NEXT
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{todayGame ? 'Up Next' : 'Next Game'}</p>
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            {todayGame ? "Up Next" : "Next Game"}
+          </p>
           {nextGame ? (
             <>
-              <p className="mt-0.5 text-sm font-medium">vs. {getOpponent(nextGame, team.teamId, team.name)}</p>
+              <p className="mt-0.5 text-sm font-medium">
+                vs. {getOpponent(nextGame, team.teamId, team.name)}
+              </p>
               <p className="mt-0.5 text-xs text-muted-foreground">
                 {formatDateTime(nextGame, showTime)}
-                {showVenue && nextGame.venue ? ` · ${nextGame.venue}` : ''}
+                {showVenue && nextGame.venue ? ` · ${nextGame.venue}` : ""}
               </p>
             </>
           ) : (
-            <p className="mt-0.5 text-sm text-muted-foreground">No upcoming games scheduled</p>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              No upcoming games scheduled
+            </p>
           )}
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 function TodayGameCard({
@@ -597,30 +840,36 @@ function TodayGameCard({
   showVenue,
   showLiveStartTime,
   showSportLabels,
-  leaguesById
+  leaguesById,
 }: {
-  team: TrackedTeam
-  todayGame: SportEvent | null
-  lastGame: SportEvent | null
-  showTime: boolean
-  showVenue: boolean
-  showLiveStartTime: boolean
-  showSportLabels: boolean
-  leaguesById: Record<string, SportLeague>
+  team: TrackedTeam;
+  todayGame: SportEvent | null;
+  lastGame: SportEvent | null;
+  showTime: boolean;
+  showVenue: boolean;
+  showLiveStartTime: boolean;
+  showSportLabels: boolean;
+  leaguesById: Record<string, SportLeague>;
 }): React.ReactElement {
-  const priorGame = lastGame && lastGame.eventId !== todayGame?.eventId ? lastGame : null
-  const outcome = todayGame ? getOutcome(todayGame, team.teamId, team.name) : null
-  const classes = outcomeClasses(outcome)
-  const todayGameDisplay = todayGame ? getTodayGameDisplayData(todayGame, team.teamId, team.name, showTime) : null
-  const phase = todayGameDisplay?.phase ?? getGamePhase(todayGame)
-  const opponent = todayGameDisplay?.opponent ?? null
-  const opponentBadgeUrl = todayGameDisplay?.opponentBadgeUrl ?? null
-  const isHome = todayGameDisplay?.isHome ?? false
-  const startTimeText = getLiveStartTimeText(todayGame, showLiveStartTime)
-  const hasStartTime = Boolean(startTimeText)
-  const hasVenue = showVenue && Boolean(todayGame?.venue)
-  const hasLastGame = Boolean(priorGame)
-  const footerSectionCount = Number(hasStartTime) + Number(hasVenue) + Number(hasLastGame)
+  const priorGame =
+    lastGame && lastGame.eventId !== todayGame?.eventId ? lastGame : null;
+  const outcome = todayGame
+    ? getOutcome(todayGame, team.teamId, team.name)
+    : null;
+  const classes = outcomeClasses(outcome);
+  const todayGameDisplay = todayGame
+    ? getTodayGameDisplayData(todayGame, team.teamId, team.name, showTime)
+    : null;
+  const phase = todayGameDisplay?.phase ?? getGamePhase(todayGame);
+  const opponent = todayGameDisplay?.opponent ?? null;
+  const opponentBadgeUrl = todayGameDisplay?.opponentBadgeUrl ?? null;
+  const isHome = todayGameDisplay?.isHome ?? false;
+  const startTimeText = getLiveStartTimeText(todayGame, showLiveStartTime);
+  const hasStartTime = Boolean(startTimeText);
+  const hasVenue = showVenue && Boolean(todayGame?.venue);
+  const hasLastGame = Boolean(priorGame);
+  const footerSectionCount =
+    Number(hasStartTime) + Number(hasVenue) + Number(hasLastGame);
 
   return (
     <div className="overflow-hidden rounded-lg border border-emerald-500/20 bg-emerald-500/5">
@@ -628,11 +877,25 @@ function TodayGameCard({
         <TeamBadge team={team} size="md" />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-bold">{team.name}</p>
-          <p className="text-xs text-muted-foreground">{getTeamMeta(team, leaguesById, showSportLabels)}</p>
+          <p className="text-xs text-muted-foreground">
+            {getTeamMeta(team, leaguesById, showSportLabels)}
+          </p>
         </div>
-        <div className={cn('flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5', getTodayBadgeClasses(todayGame))}>
-          <span className={cn('h-1.5 w-1.5 rounded-full', getTodayDotClasses(todayGame))} />
-          <span className="text-[10px] font-bold uppercase tracking-wide">{phase === 'scheduled' ? 'Today' : getGamePhaseLabel(todayGame)}</span>
+        <div
+          className={cn(
+            "flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5",
+            getTodayBadgeClasses(todayGame),
+          )}
+        >
+          <span
+            className={cn(
+              "h-1.5 w-1.5 rounded-full",
+              getTodayDotClasses(todayGame),
+            )}
+          />
+          <span className="text-[10px] font-bold uppercase tracking-wide">
+            {phase === "scheduled" ? "Today" : getGamePhaseLabel(todayGame)}
+          </span>
         </div>
       </div>
 
@@ -642,78 +905,134 @@ function TodayGameCard({
             <div className="mx-auto w-fit">
               <TeamBadge team={team} size="lg" />
             </div>
-            <p className="mt-1 text-xs font-semibold">{team.shortName ?? team.name}</p>
-            <p className="text-[10px] text-muted-foreground">{isHome ? 'Home' : 'Away'}</p>
+            <p className="mt-1 text-xs font-semibold">
+              {team.shortName ?? team.name}
+            </p>
+            <p className="text-[10px] text-muted-foreground">
+              {isHome ? "Home" : "Away"}
+            </p>
           </div>
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-              {phase === 'scheduled' ? 'Today' : getGamePhaseHeadline(todayGame)}
+              {phase === "scheduled"
+                ? "Today"
+                : getGamePhaseHeadline(todayGame)}
             </p>
-            {phase === 'live' ? (
+            {phase === "live" ? (
               <>
-                <p className="mt-1 text-base font-extrabold tracking-tight tabular-nums">{todayGameDisplay?.primaryText ?? getScore(todayGame, team.teamId, team.name)}</p>
-                <p className="text-[10px] text-red-500">{todayGameDisplay?.secondaryText ?? (todayGame?.status ?? 'Live')}</p>
+                <p className="mt-1 text-base font-extrabold tracking-tight tabular-nums">
+                  {todayGameDisplay?.primaryText ??
+                    getScore(todayGame, team.teamId, team.name)}
+                </p>
+                <p className="text-[10px] text-red-500">
+                  {todayGameDisplay?.secondaryText ??
+                    todayGame?.status ??
+                    "Live"}
+                </p>
               </>
-            ) : phase === 'finished' ? (
+            ) : phase === "finished" ? (
               <>
-                <p className={cn('mt-1 text-base font-extrabold tracking-tight tabular-nums', classes.text)}>{todayGameDisplay?.primaryText ?? getScore(todayGame, team.teamId, team.name)}</p>
-                <p className={cn('text-[10px]', classes.text)}>{todayGameDisplay?.secondaryText ?? (outcome ? `${outcome} · Final score` : 'Final score')}</p>
+                <p
+                  className={cn(
+                    "mt-1 text-base font-extrabold tracking-tight tabular-nums",
+                    classes.text,
+                  )}
+                >
+                  {todayGameDisplay?.primaryText ??
+                    getScore(todayGame, team.teamId, team.name)}
+                </p>
+                <p className={cn("text-[10px]", classes.text)}>
+                  {todayGameDisplay?.secondaryText ??
+                    (outcome ? `${outcome} · Final score` : "Final score")}
+                </p>
               </>
             ) : (
               <>
                 <p className="mt-1 text-base font-extrabold tracking-tight">
-                  {todayGameDisplay?.primaryText ?? (showTime && todayGame?.eventTime ? formatTime(todayGame) : 'Today')}
+                  {todayGameDisplay?.primaryText ??
+                    (showTime && todayGame?.eventTime
+                      ? formatTime(todayGame)
+                      : "Today")}
                 </p>
-                <p className="text-[10px] text-muted-foreground">{todayGameDisplay?.secondaryText ?? (todayGame ? `${formatDateLabel(todayGame.eventDate)} · Today` : 'Today')}</p>
+                <p className="text-[10px] text-muted-foreground">
+                  {todayGameDisplay?.secondaryText ??
+                    (todayGame
+                      ? `${formatDateLabel(todayGame.eventDate)} · Today`
+                      : "Today")}
+                </p>
               </>
             )}
           </div>
           <div>
             <div className="mx-auto w-fit">
-              <OpponentBadge name={opponent ?? '--'} badgeUrl={opponentBadgeUrl} size="lg" />
+              <OpponentBadge
+                name={opponent ?? "--"}
+                badgeUrl={opponentBadgeUrl}
+                size="lg"
+              />
             </div>
             <p className="mt-1 text-xs font-semibold">{opponent}</p>
-            <p className="text-[10px] text-muted-foreground">{isHome ? 'Opponent' : 'At'}</p>
+            <p className="text-[10px] text-muted-foreground">
+              {isHome ? "Opponent" : "At"}
+            </p>
           </div>
         </div>
       ) : null}
 
-      {(hasStartTime || hasVenue || hasLastGame) ? (
+      {hasStartTime || hasVenue || hasLastGame ? (
         <div
           className={cn(
-            'grid border-t bg-muted/10 text-xs',
-            footerSectionCount >= 2 ? 'divide-x' : null,
-            footerSectionCount === 3 ? 'grid-cols-3' : footerSectionCount === 2 ? 'grid-cols-2' : 'grid-cols-1'
+            "grid border-t bg-muted/10 text-xs",
+            footerSectionCount >= 2 ? "divide-x" : null,
+            footerSectionCount === 3
+              ? "grid-cols-3"
+              : footerSectionCount === 2
+                ? "grid-cols-2"
+                : "grid-cols-1",
           )}
         >
           {hasStartTime ? (
             <div className="px-3 py-2">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Start Time</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Start Time
+              </p>
               <p className="mt-0.5 text-foreground/80">{startTimeText}</p>
             </div>
           ) : null}
           {hasVenue ? (
             <div className="px-3 py-2">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Venue</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Venue
+              </p>
               <p className="mt-0.5 text-foreground/80">{todayGame?.venue}</p>
             </div>
           ) : null}
           {hasLastGame ? (
             <div className="px-3 py-2">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Last Result</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Last Result
+              </p>
               <div className="mt-0.5 flex items-center gap-1.5">
                 {priorGame ? (
                   <>
                     {getOutcome(priorGame, team.teamId, team.name) ? (
-                      <span className={cn(
-                        'rounded-full px-1.5 py-0.5 text-[10px] font-bold',
-                        outcomeClasses(getOutcome(priorGame, team.teamId, team.name)).text,
-                        outcomeClasses(getOutcome(priorGame, team.teamId, team.name)).bg
-                      )}>
+                      <span
+                        className={cn(
+                          "rounded-full px-1.5 py-0.5 text-[10px] font-bold",
+                          outcomeClasses(
+                            getOutcome(priorGame, team.teamId, team.name),
+                          ).text,
+                          outcomeClasses(
+                            getOutcome(priorGame, team.teamId, team.name),
+                          ).bg,
+                        )}
+                      >
                         {getOutcome(priorGame, team.teamId, team.name)}
                       </span>
                     ) : null}
-                    <span className="text-foreground/80">{getScore(priorGame, team.teamId, team.name)}</span>
+                    <span className="text-foreground/80">
+                      {getScore(priorGame, team.teamId, team.name)}
+                    </span>
                   </>
                 ) : null}
               </div>
@@ -722,7 +1041,7 @@ function TodayGameCard({
         </div>
       ) : null}
     </div>
-  )
+  );
 }
 
 function TodayRestingRow({
@@ -730,31 +1049,38 @@ function TodayRestingRow({
   nextGame,
   showTime,
   showSportLabels,
-  leaguesById
+  leaguesById,
 }: {
-  team: TrackedTeam
-  nextGame: SportEvent | null
-  showTime: boolean
-  showSportLabels: boolean
-  leaguesById: Record<string, SportLeague>
+  team: TrackedTeam;
+  nextGame: SportEvent | null;
+  showTime: boolean;
+  showSportLabels: boolean;
+  leaguesById: Record<string, SportLeague>;
 }): React.ReactElement {
   return (
     <div className="flex items-center gap-3 rounded-lg border px-3 py-2 opacity-40">
       <TeamBadge team={team} size="sm" />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold text-muted-foreground">{team.name}</p>
-        <p className="truncate text-[11px] text-muted-foreground">{getTeamMeta(team, leaguesById, showSportLabels)}</p>
+        <p className="truncate text-sm font-semibold text-muted-foreground">
+          {team.name}
+        </p>
+        <p className="truncate text-[11px] text-muted-foreground">
+          {getTeamMeta(team, leaguesById, showSportLabels)}
+        </p>
         <p className="text-xs text-muted-foreground">
           {nextGame ? (
             <>
-              Next: {getOpponent(nextGame, team.teamId, team.name)} · {formatDateTime(nextGame, showTime)}
+              Next: {getOpponent(nextGame, team.teamId, team.name)} ·{" "}
+              {formatDateTime(nextGame, showTime)}
             </>
-          ) : 'No upcoming games'}
+          ) : (
+            "No upcoming games"
+          )}
         </p>
       </div>
       <span className="shrink-0 text-xs text-muted-foreground/50">-</span>
     </div>
-  )
+  );
 }
 
 function TodayView({
@@ -765,19 +1091,23 @@ function TodayView({
   showLiveStartTime,
   today,
   showSportLabels,
-  leaguesById
+  leaguesById,
 }: {
-  teams: TrackedTeam[]
-  teamEventsById: Record<string, SportTeamEvents>
-  showVenue: boolean
-  showTime: boolean
-  showLiveStartTime: boolean
-  today: string
-  showSportLabels: boolean
-  leaguesById: Record<string, SportLeague>
+  teams: TrackedTeam[];
+  teamEventsById: Record<string, SportTeamEvents>;
+  showVenue: boolean;
+  showTime: boolean;
+  showLiveStartTime: boolean;
+  today: string;
+  showSportLabels: boolean;
+  leaguesById: Record<string, SportLeague>;
 }): React.ReactElement {
-  const playing = teams.filter((team) => getTodayGame(teamEventsById[team.teamId], today) !== null)
-  const resting = teams.filter((team) => getTodayGame(teamEventsById[team.teamId], today) === null)
+  const playing = teams.filter(
+    (team) => getTodayGame(teamEventsById[team.teamId], today) !== null,
+  );
+  const resting = teams.filter(
+    (team) => getTodayGame(teamEventsById[team.teamId], today) === null,
+  );
 
   if (playing.length === 0) {
     return (
@@ -788,7 +1118,7 @@ function TodayView({
         {resting.length > 0 ? (
           <div className="space-y-1.5">
             {resting.map((team) => {
-              const nextGame = teamEventsById[team.teamId]?.next?.[0] ?? null
+              const nextGame = teamEventsById[team.teamId]?.next?.[0] ?? null;
               return (
                 <TodayRestingRow
                   key={team.teamId}
@@ -798,20 +1128,23 @@ function TodayView({
                   showSportLabels={showSportLabels}
                   leaguesById={leaguesById}
                 />
-              )
+              );
             })}
           </div>
         ) : null}
       </div>
-    )
+    );
   }
 
   return (
     <div className="space-y-3">
       {playing.map((team) => {
-        const events = teamEventsById[team.teamId]
-        const todayGame = getTodayGame(events, today)
-        const lastGame = getFirstDifferentGame(events?.last, todayGame?.eventId ?? null)
+        const events = teamEventsById[team.teamId];
+        const todayGame = getTodayGame(events, today);
+        const lastGame = getFirstDifferentGame(
+          events?.last,
+          todayGame?.eventId ?? null,
+        );
         return (
           <TodayGameCard
             key={team.teamId}
@@ -824,15 +1157,17 @@ function TodayView({
             showSportLabels={showSportLabels}
             leaguesById={leaguesById}
           />
-        )
+        );
       })}
 
       {resting.length > 0 ? (
         <div>
-          <p className="mb-1.5 px-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/60">No game today</p>
+          <p className="mb-1.5 px-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/60">
+            No game today
+          </p>
           <div className="space-y-1.5">
             {resting.map((team) => {
-              const nextGame = teamEventsById[team.teamId]?.next?.[0] ?? null
+              const nextGame = teamEventsById[team.teamId]?.next?.[0] ?? null;
               return (
                 <TodayRestingRow
                   key={team.teamId}
@@ -842,13 +1177,13 @@ function TodayView({
                   showSportLabels={showSportLabels}
                   leaguesById={leaguesById}
                 />
-              )
+              );
             })}
           </div>
         </div>
       ) : null}
     </div>
-  )
+  );
 }
 
 export function MyTeamsView({
@@ -859,28 +1194,28 @@ export function MyTeamsView({
   showTime,
   showLiveStartTime,
   viewMode,
-  showSportLabels = false
+  showSportLabels = false,
 }: {
-  teams: TrackedTeam[]
-  teamEventsById: Record<string, SportTeamEvents>
-  leaguesById: Record<string, SportLeague>
-  showVenue: boolean
-  showTime: boolean
-  showLiveStartTime: boolean
-  viewMode: 'today' | 'summarized' | 'standard' | 'detailed'
-  showSportLabels?: boolean
+  teams: TrackedTeam[];
+  teamEventsById: Record<string, SportTeamEvents>;
+  leaguesById: Record<string, SportLeague>;
+  showVenue: boolean;
+  showTime: boolean;
+  showLiveStartTime: boolean;
+  viewMode: "today" | "summarized" | "standard" | "detailed";
+  showSportLabels?: boolean;
 }): React.ReactElement {
-  const today = getTodayString()
+  const today = getTodayString();
 
   if (teams.length === 0) {
     return (
       <div className="rounded-lg border border-dashed px-4 py-6 text-sm text-muted-foreground">
         No tracked teams yet. Add teams from Settings → Sports.
       </div>
-    )
+    );
   }
 
-  if (viewMode === 'today') {
+  if (viewMode === "today") {
     return (
       <TodayView
         teams={teams}
@@ -892,19 +1227,29 @@ export function MyTeamsView({
         today={today}
         showSportLabels={showSportLabels}
       />
-    )
+    );
   }
 
   return (
     <div className="space-y-3">
       {teams.map((team) => {
-        const events = teamEventsById[team.teamId]
-        const todayGame = getTodayGame(events, today)
-        const lastGame = getFirstDifferentGame(events?.last, todayGame?.eventId ?? null)
-        const nextGame = getFirstDifferentGame(events?.next, todayGame?.eventId ?? null)
-        const streak = computeStreak(events?.last ?? [], team.teamId, team.name)
+        const events = teamEventsById[team.teamId];
+        const todayGame = getTodayGame(events, today);
+        const lastGame = getFirstDifferentGame(
+          events?.last,
+          todayGame?.eventId ?? null,
+        );
+        const nextGame = getFirstDifferentGame(
+          events?.next,
+          todayGame?.eventId ?? null,
+        );
+        const streak = computeStreak(
+          events?.last ?? [],
+          team.teamId,
+          team.name,
+        );
 
-        if (viewMode === 'summarized') {
+        if (viewMode === "summarized") {
           return (
             <SummarizedTeamCard
               key={team.teamId}
@@ -916,10 +1261,10 @@ export function MyTeamsView({
               showSportLabels={showSportLabels}
               leaguesById={leaguesById}
             />
-          )
+          );
         }
 
-        if (viewMode === 'standard') {
+        if (viewMode === "standard") {
           return (
             <StandardTeamCard
               key={team.teamId}
@@ -933,7 +1278,7 @@ export function MyTeamsView({
               showSportLabels={showSportLabels}
               leaguesById={leaguesById}
             />
-          )
+          );
         }
 
         return (
@@ -950,10 +1295,10 @@ export function MyTeamsView({
             showSportLabels={showSportLabels}
             leaguesById={leaguesById}
           />
-        )
+        );
       })}
     </div>
-  )
+  );
 }
 
-export default MyTeamsView
+export default MyTeamsView;

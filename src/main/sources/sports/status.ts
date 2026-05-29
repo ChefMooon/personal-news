@@ -4,5 +4,5 @@ export {
   isLiveSportEvent,
   normalizeEventStatus,
   type SportEventState,
-  type SportEventStatusInput
-} from '../../../shared/sports-event-utils'
+  type SportEventStatusInput,
+} from "../../../shared/sports-event-utils";

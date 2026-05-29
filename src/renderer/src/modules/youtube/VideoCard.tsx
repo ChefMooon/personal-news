@@ -1,105 +1,133 @@
-import React, { useEffect, useState } from 'react'
-import { toast } from 'sonner'
-import { Circle, CircleCheck } from 'lucide-react'
-import { IPC, type YtVideo } from '../../../../shared/ipc-types'
-import { formatAbsoluteTime, formatDuration, formatFutureTime, formatRelativeTime } from '../../lib/time'
-import { cn } from '../../lib/utils'
-import { inferMediaType } from './video-lifecycle'
+import React, { useEffect, useState } from "react";
+import { toast } from "sonner";
+import { Circle, CircleCheck } from "lucide-react";
+import { IPC, type YtVideo } from "../../../../shared/ipc-types";
+import {
+  formatAbsoluteTime,
+  formatDuration,
+  formatFutureTime,
+  formatRelativeTime,
+} from "../../lib/time";
+import { cn } from "../../lib/utils";
+import { inferMediaType } from "./video-lifecycle";
 
 interface VideoCardProps {
-  video: YtVideo
-  density?: 'compact' | 'detailed'
-  channelName?: string
+  video: YtVideo;
+  density?: "compact" | "detailed";
+  channelName?: string;
 }
 
 function getMediaLabel(video: YtVideo): string {
-  if (video.broadcast_status === 'live') {
-    return 'LIVE'
+  if (video.broadcast_status === "live") {
+    return "LIVE";
   }
-  if (video.broadcast_status === 'upcoming') {
-    return 'UPCOMING'
+  if (video.broadcast_status === "upcoming") {
+    return "UPCOMING";
   }
 
-  const mediaType = inferMediaType(video)
+  const mediaType = inferMediaType(video);
 
-  if (mediaType === 'short') return 'SHORT'
-  if (mediaType === 'live') return 'PAST LIVE'
-  if (mediaType === 'upcoming_stream') return 'UPCOMING'
-  return 'VIDEO'
+  if (mediaType === "short") return "SHORT";
+  if (mediaType === "live") return "PAST LIVE";
+  if (mediaType === "upcoming_stream") return "UPCOMING";
+  return "VIDEO";
 }
 
 export function VideoCard({
   video,
-  density = 'detailed',
-  channelName
+  density = "detailed",
+  channelName,
 }: VideoCardProps): React.ReactElement {
-  const [watchedAt, setWatchedAt] = useState<number | null>(video.watched_at)
+  const [watchedAt, setWatchedAt] = useState<number | null>(video.watched_at);
 
   useEffect(() => {
-    setWatchedAt(video.watched_at)
-  }, [video.video_id, video.watched_at])
+    setWatchedAt(video.watched_at);
+  }, [video.video_id, video.watched_at]);
 
-  const isWatched = watchedAt != null
+  const isWatched = watchedAt != null;
 
   const saveWatchedState = (nextWatched: boolean): void => {
-    window.api.invoke(IPC.YOUTUBE_SET_VIDEO_WATCHED, video.video_id, nextWatched).catch((err) => {
-      toast.error(err instanceof Error ? err.message : 'Failed to update watched state.')
-    })
-  }
+    window.api
+      .invoke(IPC.YOUTUBE_SET_VIDEO_WATCHED, video.video_id, nextWatched)
+      .catch((err) => {
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : "Failed to update watched state.",
+        );
+      });
+  };
 
   const handleClick = (): void => {
-    const url = `https://www.youtube.com/watch?v=${video.video_id}`
+    const url = `https://www.youtube.com/watch?v=${video.video_id}`;
     window.api.invoke(IPC.SHELL_OPEN_EXTERNAL, url).catch((err) => {
-      toast.error(err instanceof Error ? err.message : 'Failed to open video.')
-    })
+      toast.error(err instanceof Error ? err.message : "Failed to open video.");
+    });
 
     if (!isWatched) {
-      const now = Math.floor(Date.now() / 1000)
-      setWatchedAt(now)
-      saveWatchedState(true)
+      const now = Math.floor(Date.now() / 1000);
+      setWatchedAt(now);
+      saveWatchedState(true);
     }
-  }
+  };
 
-  const handleWatchedToggle = (e: React.MouseEvent<HTMLButtonElement>): void => {
-    e.stopPropagation()
-    const nextWatched = !isWatched
-    setWatchedAt(nextWatched ? Math.floor(Date.now() / 1000) : null)
-    saveWatchedState(nextWatched)
-  }
+  const handleWatchedToggle = (
+    e: React.MouseEvent<HTMLButtonElement>,
+  ): void => {
+    e.stopPropagation();
+    const nextWatched = !isWatched;
+    setWatchedAt(nextWatched ? Math.floor(Date.now() / 1000) : null);
+    saveWatchedState(nextWatched);
+  };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>): void => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault()
-      handleClick()
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      handleClick();
     }
-  }
+  };
 
-  const isCompact = density === 'compact'
-  const duration = formatDuration(video.duration_sec)
-  const publishedRelative = formatRelativeTime(video.published_at)
-  const publishedAbsolute = formatAbsoluteTime(video.published_at)
+  const isCompact = density === "compact";
+  const duration = formatDuration(video.duration_sec);
+  const publishedRelative = formatRelativeTime(video.published_at);
+  const publishedAbsolute = formatAbsoluteTime(video.published_at);
   const scheduledRelative =
-    video.scheduled_start != null ? formatFutureTime(video.scheduled_start) : 'Scheduled'
+    video.scheduled_start != null
+      ? formatFutureTime(video.scheduled_start)
+      : "Scheduled";
   const scheduledAbsolute =
-    video.scheduled_start != null ? formatAbsoluteTime(video.scheduled_start) : null
+    video.scheduled_start != null
+      ? formatAbsoluteTime(video.scheduled_start)
+      : null;
   const actualStartRelative =
-    video.actual_start_time != null ? formatRelativeTime(video.actual_start_time) : null
+    video.actual_start_time != null
+      ? formatRelativeTime(video.actual_start_time)
+      : null;
   const actualStartAbsolute =
-    video.actual_start_time != null ? formatAbsoluteTime(video.actual_start_time) : null
+    video.actual_start_time != null
+      ? formatAbsoluteTime(video.actual_start_time)
+      : null;
   const actualEndRelative =
-    video.actual_end_time != null ? formatRelativeTime(video.actual_end_time) : null
+    video.actual_end_time != null
+      ? formatRelativeTime(video.actual_end_time)
+      : null;
   const actualEndAbsolute =
-    video.actual_end_time != null ? formatAbsoluteTime(video.actual_end_time) : null
-  const syncedRelative = formatRelativeTime(video.fetched_at)
-  const watchedRelative = watchedAt != null ? formatRelativeTime(watchedAt) : null
-  const watchedAbsolute = watchedAt != null ? formatAbsoluteTime(watchedAt) : null
-  const mediaLabel = getMediaLabel(video)
-  const isUpcoming = video.broadcast_status === 'upcoming'
-  const isLiveNow = video.broadcast_status === 'live'
-  const isPastLivestream = !isLiveNow && !isUpcoming && inferMediaType(video) === 'live'
+    video.actual_end_time != null
+      ? formatAbsoluteTime(video.actual_end_time)
+      : null;
+  const syncedRelative = formatRelativeTime(video.fetched_at);
+  const watchedRelative =
+    watchedAt != null ? formatRelativeTime(watchedAt) : null;
+  const watchedAbsolute =
+    watchedAt != null ? formatAbsoluteTime(watchedAt) : null;
+  const mediaLabel = getMediaLabel(video);
+  const isUpcoming = video.broadcast_status === "upcoming";
+  const isLiveNow = video.broadcast_status === "live";
+  const isPastLivestream =
+    !isLiveNow && !isUpcoming && inferMediaType(video) === "live";
 
-  const cardWidth = isCompact ? 'w-[140px]' : 'w-[180px]'
-  const thumbHeight = isCompact ? 'h-[79px]' : 'h-[101px]'
+  const cardWidth = isCompact ? "w-[140px]" : "w-[180px]";
+  const thumbHeight = isCompact ? "h-[79px]" : "h-[101px]";
 
   return (
     <div
@@ -107,18 +135,26 @@ export function VideoCard({
       onKeyDown={handleKeyDown}
       role="button"
       tabIndex={0}
-      className={cn('flex flex-col shrink-0 text-left group cursor-pointer', cardWidth)}
+      className={cn(
+        "flex flex-col shrink-0 text-left group cursor-pointer",
+        cardWidth,
+      )}
     >
       {/* 16:9 thumbnail */}
-      <div className={cn('relative rounded-md overflow-hidden bg-muted w-full', thumbHeight)}>
+      <div
+        className={cn(
+          "relative rounded-md overflow-hidden bg-muted w-full",
+          thumbHeight,
+        )}
+      >
         {video.thumbnail_url ? (
           <img
             src={video.thumbnail_url}
             alt={video.title}
             className="w-full h-full object-cover group-hover:opacity-90 transition-opacity"
-            style={isWatched ? { filter: 'saturate(0.6)' } : undefined}
+            style={isWatched ? { filter: "saturate(0.6)" } : undefined}
             onError={(e) => {
-              ;(e.target as HTMLImageElement).style.display = 'none'
+              (e.target as HTMLImageElement).style.display = "none";
             }}
           />
         ) : (
@@ -133,13 +169,17 @@ export function VideoCard({
 
         <button
           type="button"
-          aria-label={isWatched ? 'Mark as unwatched' : 'Mark as watched'}
+          aria-label={isWatched ? "Mark as unwatched" : "Mark as watched"}
           aria-pressed={isWatched}
-          title={isWatched ? 'Watched - click to mark unwatched' : 'Unwatched - click to mark watched'}
+          title={
+            isWatched
+              ? "Watched - click to mark unwatched"
+              : "Unwatched - click to mark watched"
+          }
           onClick={handleWatchedToggle}
           className={cn(
-            'absolute right-1.5 top-1.5 rounded bg-black/70 p-1 text-white transition-colors',
-            isWatched ? 'hover:bg-black/80' : 'hover:bg-black/80'
+            "absolute right-1.5 top-1.5 rounded bg-black/70 p-1 text-white transition-colors",
+            isWatched ? "hover:bg-black/80" : "hover:bg-black/80",
           )}
         >
           {isWatched ? (
@@ -159,25 +199,40 @@ export function VideoCard({
       {/* Title */}
       <p
         className="mt-1 text-xs font-medium line-clamp-2 text-foreground group-hover:text-primary transition-colors leading-tight"
-        style={isWatched ? { filter: 'brightness(0.9)' } : undefined}
+        style={isWatched ? { filter: "brightness(0.9)" } : undefined}
       >
         {video.title}
       </p>
 
-      {channelName ? <p className="mt-0.5 text-[11px] text-muted-foreground truncate">{channelName}</p> : null}
+      {channelName ? (
+        <p className="mt-0.5 text-[11px] text-muted-foreground truncate">
+          {channelName}
+        </p>
+      ) : null}
 
       {/* Date info — full in detailed mode, condensed in compact */}
       {isCompact ? (
         isUpcoming ? (
-          <p className="mt-0.5 text-[10px] text-muted-foreground" title={scheduledAbsolute ?? undefined}>
+          <p
+            className="mt-0.5 text-[10px] text-muted-foreground"
+            title={scheduledAbsolute ?? undefined}
+          >
             {scheduledRelative}
           </p>
         ) : isLiveNow ? (
-          <p className="mt-0.5 text-[10px] text-muted-foreground" title={actualStartAbsolute ?? undefined}>
-            {actualStartRelative ? `Live now · started ${actualStartRelative}` : 'Live now'}
+          <p
+            className="mt-0.5 text-[10px] text-muted-foreground"
+            title={actualStartAbsolute ?? undefined}
+          >
+            {actualStartRelative
+              ? `Live now · started ${actualStartRelative}`
+              : "Live now"}
           </p>
         ) : isPastLivestream ? (
-          <p className="mt-0.5 text-[10px] text-muted-foreground" title={(actualEndAbsolute ?? actualStartAbsolute) ?? undefined}>
+          <p
+            className="mt-0.5 text-[10px] text-muted-foreground"
+            title={actualEndAbsolute ?? actualStartAbsolute ?? undefined}
+          >
             {actualEndRelative
               ? `Ended ${actualEndRelative}`
               : actualStartRelative
@@ -185,20 +240,33 @@ export function VideoCard({
                 : publishedRelative}
           </p>
         ) : (
-          <p className="mt-0.5 text-[10px] text-muted-foreground">{publishedRelative}</p>
+          <p className="mt-0.5 text-[10px] text-muted-foreground">
+            {publishedRelative}
+          </p>
         )
       ) : (
         <>
           {isUpcoming ? (
-            <p className="mt-0.5 text-xs text-muted-foreground" title={scheduledAbsolute ?? undefined}>
+            <p
+              className="mt-0.5 text-xs text-muted-foreground"
+              title={scheduledAbsolute ?? undefined}
+            >
               {scheduledRelative}
             </p>
           ) : isLiveNow ? (
-            <p className="mt-0.5 text-xs text-muted-foreground" title={actualStartAbsolute ?? undefined}>
-              {actualStartRelative ? `Live now · started ${actualStartRelative}` : 'Live now'}
+            <p
+              className="mt-0.5 text-xs text-muted-foreground"
+              title={actualStartAbsolute ?? undefined}
+            >
+              {actualStartRelative
+                ? `Live now · started ${actualStartRelative}`
+                : "Live now"}
             </p>
           ) : isPastLivestream ? (
-            <p className="mt-0.5 text-xs text-muted-foreground" title={(actualEndAbsolute ?? actualStartAbsolute) ?? undefined}>
+            <p
+              className="mt-0.5 text-xs text-muted-foreground"
+              title={actualEndAbsolute ?? actualStartAbsolute ?? undefined}
+            >
               {actualEndRelative
                 ? `Ended ${actualEndRelative}`
                 : actualStartRelative
@@ -206,18 +274,26 @@ export function VideoCard({
                   : `Published ${publishedRelative}`}
             </p>
           ) : (
-            <p className="mt-0.5 text-xs text-muted-foreground" title={publishedAbsolute}>
+            <p
+              className="mt-0.5 text-xs text-muted-foreground"
+              title={publishedAbsolute}
+            >
               Published {publishedRelative}
             </p>
           )}
-          <p className="text-[10px] text-muted-foreground/80">Synced {syncedRelative}</p>
+          <p className="text-[10px] text-muted-foreground/80">
+            Synced {syncedRelative}
+          </p>
           {watchedRelative ? (
-            <p className="text-[10px] text-muted-foreground/80" title={watchedAbsolute ?? undefined}>
+            <p
+              className="text-[10px] text-muted-foreground/80"
+              title={watchedAbsolute ?? undefined}
+            >
               Watched {watchedRelative}
             </p>
           ) : null}
         </>
       )}
     </div>
-  )
+  );
 }

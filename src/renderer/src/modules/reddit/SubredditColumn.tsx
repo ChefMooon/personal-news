@@ -1,45 +1,58 @@
-import React, { useEffect, useState } from 'react'
-import type { DigestPost } from '../../../../shared/ipc-types'
-import { DigestPostRow } from './DigestPostRow'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import React, { useEffect, useState } from "react";
+import type { DigestPost } from "../../../../shared/ipc-types";
+import { DigestPostRow } from "./DigestPostRow";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 interface SubredditColumnProps {
-  label: string
-  posts: DigestPost[]
-  maxPosts?: number
+  label: string;
+  posts: DigestPost[];
+  maxPosts?: number;
 }
 
-export function SubredditColumn({ label, posts, maxPosts }: SubredditColumnProps): React.ReactElement {
-  const [currentPage, setCurrentPage] = useState(0)
-  const postIdentitySignature = posts.map((post) => `${post.post_id}-${post.week_start_date}`).join('|')
+export function SubredditColumn({
+  label,
+  posts,
+  maxPosts,
+}: SubredditColumnProps): React.ReactElement {
+  const [currentPage, setCurrentPage] = useState(0);
+  const postIdentitySignature = posts
+    .map((post) => `${post.post_id}-${post.week_start_date}`)
+    .join("|");
 
   // Reset page only when the list identity/order changes (sort/filter/week changes),
   // not when per-item metadata (like viewed_at) updates.
   useEffect(() => {
-    setCurrentPage(0)
-  }, [postIdentitySignature])
+    setCurrentPage(0);
+  }, [postIdentitySignature]);
 
   // Compute pagination
-  const itemsPerPage = maxPosts ?? posts.length
-  const totalPages = itemsPerPage > 0 ? Math.ceil(posts.length / itemsPerPage) : 1
-  const pagedPosts = posts.slice(currentPage * itemsPerPage, (currentPage + 1) * itemsPerPage)
+  const itemsPerPage = maxPosts ?? posts.length;
+  const totalPages =
+    itemsPerPage > 0 ? Math.ceil(posts.length / itemsPerPage) : 1;
+  const pagedPosts = posts.slice(
+    currentPage * itemsPerPage,
+    (currentPage + 1) * itemsPerPage,
+  );
 
   const handlePrev = (): void => {
-    setCurrentPage((page) => Math.max(0, page - 1))
-  }
+    setCurrentPage((page) => Math.max(0, page - 1));
+  };
 
   const handleNext = (): void => {
-    setCurrentPage((page) => Math.min(totalPages - 1, page + 1))
-  }
+    setCurrentPage((page) => Math.min(totalPages - 1, page + 1));
+  };
 
   return (
     <div className="min-w-0">
       <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 pb-1 border-b">
-        {label === 'All' ? label : `r/${label}`}
+        {label === "All" ? label : `r/${label}`}
       </div>
       <div>
         {pagedPosts.map((post) => (
-          <DigestPostRow key={`${post.post_id}-${post.week_start_date}`} post={post} />
+          <DigestPostRow
+            key={`${post.post_id}-${post.week_start_date}`}
+            post={post}
+          />
         ))}
       </div>
       {totalPages > 1 && (
@@ -68,5 +81,5 @@ export function SubredditColumn({ label, posts, maxPosts }: SubredditColumnProps
         </div>
       )}
     </div>
-  )
+  );
 }

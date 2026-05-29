@@ -1,77 +1,110 @@
-import React from 'react'
-import { toast } from 'sonner'
-import { CheckCheck, ChevronDown, ChevronRight, ExternalLink } from 'lucide-react'
-import { IPC, type YtChannel, type YtVideo, type YouTubeViewConfig } from '../../../../shared/ipc-types'
-import { useYouTubeVideos } from '../../hooks/useYouTubeVideos'
-import { StreamPanel } from './StreamPanel'
-import { VideoCarousel } from './VideoCarousel'
-import { Separator } from '../../components/ui/separator'
-import { Button } from '../../components/ui/button'
-import { inferMediaType, isActiveLivestream } from './video-lifecycle'
+import React from "react";
+import { toast } from "sonner";
+import {
+  CheckCheck,
+  ChevronDown,
+  ChevronRight,
+  ExternalLink,
+} from "lucide-react";
+import {
+  IPC,
+  type YtChannel,
+  type YtVideo,
+  type YouTubeViewConfig,
+} from "../../../../shared/ipc-types";
+import { useYouTubeVideos } from "../../hooks/useYouTubeVideos";
+import { StreamPanel } from "./StreamPanel";
+import { VideoCarousel } from "./VideoCarousel";
+import { Separator } from "../../components/ui/separator";
+import { Button } from "../../components/ui/button";
+import { inferMediaType, isActiveLivestream } from "./video-lifecycle";
 
 interface ChannelRowProps {
-  channel: YtChannel
-  viewConfig: YouTubeViewConfig
-  isCollapsed: boolean
-  onToggleCollapse: () => void
+  channel: YtChannel;
+  viewConfig: YouTubeViewConfig;
+  isCollapsed: boolean;
+  onToggleCollapse: () => void;
 }
 
-function getEffectiveConfig(viewConfig: YouTubeViewConfig, channelId: string): YouTubeViewConfig {
-  const override = viewConfig.perChannelMediaOverrides?.[channelId]
-  if (!override || Object.keys(override).length === 0) return viewConfig
-  return { ...viewConfig, ...override }
+function getEffectiveConfig(
+  viewConfig: YouTubeViewConfig,
+  channelId: string,
+): YouTubeViewConfig {
+  const override = viewConfig.perChannelMediaOverrides?.[channelId];
+  if (!override || Object.keys(override).length === 0) return viewConfig;
+  return { ...viewConfig, ...override };
 }
 
-function applyMediaTypeFilter(videos: YtVideo[], config: YouTubeViewConfig): YtVideo[] {
+function applyMediaTypeFilter(
+  videos: YtVideo[],
+  config: YouTubeViewConfig,
+): YtVideo[] {
   return videos.filter((video) => {
-    if (config.hideWatched && video.watched_at != null) return false
-    if (video.broadcast_status === 'live') return config.showLiveNow
-    if (video.broadcast_status === 'upcoming') return config.showUpcomingStreams
-    const mediaType = inferMediaType(video)
-    if (mediaType === 'short') return config.showShorts
-    if (mediaType === 'live') return config.showPastLivestreams
-    return config.showVideos
-  })
+    if (config.hideWatched && video.watched_at != null) return false;
+    if (video.broadcast_status === "live") return config.showLiveNow;
+    if (video.broadcast_status === "upcoming")
+      return config.showUpcomingStreams;
+    const mediaType = inferMediaType(video);
+    if (mediaType === "short") return config.showShorts;
+    if (mediaType === "live") return config.showPastLivestreams;
+    return config.showVideos;
+  });
 }
 
 function getYouTubeChannelUrl(channelId: string): string {
-  return `https://www.youtube.com/channel/${encodeURIComponent(channelId)}`
+  return `https://www.youtube.com/channel/${encodeURIComponent(channelId)}`;
 }
 
 export function ChannelRow({
   channel,
   viewConfig,
   isCollapsed,
-  onToggleCollapse
+  onToggleCollapse,
 }: ChannelRowProps): React.ReactElement {
-  const { videos } = useYouTubeVideos(channel.channel_id)
+  const { videos } = useYouTubeVideos(channel.channel_id);
 
-  const effectiveConfig = getEffectiveConfig(viewConfig, channel.channel_id)
-  const filteredVideos = applyMediaTypeFilter(videos, effectiveConfig)
-  const watchedCount = videos.filter((video) => video.watched_at != null).length
-  const totalCount = videos.length
+  const effectiveConfig = getEffectiveConfig(viewConfig, channel.channel_id);
+  const filteredVideos = applyMediaTypeFilter(videos, effectiveConfig);
+  const watchedCount = videos.filter(
+    (video) => video.watched_at != null,
+  ).length;
+  const totalCount = videos.length;
 
-  const handleMarkAllWatched = (e: React.MouseEvent<HTMLButtonElement>): void => {
-    e.stopPropagation()
-    window.api.invoke(IPC.YOUTUBE_MARK_CHANNEL_WATCHED, channel.channel_id).catch((err) => {
-      toast.error(err instanceof Error ? err.message : 'Failed to mark all channel videos as watched.')
-    })
-  }
+  const handleMarkAllWatched = (
+    e: React.MouseEvent<HTMLButtonElement>,
+  ): void => {
+    e.stopPropagation();
+    window.api
+      .invoke(IPC.YOUTUBE_MARK_CHANNEL_WATCHED, channel.channel_id)
+      .catch((err) => {
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : "Failed to mark all channel videos as watched.",
+        );
+      });
+  };
 
-  const handleOpenChannelPage = (e: React.MouseEvent<HTMLButtonElement>): void => {
-    e.stopPropagation()
-    window.api.invoke(IPC.SHELL_OPEN_EXTERNAL, getYouTubeChannelUrl(channel.channel_id)).catch((err) => {
-      toast.error(err instanceof Error ? err.message : 'Failed to open YouTube channel page.')
-    })
-  }
+  const handleOpenChannelPage = (
+    e: React.MouseEvent<HTMLButtonElement>,
+  ): void => {
+    e.stopPropagation();
+    window.api
+      .invoke(IPC.SHELL_OPEN_EXTERNAL, getYouTubeChannelUrl(channel.channel_id))
+      .catch((err) => {
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : "Failed to open YouTube channel page.",
+        );
+      });
+  };
 
-  const streams = filteredVideos.filter(
-    (v) => isActiveLivestream(v)
-  )
-  const regularVideos = filteredVideos.filter((v) => !isActiveLivestream(v))
+  const streams = filteredVideos.filter((v) => isActiveLivestream(v));
+  const regularVideos = filteredVideos.filter((v) => !isActiveLivestream(v));
 
   // When headers are hidden there is no collapse toggle — content is always visible
-  const isContentVisible = !viewConfig.showChannelHeaders || !isCollapsed
+  const isContentVisible = !viewConfig.showChannelHeaders || !isCollapsed;
 
   return (
     <div className="py-3">
@@ -90,12 +123,14 @@ export function ChannelRow({
                 alt={channel.name}
                 className="w-8 h-8 rounded-full object-cover bg-muted shrink-0"
                 onError={(e) => {
-                  ;(e.target as HTMLImageElement).style.display = 'none'
+                  (e.target as HTMLImageElement).style.display = "none";
                 }}
               />
             ) : (
               <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center shrink-0">
-                <span className="text-xs text-muted-foreground">{channel.name[0]}</span>
+                <span className="text-xs text-muted-foreground">
+                  {channel.name[0]}
+                </span>
               </div>
             )}
             <span className="font-medium text-sm truncate">{channel.name}</span>
@@ -182,5 +217,5 @@ export function ChannelRow({
         </div>
       )}
     </div>
-  )
+  );
 }

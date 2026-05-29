@@ -1,19 +1,38 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { toast } from 'sonner'
-import { useSavedPosts } from '../../hooks/useSavedPosts'
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useRef,
+  useCallback,
+} from "react";
+import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
+import { useSavedPosts } from "../../hooks/useSavedPosts";
 import {
   useSavedPostsConfig,
-  DEFAULT_SAVED_POSTS_VIEW_CONFIG
-} from '../../hooks/useSavedPostsConfig'
-import { useNtfyStaleness } from '../../hooks/useNtfyStaleness'
-import { useWidgetInstance } from '../../contexts/WidgetInstanceContext'
-import { SavedPostsSettingsPanel } from './SavedPostsSettingsPanel'
-import { SavedPostItemActions } from './SavedPostItemActions'
-import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card'
-import { Badge } from '../../components/ui/badge'
-import { Button } from '../../components/ui/button'
-import { Bookmark, ArrowUp, Clock, Settings2, RotateCcw, RefreshCcw, X } from 'lucide-react'
+  DEFAULT_SAVED_POSTS_VIEW_CONFIG,
+} from "../../hooks/useSavedPostsConfig";
+import { useNtfyStaleness } from "../../hooks/useNtfyStaleness";
+import { useWidgetInstance } from "../../contexts/WidgetInstanceContext";
+import { SavedPostsSettingsPanel } from "./SavedPostsSettingsPanel";
+import { SavedPostItemActions } from "./SavedPostItemActions";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+} from "../../components/ui/card";
+import { Badge } from "../../components/ui/badge";
+import { Button } from "../../components/ui/button";
+import {
+  Bookmark,
+  ArrowUp,
+  Clock,
+  Settings2,
+  RotateCcw,
+  RefreshCcw,
+  X,
+} from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,26 +42,31 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger
-} from '../../components/ui/alert-dialog'
-import { formatRelativeTime } from '../../lib/time'
-import { toRedditPostUrl } from '../../lib/utils'
-import { registerRendererModule } from '../registry'
-import { IPC, type SavedPost, type LinkSource, type SavedPostsViewConfig } from '../../../../shared/ipc-types'
-import { NtfyOnboardingWizard } from './NtfyOnboardingWizard'
+  AlertDialogTrigger,
+} from "../../components/ui/alert-dialog";
+import { formatRelativeTime } from "../../lib/time";
+import { toRedditPostUrl } from "../../lib/utils";
+import { registerRendererModule } from "../registry";
+import {
+  IPC,
+  type SavedPost,
+  type LinkSource,
+  type SavedPostsViewConfig,
+} from "../../../../shared/ipc-types";
+import { NtfyOnboardingWizard } from "./NtfyOnboardingWizard";
 
 const SOURCE_LABELS: Record<LinkSource, string> = {
-  reddit: 'Reddit',
-  x: 'X',
-  bsky: 'Bluesky',
-  generic: 'Link'
-}
+  reddit: "Reddit",
+  x: "X",
+  bsky: "Bluesky",
+  generic: "Link",
+};
 
 function formatAuthor(post: SavedPost): string | null {
-  if (!post.author) return null
-  if (post.source === 'reddit') return `u/${post.author}`
-  if (post.source === 'x') return `@${post.author}`
-  return post.author
+  if (!post.author) return null;
+  if (post.source === "reddit") return `u/${post.author}`;
+  if (post.source === "x") return `@${post.author}`;
+  return post.author;
 }
 
 function PostCard({
@@ -51,17 +75,23 @@ function PostCard({
   config,
   onOpen,
   onToggleViewed,
-  onAfterMutation
+  onAfterMutation,
 }: {
-  post: SavedPost
-  allTags: string[]
-  config: { showMetadata: boolean; showSourceBadge: boolean; showUrl: boolean; showBodyPreview: boolean; cardDensity: 'compact' | 'detailed' }
-  onOpen: (post: SavedPost) => void
-  onToggleViewed: (post: SavedPost, viewed: boolean) => void
-  onAfterMutation: () => Promise<void> | void
+  post: SavedPost;
+  allTags: string[];
+  config: {
+    showMetadata: boolean;
+    showSourceBadge: boolean;
+    showUrl: boolean;
+    showBodyPreview: boolean;
+    cardDensity: "compact" | "detailed";
+  };
+  onOpen: (post: SavedPost) => void;
+  onToggleViewed: (post: SavedPost, viewed: boolean) => void;
+  onAfterMutation: () => Promise<void> | void;
 }): React.ReactElement {
-  const author = formatAuthor(post)
-  const isViewed = post.viewed_at !== null
+  const author = formatAuthor(post);
+  const isViewed = post.viewed_at !== null;
   return (
     <SavedPostItemActions
       post={post}
@@ -73,9 +103,9 @@ function PostCard({
       {({ onContextMenu, trigger, viewedToggle }) => (
         <div
           className={
-            config.cardDensity === 'compact'
-              ? 'flex items-start gap-2 py-1 w-full'
-              : 'flex items-start gap-2 py-2 px-2 rounded bg-muted/30 w-full hover:bg-muted/50 transition-colors'
+            config.cardDensity === "compact"
+              ? "flex items-start gap-2 py-1 w-full"
+              : "flex items-start gap-2 py-2 px-2 rounded bg-muted/30 w-full hover:bg-muted/50 transition-colors"
           }
           onContextMenu={onContextMenu}
         >
@@ -90,32 +120,40 @@ function PostCard({
                   {SOURCE_LABELS[post.source]}
                 </Badge>
               )}
-              {post.source === 'reddit' && post.subreddit && config.showMetadata && (
-                <Badge variant="secondary" className="text-xs shrink-0">
-                  r/{post.subreddit}
-                </Badge>
-              )}
+              {post.source === "reddit" &&
+                post.subreddit &&
+                config.showMetadata && (
+                  <Badge variant="secondary" className="text-xs shrink-0">
+                    r/{post.subreddit}
+                  </Badge>
+                )}
               {author && config.showMetadata && (
                 <span className="text-xs text-muted-foreground">{author}</span>
               )}
             </div>
             <div
               className={
-                config.cardDensity === 'compact'
-                  ? `text-sm font-medium line-clamp-2 flex-1 ${isViewed ? 'text-foreground/70' : ''}`
-                  : `text-sm font-medium ${isViewed ? 'text-foreground/70' : ''}`
+                config.cardDensity === "compact"
+                  ? `text-sm font-medium line-clamp-2 flex-1 ${isViewed ? "text-foreground/70" : ""}`
+                  : `text-sm font-medium ${isViewed ? "text-foreground/70" : ""}`
               }
             >
               {post.title}
             </div>
             {post.note && (
-              <p className="mt-1 text-xs text-muted-foreground italic line-clamp-2">{post.note}</p>
+              <p className="mt-1 text-xs text-muted-foreground italic line-clamp-2">
+                {post.note}
+              </p>
             )}
             {config.showUrl && (
-              <p className="text-xs text-muted-foreground truncate max-w-full">{post.url}</p>
+              <p className="text-xs text-muted-foreground truncate max-w-full">
+                {post.url}
+              </p>
             )}
             {config.showBodyPreview && post.body && (
-              <p className="text-xs text-muted-foreground line-clamp-2">{post.body}</p>
+              <p className="text-xs text-muted-foreground line-clamp-2">
+                {post.body}
+              </p>
             )}
             <div className="flex items-center gap-2 text-xs">
               {post.score !== null && config.showMetadata && (
@@ -124,7 +162,10 @@ function PostCard({
                   <span>{post.score.toLocaleString()}</span>
                 </div>
               )}
-              <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-muted/60 text-foreground/80 whitespace-nowrap" title={new Date(post.saved_at * 1000).toLocaleString()}>
+              <div
+                className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-muted/60 text-foreground/80 whitespace-nowrap"
+                title={new Date(post.saved_at * 1000).toLocaleString()}
+              >
                 <Clock className="h-3 w-3" />
                 <span>{formatRelativeTime(post.saved_at)}</span>
               </div>
@@ -137,22 +178,25 @@ function PostCard({
         </div>
       )}
     </SavedPostItemActions>
-  )
+  );
 }
 
 function SavedPostsWidget(): React.ReactElement {
-  const instance = useWidgetInstance()
-  const widgetTitle = instance.label ?? 'Saved Posts'
-  const { config, setConfig } = useSavedPostsConfig(instance.instanceId)
-  const staleness = useNtfyStaleness()
-  const navigate = useNavigate()
-  const [showOnboarding, setShowOnboarding] = useState(false)
-  const [isEditing, setIsEditing] = useState(false)
-  const [snapshotConfig, setSnapshotConfig] = useState<SavedPostsViewConfig | null>(null)
-  const [editContentHeight, setEditContentHeight] = useState<number | null>(null)
-  const cardContentRef = useRef<HTMLDivElement | null>(null)
-  const measurementRef = useRef<HTMLDivElement | null>(null)
-  const measuredRowCountRef = useRef<number | null>(null)
+  const instance = useWidgetInstance();
+  const widgetTitle = instance.label ?? "Saved Posts";
+  const { config, setConfig } = useSavedPostsConfig(instance.instanceId);
+  const staleness = useNtfyStaleness();
+  const navigate = useNavigate();
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [snapshotConfig, setSnapshotConfig] =
+    useState<SavedPostsViewConfig | null>(null);
+  const [editContentHeight, setEditContentHeight] = useState<number | null>(
+    null,
+  );
+  const cardContentRef = useRef<HTMLDivElement | null>(null);
+  const measurementRef = useRef<HTMLDivElement | null>(null);
+  const measuredRowCountRef = useRef<number | null>(null);
 
   // Fetch posts with the widget's configured filters
   const { posts, loading, refetch } = useSavedPosts({
@@ -163,90 +207,97 @@ function SavedPostsWidget(): React.ReactElement {
     source_filter: config.source_filter,
     hide_viewed: config.hideViewed,
     sort_by: config.sort_by,
-    sort_dir: config.sort_dir
-  })
+    sort_dir: config.sort_dir,
+  });
 
   // Derive available options for the controls
-  const [allTags, setAllTags] = useState<string[]>([])
+  const [allTags, setAllTags] = useState<string[]>([]);
   const availableSubreddits = useMemo(() => {
-    const subs = new Set<string>()
+    const subs = new Set<string>();
     posts.forEach((p) => {
-      if (p.subreddit) subs.add(p.subreddit)
-    })
-    return Array.from(subs).sort()
-  }, [posts])
+      if (p.subreddit) subs.add(p.subreddit);
+    });
+    return Array.from(subs).sort();
+  }, [posts]);
 
   useEffect(() => {
     window.api
       .invoke(IPC.REDDIT_GET_ALL_TAGS)
       .then((result) => setAllTags(result as string[]))
       .catch((err) => {
-        toast.error(err instanceof Error ? err.message : 'Failed to load tags for Saved Posts widget.')
-      })
-  }, [posts])
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : "Failed to load tags for Saved Posts widget.",
+        );
+      });
+  }, [posts]);
 
   // Listen for ntfy ingest complete push events
   useEffect(() => {
     const listener = (): void => {
-      void refetch()
-    }
-    return window.api.on(IPC.REDDIT_NTFY_INGEST_COMPLETE, listener)
-  }, [refetch])
+      void refetch();
+    };
+    return window.api.on(IPC.REDDIT_NTFY_INGEST_COMPLETE, listener);
+  }, [refetch]);
 
   useEffect(() => {
-    if (!isEditing) return
+    if (!isEditing) return;
     const handler = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') handleClose()
-    }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  }, [isEditing]) // eslint-disable-line react-hooks/exhaustive-deps
+      if (e.key === "Escape") handleClose();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [isEditing]);
 
   // Group posts by source when configured
   const groupedPosts = useMemo(() => {
-    if (config.group_by !== 'source') return null
-    const groups = new Map<LinkSource, SavedPost[]>()
+    if (config.group_by !== "source") return null;
+    const groups = new Map<LinkSource, SavedPost[]>();
     for (const post of posts) {
-      const existing = groups.get(post.source)
+      const existing = groups.get(post.source);
       if (existing) {
-        existing.push(post)
+        existing.push(post);
       } else {
-        groups.set(post.source, [post])
+        groups.set(post.source, [post]);
       }
     }
     // Return groups in configured sourceOrder, skip empty groups
     return config.sourceOrder
       .filter((source) => groups.has(source))
-      .map((source) => ({ source, posts: groups.get(source)! }))
-  }, [posts, config.group_by, config.sourceOrder])
+      .map((source) => ({ source, posts: groups.get(source)! }));
+  }, [posts, config.group_by, config.sourceOrder]);
 
   const renderedRowCount = useMemo(() => {
-    if (loading || posts.length === 0) return 0
-    const headerRows = groupedPosts && config.showGroupHeaders ? groupedPosts.length : 0
-    return posts.length + headerRows
-  }, [loading, posts.length, groupedPosts, config.showGroupHeaders])
+    if (loading || posts.length === 0) return 0;
+    const headerRows =
+      groupedPosts && config.showGroupHeaders ? groupedPosts.length : 0;
+    return posts.length + headerRows;
+  }, [loading, posts.length, groupedPosts, config.showGroupHeaders]);
 
   useEffect(() => {
-    if (!isEditing || loading) return
-    if (measuredRowCountRef.current === renderedRowCount) return
+    if (!isEditing || loading) return;
+    if (measuredRowCountRef.current === renderedRowCount) return;
 
-    const measurementNode = measurementRef.current
-    const cardContent = cardContentRef.current
-    if (!measurementNode || !cardContent) return
+    const measurementNode = measurementRef.current;
+    const cardContent = cardContentRef.current;
+    if (!measurementNode || !cardContent) return;
 
     const frame = window.requestAnimationFrame(() => {
-      const styles = window.getComputedStyle(cardContent)
-      const paddingTop = parseFloat(styles.paddingTop) || 0
-      const paddingBottom = parseFloat(styles.paddingBottom) || 0
-      const nextHeight = Math.ceil(measurementNode.scrollHeight + paddingTop + paddingBottom)
+      const styles = window.getComputedStyle(cardContent);
+      const paddingTop = parseFloat(styles.paddingTop) || 0;
+      const paddingBottom = parseFloat(styles.paddingBottom) || 0;
+      const nextHeight = Math.ceil(
+        measurementNode.scrollHeight + paddingTop + paddingBottom,
+      );
       if (nextHeight > 0) {
-        setEditContentHeight(nextHeight)
-        measuredRowCountRef.current = renderedRowCount
+        setEditContentHeight(nextHeight);
+        measuredRowCountRef.current = renderedRowCount;
       }
-    })
+    });
 
-    return () => window.cancelAnimationFrame(frame)
-  }, [isEditing, loading, renderedRowCount])
+    return () => window.cancelAnimationFrame(frame);
+  }, [isEditing, loading, renderedRowCount]);
 
   if (!staleness.loading && !staleness.topicConfigured) {
     return (
@@ -268,72 +319,83 @@ function SavedPostsWidget(): React.ReactElement {
             isOpen={showOnboarding}
             onClose={() => setShowOnboarding(false)}
             onComplete={() => {
-              setShowOnboarding(false)
-              staleness.refetch()
-              void refetch()
+              setShowOnboarding(false);
+              staleness.refetch();
+              void refetch();
             }}
           />
         </CardContent>
       </Card>
-    )
+    );
   }
 
   const handleOpenExternal = (post: SavedPost): void => {
     if (post.viewed_at === null) {
-      window.api.invoke(IPC.REDDIT_SET_SAVED_POST_VIEWED, post.post_id, true).catch((err) => {
-        toast.error(err instanceof Error ? err.message : 'Failed to update viewed state.')
-      })
+      window.api
+        .invoke(IPC.REDDIT_SET_SAVED_POST_VIEWED, post.post_id, true)
+        .catch((err) => {
+          toast.error(
+            err instanceof Error
+              ? err.message
+              : "Failed to update viewed state.",
+          );
+        });
     }
-    const url = post.source === 'reddit' ? toRedditPostUrl(post.permalink) : post.url
-    window.api.invoke('shell:openExternal', url).catch((err) => {
-      toast.error(err instanceof Error ? err.message : 'Failed to open saved post link.')
-    })
-  }
+    const url =
+      post.source === "reddit" ? toRedditPostUrl(post.permalink) : post.url;
+    window.api.invoke("shell:openExternal", url).catch((err) => {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to open saved post link.",
+      );
+    });
+  };
 
   const handleToggleViewed = (post: SavedPost, viewed: boolean): void => {
     window.api
       .invoke(IPC.REDDIT_SET_SAVED_POST_VIEWED, post.post_id, viewed)
       .then((result) => {
-        const payload = result as { ok: boolean; error: string | null }
+        const payload = result as { ok: boolean; error: string | null };
         if (!payload.ok) {
-          toast.error(payload.error ?? 'Failed to update viewed state.')
-          return
+          toast.error(payload.error ?? "Failed to update viewed state.");
+          return;
         }
       })
       .catch((err) => {
-        toast.error(err instanceof Error ? err.message : 'Failed to update viewed state.')
-      })
-  }
+        toast.error(
+          err instanceof Error ? err.message : "Failed to update viewed state.",
+        );
+      });
+  };
 
-  const handleAfterMutation = useCallback(async (): Promise<void> => {
-  }, [])
+  const handleAfterMutation = useCallback(async (): Promise<void> => {}, []);
 
   function handleOpenEdit(): void {
-    const currentHeight = cardContentRef.current?.getBoundingClientRect().height
+    const currentHeight =
+      cardContentRef.current?.getBoundingClientRect().height;
     if (currentHeight && currentHeight > 0) {
-      setEditContentHeight(currentHeight)
+      setEditContentHeight(currentHeight);
     }
-    measuredRowCountRef.current = renderedRowCount
-    setSnapshotConfig(config)
-    setIsEditing(true)
+    measuredRowCountRef.current = renderedRowCount;
+    setSnapshotConfig(config);
+    setIsEditing(true);
   }
 
   function handleClose(): void {
-    setIsEditing(false)
-    setSnapshotConfig(null)
-    setEditContentHeight(null)
-    measuredRowCountRef.current = null
+    setIsEditing(false);
+    setSnapshotConfig(null);
+    setEditContentHeight(null);
+    measuredRowCountRef.current = null;
   }
 
   function handleReset(): void {
     if (snapshotConfig) {
-      setConfig(snapshotConfig)
+      setConfig(snapshotConfig);
     }
   }
 
   function handleFactoryReset(): void {
-    setConfig(DEFAULT_SAVED_POSTS_VIEW_CONFIG)
-    setSnapshotConfig(DEFAULT_SAVED_POSTS_VIEW_CONFIG)
+    setConfig(DEFAULT_SAVED_POSTS_VIEW_CONFIG);
+    setSnapshotConfig(DEFAULT_SAVED_POSTS_VIEW_CONFIG);
   }
 
   const cardConfig = {
@@ -341,11 +403,13 @@ function SavedPostsWidget(): React.ReactElement {
     showSourceBadge: config.showSourceBadge,
     showUrl: config.showUrl,
     showBodyPreview: config.showBodyPreview,
-    cardDensity: config.cardDensity
-  }
+    cardDensity: config.cardDensity,
+  };
 
   const renderPostList = (postsToRender: SavedPost[]): React.ReactElement => (
-    <div className={config.cardDensity === 'compact' ? 'space-y-2' : 'space-y-3'}>
+    <div
+      className={config.cardDensity === "compact" ? "space-y-2" : "space-y-3"}
+    >
       {postsToRender.map((post) => (
         <PostCard
           key={post.post_id}
@@ -358,15 +422,17 @@ function SavedPostsWidget(): React.ReactElement {
         />
       ))}
     </div>
-  )
+  );
 
   const renderPreviewContent = (): React.ReactNode => {
     if (loading && posts.length === 0) {
-      return <p className="text-sm text-muted-foreground">Loading...</p>
+      return <p className="text-sm text-muted-foreground">Loading...</p>;
     }
 
     if (posts.length === 0) {
-      return <p className="text-sm text-muted-foreground">No saved posts yet.</p>
+      return (
+        <p className="text-sm text-muted-foreground">No saved posts yet.</p>
+      );
     }
 
     if (groupedPosts) {
@@ -383,11 +449,11 @@ function SavedPostsWidget(): React.ReactElement {
             </div>
           ))}
         </div>
-      )
+      );
     }
 
-    return renderPostList(posts)
-  }
+    return renderPostList(posts);
+  };
 
   return (
     <Card>
@@ -401,7 +467,7 @@ function SavedPostsWidget(): React.ReactElement {
             {config.showViewAllLink && (
               <button
                 type="button"
-                onClick={() => navigate('/saved-posts')}
+                onClick={() => navigate("/saved-posts")}
                 className="text-xs text-primary hover:underline"
               >
                 View All
@@ -433,12 +499,15 @@ function SavedPostsWidget(): React.ReactElement {
                     <AlertDialogHeader>
                       <AlertDialogTitle>Restore Defaults</AlertDialogTitle>
                       <AlertDialogDescription>
-                        Reset all Saved Posts widget settings to their defaults? This cannot be undone.
+                        Reset all Saved Posts widget settings to their defaults?
+                        This cannot be undone.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction onClick={handleFactoryReset}>Confirm</AlertDialogAction>
+                      <AlertDialogAction onClick={handleFactoryReset}>
+                        Confirm
+                      </AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>
@@ -468,7 +537,11 @@ function SavedPostsWidget(): React.ReactElement {
       <CardContent
         ref={cardContentRef}
         className="relative"
-        style={isEditing && editContentHeight ? { height: editContentHeight, overflow: 'hidden' } : undefined}
+        style={
+          isEditing && editContentHeight
+            ? { height: editContentHeight, overflow: "hidden" }
+            : undefined
+        }
       >
         {isEditing && (
           <div
@@ -479,8 +552,10 @@ function SavedPostsWidget(): React.ReactElement {
             {renderPreviewContent()}
           </div>
         )}
-        <div className={isEditing ? 'saved-posts-card-edit' : undefined}>
-          <div className={isEditing ? 'saved-posts-card-edit__preview' : undefined}>
+        <div className={isEditing ? "saved-posts-card-edit" : undefined}>
+          <div
+            className={isEditing ? "saved-posts-card-edit__preview" : undefined}
+          >
             {renderPreviewContent()}
           </div>
           {isEditing && (
@@ -499,21 +574,20 @@ function SavedPostsWidget(): React.ReactElement {
         isOpen={showOnboarding}
         onClose={() => setShowOnboarding(false)}
         onComplete={() => {
-          setShowOnboarding(false)
-          staleness.refetch()
-          void refetch()
+          setShowOnboarding(false);
+          staleness.refetch();
+          void refetch();
         }}
       />
     </Card>
-  )
+  );
 }
 
 // Register widget in renderer module registry
 registerRendererModule({
-  id: 'saved_posts',
-  displayName: 'Saved Posts',
-  widget: SavedPostsWidget
-})
+  id: "saved_posts",
+  displayName: "Saved Posts",
+  widget: SavedPostsWidget,
+});
 
-export default SavedPostsWidget
-
+export default SavedPostsWidget;

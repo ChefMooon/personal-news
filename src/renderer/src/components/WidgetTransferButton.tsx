@@ -1,13 +1,15 @@
-import React from 'react'
-import { ArrowRightLeft } from 'lucide-react'
-import { useDashboardTransfer } from '../contexts/DashboardTransferContext'
+import React from "react";
+import { ArrowRightLeft } from "lucide-react";
+import { useDashboardTransfer } from "../contexts/DashboardTransferContext";
 
 interface WidgetTransferButtonProps {
-  instanceId: string
+  instanceId: string;
 }
 
-export function WidgetTransferButton({ instanceId }: WidgetTransferButtonProps): React.ReactElement {
-  const { openTransferDialog } = useDashboardTransfer()
+export function WidgetTransferButton({
+  instanceId,
+}: WidgetTransferButtonProps): React.ReactElement {
+  const { openTransferDialog } = useDashboardTransfer();
 
   return (
     <button
@@ -19,5 +21,5 @@ export function WidgetTransferButton({ instanceId }: WidgetTransferButtonProps):
     >
       <ArrowRightLeft className="h-4 w-4" />
     </button>
-  )
+  );
 }

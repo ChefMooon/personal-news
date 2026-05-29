@@ -1,129 +1,143 @@
-import type Database from 'better-sqlite3'
-import { BrowserWindow } from 'electron'
-import cron, { type ScheduledTask } from 'node-cron'
-import { IPC } from '../../../shared/ipc-types'
-import type { DataSourceModule } from '../registry'
-import { getSetting } from '../../settings/store'
-import { pollNtfy } from './ntfy'
-import { notifySavedPostsSync } from '../../notifications/notification-service'
+import type Database from "better-sqlite3";
+import { BrowserWindow } from "electron";
+import cron, { type ScheduledTask } from "node-cron";
+import { IPC } from "../../../shared/ipc-types";
+import type { DataSourceModule } from "../registry";
+import { getSetting } from "../../settings/store";
+import { pollNtfy } from "./ntfy";
+import { notifySavedPostsSync } from "../../notifications/notification-service";
 
-const DEFAULT_NTFY_POLL_INTERVAL_MINUTES = 60
+const DEFAULT_NTFY_POLL_INTERVAL_MINUTES = 60;
 
-let dbRef: Database.Database | null = null
-let pollingInProgress = false
-let activePollIntervalMinutes = DEFAULT_NTFY_POLL_INTERVAL_MINUTES
-let pollTask: ScheduledTask | null = null
+let dbRef: Database.Database | null = null;
+let pollingInProgress = false;
+let activePollIntervalMinutes = DEFAULT_NTFY_POLL_INTERVAL_MINUTES;
+let pollTask: ScheduledTask | null = null;
 
 function emitNtfyIngestComplete(postsIngested: number, error?: string): void {
   for (const win of BrowserWindow.getAllWindows()) {
-    win.webContents.send(IPC.REDDIT_NTFY_INGEST_COMPLETE, { postsIngested, error })
+    win.webContents.send(IPC.REDDIT_NTFY_INGEST_COMPLETE, {
+      postsIngested,
+      error,
+    });
   }
 }
 
-export async function triggerNtfyPoll(): Promise<{ postsIngested: number; messagesReceived: number }> {
-  return runNtfyPoll({ throwOnError: true })
+export async function triggerNtfyPoll(): Promise<{
+  postsIngested: number;
+  messagesReceived: number;
+}> {
+  return runNtfyPoll({ throwOnError: true });
 }
 
 function getCronExpression(minutes: number): string {
-  return `*/${minutes} * * * *`
+  return `*/${minutes} * * * *`;
 }
 
 function stopPollScheduler(): void {
   if (!pollTask) {
-    return
+    return;
   }
 
-  pollTask.stop()
-  const taskWithDestroy = pollTask as ScheduledTask & { destroy?: () => void }
-  if (typeof taskWithDestroy.destroy === 'function') {
-    taskWithDestroy.destroy()
+  pollTask.stop();
+  const taskWithDestroy = pollTask as ScheduledTask & { destroy?: () => void };
+  if (typeof taskWithDestroy.destroy === "function") {
+    taskWithDestroy.destroy();
   }
-  pollTask = null
+  pollTask = null;
 }
 
 function startPollScheduler(): void {
   if (!dbRef) {
-    return
+    return;
   }
 
-  stopPollScheduler()
+  stopPollScheduler();
   pollTask = cron.schedule(getCronExpression(activePollIntervalMinutes), () => {
-    void runNtfyPoll({ throwOnError: false })
-  })
+    void runNtfyPoll({ throwOnError: false });
+  });
 }
 
 export function applyNtfyPollInterval(minutes: number): void {
-  activePollIntervalMinutes = minutes
-  startPollScheduler()
+  activePollIntervalMinutes = minutes;
+  startPollScheduler();
 }
 
 async function runNtfyPoll(options: {
-  throwOnError: boolean
+  throwOnError: boolean;
 }): Promise<{ postsIngested: number; messagesReceived: number }> {
   if (!dbRef) {
-    throw new Error('Reddit module not initialized')
+    throw new Error("Reddit module not initialized");
   }
   if (pollingInProgress) {
-    return { postsIngested: 0, messagesReceived: 0 }
+    return { postsIngested: 0, messagesReceived: 0 };
   }
 
-  pollingInProgress = true
+  pollingInProgress = true;
   try {
-    const result = await pollNtfy(dbRef)
-    emitNtfyIngestComplete(result.postsIngested)
-    notifySavedPostsSync(result.postsIngested)
-    return result
+    const result = await pollNtfy(dbRef);
+    emitNtfyIngestComplete(result.postsIngested);
+    notifySavedPostsSync(result.postsIngested);
+    return result;
   } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error)
-    console.error('[Reddit] ntfy poll failed:', msg)
-    emitNtfyIngestComplete(0, msg)
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error("[Reddit] ntfy poll failed:", msg);
+    emitNtfyIngestComplete(0, msg);
     if (options.throwOnError) {
-      throw error
+      throw error;
     }
-    return { postsIngested: 0, messagesReceived: 0 }
+    return { postsIngested: 0, messagesReceived: 0 };
   } finally {
-    pollingInProgress = false
+    pollingInProgress = false;
   }
 }
 
 export const RedditModule: DataSourceModule = {
-  id: 'reddit',
-  displayName: 'Reddit',
+  id: "reddit",
+  displayName: "Reddit",
   initialize(db: Database.Database): void {
-    dbRef = db
-    console.log('[Reddit] Module initialized')
+    dbRef = db;
+    console.log("[Reddit] Module initialized");
 
     // Check if Saved Posts feature is enabled
-    const savedPostsEnabled = getSetting('saved_posts_enabled') !== 'false'
-    
+    const savedPostsEnabled = getSetting("saved_posts_enabled") !== "false";
+
     if (!savedPostsEnabled) {
-      console.log('[Reddit] Saved Posts feature is disabled, skipping ntfy polling')
-      return
+      console.log(
+        "[Reddit] Saved Posts feature is disabled, skipping ntfy polling",
+      );
+      return;
     }
 
-    const configuredInterval = getSetting('ntfy_poll_interval_minutes')
-    const parsedInterval = configuredInterval ? parseInt(configuredInterval, 10) : NaN
-    if (Number.isInteger(parsedInterval) && parsedInterval >= 1 && parsedInterval <= 1440) {
-      activePollIntervalMinutes = parsedInterval
+    const configuredInterval = getSetting("ntfy_poll_interval_minutes");
+    const parsedInterval = configuredInterval
+      ? parseInt(configuredInterval, 10)
+      : NaN;
+    if (
+      Number.isInteger(parsedInterval) &&
+      parsedInterval >= 1 &&
+      parsedInterval <= 1440
+    ) {
+      activePollIntervalMinutes = parsedInterval;
     } else {
-      activePollIntervalMinutes = DEFAULT_NTFY_POLL_INTERVAL_MINUTES
+      activePollIntervalMinutes = DEFAULT_NTFY_POLL_INTERVAL_MINUTES;
     }
 
-    startPollScheduler()
+    startPollScheduler();
 
     // Run startup poll
-    void pollNtfyStartup()
+    void pollNtfyStartup();
   },
   shutdown(): void {
-    console.log('[Reddit] Module shutdown')
-    stopPollScheduler()
-    dbRef = null
-  }
-}
+    console.log("[Reddit] Module shutdown");
+    stopPollScheduler();
+    dbRef = null;
+  },
+};
 
 async function pollNtfyStartup(): Promise<void> {
   try {
-    await runNtfyPoll({ throwOnError: false })
+    await runNtfyPoll({ throwOnError: false });
   } catch {
     // runNtfyPoll only throws when throwOnError is true.
   }

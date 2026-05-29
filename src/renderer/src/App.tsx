@@ -1,27 +1,31 @@
-import React from 'react'
-import { Routes, Route } from 'react-router-dom'
-import { Sidebar } from './components/Sidebar'
-import Dashboard from './routes/Dashboard'
-import SavedPosts from './routes/SavedPosts'
-import YouTubePage from './routes/YouTube'
-import RedditDigest from './routes/RedditDigest'
-import ScriptManager from './routes/ScriptManager'
-import Settings from './routes/Settings'
-import SportsPage from './routes/Sports'
-import { RedditDigestEnabledProvider } from './contexts/RedditDigestEnabledContext'
-import { RadioPlayerProvider } from './contexts/RadioPlayerContext'
-import { SavedPostsEnabledProvider } from './contexts/SavedPostsEnabledContext'
-import { SidebarConfigProvider } from './contexts/SidebarConfigContext'
-import { SportsEnabledProvider } from './contexts/SportsEnabledContext'
-import { WeatherEnabledProvider } from './contexts/WeatherEnabledContext'
-import { useSidebarConfig } from './hooks/useSidebarConfig'
-import { RadioPlayer } from './components/RadioPlayer'
-import { WindowTitleBar } from './components/WindowTitleBar'
-import { Toaster, toast } from 'sonner'
-import { IPC, type IpcMutationResult, type UpdateStatusEvent } from '../../shared/ipc-types'
+import React from "react";
+import { Routes, Route } from "react-router-dom";
+import { Sidebar } from "./components/Sidebar";
+import Dashboard from "./routes/Dashboard";
+import SavedPosts from "./routes/SavedPosts";
+import YouTubePage from "./routes/YouTube";
+import RedditDigest from "./routes/RedditDigest";
+import ScriptManager from "./routes/ScriptManager";
+import Settings from "./routes/Settings";
+import SportsPage from "./routes/Sports";
+import { RedditDigestEnabledProvider } from "./contexts/RedditDigestEnabledContext";
+import { RadioPlayerProvider } from "./contexts/RadioPlayerContext";
+import { SavedPostsEnabledProvider } from "./contexts/SavedPostsEnabledContext";
+import { SidebarConfigProvider } from "./contexts/SidebarConfigContext";
+import { SportsEnabledProvider } from "./contexts/SportsEnabledContext";
+import { WeatherEnabledProvider } from "./contexts/WeatherEnabledContext";
+import { useSidebarConfig } from "./hooks/useSidebarConfig";
+import { RadioPlayer } from "./components/RadioPlayer";
+import { WindowTitleBar } from "./components/WindowTitleBar";
+import { Toaster, toast } from "sonner";
+import {
+  IPC,
+  type IpcMutationResult,
+  type UpdateStatusEvent,
+} from "../../shared/ipc-types";
 
 function AppShell(): React.ReactElement {
-  const { loading } = useSidebarConfig()
+  const { loading } = useSidebarConfig();
 
   return (
     <RadioPlayerProvider>
@@ -29,7 +33,7 @@ function AppShell(): React.ReactElement {
         <WindowTitleBar />
         <div
           className="flex flex-1 overflow-hidden"
-          style={{ visibility: loading ? 'hidden' : 'visible' }}
+          style={{ visibility: loading ? "hidden" : "visible" }}
         >
           <Sidebar />
           <main className="flex-1 overflow-auto">
@@ -50,91 +54,100 @@ function AppShell(): React.ReactElement {
         position="bottom-right"
         richColors
         containerAriaLabel="Notifications"
-        toastOptions={{ closeButtonAriaLabel: 'Close notification' }}
+        toastOptions={{ closeButtonAriaLabel: "Close notification" }}
       />
     </RadioPlayerProvider>
-  )
+  );
 }
 
 export default function App(): React.ReactElement {
-  const lastUpdateToastKeyRef = React.useRef<string | null>(null)
+  const lastUpdateToastKeyRef = React.useRef<string | null>(null);
 
   React.useEffect(() => {
     return window.api.on(IPC.APP_SHOW_TRAY_HINT, () => {
-      toast.info('Personal News is still running in the system tray.', {
-        description: 'Use the tray icon to reopen the app or quit it completely.',
-        duration: 5000
-      })
-    })
-  }, [])
+      toast.info("Personal News is still running in the system tray.", {
+        description:
+          "Use the tray icon to reopen the app or quit it completely.",
+        duration: 5000,
+      });
+    });
+  }, []);
 
   React.useEffect(() => {
     const handleUpdateStatus = (event: UpdateStatusEvent): void => {
-      const toastKey = `${event.state}|${event.version ?? ''}|${event.friendlyMessage ?? ''}|${event.message}`
+      const toastKey = `${event.state}|${event.version ?? ""}|${event.friendlyMessage ?? ""}|${event.message}`;
       if (toastKey === lastUpdateToastKeyRef.current) {
-        return
+        return;
       }
 
-      lastUpdateToastKeyRef.current = toastKey
+      lastUpdateToastKeyRef.current = toastKey;
 
-      const versionLabel = event.version ? ` ${event.version}` : ''
+      const versionLabel = event.version ? ` ${event.version}` : "";
 
-      if (event.state === 'available') {
+      if (event.state === "available") {
         toast.info(`Update${versionLabel} is available.`, {
-          description: 'Downloading in the background.'
-        })
-        return
+          description: "Downloading in the background.",
+        });
+        return;
       }
 
-      if (event.state === 'downloaded') {
+      if (event.state === "downloaded") {
         toast.success(`Update${versionLabel} is ready.`, {
-          description: 'Install now to restart on the latest version.',
+          description: "Install now to restart on the latest version.",
           duration: Infinity,
           action: {
-            label: 'Install and restart',
+            label: "Install and restart",
             onClick: () => {
               window.api
                 .invoke(IPC.UPDATES_INSTALL_UPDATE)
                 .then((result) => {
-                  const mutation = result as IpcMutationResult
+                  const mutation = result as IpcMutationResult;
                   if (!mutation.ok) {
-                    throw new Error(mutation.error ?? 'Unable to install update.')
+                    throw new Error(
+                      mutation.error ?? "Unable to install update.",
+                    );
                   }
                 })
                 .catch((error: unknown) => {
-                  const message = error instanceof Error ? error.message : 'Unable to install update.'
-                  toast.error(message)
-                })
-            }
-          }
-        })
-        return
+                  const message =
+                    error instanceof Error
+                      ? error.message
+                      : "Unable to install update.";
+                  toast.error(message);
+                });
+            },
+          },
+        });
+        return;
       }
 
-      if (event.state === 'not-available') {
-        toast.success('You are already on the latest version.', {
-          description: `Current version: ${event.currentVersion}`
-        })
-        return
+      if (event.state === "not-available") {
+        toast.success("You are already on the latest version.", {
+          description: `Current version: ${event.currentVersion}`,
+        });
+        return;
       }
 
-      if (event.state === 'error') {
-        toast.error(event.friendlyMessage || event.message || 'Auto-update encountered an error.')
+      if (event.state === "error") {
+        toast.error(
+          event.friendlyMessage ||
+            event.message ||
+            "Auto-update encountered an error.",
+        );
       }
-    }
+    };
 
     window.api
       .invoke(IPC.UPDATES_GET_STATUS)
       .then((result) => {
-        handleUpdateStatus(result as UpdateStatusEvent)
+        handleUpdateStatus(result as UpdateStatusEvent);
       })
-      .catch(() => {
-      })
+      .catch(() => {});
 
     return window.api.on(IPC.UPDATES_STATUS, (event) => {
-      handleUpdateStatus(event as UpdateStatusEvent)
-    })
-  }, [])
+      handleUpdateStatus(event as UpdateStatusEvent);
+    });
+  }, []);
 
   return (
     <RedditDigestEnabledProvider>
@@ -148,5 +161,5 @@ export default function App(): React.ReactElement {
         </SportsEnabledProvider>
       </SavedPostsEnabledProvider>
     </RedditDigestEnabledProvider>
-  )
+  );
 }

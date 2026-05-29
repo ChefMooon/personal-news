@@ -1,24 +1,31 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { toast } from 'sonner'
-import { ArrowDown, ArrowUp, Plus, RefreshCcw, Search, Trash2 } from 'lucide-react'
-import { Button } from '../../components/ui/button'
-import { Input } from '../../components/ui/input'
-import { SportOrderControl } from './SportOrderControl'
-import { Switch } from '../../components/ui/switch'
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
+import {
+  ArrowDown,
+  ArrowUp,
+  Plus,
+  RefreshCcw,
+  Search,
+  Trash2,
+} from "lucide-react";
+import { Button } from "../../components/ui/button";
+import { Input } from "../../components/ui/input";
+import { SportOrderControl } from "./SportOrderControl";
+import { Switch } from "../../components/ui/switch";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
-  DialogTitle
-} from '../../components/ui/dialog'
+  DialogTitle,
+} from "../../components/ui/dialog";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue
-} from '../../components/ui/select'
+  SelectValue,
+} from "../../components/ui/select";
 import {
   IPC,
   type IpcMutationResult,
@@ -27,8 +34,8 @@ import {
   type SportsSettings,
   type SportSyncStatus,
   type TeamSearchResult,
-  type TrackedTeam
-} from '../../../../shared/ipc-types'
+  type TrackedTeam,
+} from "../../../../shared/ipc-types";
 import {
   DEFAULT_SPORT,
   DEFAULT_SPORTS_POLL_INTERVAL_MINUTES,
@@ -40,226 +47,311 @@ import {
   SPORTS_OPTIONS,
   SUPPORTED_SPORTS,
   getSportLabel,
-  type SupportedSport
-} from '../../../../shared/sports'
-import { getLeagueKey, getTrackedTeamMeta } from './league-display'
-import { SPORTS_PAGE_SPORT_ORDER_KEY, normalizeSportOrder } from './sport-order'
+  type SupportedSport,
+} from "../../../../shared/sports";
+import { getLeagueKey, getTrackedTeamMeta } from "./league-display";
+import {
+  SPORTS_PAGE_SPORT_ORDER_KEY,
+  normalizeSportOrder,
+} from "./sport-order";
 
 function formatLastSynced(timestamp: number | null): string {
   if (timestamp == null) {
-    return 'Never'
+    return "Never";
   }
 
-  const date = new Date(timestamp * 1000)
-  const today = new Date()
-  const yesterday = new Date()
-  yesterday.setDate(yesterday.getDate() - 1)
-  const timeLabel = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
-  const sameDay = date.toDateString() === today.toDateString()
-  const isYesterday = date.toDateString() === yesterday.toDateString()
+  const date = new Date(timestamp * 1000);
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const timeLabel = date.toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  const sameDay = date.toDateString() === today.toDateString();
+  const isYesterday = date.toDateString() === yesterday.toDateString();
 
   if (sameDay) {
-    return `Today at ${timeLabel}`
+    return `Today at ${timeLabel}`;
   }
   if (isYesterday) {
-    return `Yesterday at ${timeLabel}`
+    return `Yesterday at ${timeLabel}`;
   }
 
   return date.toLocaleString([], {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit'
-  })
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 export function SportsSettingsTab(): React.ReactElement {
-  const [selectedSport, setSelectedSport] = useState<SupportedSport>(DEFAULT_SPORT)
-  const [sportOrder, setSportOrder] = useState<SupportedSport[]>(SUPPORTED_SPORTS)
-  const [status, setStatus] = useState<SportSyncStatus | null>(null)
-  const [teams, setTeams] = useState<TrackedTeam[]>([])
-  const [leagues, setLeagues] = useState<SportLeague[]>([])
-  const [searchQuery, setSearchQuery] = useState('')
-  const [searchResults, setSearchResults] = useState<TeamSearchResult[]>([])
-  const [searching, setSearching] = useState(false)
-  const [refreshing, setRefreshing] = useState(false)
-  const [refreshingBadges, setRefreshingBadges] = useState(false)
+  const [selectedSport, setSelectedSport] =
+    useState<SupportedSport>(DEFAULT_SPORT);
+  const [sportOrder, setSportOrder] =
+    useState<SupportedSport[]>(SUPPORTED_SPORTS);
+  const [status, setStatus] = useState<SportSyncStatus | null>(null);
+  const [teams, setTeams] = useState<TrackedTeam[]>([]);
+  const [leagues, setLeagues] = useState<SportLeague[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<TeamSearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshingBadges, setRefreshingBadges] = useState(false);
   const [sportsSettings, setSportsSettings] = useState<SportsSettings>({
     pollIntervalMinutes: DEFAULT_SPORTS_POLL_INTERVAL_MINUTES,
-    startupRefreshStaleMinutes: DEFAULT_SPORTS_STARTUP_REFRESH_STALE_MINUTES
-  })
-  const [pollIntervalValue, setPollIntervalValue] = useState(String(DEFAULT_SPORTS_POLL_INTERVAL_MINUTES))
-  const [startupRefreshStaleValue, setStartupRefreshStaleValue] = useState(String(DEFAULT_SPORTS_STARTUP_REFRESH_STALE_MINUTES))
-  const [savingRefreshSettings, setSavingRefreshSettings] = useState(false)
-  const [browseLeaguesOpen, setBrowseLeaguesOpen] = useState(false)
-  const [orderReady, setOrderReady] = useState(false)
+    startupRefreshStaleMinutes: DEFAULT_SPORTS_STARTUP_REFRESH_STALE_MINUTES,
+  });
+  const [pollIntervalValue, setPollIntervalValue] = useState(
+    String(DEFAULT_SPORTS_POLL_INTERVAL_MINUTES),
+  );
+  const [startupRefreshStaleValue, setStartupRefreshStaleValue] = useState(
+    String(DEFAULT_SPORTS_STARTUP_REFRESH_STALE_MINUTES),
+  );
+  const [savingRefreshSettings, setSavingRefreshSettings] = useState(false);
+  const [browseLeaguesOpen, setBrowseLeaguesOpen] = useState(false);
+  const [orderReady, setOrderReady] = useState(false);
 
   useEffect(() => {
     window.api
       .invoke(IPC.SETTINGS_GET, SPORTS_PAGE_SPORT_ORDER_KEY)
       .then((value) => {
-        setSportOrder(normalizeSportOrder(value))
-        setOrderReady(true)
+        setSportOrder(normalizeSportOrder(value));
+        setOrderReady(true);
       })
       .catch((error) => {
-        toast.error(error instanceof Error ? error.message : 'Failed to load sport order.')
-        setOrderReady(true)
-      })
-  }, [])
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Failed to load sport order.",
+        );
+        setOrderReady(true);
+      });
+  }, []);
 
   useEffect(() => {
     if (!orderReady) {
-      return
+      return;
     }
 
-    window.api.invoke(IPC.SETTINGS_SET, SPORTS_PAGE_SPORT_ORDER_KEY, JSON.stringify(sportOrder)).catch((error) => {
-      toast.error(error instanceof Error ? error.message : 'Failed to save sport order.')
-    })
-  }, [orderReady, sportOrder])
+    window.api
+      .invoke(
+        IPC.SETTINGS_SET,
+        SPORTS_PAGE_SPORT_ORDER_KEY,
+        JSON.stringify(sportOrder),
+      )
+      .catch((error) => {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Failed to save sport order.",
+        );
+      });
+  }, [orderReady, sportOrder]);
 
   const loadData = useCallback(async () => {
     try {
-      const [statusList, trackedTeams, sportLeagues, currentSettings] = await Promise.all([
-        window.api.invoke(IPC.SPORTS_GET_STATUS),
-        window.api.invoke(IPC.SPORTS_GET_TRACKED_TEAMS),
-        window.api.invoke(IPC.SPORTS_GET_LEAGUES, { sport: selectedSport }),
-        window.api.invoke(IPC.SETTINGS_GET_SPORTS_SETTINGS)
-      ])
+      const [statusList, trackedTeams, sportLeagues, currentSettings] =
+        await Promise.all([
+          window.api.invoke(IPC.SPORTS_GET_STATUS),
+          window.api.invoke(IPC.SPORTS_GET_TRACKED_TEAMS),
+          window.api.invoke(IPC.SPORTS_GET_LEAGUES, { sport: selectedSport }),
+          window.api.invoke(IPC.SETTINGS_GET_SPORTS_SETTINGS),
+        ]);
 
-      setStatus(((statusList as SportSyncStatus[]).find((item) => item.sport === selectedSport) ?? null))
-      setTeams((trackedTeams as TrackedTeam[]).filter((team) => team.sport === selectedSport).sort((a, b) => a.sortOrder - b.sortOrder))
-      setLeagues((sportLeagues as SportLeague[]).sort((a, b) => Number(b.enabled) - Number(a.enabled) || a.name.localeCompare(b.name)))
-      setSportsSettings(currentSettings as SportsSettings)
-      setPollIntervalValue(String((currentSettings as SportsSettings).pollIntervalMinutes))
-      setStartupRefreshStaleValue(String((currentSettings as SportsSettings).startupRefreshStaleMinutes))
+      setStatus(
+        (statusList as SportSyncStatus[]).find(
+          (item) => item.sport === selectedSport,
+        ) ?? null,
+      );
+      setTeams(
+        (trackedTeams as TrackedTeam[])
+          .filter((team) => team.sport === selectedSport)
+          .sort((a, b) => a.sortOrder - b.sortOrder),
+      );
+      setLeagues(
+        (sportLeagues as SportLeague[]).sort(
+          (a, b) =>
+            Number(b.enabled) - Number(a.enabled) ||
+            a.name.localeCompare(b.name),
+        ),
+      );
+      setSportsSettings(currentSettings as SportsSettings);
+      setPollIntervalValue(
+        String((currentSettings as SportsSettings).pollIntervalMinutes),
+      );
+      setStartupRefreshStaleValue(
+        String((currentSettings as SportsSettings).startupRefreshStaleMinutes),
+      );
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to load Sports settings.')
+      toast.error(
+        err instanceof Error ? err.message : "Failed to load Sports settings.",
+      );
     }
-  }, [selectedSport])
+  }, [selectedSport]);
 
   useEffect(() => {
-    void loadData()
-  }, [loadData])
+    void loadData();
+  }, [loadData]);
 
   useEffect(() => {
     return window.api.on(IPC.SPORTS_DATA_UPDATED, (event) => {
-      const payload = event as SportsDataUpdatedEvent
+      const payload = event as SportsDataUpdatedEvent;
       if (payload.sport !== selectedSport) {
-        return
+        return;
       }
       if (!payload.ok && payload.error) {
-        toast.error(payload.error)
+        toast.error(payload.error);
       }
-      void loadData()
-    })
-  }, [loadData, selectedSport])
+      void loadData();
+    });
+  }, [loadData, selectedSport]);
 
   useEffect(() => {
-    setSearchResults([])
-  }, [selectedSport])
+    setSearchResults([]);
+  }, [selectedSport]);
 
-  const trackedTeamIds = useMemo(() => new Set(teams.map((team) => team.teamId)), [teams])
+  const trackedTeamIds = useMemo(
+    () => new Set(teams.map((team) => team.teamId)),
+    [teams],
+  );
   const leaguesById = useMemo(
-    () => Object.fromEntries(leagues.map((league) => [getLeagueKey(league.sport, league.leagueId), league] as const)),
-    [leagues]
-  )
-  const sportLabel = getSportLabel(selectedSport)
+    () =>
+      Object.fromEntries(
+        leagues.map(
+          (league) =>
+            [getLeagueKey(league.sport, league.leagueId), league] as const,
+        ),
+      ),
+    [leagues],
+  );
+  const sportLabel = getSportLabel(selectedSport);
 
   const refreshNow = async (): Promise<void> => {
-    setRefreshing(true)
+    setRefreshing(true);
     try {
-      const result = (await window.api.invoke(IPC.SPORTS_REFRESH, { sport: selectedSport })) as IpcMutationResult
+      const result = (await window.api.invoke(IPC.SPORTS_REFRESH, {
+        sport: selectedSport,
+      })) as IpcMutationResult;
       if (!result.ok) {
-        toast.error(result.error ?? 'Failed to refresh sports data.')
-        return
+        toast.error(result.error ?? "Failed to refresh sports data.");
+        return;
       }
-      toast.success('Sports refresh complete.')
-      await loadData()
+      toast.success("Sports refresh complete.");
+      await loadData();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to refresh sports data.')
+      toast.error(
+        err instanceof Error ? err.message : "Failed to refresh sports data.",
+      );
     } finally {
-      setRefreshing(false)
+      setRefreshing(false);
     }
-  }
+  };
 
   const refreshBadgesNow = async (): Promise<void> => {
-    setRefreshingBadges(true)
+    setRefreshingBadges(true);
     try {
-      const result = (await window.api.invoke(IPC.SPORTS_REFRESH_BADGES, { sport: selectedSport })) as IpcMutationResult
+      const result = (await window.api.invoke(IPC.SPORTS_REFRESH_BADGES, {
+        sport: selectedSport,
+      })) as IpcMutationResult;
       if (!result.ok) {
-        toast.error(result.error ?? 'Failed to refresh sports badges and logos.')
-        return
+        toast.error(
+          result.error ?? "Failed to refresh sports badges and logos.",
+        );
+        return;
       }
-      toast.success('Sports badges and logos refresh complete.')
-      await loadData()
+      toast.success("Sports badges and logos refresh complete.");
+      await loadData();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to refresh sports badges and logos.')
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : "Failed to refresh sports badges and logos.",
+      );
     } finally {
-      setRefreshingBadges(false)
+      setRefreshingBadges(false);
     }
-  }
+  };
 
   const saveRefreshSettings = async (): Promise<void> => {
-    const parsed = Number.parseInt(pollIntervalValue, 10)
-    if (!Number.isFinite(parsed) || parsed < MIN_SPORTS_POLL_INTERVAL_MINUTES || parsed > MAX_SPORTS_POLL_INTERVAL_MINUTES) {
-      toast.error(`Refresh interval must be between ${MIN_SPORTS_POLL_INTERVAL_MINUTES} and ${MAX_SPORTS_POLL_INTERVAL_MINUTES} minutes.`)
-      return
-    }
-
-    const parsedStartupStale = Number.parseInt(startupRefreshStaleValue, 10)
+    const parsed = Number.parseInt(pollIntervalValue, 10);
     if (
-      !Number.isFinite(parsedStartupStale)
-      || parsedStartupStale < MIN_SPORTS_STARTUP_REFRESH_STALE_MINUTES
-      || parsedStartupStale > MAX_SPORTS_STARTUP_REFRESH_STALE_MINUTES
+      !Number.isFinite(parsed) ||
+      parsed < MIN_SPORTS_POLL_INTERVAL_MINUTES ||
+      parsed > MAX_SPORTS_POLL_INTERVAL_MINUTES
     ) {
       toast.error(
-        `Startup freshness threshold must be between ${MIN_SPORTS_STARTUP_REFRESH_STALE_MINUTES} and ${MAX_SPORTS_STARTUP_REFRESH_STALE_MINUTES} minutes.`
-      )
-      return
+        `Refresh interval must be between ${MIN_SPORTS_POLL_INTERVAL_MINUTES} and ${MAX_SPORTS_POLL_INTERVAL_MINUTES} minutes.`,
+      );
+      return;
     }
 
-    setSavingRefreshSettings(true)
-    try {
-      const nextSettings = (await window.api.invoke(IPC.SETTINGS_UPDATE_SPORTS_SETTINGS, {
-        pollIntervalMinutes: parsed,
-        startupRefreshStaleMinutes: parsedStartupStale
-      })) as SportsSettings
-      setSportsSettings(nextSettings)
-      setPollIntervalValue(String(nextSettings.pollIntervalMinutes))
-      setStartupRefreshStaleValue(String(nextSettings.startupRefreshStaleMinutes))
-      toast.success('Sports refresh settings saved.')
-      await loadData()
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to save sports refresh settings.')
-    } finally {
-      setSavingRefreshSettings(false)
+    const parsedStartupStale = Number.parseInt(startupRefreshStaleValue, 10);
+    if (
+      !Number.isFinite(parsedStartupStale) ||
+      parsedStartupStale < MIN_SPORTS_STARTUP_REFRESH_STALE_MINUTES ||
+      parsedStartupStale > MAX_SPORTS_STARTUP_REFRESH_STALE_MINUTES
+    ) {
+      toast.error(
+        `Startup freshness threshold must be between ${MIN_SPORTS_STARTUP_REFRESH_STALE_MINUTES} and ${MAX_SPORTS_STARTUP_REFRESH_STALE_MINUTES} minutes.`,
+      );
+      return;
     }
-  }
+
+    setSavingRefreshSettings(true);
+    try {
+      const nextSettings = (await window.api.invoke(
+        IPC.SETTINGS_UPDATE_SPORTS_SETTINGS,
+        {
+          pollIntervalMinutes: parsed,
+          startupRefreshStaleMinutes: parsedStartupStale,
+        },
+      )) as SportsSettings;
+      setSportsSettings(nextSettings);
+      setPollIntervalValue(String(nextSettings.pollIntervalMinutes));
+      setStartupRefreshStaleValue(
+        String(nextSettings.startupRefreshStaleMinutes),
+      );
+      toast.success("Sports refresh settings saved.");
+      await loadData();
+    } catch (err) {
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : "Failed to save sports refresh settings.",
+      );
+    } finally {
+      setSavingRefreshSettings(false);
+    }
+  };
 
   const runSearch = async (): Promise<void> => {
-    const trimmed = searchQuery.trim()
+    const trimmed = searchQuery.trim();
     if (!trimmed) {
-      return
+      return;
     }
 
-    setSearching(true)
+    setSearching(true);
     try {
       const results = (await window.api.invoke(IPC.SPORTS_SEARCH_TEAMS, {
         query: trimmed,
-        sport: selectedSport
-      })) as TeamSearchResult[]
-      setSearchResults(results)
+        sport: selectedSport,
+      })) as TeamSearchResult[];
+      setSearchResults(results);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to search sports teams.')
+      toast.error(
+        err instanceof Error ? err.message : "Failed to search sports teams.",
+      );
     } finally {
-      setSearching(false)
+      setSearching(false);
     }
-  }
+  };
 
   const addTeam = async (result: TeamSearchResult): Promise<void> => {
     if (trackedTeamIds.has(result.teamId)) {
-      toast.info('That team is already tracked.')
-      return
+      toast.info("That team is already tracked.");
+      return;
     }
 
     try {
@@ -269,87 +361,115 @@ export function SportsSettingsTab(): React.ReactElement {
         sport: result.sport,
         teamName: result.name,
         leagueName: result.leagueName,
-        badgeUrl: result.badgeUrl
-      })
-      toast.success(`Added ${result.name}.`)
-      await loadData()
+        badgeUrl: result.badgeUrl,
+      });
+      toast.success(`Added ${result.name}.`);
+      await loadData();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to add team.')
+      toast.error(err instanceof Error ? err.message : "Failed to add team.");
     }
-  }
+  };
 
-  const toggleTeamEnabled = async (team: TrackedTeam, enabled: boolean): Promise<void> => {
+  const toggleTeamEnabled = async (
+    team: TrackedTeam,
+    enabled: boolean,
+  ): Promise<void> => {
     try {
       const result = (await window.api.invoke(IPC.SPORTS_SET_TEAM_ENABLED, {
         teamId: team.teamId,
-        enabled
-      })) as IpcMutationResult
+        enabled,
+      })) as IpcMutationResult;
       if (!result.ok) {
-        toast.error(result.error ?? 'Failed to update team visibility.')
-        return
+        toast.error(result.error ?? "Failed to update team visibility.");
+        return;
       }
-      await loadData()
+      await loadData();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to update team visibility.')
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : "Failed to update team visibility.",
+      );
     }
-  }
+  };
 
   const removeTeam = async (teamId: string): Promise<void> => {
     try {
-      const result = (await window.api.invoke(IPC.SPORTS_REMOVE_TEAM, { teamId })) as IpcMutationResult
+      const result = (await window.api.invoke(IPC.SPORTS_REMOVE_TEAM, {
+        teamId,
+      })) as IpcMutationResult;
       if (!result.ok) {
-        toast.error(result.error ?? 'Failed to remove team.')
-        return
+        toast.error(result.error ?? "Failed to remove team.");
+        return;
       }
-      toast.success('Team removed.')
-      await loadData()
+      toast.success("Team removed.");
+      await loadData();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to remove team.')
+      toast.error(
+        err instanceof Error ? err.message : "Failed to remove team.",
+      );
     }
-  }
+  };
 
-  const reorderTeams = async (fromIndex: number, toIndex: number): Promise<void> => {
+  const reorderTeams = async (
+    fromIndex: number,
+    toIndex: number,
+  ): Promise<void> => {
     if (toIndex < 0 || toIndex >= teams.length) {
-      return
+      return;
     }
 
-    const next = [...teams]
-    const [moved] = next.splice(fromIndex, 1)
-    next.splice(toIndex, 0, moved)
+    const next = [...teams];
+    const [moved] = next.splice(fromIndex, 1);
+    next.splice(toIndex, 0, moved);
 
     try {
       const result = (await window.api.invoke(IPC.SPORTS_SET_TEAM_ORDER, {
-        orderedIds: next.map((team) => team.teamId)
-      })) as IpcMutationResult
+        orderedIds: next.map((team) => team.teamId),
+      })) as IpcMutationResult;
       if (!result.ok) {
-        toast.error(result.error ?? 'Failed to reorder teams.')
-        return
+        toast.error(result.error ?? "Failed to reorder teams.");
+        return;
       }
-      setTeams(next)
+      setTeams(next);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to reorder teams.')
+      toast.error(
+        err instanceof Error ? err.message : "Failed to reorder teams.",
+      );
     }
-  }
+  };
 
-  const setLeagueEnabled = async (league: SportLeague, enabled: boolean): Promise<void> => {
+  const setLeagueEnabled = async (
+    league: SportLeague,
+    enabled: boolean,
+  ): Promise<void> => {
     try {
       const result = enabled
-        ? await window.api.invoke(IPC.SPORTS_ADD_LEAGUE, { leagueId: league.leagueId, sport: league.sport })
-        : await window.api.invoke(IPC.SPORTS_REMOVE_LEAGUE, { leagueId: league.leagueId })
+        ? await window.api.invoke(IPC.SPORTS_ADD_LEAGUE, {
+            leagueId: league.leagueId,
+            sport: league.sport,
+          })
+        : await window.api.invoke(IPC.SPORTS_REMOVE_LEAGUE, {
+            leagueId: league.leagueId,
+          });
 
       if (!enabled) {
-        const mutation = result as IpcMutationResult
+        const mutation = result as IpcMutationResult;
         if (!mutation.ok) {
-          toast.error(mutation.error ?? 'Failed to update league visibility.')
-          return
+          toast.error(mutation.error ?? "Failed to update league visibility.");
+          return;
         }
       }
 
-      await loadData()
+      await loadData();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to update league visibility.')
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : "Failed to update league visibility.",
+      );
     }
-  }
+  };
 
   return (
     <div className="space-y-6 max-w-4xl pb-8">
@@ -363,13 +483,24 @@ export function SportsSettingsTab(): React.ReactElement {
           </DialogHeader>
           <div className="max-h-[60vh] space-y-2 overflow-y-auto pr-1">
             {leagues.map((league) => (
-              <div key={league.leagueId} className="flex items-center justify-between gap-3 rounded-md border px-3 py-2">
+              <div
+                key={league.leagueId}
+                className="flex items-center justify-between gap-3 rounded-md border px-3 py-2"
+              >
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium">{league.name}</p>
-                  {league.country ? <p className="truncate text-xs text-muted-foreground">{league.country}</p> : null}
+                  {league.country ? (
+                    <p className="truncate text-xs text-muted-foreground">
+                      {league.country}
+                    </p>
+                  ) : null}
                 </div>
-                <Button variant={league.enabled ? 'secondary' : 'outline'} size="sm" onClick={() => void setLeagueEnabled(league, !league.enabled)}>
-                  {league.enabled ? 'Enabled' : 'Enable'}
+                <Button
+                  variant={league.enabled ? "secondary" : "outline"}
+                  size="sm"
+                  onClick={() => void setLeagueEnabled(league, !league.enabled)}
+                >
+                  {league.enabled ? "Enabled" : "Enable"}
                 </Button>
               </div>
             ))}
@@ -382,20 +513,31 @@ export function SportsSettingsTab(): React.ReactElement {
         <p className="mb-3 text-xs text-muted-foreground">
           Drag to reorder the sport sections shown on the dedicated Sports page.
         </p>
-        <SportOrderControl orderedSports={sportOrder} onChange={(value) => setSportOrder(value as SupportedSport[])} />
+        <SportOrderControl
+          orderedSports={sportOrder}
+          onChange={(value) => setSportOrder(value as SupportedSport[])}
+        />
       </div>
 
       <div>
         <h3 className="mb-1 text-sm font-medium">Sport</h3>
         <p className="mb-3 text-xs text-muted-foreground">
-          Choose which sport to configure for shared cache, tracked teams, and league coverage.
+          Choose which sport to configure for shared cache, tracked teams, and
+          league coverage.
         </p>
         <div className="max-w-xs">
-          <Select value={selectedSport} onValueChange={(value) => setSelectedSport(value as SupportedSport)}>
-            <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+          <Select
+            value={selectedSport}
+            onValueChange={(value) => setSelectedSport(value as SupportedSport)}
+          >
+            <SelectTrigger className="h-9">
+              <SelectValue />
+            </SelectTrigger>
             <SelectContent align="start" side="bottom">
               {SPORTS_OPTIONS.map((sport) => (
-                <SelectItem key={sport.id} value={sport.id}>{sport.label}</SelectItem>
+                <SelectItem key={sport.id} value={sport.id}>
+                  {sport.label}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -410,14 +552,25 @@ export function SportsSettingsTab(): React.ReactElement {
         <div className="grid gap-3 md:grid-cols-2 max-w-3xl">
           <div className="rounded-md border px-3 py-3">
             <p className="text-sm font-medium">{sportLabel}</p>
-            <p className="mt-2 text-xs text-muted-foreground">Last synced: {formatLastSynced(status?.lastFetchedAt ?? null)}</p>
-            <p className="text-xs text-muted-foreground">Last badges/logos sync: {formatLastSynced(status?.lastBadgeFetchedAt ?? null)}</p>
-            <p className="text-xs text-muted-foreground">Enabled leagues: {status?.enabledLeagueCount ?? 0}</p>
-            <p className="text-xs text-muted-foreground">Tracked teams: {status?.trackedTeamCount ?? 0}</p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Last synced: {formatLastSynced(status?.lastFetchedAt ?? null)}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Last badges/logos sync:{" "}
+              {formatLastSynced(status?.lastBadgeFetchedAt ?? null)}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Enabled leagues: {status?.enabledLeagueCount ?? 0}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Tracked teams: {status?.trackedTeamCount ?? 0}
+            </p>
           </div>
           <div className="rounded-md border px-3 py-3">
             <p className="text-sm font-medium">Refresh cadence</p>
-            <p className="mt-2 text-xs text-muted-foreground">Refresh every ___ minutes for automatic sports sync.</p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Refresh every ___ minutes for automatic sports sync.
+            </p>
             <div className="mt-3 flex items-center gap-2">
               <Input
                 value={pollIntervalValue}
@@ -428,32 +581,60 @@ export function SportsSettingsTab(): React.ReactElement {
               />
             </div>
             <p className="mt-2 text-xs text-muted-foreground">
-              Current setting: every {sportsSettings.pollIntervalMinutes} minute{sportsSettings.pollIntervalMinutes === 1 ? '' : 's'}.
+              Current setting: every {sportsSettings.pollIntervalMinutes} minute
+              {sportsSettings.pollIntervalMinutes === 1 ? "" : "s"}.
             </p>
-            <p className="mt-4 text-xs text-muted-foreground">Startup refresh when cached data is older than ___ minutes.</p>
+            <p className="mt-4 text-xs text-muted-foreground">
+              Startup refresh when cached data is older than ___ minutes.
+            </p>
             <div className="mt-3 flex items-center gap-2">
               <Input
                 value={startupRefreshStaleValue}
-                onChange={(event) => setStartupRefreshStaleValue(event.target.value)}
+                onChange={(event) =>
+                  setStartupRefreshStaleValue(event.target.value)
+                }
                 inputMode="numeric"
                 className="w-28"
                 aria-label="Sports startup freshness threshold in minutes"
               />
-              <Button variant="outline" size="sm" onClick={() => void saveRefreshSettings()} disabled={savingRefreshSettings}>
-                {savingRefreshSettings ? 'Saving...' : 'Save Refresh Settings'}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void saveRefreshSettings()}
+                disabled={savingRefreshSettings}
+              >
+                {savingRefreshSettings ? "Saving..." : "Save Refresh Settings"}
               </Button>
             </div>
             <p className="mt-2 text-xs text-muted-foreground">
-              Startup threshold: {sportsSettings.startupRefreshStaleMinutes} minute{sportsSettings.startupRefreshStaleMinutes === 1 ? '' : 's'}.
+              Startup threshold: {sportsSettings.startupRefreshStaleMinutes}{" "}
+              minute{sportsSettings.startupRefreshStaleMinutes === 1 ? "" : "s"}
+              .
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
-              <Button variant="outline" size="sm" onClick={() => void refreshNow()} disabled={refreshing}>
-                <RefreshCcw className={`mr-1 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-                {refreshing ? 'Refreshing scores...' : 'Refresh scores'}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void refreshNow()}
+                disabled={refreshing}
+              >
+                <RefreshCcw
+                  className={`mr-1 h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
+                />
+                {refreshing ? "Refreshing scores..." : "Refresh scores"}
               </Button>
-              <Button variant="outline" size="sm" onClick={() => void refreshBadgesNow()} disabled={refreshingBadges}>
-                <RefreshCcw className={`mr-1 h-4 w-4 ${refreshingBadges ? 'animate-spin' : ''}`} />
-                {refreshingBadges ? 'Refreshing badges...' : 'Refresh badges/logos'}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void refreshBadgesNow()}
+                disabled={refreshingBadges}
+              >
+                <RefreshCcw
+                  className={`mr-1 h-4 w-4 ${refreshingBadges ? "animate-spin" : ""}`}
+                />
+                {refreshingBadges
+                  ? "Refreshing badges..."
+                  : "Refresh badges/logos"}
               </Button>
             </div>
           </div>
@@ -463,28 +644,52 @@ export function SportsSettingsTab(): React.ReactElement {
       <div>
         <h3 className="mb-1 text-sm font-medium">{sportLabel} Tracked Teams</h3>
         <p className="mb-3 text-xs text-muted-foreground">
-          Teams render in the order shown here when the widget is set to My Teams.
+          Teams render in the order shown here when the widget is set to My
+          Teams.
         </p>
         <div className="rounded-md border px-3 py-3 max-w-3xl">
           <div className="flex gap-2">
-            <Input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search team name" />
-            <Button variant="outline" size="sm" onClick={() => void runSearch()} disabled={searching}>
+            <Input
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search team name"
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void runSearch()}
+              disabled={searching}
+            >
               <Search className="mr-1 h-4 w-4" />
-              {searching ? 'Searching...' : 'Search'}
+              {searching ? "Searching..." : "Search"}
             </Button>
           </div>
 
           {searchResults.length > 0 ? (
             <div className="mt-3 space-y-2">
               {searchResults.map((result) => (
-                <div key={result.teamId} className="flex items-center justify-between gap-3 rounded-md border px-3 py-2">
+                <div
+                  key={result.teamId}
+                  className="flex items-center justify-between gap-3 rounded-md border px-3 py-2"
+                >
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">{result.name}</p>
-                    <p className="truncate text-xs text-muted-foreground">{result.leagueName}</p>
+                    <p className="truncate text-sm font-medium">
+                      {result.name}
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {result.leagueName}
+                    </p>
                   </div>
-                  <Button variant="outline" size="sm" onClick={() => void addTeam(result)} disabled={trackedTeamIds.has(result.teamId)}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void addTeam(result)}
+                    disabled={trackedTeamIds.has(result.teamId)}
+                  >
                     <Plus className="mr-1 h-4 w-4" />
-                    {trackedTeamIds.has(result.teamId) ? 'Already added' : 'Add'}
+                    {trackedTeamIds.has(result.teamId)
+                      ? "Already added"
+                      : "Add"}
                   </Button>
                 </div>
               ))}
@@ -498,20 +703,48 @@ export function SportsSettingsTab(): React.ReactElement {
               </div>
             ) : (
               teams.map((team, index) => (
-                <div key={team.teamId} className="flex items-center justify-between gap-3 rounded-md border px-3 py-2">
+                <div
+                  key={team.teamId}
+                  className="flex items-center justify-between gap-3 rounded-md border px-3 py-2"
+                >
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium">{team.name}</p>
-                    <p className="truncate text-xs text-muted-foreground">{getTrackedTeamMeta(team, leaguesById, false)}</p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {getTrackedTeamMeta(team, leaguesById, false)}
+                    </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Button variant="outline" size="icon" onClick={() => void reorderTeams(index, index - 1)} disabled={index === 0} aria-label="Move team up">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => void reorderTeams(index, index - 1)}
+                      disabled={index === 0}
+                      aria-label="Move team up"
+                    >
                       <ArrowUp className="h-4 w-4" />
                     </Button>
-                    <Button variant="outline" size="icon" onClick={() => void reorderTeams(index, index + 1)} disabled={index === teams.length - 1} aria-label="Move team down">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => void reorderTeams(index, index + 1)}
+                      disabled={index === teams.length - 1}
+                      aria-label="Move team down"
+                    >
                       <ArrowDown className="h-4 w-4" />
                     </Button>
-                    <Switch checked={team.enabled} onCheckedChange={(checked) => void toggleTeamEnabled(team, checked)} aria-label={`Enable ${team.name}`} />
-                    <Button variant="outline" size="icon" onClick={() => void removeTeam(team.teamId)} aria-label={`Remove ${team.name}`}>
+                    <Switch
+                      checked={team.enabled}
+                      onCheckedChange={(checked) =>
+                        void toggleTeamEnabled(team, checked)
+                      }
+                      aria-label={`Enable ${team.name}`}
+                    />
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => void removeTeam(team.teamId)}
+                      aria-label={`Remove ${team.name}`}
+                    >
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
@@ -523,29 +756,48 @@ export function SportsSettingsTab(): React.ReactElement {
       </div>
 
       <div>
-        <h3 className="mb-1 text-sm font-medium">{sportLabel} Leagues in All Games View</h3>
+        <h3 className="mb-1 text-sm font-medium">
+          {sportLabel} Leagues in All Games View
+        </h3>
         <p className="mb-3 text-xs text-muted-foreground">
           Enabled leagues appear in the All Games overview for {sportLabel}.
         </p>
         <div className="rounded-md border px-3 py-3 max-w-3xl space-y-3">
           <div className="space-y-2">
             {leagues.slice(0, 8).map((league) => (
-              <div key={league.leagueId} className="flex items-center justify-between rounded-md border px-3 py-2">
+              <div
+                key={league.leagueId}
+                className="flex items-center justify-between rounded-md border px-3 py-2"
+              >
                 <div>
                   <p className="text-sm font-medium">{league.name}</p>
-                  {league.country ? <p className="text-xs text-muted-foreground">{league.country}</p> : null}
+                  {league.country ? (
+                    <p className="text-xs text-muted-foreground">
+                      {league.country}
+                    </p>
+                  ) : null}
                 </div>
-                <Switch checked={league.enabled} onCheckedChange={(checked) => void setLeagueEnabled(league, checked)} aria-label={`Enable ${league.name}`} />
+                <Switch
+                  checked={league.enabled}
+                  onCheckedChange={(checked) =>
+                    void setLeagueEnabled(league, checked)
+                  }
+                  aria-label={`Enable ${league.name}`}
+                />
               </div>
             ))}
           </div>
-          <Button variant="outline" size="sm" onClick={() => setBrowseLeaguesOpen(true)}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setBrowseLeaguesOpen(true)}
+          >
             Browse Leagues
           </Button>
         </div>
       </div>
     </div>
-  )
+  );
 }
 
-export default SportsSettingsTab
+export default SportsSettingsTab;

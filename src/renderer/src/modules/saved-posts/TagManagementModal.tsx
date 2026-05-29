@@ -1,14 +1,14 @@
-import React, { useEffect, useState } from 'react'
-import { toast } from 'sonner'
-import { IPC } from '../../../../shared/ipc-types'
+import React, { useEffect, useState } from "react";
+import { toast } from "sonner";
+import { IPC } from "../../../../shared/ipc-types";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
-  DialogTitle
-} from '../../components/ui/dialog'
-import { Button } from '../../components/ui/button'
-import { Input } from '../../components/ui/input'
+  DialogTitle,
+} from "../../components/ui/dialog";
+import { Button } from "../../components/ui/button";
+import { Input } from "../../components/ui/input";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,70 +17,76 @@ import {
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
-  AlertDialogTitle
-} from '../../components/ui/alert-dialog'
+  AlertDialogTitle,
+} from "../../components/ui/alert-dialog";
 
 interface TagManagementModalProps {
-  isOpen: boolean
-  onClose: () => void
-  onTagUpdated: () => void
+  isOpen: boolean;
+  onClose: () => void;
+  onTagUpdated: () => void;
 }
 
 export function TagManagementModal({
   isOpen,
   onClose,
-  onTagUpdated
+  onTagUpdated,
 }: TagManagementModalProps): React.ReactElement {
-  const [tags, setTags] = useState<string[]>([])
-  const [editingTag, setEditingTag] = useState<string | null>(null)
-  const [editValue, setEditValue] = useState('')
-  const [deletingTag, setDeletingTag] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [tags, setTags] = useState<string[]>([]);
+  const [editingTag, setEditingTag] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const [deletingTag, setDeletingTag] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   const fetchTags = (): void => {
     window.api
       .invoke(IPC.REDDIT_GET_ALL_TAGS)
       .then((result) => setTags(result as string[]))
       .catch((err) => {
-        toast.error(err instanceof Error ? err.message : 'Failed to load tags.')
-      })
-  }
+        toast.error(
+          err instanceof Error ? err.message : "Failed to load tags.",
+        );
+      });
+  };
 
   useEffect(() => {
-    if (isOpen) fetchTags()
-  }, [isOpen])
+    if (isOpen) fetchTags();
+  }, [isOpen]);
 
   const handleRename = async (): Promise<void> => {
-    if (!editingTag || !editValue.trim()) return
-    setLoading(true)
+    if (!editingTag || !editValue.trim()) return;
+    setLoading(true);
     try {
-      await window.api.invoke(IPC.REDDIT_RENAME_TAG, editingTag, editValue.trim())
-      setEditingTag(null)
-      setEditValue('')
-      fetchTags()
-      onTagUpdated()
-      toast.success('Tag renamed.')
+      await window.api.invoke(
+        IPC.REDDIT_RENAME_TAG,
+        editingTag,
+        editValue.trim(),
+      );
+      setEditingTag(null);
+      setEditValue("");
+      fetchTags();
+      onTagUpdated();
+      toast.success("Tag renamed.");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to rename tag.')
+      toast.error(err instanceof Error ? err.message : "Failed to rename tag.");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handleDelete = async (tag: string): Promise<void> => {
-    setLoading(true)
+    setLoading(true);
     try {
-      await window.api.invoke(IPC.REDDIT_DELETE_TAG, tag)
-      setDeletingTag(null)
-      fetchTags()
-      onTagUpdated()
-      toast.success('Tag deleted.')
+      await window.api.invoke(IPC.REDDIT_DELETE_TAG, tag);
+      setDeletingTag(null);
+      fetchTags();
+      onTagUpdated();
+      toast.success("Tag deleted.");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to delete tag.')
+      toast.error(err instanceof Error ? err.message : "Failed to delete tag.");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   return (
     <>
@@ -91,7 +97,9 @@ export function TagManagementModal({
           </DialogHeader>
           <div className="space-y-2 max-h-[400px] overflow-y-auto">
             {tags.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">No tags yet.</p>
+              <p className="text-sm text-muted-foreground py-4 text-center">
+                No tags yet.
+              </p>
             ) : (
               tags.map((tag) => (
                 <div
@@ -106,8 +114,8 @@ export function TagManagementModal({
                         className="h-8 text-sm"
                         aria-label={`Rename tag ${tag}`}
                         onKeyDown={(e) => {
-                          if (e.key === 'Enter') void handleRename()
-                          if (e.key === 'Escape') setEditingTag(null)
+                          if (e.key === "Enter") void handleRename();
+                          if (e.key === "Escape") setEditingTag(null);
                         }}
                         autoFocus
                       />
@@ -135,8 +143,8 @@ export function TagManagementModal({
                           size="sm"
                           variant="ghost"
                           onClick={() => {
-                            setEditingTag(tag)
-                            setEditValue(tag)
+                            setEditingTag(tag);
+                            setEditValue(tag);
                           }}
                         >
                           Rename
@@ -165,9 +173,12 @@ export function TagManagementModal({
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete tag &quot;{deletingTag}&quot;?</AlertDialogTitle>
+            <AlertDialogTitle>
+              Delete tag &quot;{deletingTag}&quot;?
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              This will remove the tag from all posts. The posts themselves will not be deleted.
+              This will remove the tag from all posts. The posts themselves will
+              not be deleted.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -182,5 +193,5 @@ export function TagManagementModal({
         </AlertDialogContent>
       </AlertDialog>
     </>
-  )
+  );
 }

@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { ipcMain } from "electron";
 import type {
   IpcMutationResult,
   RadioStation,
@@ -8,10 +8,10 @@ import type {
   SportsSettings,
   SportSyncStatus,
   TeamSearchResult,
-  TrackedTeam
-} from '../../../shared/ipc-types'
-import { IPC } from '../../../shared/ipc-types'
-import { resolveSportsRadioStream, searchSportsRadioStations } from './radio'
+  TrackedTeam,
+} from "../../../shared/ipc-types";
+import { IPC } from "../../../shared/ipc-types";
+import { resolveSportsRadioStream, searchSportsRadioStations } from "./radio";
 import {
   addSportsLeague,
   addSportsTeam,
@@ -30,126 +30,199 @@ import {
   searchSportsTeams,
   setSportsTeamEnabled,
   setSportsTeamOrder,
-  updateSportsSettings
-} from './index'
+  updateSportsSettings,
+} from "./index";
 
 export function registerSportsIpcHandlers(): void {
   ipcMain.handle(IPC.SETTINGS_GET_SPORTS_SETTINGS, (): SportsSettings => {
-    return getSportsSettings()
-  })
+    return getSportsSettings();
+  });
 
-  ipcMain.handle(IPC.SETTINGS_UPDATE_SPORTS_SETTINGS, (_event, args: Partial<SportsSettings>): SportsSettings => {
-    return updateSportsSettings(args)
-  })
+  ipcMain.handle(
+    IPC.SETTINGS_UPDATE_SPORTS_SETTINGS,
+    (_event, args: Partial<SportsSettings>): SportsSettings => {
+      return updateSportsSettings(args);
+    },
+  );
 
-  ipcMain.handle(IPC.SPORTS_GET_TODAY_EVENTS, (_event, args: { sport: string }) => {
-    return getSportsTodayEvents(args.sport)
-  })
+  ipcMain.handle(
+    IPC.SPORTS_GET_TODAY_EVENTS,
+    (_event, args: { sport: string }) => {
+      return getSportsTodayEvents(args.sport);
+    },
+  );
 
-  ipcMain.handle(IPC.SPORTS_GET_TEAM_EVENTS, (_event, args: { teamId: string }) => {
-    return getSportsTeamEvents(args.teamId)
-  })
+  ipcMain.handle(
+    IPC.SPORTS_GET_TEAM_EVENTS,
+    (_event, args: { teamId: string }) => {
+      return getSportsTeamEvents(args.teamId);
+    },
+  );
 
   ipcMain.handle(
     IPC.SPORTS_GET_STANDINGS,
-    async (_event, args: { leagueId: string; season: string; sport: string; leagueName?: string }): Promise<SportStandingRow[]> => {
-      return getSportsStandings(args.leagueId, args.season, args.sport, args.leagueName)
-    }
-  )
+    async (
+      _event,
+      args: {
+        leagueId: string;
+        season: string;
+        sport: string;
+        leagueName?: string;
+      },
+    ): Promise<SportStandingRow[]> => {
+      return getSportsStandings(
+        args.leagueId,
+        args.season,
+        args.sport,
+        args.leagueName,
+      );
+    },
+  );
 
   ipcMain.handle(
     IPC.SPORTS_GET_EVENT_DETAILS,
-    async (_event, args: { eventId: string }): Promise<SportEventDetail | null> => {
-      return getSportsEventDetails(args.eventId)
-    }
-  )
+    async (
+      _event,
+      args: { eventId: string },
+    ): Promise<SportEventDetail | null> => {
+      return getSportsEventDetails(args.eventId);
+    },
+  );
 
-  ipcMain.handle(IPC.SPORTS_SEARCH_RADIO_STATIONS, async (_event, args: { game: Parameters<typeof searchSportsRadioStations>[0] }): Promise<RadioStation[]> => {
-    return searchSportsRadioStations(args.game)
-  })
+  ipcMain.handle(
+    IPC.SPORTS_SEARCH_RADIO_STATIONS,
+    async (
+      _event,
+      args: { game: Parameters<typeof searchSportsRadioStations>[0] },
+    ): Promise<RadioStation[]> => {
+      return searchSportsRadioStations(args.game);
+    },
+  );
 
-  ipcMain.handle(IPC.SPORTS_RESOLVE_RADIO_STREAM, async (_event, args: { url: string }): Promise<string> => {
-    return resolveSportsRadioStream(args.url)
-  })
+  ipcMain.handle(
+    IPC.SPORTS_RESOLVE_RADIO_STREAM,
+    async (_event, args: { url: string }): Promise<string> => {
+      return resolveSportsRadioStream(args.url);
+    },
+  );
 
   ipcMain.handle(IPC.SPORTS_GET_TRACKED_TEAMS, (): TrackedTeam[] => {
-    return getSportsTrackedTeams()
-  })
+    return getSportsTrackedTeams();
+  });
 
   ipcMain.handle(
     IPC.SPORTS_ADD_TEAM,
     async (
       _event,
       args: {
-        teamId: string
-        leagueId: string
-        sport: string
-        teamName?: string
-        leagueName?: string
-        badgeUrl?: string | null
-      }
+        teamId: string;
+        leagueId: string;
+        sport: string;
+        teamName?: string;
+        leagueName?: string;
+        badgeUrl?: string | null;
+      },
     ): Promise<TrackedTeam> => {
       return addSportsTeam(args.teamId, args.leagueId, args.sport, {
         teamName: args.teamName,
         leagueName: args.leagueName,
-        badgeUrl: args.badgeUrl ?? null
-      })
-    }
-  )
+        badgeUrl: args.badgeUrl ?? null,
+      });
+    },
+  );
 
-  ipcMain.handle(IPC.SPORTS_REMOVE_TEAM, (_event, args: { teamId: string }): IpcMutationResult => {
-    return removeSportsTeam(args.teamId)
-  })
+  ipcMain.handle(
+    IPC.SPORTS_REMOVE_TEAM,
+    (_event, args: { teamId: string }): IpcMutationResult => {
+      return removeSportsTeam(args.teamId);
+    },
+  );
 
-  ipcMain.handle(IPC.SPORTS_SET_TEAM_ENABLED, (_event, args: { teamId: string; enabled: boolean }): IpcMutationResult => {
-    return setSportsTeamEnabled(args.teamId, args.enabled)
-  })
+  ipcMain.handle(
+    IPC.SPORTS_SET_TEAM_ENABLED,
+    (_event, args: { teamId: string; enabled: boolean }): IpcMutationResult => {
+      return setSportsTeamEnabled(args.teamId, args.enabled);
+    },
+  );
 
-  ipcMain.handle(IPC.SPORTS_SET_TEAM_ORDER, (_event, args: { orderedIds: string[] }): IpcMutationResult => {
-    return setSportsTeamOrder(args.orderedIds)
-  })
+  ipcMain.handle(
+    IPC.SPORTS_SET_TEAM_ORDER,
+    (_event, args: { orderedIds: string[] }): IpcMutationResult => {
+      return setSportsTeamOrder(args.orderedIds);
+    },
+  );
 
-  ipcMain.handle(IPC.SPORTS_GET_LEAGUES, async (_event, args: { sport: string }): Promise<SportLeague[]> => {
-    return getSportsLeagues(args.sport)
-  })
+  ipcMain.handle(
+    IPC.SPORTS_GET_LEAGUES,
+    async (_event, args: { sport: string }): Promise<SportLeague[]> => {
+      return getSportsLeagues(args.sport);
+    },
+  );
 
-  ipcMain.handle(IPC.SPORTS_ADD_LEAGUE, async (_event, args: { leagueId: string; sport: string }): Promise<SportLeague> => {
-    return addSportsLeague(args.leagueId, args.sport)
-  })
+  ipcMain.handle(
+    IPC.SPORTS_ADD_LEAGUE,
+    async (
+      _event,
+      args: { leagueId: string; sport: string },
+    ): Promise<SportLeague> => {
+      return addSportsLeague(args.leagueId, args.sport);
+    },
+  );
 
-  ipcMain.handle(IPC.SPORTS_REMOVE_LEAGUE, (_event, args: { leagueId: string }): IpcMutationResult => {
-    return removeSportsLeague(args.leagueId)
-  })
+  ipcMain.handle(
+    IPC.SPORTS_REMOVE_LEAGUE,
+    (_event, args: { leagueId: string }): IpcMutationResult => {
+      return removeSportsLeague(args.leagueId);
+    },
+  );
 
-  ipcMain.handle(IPC.SPORTS_SEARCH_TEAMS, async (_event, args: { query: string; sport: string }): Promise<TeamSearchResult[]> => {
-    return searchSportsTeams(args.query, args.sport)
-  })
+  ipcMain.handle(
+    IPC.SPORTS_SEARCH_TEAMS,
+    async (
+      _event,
+      args: { query: string; sport: string },
+    ): Promise<TeamSearchResult[]> => {
+      return searchSportsTeams(args.query, args.sport);
+    },
+  );
 
-  ipcMain.handle(IPC.SPORTS_REFRESH, async (_event, args: { sport: string }): Promise<IpcMutationResult> => {
-    try {
-      await refreshSportsData(args.sport, true)
-      return { ok: true, error: null }
-    } catch (error) {
-      return {
-        ok: false,
-        error: error instanceof Error ? error.message : 'Failed to refresh sports data.'
+  ipcMain.handle(
+    IPC.SPORTS_REFRESH,
+    async (_event, args: { sport: string }): Promise<IpcMutationResult> => {
+      try {
+        await refreshSportsData(args.sport, true);
+        return { ok: true, error: null };
+      } catch (error) {
+        return {
+          ok: false,
+          error:
+            error instanceof Error
+              ? error.message
+              : "Failed to refresh sports data.",
+        };
       }
-    }
-  })
+    },
+  );
 
-  ipcMain.handle(IPC.SPORTS_REFRESH_BADGES, async (_event, args: { sport: string }): Promise<IpcMutationResult> => {
-    try {
-      await refreshSportsBadges(args.sport, true)
-      return { ok: true, error: null }
-    } catch (error) {
-      return {
-        ok: false,
-        error: error instanceof Error ? error.message : 'Failed to refresh sports badges.'
+  ipcMain.handle(
+    IPC.SPORTS_REFRESH_BADGES,
+    async (_event, args: { sport: string }): Promise<IpcMutationResult> => {
+      try {
+        await refreshSportsBadges(args.sport, true);
+        return { ok: true, error: null };
+      } catch (error) {
+        return {
+          ok: false,
+          error:
+            error instanceof Error
+              ? error.message
+              : "Failed to refresh sports badges.",
+        };
       }
-    }
-  })
+    },
+  );
 
   ipcMain.handle(IPC.SPORTS_GET_STATUS, (): SportSyncStatus[] => {
-    return getSportsStatus()
-  })
+    return getSportsStatus();
+  });
 }

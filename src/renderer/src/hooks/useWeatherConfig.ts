@@ -1,13 +1,13 @@
-import { useEffect, useState } from 'react'
-import { toast } from 'sonner'
-import type { WeatherViewConfig } from '../../../shared/ipc-types'
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import type { WeatherViewConfig } from "../../../shared/ipc-types";
 
 export const DEFAULT_WEATHER_VIEW_CONFIG: WeatherViewConfig = {
   locationId: null,
-  detailLevel: 'standard',
-  displayMode: 'current_hourly',
-  forecastView: 'all',
-  hourlyMetric: 'overview',
+  detailLevel: "standard",
+  displayMode: "current_hourly",
+  forecastView: "all",
+  hourlyMetric: "overview",
   showAlerts: true,
   showPrecipitation: true,
   showWind: true,
@@ -19,49 +19,61 @@ export const DEFAULT_WEATHER_VIEW_CONFIG: WeatherViewConfig = {
   showVisibility: true,
   showUvIndex: true,
   showPressure: true,
-  showDewPoint: true
-}
+  showDewPoint: true,
+};
 
 export function useWeatherConfig(instanceId: string): {
-  config: WeatherViewConfig
-  setConfig: (newConfig: WeatherViewConfig) => void
+  config: WeatherViewConfig;
+  setConfig: (newConfig: WeatherViewConfig) => void;
 } {
-  const [config, setConfigState] = useState<WeatherViewConfig>(DEFAULT_WEATHER_VIEW_CONFIG)
-  const storageKey = `weather_view_config:${instanceId}`
+  const [config, setConfigState] = useState<WeatherViewConfig>(
+    DEFAULT_WEATHER_VIEW_CONFIG,
+  );
+  const storageKey = `weather_view_config:${instanceId}`;
 
   useEffect(() => {
     window.api
-      .invoke('settings:get', storageKey)
+      .invoke("settings:get", storageKey)
       .then((raw) => {
         if (raw) {
           try {
-            const parsed = JSON.parse(raw as string) as Partial<WeatherViewConfig>
+            const parsed = JSON.parse(
+              raw as string,
+            ) as Partial<WeatherViewConfig>;
             // Migrate legacy combined mode to current_all
-            if ((parsed.displayMode as string) === 'current_both') {
-              parsed.displayMode = 'current_all'
+            if ((parsed.displayMode as string) === "current_both") {
+              parsed.displayMode = "current_all";
             }
             setConfigState({
               ...DEFAULT_WEATHER_VIEW_CONFIG,
-              ...parsed
-            })
+              ...parsed,
+            });
           } catch {
             // Use default on parse error
           }
         }
       })
       .catch((err) => {
-        toast.error(err instanceof Error ? err.message : 'Failed to load Weather widget settings.')
-      })
-  }, [instanceId, storageKey])
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : "Failed to load Weather widget settings.",
+        );
+      });
+  }, [instanceId, storageKey]);
 
   const setConfig = (newConfig: WeatherViewConfig): void => {
-    setConfigState(newConfig)
+    setConfigState(newConfig);
     window.api
-      .invoke('settings:set', storageKey, JSON.stringify(newConfig))
+      .invoke("settings:set", storageKey, JSON.stringify(newConfig))
       .catch((err) => {
-        toast.error(err instanceof Error ? err.message : 'Failed to save Weather widget settings.')
-      })
-  }
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : "Failed to save Weather widget settings.",
+        );
+      });
+  };
 
-  return { config, setConfig }
+  return { config, setConfig };
 }

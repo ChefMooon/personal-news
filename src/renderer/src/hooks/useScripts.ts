@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react'
-import { toast } from 'sonner'
+import { useState, useEffect, useCallback } from "react";
+import { toast } from "sonner";
 import type {
   ScriptWithLastRun,
   ScriptRunRecord,
@@ -7,187 +7,245 @@ import type {
   ScriptRunCompleteEvent,
   ScriptUpdateInput,
   ScriptScheduleInput,
-  IpcMutationResult
-} from '../../../shared/ipc-types'
-import { IPC } from '../../../shared/ipc-types'
+  IpcMutationResult,
+} from "../../../shared/ipc-types";
+import { IPC } from "../../../shared/ipc-types";
 
 interface UseScriptsReturn {
-  scripts: ScriptWithLastRun[]
-  loading: boolean
-  refreshing: boolean
-  runningIds: Set<number>
-  outputLines: Map<number, ScriptOutputChunk[]>
-  runScript: (id: number) => Promise<void>
-  cancelScript: (id: number) => Promise<void>
-  updateScript: (input: ScriptUpdateInput) => Promise<IpcMutationResult>
-  setScriptSchedule: (id: number, schedule: ScriptScheduleInput) => Promise<IpcMutationResult>
-  setScriptEnabled: (id: number, enabled: boolean) => Promise<IpcMutationResult>
-  getRunHistory: (id: number) => Promise<ScriptRunRecord[]>
-  refresh: () => Promise<void>
+  scripts: ScriptWithLastRun[];
+  loading: boolean;
+  refreshing: boolean;
+  runningIds: Set<number>;
+  outputLines: Map<number, ScriptOutputChunk[]>;
+  runScript: (id: number) => Promise<void>;
+  cancelScript: (id: number) => Promise<void>;
+  updateScript: (input: ScriptUpdateInput) => Promise<IpcMutationResult>;
+  setScriptSchedule: (
+    id: number,
+    schedule: ScriptScheduleInput,
+  ) => Promise<IpcMutationResult>;
+  setScriptEnabled: (
+    id: number,
+    enabled: boolean,
+  ) => Promise<IpcMutationResult>;
+  getRunHistory: (id: number) => Promise<ScriptRunRecord[]>;
+  refresh: () => Promise<void>;
 }
 
 export function useScripts(): UseScriptsReturn {
-  const [scripts, setScripts] = useState<ScriptWithLastRun[]>([])
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [runningIds, setRunningIds] = useState<Set<number>>(new Set())
-  const [outputLines, setOutputLines] = useState<Map<number, ScriptOutputChunk[]>>(new Map())
+  const [scripts, setScripts] = useState<ScriptWithLastRun[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [runningIds, setRunningIds] = useState<Set<number>>(new Set());
+  const [outputLines, setOutputLines] = useState<
+    Map<number, ScriptOutputChunk[]>
+  >(new Map());
 
   const fetchScripts = useCallback(async (): Promise<void> => {
-    setLoading(true)
+    setLoading(true);
     try {
-      const data = await window.api.invoke(IPC.SCRIPTS_GET_ALL)
-      setScripts(data as ScriptWithLastRun[])
+      const data = await window.api.invoke(IPC.SCRIPTS_GET_ALL);
+      setScripts(data as ScriptWithLastRun[]);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to load scripts.'
-      toast.error(message)
+      const message =
+        err instanceof Error ? err.message : "Failed to load scripts.";
+      toast.error(message);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }, [])
+  }, []);
 
   useEffect(() => {
-    void fetchScripts()
-  }, [fetchScripts])
+    void fetchScripts();
+  }, [fetchScripts]);
 
   // Subscribe to push updates after a run completes — also clears runningIds
   useEffect(() => {
     const unsub = window.api.on(IPC.SCRIPTS_UPDATED, () => {
-      void fetchScripts()
+      void fetchScripts();
       // Clear all running status on refresh; backend is the source of truth
-      setRunningIds(new Set())
-    })
-    return unsub
-  }, [fetchScripts])
+      setRunningIds(new Set());
+    });
+    return unsub;
+  }, [fetchScripts]);
 
   // Additive listener for run completion/warning events and user toasts
   useEffect(() => {
-    const unsub = window.api.on(IPC.SCRIPTS_RUN_COMPLETE, (...args: unknown[]) => {
-      const event = args[0] as ScriptRunCompleteEvent
-      if (event.kind !== 'run_complete') {
-        return
-      }
+    const unsub = window.api.on(
+      IPC.SCRIPTS_RUN_COMPLETE,
+      (...args: unknown[]) => {
+        const event = args[0] as ScriptRunCompleteEvent;
+        if (event.kind !== "run_complete") {
+          return;
+        }
 
-      const scriptName = scripts.find((script) => script.id === event.scriptId)?.name ?? `Script ${event.scriptId}`
-      if (event.exitCode === 0) {
-        toast.success(`${scriptName} completed.`)
-      } else {
-        toast.error(`${scriptName} failed (${event.message}).`)
-      }
+        const scriptName =
+          scripts.find((script) => script.id === event.scriptId)?.name ??
+          `Script ${event.scriptId}`;
+        if (event.exitCode === 0) {
+          toast.success(`${scriptName} completed.`);
+        } else {
+          toast.error(`${scriptName} failed (${event.message}).`);
+        }
 
-      setRunningIds((prev) => {
-        const next = new Set(prev)
-        next.delete(event.scriptId)
-        return next
-      })
-    })
-    return unsub
-  }, [scripts])
+        setRunningIds((prev) => {
+          const next = new Set(prev);
+          next.delete(event.scriptId);
+          return next;
+        });
+      },
+    );
+    return unsub;
+  }, [scripts]);
 
   // Subscribe to live output chunks (capped to last 50 run IDs to prevent unbounded growth)
   useEffect(() => {
-    const MAX_TRACKED_RUNS = 50
+    const MAX_TRACKED_RUNS = 50;
     const unsub = window.api.on(IPC.SCRIPTS_OUTPUT, (...args: unknown[]) => {
-      const chunk = args[0] as ScriptOutputChunk
+      const chunk = args[0] as ScriptOutputChunk;
       setOutputLines((prev) => {
-        const next = new Map(prev)
-        next.set(chunk.runId, [...(next.get(chunk.runId) ?? []), chunk])
+        const next = new Map(prev);
+        next.set(chunk.runId, [...(next.get(chunk.runId) ?? []), chunk]);
         if (next.size > MAX_TRACKED_RUNS) {
-          const oldest = [...next.keys()].sort((a, b) => a - b)[0]
-          next.delete(oldest)
+          const oldest = [...next.keys()].sort((a, b) => a - b)[0];
+          next.delete(oldest);
         }
-        return next
-      })
-    })
-    return unsub
-  }, [])
+        return next;
+      });
+    });
+    return unsub;
+  }, []);
 
   const runScript = useCallback(async (id: number): Promise<void> => {
-    setRunningIds((prev) => new Set(prev).add(id))
+    setRunningIds((prev) => new Set(prev).add(id));
     try {
-      await window.api.invoke(IPC.SCRIPTS_RUN, id)
+      await window.api.invoke(IPC.SCRIPTS_RUN, id);
       // runningIds will be cleared when SCRIPTS_UPDATED fires after the run completes
     } catch (err) {
       // If the IPC call itself fails, clear the spinner immediately
-      const message = err instanceof Error ? err.message : 'Failed to start script run.'
-      toast.error(message)
+      const message =
+        err instanceof Error ? err.message : "Failed to start script run.";
+      toast.error(message);
       setRunningIds((prev) => {
-        const next = new Set(prev)
-        next.delete(id)
-        return next
-      })
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
     }
-  }, [])
+  }, []);
 
   const cancelScript = useCallback(async (id: number): Promise<void> => {
     try {
-      await window.api.invoke(IPC.SCRIPTS_CANCEL, id)
+      await window.api.invoke(IPC.SCRIPTS_CANCEL, id);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to cancel script run.'
-      toast.error(message)
+      const message =
+        err instanceof Error ? err.message : "Failed to cancel script run.";
+      toast.error(message);
     }
-  }, [])
+  }, []);
 
-  const updateScript = useCallback(async (input: ScriptUpdateInput): Promise<IpcMutationResult> => {
-    try {
-      const result = (await window.api.invoke(IPC.SCRIPTS_UPDATE, input)) as IpcMutationResult
-      if (result.ok) {
-        await fetchScripts()
+  const updateScript = useCallback(
+    async (input: ScriptUpdateInput): Promise<IpcMutationResult> => {
+      try {
+        const result = (await window.api.invoke(
+          IPC.SCRIPTS_UPDATE,
+          input,
+        )) as IpcMutationResult;
+        if (result.ok) {
+          await fetchScripts();
+        }
+        return result;
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Failed to update script.";
+        toast.error(message);
+        return { ok: false, error: "Failed to update script." };
       }
-      return result
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to update script.'
-      toast.error(message)
-      return { ok: false, error: 'Failed to update script.' }
-    }
-  }, [fetchScripts])
+    },
+    [fetchScripts],
+  );
 
-  const setScriptSchedule = useCallback(async (id: number, schedule: ScriptScheduleInput): Promise<IpcMutationResult> => {
-    try {
-      const result = (await window.api.invoke(IPC.SCRIPTS_SET_SCHEDULE, id, schedule)) as IpcMutationResult
-      if (result.ok) {
-        await fetchScripts()
+  const setScriptSchedule = useCallback(
+    async (
+      id: number,
+      schedule: ScriptScheduleInput,
+    ): Promise<IpcMutationResult> => {
+      try {
+        const result = (await window.api.invoke(
+          IPC.SCRIPTS_SET_SCHEDULE,
+          id,
+          schedule,
+        )) as IpcMutationResult;
+        if (result.ok) {
+          await fetchScripts();
+        }
+        return result;
+      } catch (err) {
+        const message =
+          err instanceof Error
+            ? err.message
+            : "Failed to update script schedule.";
+        toast.error(message);
+        return { ok: false, error: "Failed to update script schedule." };
       }
-      return result
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to update script schedule.'
-      toast.error(message)
-      return { ok: false, error: 'Failed to update script schedule.' }
-    }
-  }, [fetchScripts])
+    },
+    [fetchScripts],
+  );
 
-  const setScriptEnabled = useCallback(async (id: number, enabled: boolean): Promise<IpcMutationResult> => {
-    try {
-      const result = (await window.api.invoke(IPC.SCRIPTS_SET_ENABLED, id, enabled)) as IpcMutationResult
-      if (result.ok) {
-        await fetchScripts()
+  const setScriptEnabled = useCallback(
+    async (id: number, enabled: boolean): Promise<IpcMutationResult> => {
+      try {
+        const result = (await window.api.invoke(
+          IPC.SCRIPTS_SET_ENABLED,
+          id,
+          enabled,
+        )) as IpcMutationResult;
+        if (result.ok) {
+          await fetchScripts();
+        }
+        return result;
+      } catch (err) {
+        const message =
+          err instanceof Error
+            ? err.message
+            : "Failed to update script auto-run setting.";
+        toast.error(message);
+        return {
+          ok: false,
+          error: "Failed to update script auto-run setting.",
+        };
       }
-      return result
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to update script auto-run setting.'
-      toast.error(message)
-      return { ok: false, error: 'Failed to update script auto-run setting.' }
-    }
-  }, [fetchScripts])
+    },
+    [fetchScripts],
+  );
 
-  const getRunHistory = useCallback(async (id: number): Promise<ScriptRunRecord[]> => {
-    try {
-      return (await window.api.invoke(IPC.SCRIPTS_GET_RUN_HISTORY, id)) as ScriptRunRecord[]
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to load script run history.'
-      toast.error(message)
-      return []
-    }
-  }, [])
+  const getRunHistory = useCallback(
+    async (id: number): Promise<ScriptRunRecord[]> => {
+      try {
+        return (await window.api.invoke(
+          IPC.SCRIPTS_GET_RUN_HISTORY,
+          id,
+        )) as ScriptRunRecord[];
+      } catch (err) {
+        const message =
+          err instanceof Error
+            ? err.message
+            : "Failed to load script run history.";
+        toast.error(message);
+        return [];
+      }
+    },
+    [],
+  );
 
   const refresh = useCallback(async (): Promise<void> => {
-    setRefreshing(true)
+    setRefreshing(true);
     try {
-      await fetchScripts()
+      await fetchScripts();
     } finally {
-      setRefreshing(false)
+      setRefreshing(false);
     }
-  }, [fetchScripts])
+  }, [fetchScripts]);
 
   return {
     scripts,
@@ -201,7 +259,6 @@ export function useScripts(): UseScriptsReturn {
     setScriptSchedule,
     setScriptEnabled,
     getRunHistory,
-    refresh
-  }
+    refresh,
+  };
 }
-

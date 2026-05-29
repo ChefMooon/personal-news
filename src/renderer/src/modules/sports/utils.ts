@@ -1,13 +1,13 @@
-import type { SportEvent } from '../../../../shared/ipc-types'
-import { classifySportEventState } from '../../../../shared/sports-event-utils'
+import type { SportEvent } from "../../../../shared/ipc-types";
+import { classifySportEventState } from "../../../../shared/sports-event-utils";
 
 export function isFinishedStatus(status: string | null): boolean {
-  return classifySportEventState({ status }) === 'final'
+  return classifySportEventState({ status }) === "final";
 }
 
 export function hasResolvedScore(game: SportEvent | null): boolean {
   if (!game) {
-    return false
+    return false;
   }
 
   const state = classifySportEventState({
@@ -15,36 +15,36 @@ export function hasResolvedScore(game: SportEvent | null): boolean {
     homeScore: game.homeScore,
     awayScore: game.awayScore,
     eventDate: game.eventDate,
-    eventTime: game.eventTime
-  })
-  if (state === 'scheduled') {
-    return false
+    eventTime: game.eventTime,
+  });
+  if (state === "scheduled") {
+    return false;
   }
 
-  const homeScore = Number.parseInt(game.homeScore ?? '', 10)
-  const awayScore = Number.parseInt(game.awayScore ?? '', 10)
-  return Number.isFinite(homeScore) && Number.isFinite(awayScore)
+  const homeScore = Number.parseInt(game.homeScore ?? "", 10);
+  const awayScore = Number.parseInt(game.awayScore ?? "", 10);
+  return Number.isFinite(homeScore) && Number.isFinite(awayScore);
 }
 
 export function isLiveStatus(status: string | null): boolean {
-  return classifySportEventState({ status }) === 'live'
+  return classifySportEventState({ status }) === "live";
 }
 
-export type GamePhase = 'scheduled' | 'live' | 'finished'
+export type GamePhase = "scheduled" | "live" | "finished";
 
 export function getEventStartAt(game: SportEvent | null): number | null {
   if (!game) {
-    return null
+    return null;
   }
 
-  const time = game.eventTime ?? '12:00'
-  const timestamp = Date.parse(`${game.eventDate}T${time}:00Z`)
-  return Number.isNaN(timestamp) ? null : timestamp
+  const time = game.eventTime ?? "12:00";
+  const timestamp = Date.parse(`${game.eventDate}T${time}:00Z`);
+  return Number.isNaN(timestamp) ? null : timestamp;
 }
 
 export function getGamePhase(game: SportEvent | null): GamePhase {
   if (!game) {
-    return 'scheduled'
+    return "scheduled";
   }
 
   const state = classifySportEventState({
@@ -52,68 +52,68 @@ export function getGamePhase(game: SportEvent | null): GamePhase {
     homeScore: game.homeScore,
     awayScore: game.awayScore,
     eventDate: game.eventDate,
-    eventTime: game.eventTime
-  })
+    eventTime: game.eventTime,
+  });
 
-  if (state === 'live') {
-    return 'live'
+  if (state === "live") {
+    return "live";
   }
 
-  if (state === 'final') {
-    return 'finished'
+  if (state === "final") {
+    return "finished";
   }
 
-  return 'scheduled'
+  return "scheduled";
 }
 
 export function getGamePhaseLabel(game: SportEvent | null): string {
-  const phase = getGamePhase(game)
-  if (phase === 'live') {
-    return 'Live'
+  const phase = getGamePhase(game);
+  if (phase === "live") {
+    return "Live";
   }
 
-  if (phase === 'finished') {
-    return 'Finished'
+  if (phase === "finished") {
+    return "Finished";
   }
 
-  return 'Scheduled'
+  return "Scheduled";
 }
 
 export function getGamePhaseHeadline(game: SportEvent | null): string {
-  const phase = getGamePhase(game)
-  if (phase === 'live') {
-    return 'Live'
+  const phase = getGamePhase(game);
+  if (phase === "live") {
+    return "Live";
   }
 
-  if (phase === 'finished') {
-    return 'Finished'
+  if (phase === "finished") {
+    return "Finished";
   }
 
-  return 'Scheduled'
+  return "Scheduled";
 }
 
 export function getGamePhaseBadgeClasses(game: SportEvent | null): string {
-  const phase = getGamePhase(game)
-  if (phase === 'live') {
-    return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300'
+  const phase = getGamePhase(game);
+  if (phase === "live") {
+    return "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300";
   }
 
-  if (phase === 'finished') {
-    return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300'
+  if (phase === "finished") {
+    return "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300";
   }
 
-  return 'border-sky-500/30 bg-sky-500/10 text-sky-600 dark:text-sky-300'
+  return "border-sky-500/30 bg-sky-500/10 text-sky-600 dark:text-sky-300";
 }
 
 export function getGamePhaseDotClasses(game: SportEvent | null): string {
-  const phase = getGamePhase(game)
-  if (phase === 'live') {
-    return 'bg-emerald-400 animate-pulse'
+  const phase = getGamePhase(game);
+  if (phase === "live") {
+    return "bg-emerald-400 animate-pulse";
   }
 
-  if (phase === 'finished') {
-    return 'bg-emerald-400'
+  if (phase === "finished") {
+    return "bg-emerald-400";
   }
 
-  return 'bg-sky-400'
+  return "bg-sky-400";
 }

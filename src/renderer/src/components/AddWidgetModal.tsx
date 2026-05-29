@@ -1,145 +1,170 @@
-import React, { useState, useEffect, useMemo } from 'react'
-import { X, ArrowLeft, Plus, Youtube, Newspaper, Bookmark, CloudSun, Trophy } from 'lucide-react'
-import { Button } from './ui/button'
-import { Input } from './ui/input'
+import React, { useState, useEffect, useMemo } from "react";
+import {
+  X,
+  ArrowLeft,
+  Plus,
+  Youtube,
+  Newspaper,
+  Bookmark,
+  CloudSun,
+  Trophy,
+} from "lucide-react";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue
-} from './ui/select'
-import { moduleRegistry } from '../modules/registry'
-import { useRedditDigest } from '../hooks/useRedditDigest'
-import { useSavedPostsEnabled } from '../contexts/SavedPostsEnabledContext'
-import { useSportsEnabled } from '../contexts/SportsEnabledContext'
-import { useWeatherEnabled } from '../contexts/WeatherEnabledContext'
-import type { WidgetLayout } from '../../../shared/ipc-types'
-import { cn } from '../lib/utils'
+  SelectValue,
+} from "./ui/select";
+import { moduleRegistry } from "../modules/registry";
+import { useRedditDigest } from "../hooks/useRedditDigest";
+import { useSavedPostsEnabled } from "../contexts/SavedPostsEnabledContext";
+import { useSportsEnabled } from "../contexts/SportsEnabledContext";
+import { useWeatherEnabled } from "../contexts/WeatherEnabledContext";
+import type { WidgetLayout } from "../../../shared/ipc-types";
+import { cn } from "../lib/utils";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export interface AddWidgetConfig {
-  moduleId: string
-  label: string | null
-  subredditFilter: string[] | null
-  position: 'top' | 'bottom' | { afterId: string }
+  moduleId: string;
+  label: string | null;
+  subredditFilter: string[] | null;
+  position: "top" | "bottom" | { afterId: string };
 }
 
 interface AddWidgetModalProps {
-  layout: WidgetLayout
-  onAdd: (config: AddWidgetConfig) => void
-  onClose: () => void
+  layout: WidgetLayout;
+  onAdd: (config: AddWidgetConfig) => void;
+  onClose: () => void;
 }
 
 // ─── Static module metadata ──────────────────────────────────────────────────
 
-const MODULE_META: Record<string, { description: string; icon: React.ReactNode }> = {
+const MODULE_META: Record<
+  string,
+  { description: string; icon: React.ReactNode }
+> = {
   youtube: {
-    description: 'Recent videos and live streams from your subscribed channels.',
-    icon: <Youtube className="h-7 w-7 text-destructive" />
+    description:
+      "Recent videos and live streams from your subscribed channels.",
+    icon: <Youtube className="h-7 w-7 text-destructive" />,
   },
   reddit_digest: {
-    description: 'Top posts from your subreddits, with per-instance filters.',
-    icon: <Newspaper className="h-7 w-7 text-amber-700 dark:text-amber-300" />
+    description: "Top posts from your subreddits, with per-instance filters.",
+    icon: <Newspaper className="h-7 w-7 text-amber-700 dark:text-amber-300" />,
   },
   saved_posts: {
-    description: 'Posts saved from Reddit via your ntfy mobile flow.',
-    icon: <Bookmark className="h-7 w-7 text-primary" />
+    description: "Posts saved from Reddit via your ntfy mobile flow.",
+    icon: <Bookmark className="h-7 w-7 text-primary" />,
   },
   weather: {
-    description: 'Current conditions plus forecast detail for your saved locations.',
-    icon: <CloudSun className="h-7 w-7 text-sky-500" />
+    description:
+      "Current conditions plus forecast detail for your saved locations.",
+    icon: <CloudSun className="h-7 w-7 text-sky-500" />,
   },
   sports: {
-    description: 'Today\'s schedule plus your tracked teams for supported sports.',
-    icon: <Trophy className="h-7 w-7 text-amber-600" />
-  }
-}
+    description:
+      "Today's schedule plus your tracked teams for supported sports.",
+    icon: <Trophy className="h-7 w-7 text-amber-600" />,
+  },
+};
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function AddWidgetModal({ layout, onAdd, onClose }: AddWidgetModalProps): React.ReactElement {
-  const [phase, setPhase] = useState<'pick' | 'configure'>('pick')
-  const [selectedModuleId, setSelectedModuleId] = useState<string | null>(null)
-  const [name, setName] = useState('')
-  const [position, setPosition] = useState('bottom')
-  const [subredditFilter, setSubredditFilter] = useState<string[] | null>(null)
+export function AddWidgetModal({
+  layout,
+  onAdd,
+  onClose,
+}: AddWidgetModalProps): React.ReactElement {
+  const [phase, setPhase] = useState<"pick" | "configure">("pick");
+  const [selectedModuleId, setSelectedModuleId] = useState<string | null>(null);
+  const [name, setName] = useState("");
+  const [position, setPosition] = useState("bottom");
+  const [subredditFilter, setSubredditFilter] = useState<string[] | null>(null);
 
-  const { posts } = useRedditDigest()
-  const { enabled: savedPostsEnabled } = useSavedPostsEnabled()
-  const { enabled: sportsEnabled } = useSportsEnabled()
-  const { enabled: weatherEnabled } = useWeatherEnabled()
+  const { posts } = useRedditDigest();
+  const { enabled: savedPostsEnabled } = useSavedPostsEnabled();
+  const { enabled: sportsEnabled } = useSportsEnabled();
+  const { enabled: weatherEnabled } = useWeatherEnabled();
   const availableSubreddits = useMemo(
     () => [...new Set(posts.map((p) => p.subreddit))].sort(),
-    [posts]
-  )
+    [posts],
+  );
 
   // Close on Escape
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent): void {
-      if (e.key === 'Escape') onClose()
+      if (e.key === "Escape") onClose();
     }
-    document.addEventListener('keydown', onKeyDown)
-    return () => document.removeEventListener('keydown', onKeyDown)
-  }, [onClose])
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
 
   // Build position options from current layout — skip hidden widgets
   const positionOptions = useMemo(() => {
     const options: { value: string; label: string }[] = [
-      { value: 'top', label: 'Top of dashboard' }
-    ]
+      { value: "top", label: "Top of dashboard" },
+    ];
     for (const instanceId of layout.widget_order) {
-      if (layout.widget_visibility[instanceId] === false) continue
-      const instance = layout.widget_instances[instanceId]
-      if (!instance) continue
-      const mod = moduleRegistry.find((m) => m.id === instance.moduleId)
-      const widgetLabel = instance.label ?? mod?.displayName ?? instanceId
-      options.push({ value: `after:${instanceId}`, label: `After "${widgetLabel}"` })
+      if (layout.widget_visibility[instanceId] === false) continue;
+      const instance = layout.widget_instances[instanceId];
+      if (!instance) continue;
+      const mod = moduleRegistry.find((m) => m.id === instance.moduleId);
+      const widgetLabel = instance.label ?? mod?.displayName ?? instanceId;
+      options.push({
+        value: `after:${instanceId}`,
+        label: `After "${widgetLabel}"`,
+      });
     }
-    options.push({ value: 'bottom', label: 'Bottom of dashboard' })
-    return options
-  }, [layout])
+    options.push({ value: "bottom", label: "Bottom of dashboard" });
+    return options;
+  }, [layout]);
 
-  const selectedMod = moduleRegistry.find((m) => m.id === selectedModuleId)
+  const selectedMod = moduleRegistry.find((m) => m.id === selectedModuleId);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
   function selectModule(moduleId: string): void {
-    const mod = moduleRegistry.find((m) => m.id === moduleId)
-    setSelectedModuleId(moduleId)
-    setName(mod?.displayName ?? '')
-    setSubredditFilter(null)
-    setPhase('configure')
+    const mod = moduleRegistry.find((m) => m.id === moduleId);
+    setSelectedModuleId(moduleId);
+    setName(mod?.displayName ?? "");
+    setSubredditFilter(null);
+    setPhase("configure");
   }
 
   function handleAdd(): void {
-    if (!selectedModuleId) return
-    const defaultName = selectedMod?.displayName ?? ''
-    const trimmed = name.trim()
+    if (!selectedModuleId) return;
+    const defaultName = selectedMod?.displayName ?? "";
+    const trimmed = name.trim();
 
-    let pos: AddWidgetConfig['position']
-    if (position === 'top') pos = 'top'
-    else if (position === 'bottom') pos = 'bottom'
-    else pos = { afterId: position.replace('after:', '') }
+    let pos: AddWidgetConfig["position"];
+    if (position === "top") pos = "top";
+    else if (position === "bottom") pos = "bottom";
+    else pos = { afterId: position.replace("after:", "") };
 
     onAdd({
       moduleId: selectedModuleId,
-      label: trimmed === '' || trimmed === defaultName ? null : trimmed,
-      subredditFilter: selectedModuleId === 'reddit_digest' ? subredditFilter : null,
-      position: pos
-    })
+      label: trimmed === "" || trimmed === defaultName ? null : trimmed,
+      subredditFilter:
+        selectedModuleId === "reddit_digest" ? subredditFilter : null,
+      position: pos,
+    });
   }
 
   function toggleSubreddit(sub: string): void {
     if (!subredditFilter) {
-      setSubredditFilter(availableSubreddits.filter((s) => s !== sub))
+      setSubredditFilter(availableSubreddits.filter((s) => s !== sub));
     } else if (subredditFilter.includes(sub)) {
-      const next = subredditFilter.filter((s) => s !== sub)
-      setSubredditFilter(next.length === 0 ? null : next)
+      const next = subredditFilter.filter((s) => s !== sub);
+      setSubredditFilter(next.length === 0 ? null : next);
     } else {
-      const next = [...subredditFilter, sub]
-      setSubredditFilter(next.length === availableSubreddits.length ? null : next)
+      const next = [...subredditFilter, sub];
+      setSubredditFilter(
+        next.length === availableSubreddits.length ? null : next,
+      );
     }
   }
 
@@ -151,14 +176,13 @@ export function AddWidgetModal({ layout, onAdd, onClose }: AddWidgetModalProps):
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
       <div className="bg-card border border-border rounded-xl shadow-2xl w-full max-w-lg mx-4 flex flex-col max-h-[85vh]">
-
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b shrink-0">
           <div className="flex items-center gap-2">
-            {phase === 'configure' && (
+            {phase === "configure" && (
               <button
                 type="button"
-                onClick={() => setPhase('pick')}
+                onClick={() => setPhase("pick")}
                 className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
                 aria-label="Back to widget list"
               >
@@ -166,7 +190,9 @@ export function AddWidgetModal({ layout, onAdd, onClose }: AddWidgetModalProps):
               </button>
             )}
             <h2 className="text-sm font-semibold">
-              {phase === 'pick' ? 'Add Widget' : `Configure ${selectedMod?.displayName ?? ''}`}
+              {phase === "pick"
+                ? "Add Widget"
+                : `Configure ${selectedMod?.displayName ?? ""}`}
             </h2>
           </div>
           <button
@@ -181,7 +207,7 @@ export function AddWidgetModal({ layout, onAdd, onClose }: AddWidgetModalProps):
 
         {/* Scrollable content */}
         <div className="flex-1 overflow-auto p-5">
-          {phase === 'pick' ? (
+          {phase === "pick" ? (
             <WidgetPicker
               onSelect={selectModule}
               savedPostsEnabled={savedPostsEnabled}
@@ -193,7 +219,7 @@ export function AddWidgetModal({ layout, onAdd, onClose }: AddWidgetModalProps):
               moduleId={selectedModuleId!}
               name={name}
               onNameChange={setName}
-              defaultName={selectedMod?.displayName ?? ''}
+              defaultName={selectedMod?.displayName ?? ""}
               position={position}
               onPositionChange={setPosition}
               positionOptions={positionOptions}
@@ -206,7 +232,7 @@ export function AddWidgetModal({ layout, onAdd, onClose }: AddWidgetModalProps):
         </div>
 
         {/* Footer */}
-        {phase === 'configure' && (
+        {phase === "configure" && (
           <div className="flex items-center justify-end gap-2 px-5 py-4 border-t shrink-0">
             <Button variant="outline" size="sm" onClick={onClose}>
               Cancel
@@ -219,7 +245,7 @@ export function AddWidgetModal({ layout, onAdd, onClose }: AddWidgetModalProps):
         )}
       </div>
     </div>
-  )
+  );
 }
 
 // ─── Phase 1: Widget picker ───────────────────────────────────────────────────
@@ -228,68 +254,70 @@ function WidgetPicker({
   onSelect,
   savedPostsEnabled,
   sportsEnabled,
-  weatherEnabled
+  weatherEnabled,
 }: {
-  onSelect: (id: string) => void
-  savedPostsEnabled: boolean
-  sportsEnabled: boolean
-  weatherEnabled: boolean
+  onSelect: (id: string) => void;
+  savedPostsEnabled: boolean;
+  sportsEnabled: boolean;
+  weatherEnabled: boolean;
 }): React.ReactElement {
   return (
     <div className="grid grid-cols-1 gap-3">
       {moduleRegistry.map((mod) => {
         // Skip saved_posts widget if feature is disabled
-        if (mod.id === 'saved_posts' && !savedPostsEnabled) {
-          return null
+        if (mod.id === "saved_posts" && !savedPostsEnabled) {
+          return null;
         }
-        if (mod.id === 'sports' && !sportsEnabled) {
-          return null
+        if (mod.id === "sports" && !sportsEnabled) {
+          return null;
         }
-        if (mod.id === 'weather' && !weatherEnabled) {
-          return null
+        if (mod.id === "weather" && !weatherEnabled) {
+          return null;
         }
-        const meta = MODULE_META[mod.id]
+        const meta = MODULE_META[mod.id];
         return (
           <button
             type="button"
             key={mod.id}
             onClick={() => onSelect(mod.id)}
             className={cn(
-              'flex items-center gap-4 p-4 rounded-lg border border-border text-left',
-              'hover:border-primary hover:bg-accent transition-colors group'
+              "flex items-center gap-4 p-4 rounded-lg border border-border text-left",
+              "hover:border-primary hover:bg-accent transition-colors group",
             )}
           >
             <div className="p-2.5 rounded-lg bg-muted group-hover:bg-background transition-colors shrink-0">
-              {meta?.icon ?? <Newspaper className="h-7 w-7 text-muted-foreground" />}
+              {meta?.icon ?? (
+                <Newspaper className="h-7 w-7 text-muted-foreground" />
+              )}
             </div>
             <div className="min-w-0">
               <p className="text-sm font-medium">{mod.displayName}</p>
               <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-                {meta?.description ?? ''}
+                {meta?.description ?? ""}
               </p>
             </div>
             <ArrowLeft className="h-4 w-4 text-muted-foreground rotate-180 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity ml-auto" />
           </button>
-        )
+        );
       })}
     </div>
-  )
+  );
 }
 
 // ─── Phase 2: Configure form ─────────────────────────────────────────────────
 
 interface ConfigureFormProps {
-  moduleId: string
-  name: string
-  onNameChange: (v: string) => void
-  defaultName: string
-  position: string
-  onPositionChange: (v: string) => void
-  positionOptions: { value: string; label: string }[]
-  subredditFilter: string[] | null
-  availableSubreddits: string[]
-  onToggleSubreddit: (sub: string) => void
-  onResetFilter: () => void
+  moduleId: string;
+  name: string;
+  onNameChange: (v: string) => void;
+  defaultName: string;
+  position: string;
+  onPositionChange: (v: string) => void;
+  positionOptions: { value: string; label: string }[];
+  subredditFilter: string[] | null;
+  availableSubreddits: string[];
+  onToggleSubreddit: (sub: string) => void;
+  onResetFilter: () => void;
 }
 
 function ConfigureForm({
@@ -303,16 +331,17 @@ function ConfigureForm({
   subredditFilter,
   availableSubreddits,
   onToggleSubreddit,
-  onResetFilter
+  onResetFilter,
 }: ConfigureFormProps): React.ReactElement {
-  const isReddit = moduleId === 'reddit_digest'
+  const isReddit = moduleId === "reddit_digest";
 
   return (
     <div className="space-y-5">
-
       {/* Name */}
       <div className="space-y-1.5">
-        <label htmlFor="add-widget-name" className="text-sm font-medium">Name</label>
+        <label htmlFor="add-widget-name" className="text-sm font-medium">
+          Name
+        </label>
         <Input
           id="add-widget-name"
           value={name}
@@ -326,7 +355,9 @@ function ConfigureForm({
 
       {/* Position */}
       <div className="space-y-1.5">
-        <label htmlFor="add-widget-position" className="text-sm font-medium">Position</label>
+        <label htmlFor="add-widget-position" className="text-sm font-medium">
+          Position
+        </label>
         <Select value={position} onValueChange={onPositionChange}>
           <SelectTrigger id="add-widget-position" aria-label="Widget position">
             <SelectValue />
@@ -360,7 +391,8 @@ function ConfigureForm({
           {availableSubreddits.length === 0 ? (
             <div className="rounded-lg border border-border bg-muted/40 px-4 py-3">
               <p className="text-xs text-muted-foreground">
-                No posts loaded yet — subreddit filters can be configured after adding the widget.
+                No posts loaded yet — subreddit filters can be configured after
+                adding the widget.
               </p>
             </div>
           ) : (
@@ -370,7 +402,8 @@ function ConfigureForm({
               </p>
               <div className="rounded-lg border border-border divide-y divide-border max-h-52 overflow-auto">
                 {availableSubreddits.map((sub) => {
-                  const checked = !subredditFilter || subredditFilter.includes(sub)
+                  const checked =
+                    !subredditFilter || subredditFilter.includes(sub);
                   return (
                     <label
                       key={sub}
@@ -386,7 +419,7 @@ function ConfigureForm({
                       />
                       <span className="text-sm">r/{sub}</span>
                     </label>
-                  )
+                  );
                 })}
               </div>
             </>
@@ -394,5 +427,5 @@ function ConfigureForm({
         </div>
       )}
     </div>
-  )
+  );
 }

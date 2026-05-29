@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react'
-import { toast } from 'sonner'
+import React, { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import {
   DndContext,
   closestCenter,
@@ -11,19 +11,19 @@ import {
   useSensors,
   type DragEndEvent,
   type DragOverEvent,
-  type DragStartEvent
-} from '@dnd-kit/core'
+  type DragStartEvent,
+} from "@dnd-kit/core";
 import {
   SortableContext,
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
-  arrayMove
-} from '@dnd-kit/sortable'
-import { useWidgetLayout } from '../hooks/useWidgetLayout'
-import { WidgetWrapper } from '../components/WidgetWrapper'
-import { WidgetTransferDialog } from '../components/WidgetTransferDialog'
-import { getModule } from '../modules/registry'
-import { Button } from '../components/ui/button'
+  arrayMove,
+} from "@dnd-kit/sortable";
+import { useWidgetLayout } from "../hooks/useWidgetLayout";
+import { WidgetWrapper } from "../components/WidgetWrapper";
+import { WidgetTransferDialog } from "../components/WidgetTransferDialog";
+import { getModule } from "../modules/registry";
+import { Button } from "../components/ui/button";
 import {
   ArrowLeft,
   ArrowRightLeft,
@@ -33,19 +33,22 @@ import {
   Pencil,
   Plus,
   Settings2,
-  Trash2
-} from 'lucide-react'
-import { WidgetInstanceContext } from '../contexts/WidgetInstanceContext'
-import { DashboardTransferContext } from '../contexts/DashboardTransferContext'
-import { AddWidgetModal, type AddWidgetConfig } from '../components/AddWidgetModal'
-import { useSavedPostsEnabled } from '../contexts/SavedPostsEnabledContext'
-import { useRedditDigestEnabled } from '../contexts/RedditDigestEnabledContext'
-import { useSportsEnabled } from '../contexts/SportsEnabledContext'
-import { useWeatherEnabled } from '../contexts/WeatherEnabledContext'
-import { normalizeSportsViewConfig } from '../hooks/useSportsViewConfig'
-import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs'
-import { DashboardGlyph } from '../lib/dashboard-icons'
-import { DashboardViewDialog } from '../components/DashboardViewDialog'
+  Trash2,
+} from "lucide-react";
+import { WidgetInstanceContext } from "../contexts/WidgetInstanceContext";
+import { DashboardTransferContext } from "../contexts/DashboardTransferContext";
+import {
+  AddWidgetModal,
+  type AddWidgetConfig,
+} from "../components/AddWidgetModal";
+import { useSavedPostsEnabled } from "../contexts/SavedPostsEnabledContext";
+import { useRedditDigestEnabled } from "../contexts/RedditDigestEnabledContext";
+import { useSportsEnabled } from "../contexts/SportsEnabledContext";
+import { useWeatherEnabled } from "../contexts/WeatherEnabledContext";
+import { normalizeSportsViewConfig } from "../hooks/useSportsViewConfig";
+import { Tabs, TabsList, TabsTrigger } from "../components/ui/tabs";
+import { DashboardGlyph } from "../lib/dashboard-icons";
+import { DashboardViewDialog } from "../components/DashboardViewDialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -54,161 +57,182 @@ import {
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
-  AlertDialogTitle
-} from '../components/ui/alert-dialog'
-import { IPC, type DashboardIcon, type IpcMutationResult, type SportsSettings, type SportsViewConfig, type SportSyncStatus } from '../../../shared/ipc-types'
+  AlertDialogTitle,
+} from "../components/ui/alert-dialog";
+import {
+  IPC,
+  type DashboardIcon,
+  type IpcMutationResult,
+  type SportsSettings,
+  type SportsViewConfig,
+  type SportSyncStatus,
+} from "../../../shared/ipc-types";
 import {
   ALL_SPORTS_ID,
   DEFAULT_SPORTS_STARTUP_REFRESH_STALE_MINUTES,
   SUPPORTED_SPORTS,
   isSupportedSport,
   normalizeSportsStartupRefreshStaleMinutes,
-  type SupportedSport
-} from '../../../shared/sports'
+  type SupportedSport,
+} from "../../../shared/sports";
 
-const DASHBOARD_TAB_DROP_PREFIX = 'dashboard-tab:'
-const DASHBOARD_INSERT_DROP_PREFIX = 'dashboard-insert:'
-const TAB_AUTO_SWITCH_DELAY_MS = 450
+const DASHBOARD_TAB_DROP_PREFIX = "dashboard-tab:";
+const DASHBOARD_INSERT_DROP_PREFIX = "dashboard-insert:";
+const TAB_AUTO_SWITCH_DELAY_MS = 450;
 
 function getSportsForWidget(rawConfig: unknown): SupportedSport[] {
-  let parsedConfig: Partial<SportsViewConfig> = {}
+  let parsedConfig: Partial<SportsViewConfig> = {};
 
-  if (typeof rawConfig === 'string') {
+  if (typeof rawConfig === "string") {
     try {
-      parsedConfig = JSON.parse(rawConfig) as Partial<SportsViewConfig>
+      parsedConfig = JSON.parse(rawConfig) as Partial<SportsViewConfig>;
     } catch {
-      parsedConfig = {}
+      parsedConfig = {};
     }
   }
 
-  const normalizedConfig = normalizeSportsViewConfig(parsedConfig)
+  const normalizedConfig = normalizeSportsViewConfig(parsedConfig);
   if (normalizedConfig.sport === ALL_SPORTS_ID) {
-    return SUPPORTED_SPORTS
+    return SUPPORTED_SPORTS;
   }
 
-  return isSupportedSport(normalizedConfig.sport) ? [normalizedConfig.sport] : []
+  return isSupportedSport(normalizedConfig.sport)
+    ? [normalizedConfig.sport]
+    : [];
 }
 
-function isSportStatusStale(status: SportSyncStatus | undefined, staleAfterMs: number): boolean {
+function isSportStatusStale(
+  status: SportSyncStatus | undefined,
+  staleAfterMs: number,
+): boolean {
   if (status?.lastFetchedAt == null) {
-    return true
+    return true;
   }
 
-  return Date.now() - status.lastFetchedAt * 1000 >= staleAfterMs
+  return Date.now() - status.lastFetchedAt * 1000 >= staleAfterMs;
 }
 
 function getDashboardTabDropViewId(rawId: string): string | null {
   return rawId.startsWith(DASHBOARD_TAB_DROP_PREFIX)
     ? rawId.slice(DASHBOARD_TAB_DROP_PREFIX.length)
-    : null
+    : null;
 }
 
-function createDashboardInsertDropId(viewId: string, position: 'top' | 'bottom' | { afterId: string }): string {
-  if (position === 'top') {
-    return `${DASHBOARD_INSERT_DROP_PREFIX}${viewId}:top`
+function createDashboardInsertDropId(
+  viewId: string,
+  position: "top" | "bottom" | { afterId: string },
+): string {
+  if (position === "top") {
+    return `${DASHBOARD_INSERT_DROP_PREFIX}${viewId}:top`;
   }
 
-  if (position === 'bottom') {
-    return `${DASHBOARD_INSERT_DROP_PREFIX}${viewId}:bottom`
+  if (position === "bottom") {
+    return `${DASHBOARD_INSERT_DROP_PREFIX}${viewId}:bottom`;
   }
 
-  return `${DASHBOARD_INSERT_DROP_PREFIX}${viewId}:after:${position.afterId}`
+  return `${DASHBOARD_INSERT_DROP_PREFIX}${viewId}:after:${position.afterId}`;
 }
 
-function parseDashboardInsertDropTarget(rawId: string): { viewId: string; position: 'top' | 'bottom' | { afterId: string } } | null {
+function parseDashboardInsertDropTarget(
+  rawId: string,
+): { viewId: string; position: "top" | "bottom" | { afterId: string } } | null {
   if (!rawId.startsWith(DASHBOARD_INSERT_DROP_PREFIX)) {
-    return null
+    return null;
   }
 
-  const payload = rawId.slice(DASHBOARD_INSERT_DROP_PREFIX.length)
-  const [viewId, mode, ...rest] = payload.split(':')
+  const payload = rawId.slice(DASHBOARD_INSERT_DROP_PREFIX.length);
+  const [viewId, mode, ...rest] = payload.split(":");
   if (!viewId || !mode) {
-    return null
+    return null;
   }
 
-  if (mode === 'top') {
-    return { viewId, position: 'top' }
+  if (mode === "top") {
+    return { viewId, position: "top" };
   }
 
-  if (mode === 'bottom') {
-    return { viewId, position: 'bottom' }
+  if (mode === "bottom") {
+    return { viewId, position: "bottom" };
   }
 
-  if (mode === 'after') {
-    const afterId = rest.join(':')
+  if (mode === "after") {
+    const afterId = rest.join(":");
     if (!afterId) {
-      return null
+      return null;
     }
-    return { viewId, position: { afterId } }
+    return { viewId, position: { afterId } };
   }
 
-  return null
+  return null;
 }
 
 function DashboardTabDropTarget({
   viewId,
   disabled,
-  children
+  children,
 }: {
-  viewId: string
-  disabled: boolean
-  children: React.ReactNode
+  viewId: string;
+  disabled: boolean;
+  children: React.ReactNode;
 }): React.ReactElement {
   const { isOver, setNodeRef } = useDroppable({
     id: `${DASHBOARD_TAB_DROP_PREFIX}${viewId}`,
-    disabled
-  })
+    disabled,
+  });
 
   return (
     <div
       ref={setNodeRef}
-      className={isOver && !disabled ? 'rounded-lg ring-2 ring-primary/50 ring-offset-2 ring-offset-background' : undefined}
+      className={
+        isOver && !disabled
+          ? "rounded-lg ring-2 ring-primary/50 ring-offset-2 ring-offset-background"
+          : undefined
+      }
     >
       {children}
     </div>
-  )
+  );
 }
 
 function DashboardInsertionDropTarget({
   dropId,
   label,
-  visible
+  visible,
 }: {
-  dropId: string
-  label: string
-  visible: boolean
+  dropId: string;
+  label: string;
+  visible: boolean;
 }): React.ReactElement | null {
   const { isOver, setNodeRef } = useDroppable({
     id: dropId,
-    disabled: !visible
-  })
+    disabled: !visible,
+  });
 
   if (!visible) {
-    return null
+    return null;
   }
 
   return (
     <div
       ref={setNodeRef}
       className={[
-        'my-1 rounded-md border border-dashed px-3 py-1.5 text-xs transition-colors',
+        "my-1 rounded-md border border-dashed px-3 py-1.5 text-xs transition-colors",
         isOver
-          ? 'border-primary bg-primary/10 text-foreground'
-          : 'border-border/70 bg-muted/20 text-muted-foreground'
-      ].join(' ')}
+          ? "border-primary bg-primary/10 text-foreground"
+          : "border-border/70 bg-muted/20 text-muted-foreground",
+      ].join(" ")}
       aria-label={label}
     >
       {label}
     </div>
-  )
+  );
 }
 
 // Import modules to trigger registration
-import '../modules/youtube/YouTubeWidget'
-import '../modules/reddit/RedditDigestWidget'
-import '../modules/saved-posts/SavedPostsWidget'
-import '../modules/sports'
-import '../modules/weather/WeatherWidget'
+import "../modules/youtube/YouTubeWidget";
+import "../modules/reddit/RedditDigestWidget";
+import "../modules/saved-posts/SavedPostsWidget";
+import "../modules/sports";
+import "../modules/weather/WeatherWidget";
 
 export default function Dashboard(): React.ReactElement {
   const {
@@ -224,194 +248,232 @@ export default function Dashboard(): React.ReactElement {
     moveDashboardView,
     moveWidgetToView,
     copyWidgetToView,
-    loading
-  } = useWidgetLayout()
-  const { enabled: redditDigestEnabled } = useRedditDigestEnabled()
-  const { enabled: savedPostsEnabled } = useSavedPostsEnabled()
-  const { enabled: sportsEnabled } = useSportsEnabled()
-  const { enabled: weatherEnabled } = useWeatherEnabled()
-  const [editMode, setEditMode] = useState(false)
-  const [showAddModal, setShowAddModal] = useState(false)
-  const [dashboardDialogMode, setDashboardDialogMode] = useState<'create' | 'edit' | null>(null)
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-  const [transferDialogWidgetId, setTransferDialogWidgetId] = useState<string | null>(null)
-  const [dragSourceViewId, setDragSourceViewId] = useState<string | null>(null)
-  const [draggingWidgetId, setDraggingWidgetId] = useState<string | null>(null)
-  const tabSwitchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const pendingTabSwitchViewIdRef = useRef<string | null>(null)
-  const initialDashboardViewIdRef = useRef<string | null>(null)
-  const startupSportsRefreshHandledRef = useRef(false)
+    loading,
+  } = useWidgetLayout();
+  const { enabled: redditDigestEnabled } = useRedditDigestEnabled();
+  const { enabled: savedPostsEnabled } = useSavedPostsEnabled();
+  const { enabled: sportsEnabled } = useSportsEnabled();
+  const { enabled: weatherEnabled } = useWeatherEnabled();
+  const [editMode, setEditMode] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [dashboardDialogMode, setDashboardDialogMode] = useState<
+    "create" | "edit" | null
+  >(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [transferDialogWidgetId, setTransferDialogWidgetId] = useState<
+    string | null
+  >(null);
+  const [dragSourceViewId, setDragSourceViewId] = useState<string | null>(null);
+  const [draggingWidgetId, setDraggingWidgetId] = useState<string | null>(null);
+  const tabSwitchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingTabSwitchViewIdRef = useRef<string | null>(null);
+  const initialDashboardViewIdRef = useRef<string | null>(null);
+  const startupSportsRefreshHandledRef = useRef(false);
 
-  const layout = activeView.layout
-  const activeViewIndex = dashboardViews.findIndex((view) => view.id === activeViewId)
-  const canMoveViewLeft = activeViewIndex > 0
-  const canMoveViewRight = activeViewIndex >= 0 && activeViewIndex < dashboardViews.length - 1
-  const canDeleteView = dashboardViews.length > 1
-  const showingCrossViewInsertTargets = draggingWidgetId !== null && dragSourceViewId !== null && activeViewId !== dragSourceViewId
+  const layout = activeView.layout;
+  const activeViewIndex = dashboardViews.findIndex(
+    (view) => view.id === activeViewId,
+  );
+  const canMoveViewLeft = activeViewIndex > 0;
+  const canMoveViewRight =
+    activeViewIndex >= 0 && activeViewIndex < dashboardViews.length - 1;
+  const canDeleteView = dashboardViews.length > 1;
+  const showingCrossViewInsertTargets =
+    draggingWidgetId !== null &&
+    dragSourceViewId !== null &&
+    activeViewId !== dragSourceViewId;
 
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates
-    })
-  )
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  );
 
   useEffect(() => {
     return () => {
       if (tabSwitchTimerRef.current) {
-        clearTimeout(tabSwitchTimerRef.current)
+        clearTimeout(tabSwitchTimerRef.current);
       }
-    }
-  }, [])
+    };
+  }, []);
 
   useEffect(() => {
     if (loading || initialDashboardViewIdRef.current !== null) {
-      return
+      return;
     }
 
-    initialDashboardViewIdRef.current = activeViewId
-  }, [activeViewId, loading])
+    initialDashboardViewIdRef.current = activeViewId;
+  }, [activeViewId, loading]);
 
   useEffect(() => {
     if (loading || startupSportsRefreshHandledRef.current) {
-      return
+      return;
     }
 
-    const initialDashboardViewId = initialDashboardViewIdRef.current ?? activeViewId
+    const initialDashboardViewId =
+      initialDashboardViewIdRef.current ?? activeViewId;
     if (activeViewId !== initialDashboardViewId) {
-      return
+      return;
     }
 
-    startupSportsRefreshHandledRef.current = true
+    startupSportsRefreshHandledRef.current = true;
 
     if (!sportsEnabled) {
-      return
+      return;
     }
 
-    const sportsWidgetInstanceIds = Object.values(activeView.layout.widget_instances)
-      .filter((instance) => instance.moduleId === 'sports')
-      .map((instance) => instance.instanceId)
+    const sportsWidgetInstanceIds = Object.values(
+      activeView.layout.widget_instances,
+    )
+      .filter((instance) => instance.moduleId === "sports")
+      .map((instance) => instance.instanceId);
 
     if (sportsWidgetInstanceIds.length === 0) {
-      return
+      return;
     }
 
-    let cancelled = false
+    let cancelled = false;
 
     const refreshInitialDashboardSports = async (): Promise<void> => {
       try {
         const [rawConfigs, statusList, sportsSettings] = await Promise.all([
           Promise.all(
-            sportsWidgetInstanceIds.map((instanceId) => window.api.invoke(IPC.SETTINGS_GET, `sports_view_config:${instanceId}`))
+            sportsWidgetInstanceIds.map((instanceId) =>
+              window.api.invoke(
+                IPC.SETTINGS_GET,
+                `sports_view_config:${instanceId}`,
+              ),
+            ),
           ),
           window.api.invoke(IPC.SPORTS_GET_STATUS),
-          window.api.invoke(IPC.SETTINGS_GET_SPORTS_SETTINGS)
-        ])
+          window.api.invoke(IPC.SETTINGS_GET_SPORTS_SETTINGS),
+        ]);
 
         if (cancelled) {
-          return
+          return;
         }
 
-        const selectedSports = new Set<SupportedSport>()
+        const selectedSports = new Set<SupportedSport>();
         for (const rawConfig of rawConfigs) {
           for (const sport of getSportsForWidget(rawConfig)) {
-            selectedSports.add(sport)
+            selectedSports.add(sport);
           }
         }
 
         if (selectedSports.size === 0) {
-          return
+          return;
         }
 
         const statusBySport = new Map(
-          (statusList as SportSyncStatus[]).map((status) => [status.sport, status] as const)
-        )
-        const startupRefreshStaleMinutes = normalizeSportsStartupRefreshStaleMinutes(
-          (sportsSettings as Partial<SportsSettings>).startupRefreshStaleMinutes ?? DEFAULT_SPORTS_STARTUP_REFRESH_STALE_MINUTES
-        )
-        const startupRefreshStaleAfterMs = startupRefreshStaleMinutes * 60 * 1000
+          (statusList as SportSyncStatus[]).map(
+            (status) => [status.sport, status] as const,
+          ),
+        );
+        const startupRefreshStaleMinutes =
+          normalizeSportsStartupRefreshStaleMinutes(
+            (sportsSettings as Partial<SportsSettings>)
+              .startupRefreshStaleMinutes ??
+              DEFAULT_SPORTS_STARTUP_REFRESH_STALE_MINUTES,
+          );
+        const startupRefreshStaleAfterMs =
+          startupRefreshStaleMinutes * 60 * 1000;
         const staleSports = Array.from(selectedSports).filter((sport) =>
-          isSportStatusStale(statusBySport.get(sport), startupRefreshStaleAfterMs)
-        )
+          isSportStatusStale(
+            statusBySport.get(sport),
+            startupRefreshStaleAfterMs,
+          ),
+        );
 
         if (staleSports.length === 0) {
-          return
+          return;
         }
 
         const results = (await Promise.all(
-          staleSports.map((sport) => window.api.invoke(IPC.SPORTS_REFRESH, { sport }))
-        )) as IpcMutationResult[]
-        const failed = results.find((result) => !result.ok)
+          staleSports.map((sport) =>
+            window.api.invoke(IPC.SPORTS_REFRESH, { sport }),
+          ),
+        )) as IpcMutationResult[];
+        const failed = results.find((result) => !result.ok);
 
         if (failed) {
-          console.error('[Dashboard] Startup sports refresh failed:', failed.error ?? 'Unknown error')
+          console.error(
+            "[Dashboard] Startup sports refresh failed:",
+            failed.error ?? "Unknown error",
+          );
         }
       } catch (error) {
-        console.error('[Dashboard] Failed to refresh startup sports widgets:', error)
+        console.error(
+          "[Dashboard] Failed to refresh startup sports widgets:",
+          error,
+        );
       }
-    }
+    };
 
-    void refreshInitialDashboardSports()
+    void refreshInitialDashboardSports();
 
     return () => {
-      cancelled = true
-    }
-  }, [activeView, activeViewId, loading, sportsEnabled])
+      cancelled = true;
+    };
+  }, [activeView, activeViewId, loading, sportsEnabled]);
 
   function clearPendingTabSwitch(): void {
     if (tabSwitchTimerRef.current) {
-      clearTimeout(tabSwitchTimerRef.current)
-      tabSwitchTimerRef.current = null
+      clearTimeout(tabSwitchTimerRef.current);
+      tabSwitchTimerRef.current = null;
     }
-    pendingTabSwitchViewIdRef.current = null
+    pendingTabSwitchViewIdRef.current = null;
   }
 
   function scheduleTabAutoSwitch(viewId: string): void {
-    if (pendingTabSwitchViewIdRef.current === viewId || activeViewId === viewId) {
-      return
+    if (
+      pendingTabSwitchViewIdRef.current === viewId ||
+      activeViewId === viewId
+    ) {
+      return;
     }
 
-    clearPendingTabSwitch()
-    pendingTabSwitchViewIdRef.current = viewId
+    clearPendingTabSwitch();
+    pendingTabSwitchViewIdRef.current = viewId;
     tabSwitchTimerRef.current = setTimeout(() => {
-      pendingTabSwitchViewIdRef.current = null
-      tabSwitchTimerRef.current = null
-      setActiveViewId(viewId)
-    }, TAB_AUTO_SWITCH_DELAY_MS)
+      pendingTabSwitchViewIdRef.current = null;
+      tabSwitchTimerRef.current = null;
+      setActiveViewId(viewId);
+    }, TAB_AUTO_SWITCH_DELAY_MS);
   }
 
   function handleDragEnd(event: DragEndEvent): void {
-    const { active, over } = event
-    const activeId = active.id as string
-    const sourceViewId = dragSourceViewId ?? activeViewId
-    clearPendingTabSwitch()
-    setDragSourceViewId(null)
-    setDraggingWidgetId(null)
+    const { active, over } = event;
+    const activeId = active.id as string;
+    const sourceViewId = dragSourceViewId ?? activeViewId;
+    clearPendingTabSwitch();
+    setDragSourceViewId(null);
+    setDraggingWidgetId(null);
 
-    if (!over) return
+    if (!over) return;
 
-    const insertTarget = parseDashboardInsertDropTarget(String(over.id))
+    const insertTarget = parseDashboardInsertDropTarget(String(over.id));
     if (insertTarget && insertTarget.viewId !== sourceViewId) {
       moveWidgetToView({
         sourceViewId,
         targetViewId: insertTarget.viewId,
         instanceId: activeId,
         position: insertTarget.position,
-        switchToTarget: true
-      })
-      return
+        switchToTarget: true,
+      });
+      return;
     }
 
-    const targetTabViewId = getDashboardTabDropViewId(String(over.id))
+    const targetTabViewId = getDashboardTabDropViewId(String(over.id));
     if (targetTabViewId && targetTabViewId !== activeViewId) {
-      const switchToTarget = targetTabViewId !== sourceViewId
+      const switchToTarget = targetTabViewId !== sourceViewId;
       moveWidgetToView({
         sourceViewId,
         targetViewId: targetTabViewId,
         instanceId: activeId,
-        switchToTarget
-      })
-      return
+        switchToTarget,
+      });
+      return;
     }
 
     if (sourceViewId !== activeViewId) {
@@ -421,45 +483,45 @@ export default function Dashboard(): React.ReactElement {
           targetViewId: activeViewId,
           instanceId: activeId,
           position: { afterId: String(over.id) },
-          switchToTarget: true
-        })
+          switchToTarget: true,
+        });
       }
-      return
+      return;
     }
 
-    if (active.id === over.id) return
+    if (active.id === over.id) return;
 
-    const oldIndex = layout.widget_order.indexOf(activeId)
-    const newIndex = layout.widget_order.indexOf(over.id as string)
-    const newOrder = arrayMove(layout.widget_order, oldIndex, newIndex)
+    const oldIndex = layout.widget_order.indexOf(activeId);
+    const newIndex = layout.widget_order.indexOf(over.id as string);
+    const newOrder = arrayMove(layout.widget_order, oldIndex, newIndex);
 
-    setActiveLayout({ ...layout, widget_order: newOrder })
+    setActiveLayout({ ...layout, widget_order: newOrder });
   }
 
   function handleDragStart(event: DragStartEvent): void {
-    const activeId = event.active.id as string
+    const activeId = event.active.id as string;
     if (!layout.widget_order.includes(activeId)) {
-      return
+      return;
     }
 
-    setDragSourceViewId(activeViewId)
-    setDraggingWidgetId(activeId)
+    setDragSourceViewId(activeViewId);
+    setDraggingWidgetId(activeId);
   }
 
   function handleDragOver(event: DragOverEvent): void {
-    const overId = event.over?.id
+    const overId = event.over?.id;
     if (!overId || dragSourceViewId === null) {
-      clearPendingTabSwitch()
-      return
+      clearPendingTabSwitch();
+      return;
     }
 
-    const targetTabViewId = getDashboardTabDropViewId(String(overId))
+    const targetTabViewId = getDashboardTabDropViewId(String(overId));
     if (targetTabViewId && targetTabViewId !== activeViewId) {
-      scheduleTabAutoSwitch(targetTabViewId)
-      return
+      scheduleTabAutoSwitch(targetTabViewId);
+      return;
     }
 
-    clearPendingTabSwitch()
+    clearPendingTabSwitch();
   }
 
   function handleToggleVisibility(instanceId: string): void {
@@ -467,9 +529,9 @@ export default function Dashboard(): React.ReactElement {
       ...layout,
       widget_visibility: {
         ...layout.widget_visibility,
-        [instanceId]: !layout.widget_visibility[instanceId]
-      }
-    })
+        [instanceId]: !layout.widget_visibility[instanceId],
+      },
+    });
   }
 
   function handleRename(instanceId: string, newLabel: string | null): void {
@@ -477,56 +539,67 @@ export default function Dashboard(): React.ReactElement {
       ...layout,
       widget_instances: {
         ...layout.widget_instances,
-        [instanceId]: { ...layout.widget_instances[instanceId], label: newLabel }
-      }
-    })
+        [instanceId]: {
+          ...layout.widget_instances[instanceId],
+          label: newLabel,
+        },
+      },
+    });
   }
 
   function handleRemove(instanceId: string): void {
-    const { [instanceId]: _inst, ...remainingInstances } = layout.widget_instances
-    const { [instanceId]: _vis, ...remainingVisibility } = layout.widget_visibility
+    const { [instanceId]: _inst, ...remainingInstances } =
+      layout.widget_instances;
+    const { [instanceId]: _vis, ...remainingVisibility } =
+      layout.widget_visibility;
     setActiveLayout(
       {
         ...layout,
         widget_order: layout.widget_order.filter((id) => id !== instanceId),
         widget_visibility: remainingVisibility,
-        widget_instances: remainingInstances
+        widget_instances: remainingInstances,
       },
-      { deleteInstanceIds: [instanceId] }
-    )
+      { deleteInstanceIds: [instanceId] },
+    );
   }
 
   function handleMoveUp(instanceId: string): void {
-    const index = layout.widget_order.indexOf(instanceId)
-    if (index <= 0) return
-    setActiveLayout({ ...layout, widget_order: arrayMove(layout.widget_order, index, index - 1) })
+    const index = layout.widget_order.indexOf(instanceId);
+    if (index <= 0) return;
+    setActiveLayout({
+      ...layout,
+      widget_order: arrayMove(layout.widget_order, index, index - 1),
+    });
   }
 
   function handleMoveDown(instanceId: string): void {
-    const index = layout.widget_order.indexOf(instanceId)
-    if (index < 0 || index >= layout.widget_order.length - 1) return
-    setActiveLayout({ ...layout, widget_order: arrayMove(layout.widget_order, index, index + 1) })
+    const index = layout.widget_order.indexOf(instanceId);
+    if (index < 0 || index >= layout.widget_order.length - 1) return;
+    setActiveLayout({
+      ...layout,
+      widget_order: arrayMove(layout.widget_order, index, index + 1),
+    });
   }
 
   function handleAddFromModal(config: AddWidgetConfig): void {
-    const instanceId = `${config.moduleId}_${Date.now()}`
+    const instanceId = `${config.moduleId}_${Date.now()}`;
 
     // Build new widget_order based on requested position
-    let newOrder: string[]
-    if (config.position === 'top') {
-      newOrder = [instanceId, ...layout.widget_order]
-    } else if (config.position === 'bottom') {
-      newOrder = [...layout.widget_order, instanceId]
+    let newOrder: string[];
+    if (config.position === "top") {
+      newOrder = [instanceId, ...layout.widget_order];
+    } else if (config.position === "bottom") {
+      newOrder = [...layout.widget_order, instanceId];
     } else {
-      const afterIndex = layout.widget_order.indexOf(config.position.afterId)
+      const afterIndex = layout.widget_order.indexOf(config.position.afterId);
       if (afterIndex === -1) {
-        newOrder = [...layout.widget_order, instanceId]
+        newOrder = [...layout.widget_order, instanceId];
       } else {
         newOrder = [
           ...layout.widget_order.slice(0, afterIndex + 1),
           instanceId,
-          ...layout.widget_order.slice(afterIndex + 1)
-        ]
+          ...layout.widget_order.slice(afterIndex + 1),
+        ];
       }
     }
 
@@ -536,60 +609,74 @@ export default function Dashboard(): React.ReactElement {
       widget_visibility: { ...layout.widget_visibility, [instanceId]: true },
       widget_instances: {
         ...layout.widget_instances,
-        [instanceId]: { instanceId, moduleId: config.moduleId, label: config.label }
-      }
-    })
+        [instanceId]: {
+          instanceId,
+          moduleId: config.moduleId,
+          label: config.label,
+        },
+      },
+    });
 
     // Persist initial Reddit Digest subreddit filter if one was set
-    if (config.moduleId === 'reddit_digest' && config.subredditFilter !== null) {
-      const storageKey = `reddit_digest_view_config:${instanceId}`
+    if (
+      config.moduleId === "reddit_digest" &&
+      config.subredditFilter !== null
+    ) {
+      const storageKey = `reddit_digest_view_config:${instanceId}`;
       const initialConfig = {
-        sort_by: 'score',
-        sort_dir: 'desc',
-        group_by: 'subreddit',
-        layout_mode: 'columns',
-        subreddit_mode: 'selected',
+        sort_by: "score",
+        sort_dir: "desc",
+        group_by: "subreddit",
+        layout_mode: "columns",
+        subreddit_mode: "selected",
         selected_subreddits: config.subredditFilter,
         subreddit_order: [],
-        pinned_subreddits: []
-      }
+        pinned_subreddits: [],
+      };
       window.api
-        .invoke('settings:set', storageKey, JSON.stringify(initialConfig))
+        .invoke("settings:set", storageKey, JSON.stringify(initialConfig))
         .catch((err) => {
-          toast.error(err instanceof Error ? err.message : 'Failed to persist initial Reddit Digest widget settings.')
-        })
+          toast.error(
+            err instanceof Error
+              ? err.message
+              : "Failed to persist initial Reddit Digest widget settings.",
+          );
+        });
     }
 
-    setShowAddModal(false)
+    setShowAddModal(false);
   }
 
-  function handleDashboardDialogSubmit(input: { name: string; icon: DashboardIcon | null }): void {
-    if (dashboardDialogMode === 'create') {
-      createDashboardView(input)
-      return
+  function handleDashboardDialogSubmit(input: {
+    name: string;
+    icon: DashboardIcon | null;
+  }): void {
+    if (dashboardDialogMode === "create") {
+      createDashboardView(input);
+      return;
     }
 
-    updateDashboardViewMeta(activeView.id, input)
+    updateDashboardViewMeta(activeView.id, input);
   }
 
   function handleTransferSubmit(input: {
-    mode: 'move' | 'copy'
-    targetViewId: string
-    position: 'top' | 'bottom' | { afterId: string }
-    switchToTarget: boolean
+    mode: "move" | "copy";
+    targetViewId: string;
+    position: "top" | "bottom" | { afterId: string };
+    switchToTarget: boolean;
   }): boolean {
     if (!transferDialogWidgetId) {
-      return false
+      return false;
     }
 
-    if (input.mode === 'move') {
+    if (input.mode === "move") {
       return moveWidgetToView({
         sourceViewId: activeViewId,
         targetViewId: input.targetViewId,
         instanceId: transferDialogWidgetId,
         position: input.position,
-        switchToTarget: input.switchToTarget
-      })
+        switchToTarget: input.switchToTarget,
+      });
     }
 
     return copyWidgetToView({
@@ -597,8 +684,8 @@ export default function Dashboard(): React.ReactElement {
       targetViewId: input.targetViewId,
       instanceId: transferDialogWidgetId,
       position: input.position,
-      switchToTarget: input.switchToTarget
-    })
+      switchToTarget: input.switchToTarget,
+    });
   }
 
   if (loading) {
@@ -606,23 +693,24 @@ export default function Dashboard(): React.ReactElement {
       <div className="flex items-center justify-center h-full">
         <p className="text-muted-foreground">Loading dashboard...</p>
       </div>
-    )
+    );
   }
 
   return (
     <DashboardTransferContext.Provider
       value={{
-        openTransferDialog: (instanceId) => setTransferDialogWidgetId(instanceId)
+        openTransferDialog: (instanceId) =>
+          setTransferDialogWidgetId(instanceId),
       }}
     >
       <DndContext
         sensors={sensors}
         collisionDetection={(args) => {
-          const pointerHits = pointerWithin(args)
+          const pointerHits = pointerWithin(args);
           if (pointerHits.length > 0) {
-            return pointerHits
+            return pointerHits;
           }
-          return closestCenter(args)
+          return closestCenter(args);
         }}
         onDragStart={handleDragStart}
         onDragOver={handleDragOver}
@@ -637,7 +725,12 @@ export default function Dashboard(): React.ReactElement {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-                  <Button variant="outline" size="sm" className="h-8" onClick={() => setDashboardDialogMode('create')}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8"
+                    onClick={() => setDashboardDialogMode("create")}
+                  >
                     <Plus className="mr-1 h-4 w-4" />
                     New Dashboard
                   </Button>
@@ -652,18 +745,26 @@ export default function Dashboard(): React.ReactElement {
                         <Plus className="mr-1 h-4 w-4" />
                         Add Widget
                       </Button>
-                      <Button variant="outline" size="sm" onClick={() => setDashboardDialogMode('edit')}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setDashboardDialogMode("edit")}
+                      >
                         <Pencil className="mr-1 h-4 w-4" />
                         Edit Tab
                       </Button>
-                      <Button variant="outline" size="sm" onClick={() => duplicateDashboardView(activeView.id)}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => duplicateDashboardView(activeView.id)}
+                      >
                         <Copy className="mr-1 h-4 w-4" />
                         Duplicate
                       </Button>
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => moveDashboardView(activeView.id, 'left')}
+                        onClick={() => moveDashboardView(activeView.id, "left")}
                         disabled={!canMoveViewLeft}
                       >
                         <ArrowLeft className="mr-1 h-4 w-4" />
@@ -672,7 +773,9 @@ export default function Dashboard(): React.ReactElement {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => moveDashboardView(activeView.id, 'right')}
+                        onClick={() =>
+                          moveDashboardView(activeView.id, "right")
+                        }
                         disabled={!canMoveViewRight}
                       >
                         <ArrowRight className="mr-1 h-4 w-4" />
@@ -690,7 +793,7 @@ export default function Dashboard(): React.ReactElement {
                     </>
                   )}
                   <Button
-                    variant={editMode ? 'default' : 'outline'}
+                    variant={editMode ? "default" : "outline"}
                     size="sm"
                     className="h-8"
                     onClick={() => setEditMode((value) => !value)}
@@ -714,15 +817,32 @@ export default function Dashboard(): React.ReactElement {
                 <div className="overflow-x-auto pb-1">
                   <TabsList className="h-auto min-w-full justify-start gap-2 rounded-lg bg-muted/70 p-1">
                     {dashboardViews.map((view) => (
-                      <DashboardTabDropTarget key={view.id} viewId={view.id} disabled={!editMode}>
+                      <DashboardTabDropTarget
+                        key={view.id}
+                        viewId={view.id}
+                        disabled={!editMode}
+                      >
                         <TabsTrigger
                           value={view.id}
                           className="shrink-0 gap-2 rounded-md border border-transparent px-4 py-1 data-[state=active]:border-border"
-                          title={editMode ? 'Drop a widget here to move it to this dashboard.' : undefined}
+                          title={
+                            editMode
+                              ? "Drop a widget here to move it to this dashboard."
+                              : undefined
+                          }
                         >
-                          {view.icon ? <DashboardGlyph icon={view.icon} className="h-4 w-4" /> : null}
-                          <span className="max-w-[10rem] truncate">{view.name}</span>
-                          {editMode ? <ArrowRightLeft className="h-3.5 w-3.5 text-muted-foreground/70" /> : null}
+                          {view.icon ? (
+                            <DashboardGlyph
+                              icon={view.icon}
+                              className="h-4 w-4"
+                            />
+                          ) : null}
+                          <span className="max-w-[10rem] truncate">
+                            {view.name}
+                          </span>
+                          {editMode ? (
+                            <ArrowRightLeft className="h-3.5 w-3.5 text-muted-foreground/70" />
+                          ) : null}
                         </TabsTrigger>
                       </DashboardTabDropTarget>
                     ))}
@@ -735,17 +855,22 @@ export default function Dashboard(): React.ReactElement {
           <div className="flex-1 p-6 space-y-6 w-full">
             {layout.widget_order.length === 0 ? (
               <div className="rounded-xl border border-dashed bg-card/70 px-6 py-10 text-center">
-                <h2 className="text-lg font-semibold">{activeView.name} is empty</h2>
+                <h2 className="text-lg font-semibold">
+                  {activeView.name} is empty
+                </h2>
                 <p className="mt-2 text-sm text-muted-foreground">
                   Add widgets to build a dashboard focused on this subject.
                 </p>
                 <DashboardInsertionDropTarget
-                  dropId={createDashboardInsertDropId(activeViewId, 'top')}
+                  dropId={createDashboardInsertDropId(activeViewId, "top")}
                   label="Drop here to place at the top of this dashboard"
                   visible={showingCrossViewInsertTargets}
                 />
                 {editMode ? (
-                  <Button className="mt-4" onClick={() => setShowAddModal(true)}>
+                  <Button
+                    className="mt-4"
+                    onClick={() => setShowAddModal(true)}
+                  >
                     <Plus className="mr-1 h-4 w-4" />
                     Add First Widget
                   </Button>
@@ -756,23 +881,36 @@ export default function Dashboard(): React.ReactElement {
                 )}
               </div>
             ) : (
-              <SortableContext items={layout.widget_order} strategy={verticalListSortingStrategy}>
+              <SortableContext
+                items={layout.widget_order}
+                strategy={verticalListSortingStrategy}
+              >
                 {layout.widget_order.map((instanceId) => {
-                  const instance = layout.widget_instances[instanceId]
-                  if (!instance) return null
-                  if (instance.moduleId === 'reddit_digest' && !redditDigestEnabled) return null
-                  if (instance.moduleId === 'saved_posts' && !savedPostsEnabled) return null
-                  if (instance.moduleId === 'sports' && !sportsEnabled) return null
-                  if (instance.moduleId === 'weather' && !weatherEnabled) return null
-                  const mod = getModule(instance.moduleId)
-                  if (!mod) return null
-                  const WidgetComponent = mod.widget
-                  const widgetIndex = layout.widget_order.indexOf(instanceId)
+                  const instance = layout.widget_instances[instanceId];
+                  if (!instance) return null;
+                  if (
+                    instance.moduleId === "reddit_digest" &&
+                    !redditDigestEnabled
+                  )
+                    return null;
+                  if (instance.moduleId === "saved_posts" && !savedPostsEnabled)
+                    return null;
+                  if (instance.moduleId === "sports" && !sportsEnabled)
+                    return null;
+                  if (instance.moduleId === "weather" && !weatherEnabled)
+                    return null;
+                  const mod = getModule(instance.moduleId);
+                  if (!mod) return null;
+                  const WidgetComponent = mod.widget;
+                  const widgetIndex = layout.widget_order.indexOf(instanceId);
                   return (
                     <React.Fragment key={instanceId}>
                       {widgetIndex === 0 ? (
                         <DashboardInsertionDropTarget
-                          dropId={createDashboardInsertDropId(activeViewId, 'top')}
+                          dropId={createDashboardInsertDropId(
+                            activeViewId,
+                            "top",
+                          )}
                           label="Drop here to place at the top of this dashboard"
                           visible={showingCrossViewInsertTargets}
                         />
@@ -783,9 +921,13 @@ export default function Dashboard(): React.ReactElement {
                           label={instance.label}
                           defaultLabel={mod.displayName}
                           editMode={editMode}
-                          visible={layout.widget_visibility[instanceId] !== false}
+                          visible={
+                            layout.widget_visibility[instanceId] !== false
+                          }
                           isFirst={widgetIndex === 0}
-                          isLast={widgetIndex === layout.widget_order.length - 1}
+                          isLast={
+                            widgetIndex === layout.widget_order.length - 1
+                          }
                           onToggleVisibility={handleToggleVisibility}
                           onRename={handleRename}
                           onRemove={handleRemove}
@@ -796,12 +938,14 @@ export default function Dashboard(): React.ReactElement {
                         </WidgetWrapper>
                       </WidgetInstanceContext.Provider>
                       <DashboardInsertionDropTarget
-                        dropId={createDashboardInsertDropId(activeViewId, { afterId: instanceId })}
+                        dropId={createDashboardInsertDropId(activeViewId, {
+                          afterId: instanceId,
+                        })}
                         label={`Drop here to place after ${instance.label ?? mod.displayName}`}
                         visible={showingCrossViewInsertTargets}
                       />
                     </React.Fragment>
-                  )
+                  );
                 })}
               </SortableContext>
             )}
@@ -817,12 +961,14 @@ export default function Dashboard(): React.ReactElement {
 
           <DashboardViewDialog
             open={dashboardDialogMode !== null}
-            mode={dashboardDialogMode ?? 'create'}
-            initialName={dashboardDialogMode === 'edit' ? activeView.name : ''}
-            initialIcon={dashboardDialogMode === 'edit' ? activeView.icon : null}
+            mode={dashboardDialogMode ?? "create"}
+            initialName={dashboardDialogMode === "edit" ? activeView.name : ""}
+            initialIcon={
+              dashboardDialogMode === "edit" ? activeView.icon : null
+            }
             onOpenChange={(open) => {
               if (!open) {
-                setDashboardDialogMode(null)
+                setDashboardDialogMode(null);
               }
             }}
             onSubmit={handleDashboardDialogSubmit}
@@ -834,28 +980,31 @@ export default function Dashboard(): React.ReactElement {
             dashboardViews={dashboardViews}
             onOpenChange={(open) => {
               if (!open) {
-                setTransferDialogWidgetId(null)
+                setTransferDialogWidgetId(null);
               }
             }}
             onSubmit={handleTransferSubmit}
           />
 
-          <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <AlertDialog
+            open={deleteDialogOpen}
+            onOpenChange={setDeleteDialogOpen}
+          >
             <AlertDialogContent>
               <AlertDialogHeader>
                 <AlertDialogTitle>Delete dashboard?</AlertDialogTitle>
                 <AlertDialogDescription>
                   {canDeleteView
                     ? `Delete ${activeView.name} and remove any widget-specific saved settings tied only to this dashboard.`
-                    : 'At least one dashboard must remain.'}
+                    : "At least one dashboard must remain."}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
                 <AlertDialogAction
                   onClick={() => {
-                    deleteDashboardView(activeView.id)
-                    setDeleteDialogOpen(false)
+                    deleteDashboardView(activeView.id);
+                    setDeleteDialogOpen(false);
                   }}
                   disabled={!canDeleteView}
                 >
@@ -867,5 +1016,5 @@ export default function Dashboard(): React.ReactElement {
         </div>
       </DndContext>
     </DashboardTransferContext.Provider>
-  )
+  );
 }

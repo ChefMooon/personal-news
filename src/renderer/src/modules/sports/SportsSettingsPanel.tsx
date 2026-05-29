@@ -1,36 +1,45 @@
-import React from 'react'
-import { Switch } from '../../components/ui/switch'
+import React from "react";
+import { Switch } from "../../components/ui/switch";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue
-} from '../../components/ui/select'
-import type { SportsViewConfig } from '../../../../shared/ipc-types'
-import { SPORTS_WIDGET_OPTIONS } from '../../../../shared/sports'
+  SelectValue,
+} from "../../components/ui/select";
+import type { SportsViewConfig } from "../../../../shared/ipc-types";
+import { SPORTS_WIDGET_OPTIONS } from "../../../../shared/sports";
 
 export function SportsSettingsPanel({
   config,
-  setConfig
+  setConfig,
 }: {
-  config: SportsViewConfig
-  setConfig: (config: SportsViewConfig) => void
+  config: SportsViewConfig;
+  setConfig: (config: SportsViewConfig) => void;
 }): React.ReactElement {
   return (
     <div className="flex w-full flex-col gap-4 overflow-y-auto pr-1">
       <div>
         <h3 className="text-sm font-medium">Widget Settings</h3>
-        <p className="text-xs text-muted-foreground">Controls for this Sports widget instance.</p>
+        <p className="text-xs text-muted-foreground">
+          Controls for this Sports widget instance.
+        </p>
       </div>
 
       <div className="space-y-2">
         <label className="text-sm font-medium">Sport</label>
-        <Select value={config.sport} onValueChange={(value) => setConfig({ ...config, sport: value })}>
-          <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+        <Select
+          value={config.sport}
+          onValueChange={(value) => setConfig({ ...config, sport: value })}
+        >
+          <SelectTrigger className="h-9">
+            <SelectValue />
+          </SelectTrigger>
           <SelectContent align="start" side="bottom">
             {SPORTS_WIDGET_OPTIONS.map((sport) => (
-              <SelectItem key={sport.id} value={sport.id}>{sport.label}</SelectItem>
+              <SelectItem key={sport.id} value={sport.id}>
+                {sport.label}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -40,9 +49,16 @@ export function SportsSettingsPanel({
         <label className="text-sm font-medium">View</label>
         <Select
           value={config.viewMode}
-          onValueChange={(value) => setConfig({ ...config, viewMode: value as SportsViewConfig['viewMode'] })}
+          onValueChange={(value) =>
+            setConfig({
+              ...config,
+              viewMode: value as SportsViewConfig["viewMode"],
+            })
+          }
         >
-          <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="h-9">
+            <SelectValue />
+          </SelectTrigger>
           <SelectContent align="start" side="bottom">
             <SelectItem value="today">Today</SelectItem>
             <SelectItem value="summarized">Summarized</SelectItem>
@@ -56,31 +72,49 @@ export function SportsSettingsPanel({
       <div className="flex items-center justify-between rounded-md border px-3 py-2">
         <div>
           <p className="text-sm">Show local game times</p>
-          <p className="text-xs text-muted-foreground">Use your local timezone for scheduled games.</p>
+          <p className="text-xs text-muted-foreground">
+            Use your local timezone for scheduled games.
+          </p>
         </div>
-        <Switch checked={config.showTime} onCheckedChange={(checked) => setConfig({ ...config, showTime: checked })} />
+        <Switch
+          checked={config.showTime}
+          onCheckedChange={(checked) =>
+            setConfig({ ...config, showTime: checked })
+          }
+        />
       </div>
 
       <div className="flex items-center justify-between rounded-md border px-3 py-2">
         <div>
           <p className="text-sm">Show venue</p>
-          <p className="text-xs text-muted-foreground">Include venue names when available.</p>
+          <p className="text-xs text-muted-foreground">
+            Include venue names when available.
+          </p>
         </div>
-        <Switch checked={config.showVenue} onCheckedChange={(checked) => setConfig({ ...config, showVenue: checked })} />
+        <Switch
+          checked={config.showVenue}
+          onCheckedChange={(checked) =>
+            setConfig({ ...config, showVenue: checked })
+          }
+        />
       </div>
 
       <div className="flex items-center justify-between rounded-md border px-3 py-2">
         <div>
           <p className="text-sm">Show live game start time</p>
-          <p className="text-xs text-muted-foreground">Display scheduled start time when games are live.</p>
+          <p className="text-xs text-muted-foreground">
+            Display scheduled start time when games are live.
+          </p>
         </div>
         <Switch
           checked={config.showLiveStartTime}
-          onCheckedChange={(checked) => setConfig({ ...config, showLiveStartTime: checked })}
+          onCheckedChange={(checked) =>
+            setConfig({ ...config, showLiveStartTime: checked })
+          }
         />
       </div>
     </div>
-  )
+  );
 }
 
-export default SportsSettingsPanel
+export default SportsSettingsPanel;

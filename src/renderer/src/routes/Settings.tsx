@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
-import { toast } from 'sonner'
+import React, { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { toast } from "sonner";
 import {
   DndContext,
   closestCenter,
@@ -8,27 +8,32 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
-  type DragEndEvent
-} from '@dnd-kit/core'
+  type DragEndEvent,
+} from "@dnd-kit/core";
 import {
   arrayMove,
   SortableContext,
   sortableKeyboardCoordinates,
   useSortable,
-  verticalListSortingStrategy
-} from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs'
-import { Input } from '../components/ui/input'
-import { Button } from '../components/ui/button'
-import { Switch } from '../components/ui/switch'
-import { useTheme } from '../providers/ThemeProvider'
-import { useYouTubeChannels } from '../hooks/useYouTubeChannels'
-import { useSidebarConfig } from '../hooks/useSidebarConfig'
-import { useRedditDigestEnabled } from '../contexts/RedditDigestEnabledContext'
-import { useSavedPostsEnabled } from '../contexts/SavedPostsEnabledContext'
-import { useSportsEnabled } from '../contexts/SportsEnabledContext'
-import { useWeatherEnabled } from '../contexts/WeatherEnabledContext'
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+} from "../components/ui/tabs";
+import { Input } from "../components/ui/input";
+import { Button } from "../components/ui/button";
+import { Switch } from "../components/ui/switch";
+import { useTheme } from "../providers/ThemeProvider";
+import { useYouTubeChannels } from "../hooks/useYouTubeChannels";
+import { useSidebarConfig } from "../hooks/useSidebarConfig";
+import { useRedditDigestEnabled } from "../contexts/RedditDigestEnabledContext";
+import { useSavedPostsEnabled } from "../contexts/SavedPostsEnabledContext";
+import { useSportsEnabled } from "../contexts/SportsEnabledContext";
+import { useWeatherEnabled } from "../contexts/WeatherEnabledContext";
 import {
   ArrowDown,
   ArrowUp,
@@ -40,10 +45,13 @@ import {
   Pencil,
   Plus,
   Trash2,
-  Upload
-} from 'lucide-react'
-import { cn } from '../lib/utils'
-import { ThemeCreatorDialog, readThemeTokensFromDocument } from '../components/ThemeCreatorDialog'
+  Upload,
+} from "lucide-react";
+import { cn } from "../lib/utils";
+import {
+  ThemeCreatorDialog,
+  readThemeTokensFromDocument,
+} from "../components/ThemeCreatorDialog";
 import {
   CUSTOMIZABLE_SIDEBAR_ITEM_IDS,
   IPC,
@@ -56,15 +64,15 @@ import {
   type SidebarItemId,
   type ScriptRunCompleteEvent,
   type ThemeRow,
-  type UpdateStatusEvent
-} from '../../../shared/ipc-types'
+  type UpdateStatusEvent,
+} from "../../../shared/ipc-types";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue
-} from '../components/ui/select'
+  SelectValue,
+} from "../components/ui/select";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -73,235 +81,282 @@ import {
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
-  AlertDialogTitle
-} from '../components/ui/alert-dialog'
-import { NtfyOnboardingWizard } from '../modules/saved-posts/NtfyOnboardingWizard'
-import { TagManagementModal } from '../modules/saved-posts/TagManagementModal'
-import { SportsSettingsTab } from '../modules/sports/SportsSettingsTab'
-import { WeatherSettingsTab } from '../modules/weather/WeatherSettingsTab'
+  AlertDialogTitle,
+} from "../components/ui/alert-dialog";
+import { NtfyOnboardingWizard } from "../modules/saved-posts/NtfyOnboardingWizard";
+import { TagManagementModal } from "../modules/saved-posts/TagManagementModal";
+import { SportsSettingsTab } from "../modules/sports/SportsSettingsTab";
+import { WeatherSettingsTab } from "../modules/weather/WeatherSettingsTab";
 
 function YouTubeTab(): React.ReactElement {
-  const { channels } = useYouTubeChannels()
-  const addInputRef = useRef<HTMLInputElement | null>(null)
-  const [pendingByChannel, setPendingByChannel] = useState<Record<string, boolean>>({})
-  const [removingByChannel, setRemovingByChannel] = useState<Record<string, boolean>>({})
-  const [channelToRemove, setChannelToRemove] = useState<{ id: string; name: string } | null>(null)
-  const [addInput, setAddInput] = useState('')
-  const [adding, setAdding] = useState(false)
-  const [intervalValue, setIntervalValue] = useState('15')
-  const [savingInterval, setSavingInterval] = useState(false)
-  const [pollingNow, setPollingNow] = useState(false)
-  const [clearingVideoCache, setClearingVideoCache] = useState(false)
-  const canSubmitChannel = addInput.trim().length > 0 && !adding
+  const { channels } = useYouTubeChannels();
+  const addInputRef = useRef<HTMLInputElement | null>(null);
+  const [pendingByChannel, setPendingByChannel] = useState<
+    Record<string, boolean>
+  >({});
+  const [removingByChannel, setRemovingByChannel] = useState<
+    Record<string, boolean>
+  >({});
+  const [channelToRemove, setChannelToRemove] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+  const [addInput, setAddInput] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [intervalValue, setIntervalValue] = useState("15");
+  const [savingInterval, setSavingInterval] = useState(false);
+  const [pollingNow, setPollingNow] = useState(false);
+  const [clearingVideoCache, setClearingVideoCache] = useState(false);
+  const canSubmitChannel = addInput.trim().length > 0 && !adding;
 
-  const [showKey, setShowKey] = useState(false)
-  const [apiKey, setApiKey] = useState('')
-  const [apiKeyStatus, setApiKeyStatus] = useState<YouTubeApiKeyStatus | null>(null)
-  const [savingKey, setSavingKey] = useState(false)
+  const [showKey, setShowKey] = useState(false);
+  const [apiKey, setApiKey] = useState("");
+  const [apiKeyStatus, setApiKeyStatus] = useState<YouTubeApiKeyStatus | null>(
+    null,
+  );
+  const [savingKey, setSavingKey] = useState(false);
 
   const refreshApiKeyStatus = (): void => {
     window.api
       .invoke(IPC.SETTINGS_GET_YOUTUBE_API_KEY_STATUS)
       .then((data) => {
-        setApiKeyStatus(data as YouTubeApiKeyStatus)
+        setApiKeyStatus(data as YouTubeApiKeyStatus);
       })
       .catch((err) => {
-        toast.error(err instanceof Error ? err.message : 'Failed to load API key status.')
-      })
-  }
+        toast.error(
+          err instanceof Error ? err.message : "Failed to load API key status.",
+        );
+      });
+  };
 
   const saveApiKey = async (): Promise<void> => {
-    setSavingKey(true)
+    setSavingKey(true);
     try {
       const result = (await window.api.invoke(
         IPC.SETTINGS_SET_YOUTUBE_API_KEY,
-        apiKey
-      )) as IpcMutationResult
+        apiKey,
+      )) as IpcMutationResult;
       if (!result.ok) {
-        toast.error(result.error ?? 'Failed to save API key.')
-        return
+        toast.error(result.error ?? "Failed to save API key.");
+        return;
       }
-      setApiKey('')
-      toast.success('API key saved and validated successfully.')
-      refreshApiKeyStatus()
+      setApiKey("");
+      toast.success("API key saved and validated successfully.");
+      refreshApiKeyStatus();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to save API key.')
+      toast.error(
+        err instanceof Error ? err.message : "Failed to save API key.",
+      );
     } finally {
-      setSavingKey(false)
+      setSavingKey(false);
     }
-  }
+  };
 
   const clearApiKey = async (): Promise<void> => {
-    setSavingKey(true)
+    setSavingKey(true);
     try {
-      await window.api.invoke(IPC.SETTINGS_CLEAR_YOUTUBE_API_KEY)
-      setApiKey('')
-      toast.success('YouTube API key removed.')
-      refreshApiKeyStatus()
+      await window.api.invoke(IPC.SETTINGS_CLEAR_YOUTUBE_API_KEY);
+      setApiKey("");
+      toast.success("YouTube API key removed.");
+      refreshApiKeyStatus();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to clear API key.')
+      toast.error(
+        err instanceof Error ? err.message : "Failed to clear API key.",
+      );
     } finally {
-      setSavingKey(false)
+      setSavingKey(false);
     }
-  }
+  };
 
   useEffect(() => {
     window.api
-      .invoke(IPC.SETTINGS_GET, 'rss_poll_interval_minutes')
+      .invoke(IPC.SETTINGS_GET, "rss_poll_interval_minutes")
       .then((raw) => {
-        if (typeof raw === 'string' && raw.trim()) {
-          setIntervalValue(raw)
+        if (typeof raw === "string" && raw.trim()) {
+          setIntervalValue(raw);
         }
       })
       .catch((err) => {
-        toast.error(err instanceof Error ? err.message : 'Failed to load RSS poll interval.')
-      })
-  }, [])
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : "Failed to load RSS poll interval.",
+        );
+      });
+  }, []);
 
   useEffect(() => {
-    setPendingByChannel({})
-  }, [channels])
+    setPendingByChannel({});
+  }, [channels]);
 
   useEffect(() => {
-    refreshApiKeyStatus()
-  }, [])
+    refreshApiKeyStatus();
+  }, []);
 
   const isEnabled = (channelId: string, defaultVal: number): boolean => {
-    if (channelId in pendingByChannel) return pendingByChannel[channelId]
-    return defaultVal === 1
-  }
+    if (channelId in pendingByChannel) return pendingByChannel[channelId];
+    return defaultVal === 1;
+  };
 
-  const setChannelEnabled = async (channelId: string, checked: boolean): Promise<void> => {
-    setPendingByChannel((prev) => ({ ...prev, [channelId]: checked }))
+  const setChannelEnabled = async (
+    channelId: string,
+    checked: boolean,
+  ): Promise<void> => {
+    setPendingByChannel((prev) => ({ ...prev, [channelId]: checked }));
     try {
       const result = (await window.api.invoke(
         IPC.YOUTUBE_SET_CHANNEL_ENABLED,
         channelId,
-        checked
-      )) as IpcMutationResult
+        checked,
+      )) as IpcMutationResult;
       if (!result.ok) {
-        toast.error(result.error ?? 'Failed to update channel state.')
+        toast.error(result.error ?? "Failed to update channel state.");
         setPendingByChannel((prev) => {
-          const next = { ...prev }
-          delete next[channelId]
-          return next
-        })
-        return
+          const next = { ...prev };
+          delete next[channelId];
+          return next;
+        });
+        return;
       }
-      toast.success('Channel settings saved.')
+      toast.success("Channel settings saved.");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to update channel state.')
+      toast.error(
+        err instanceof Error ? err.message : "Failed to update channel state.",
+      );
       setPendingByChannel((prev) => {
-        const next = { ...prev }
-        delete next[channelId]
-        return next
-      })
+        const next = { ...prev };
+        delete next[channelId];
+        return next;
+      });
     }
-  }
+  };
 
   const removeChannel = async (channelId: string): Promise<void> => {
-    setRemovingByChannel((prev) => ({ ...prev, [channelId]: true }))
+    setRemovingByChannel((prev) => ({ ...prev, [channelId]: true }));
     try {
       const result = (await window.api.invoke(
         IPC.YOUTUBE_REMOVE_CHANNEL,
-        channelId
-      )) as IpcMutationResult
+        channelId,
+      )) as IpcMutationResult;
       if (!result.ok) {
-        toast.error(result.error ?? 'Failed to remove channel.')
-        return
+        toast.error(result.error ?? "Failed to remove channel.");
+        return;
       }
-      toast.success('Channel removed successfully.')
+      toast.success("Channel removed successfully.");
       requestAnimationFrame(() => {
-        addInputRef.current?.focus()
-      })
+        addInputRef.current?.focus();
+      });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to remove channel.')
+      toast.error(
+        err instanceof Error ? err.message : "Failed to remove channel.",
+      );
     } finally {
       setRemovingByChannel((prev) => {
-        const next = { ...prev }
-        delete next[channelId]
-        return next
-      })
-      setChannelToRemove((current) => (current?.id === channelId ? null : current))
+        const next = { ...prev };
+        delete next[channelId];
+        return next;
+      });
+      setChannelToRemove((current) =>
+        current?.id === channelId ? null : current,
+      );
     }
-  }
+  };
 
   const addChannel = async (): Promise<void> => {
-    setAdding(true)
+    setAdding(true);
     try {
-      const result = (await window.api.invoke(IPC.YOUTUBE_ADD_CHANNEL, addInput)) as IpcMutationResult
+      const result = (await window.api.invoke(
+        IPC.YOUTUBE_ADD_CHANNEL,
+        addInput,
+      )) as IpcMutationResult;
       if (!result.ok) {
-        toast.error(result.error ?? 'Failed to add channel.')
-        return
+        toast.error(result.error ?? "Failed to add channel.");
+        return;
       }
-      setAddInput('')
-      toast.success('Channel added successfully.')
-      addInputRef.current?.focus()
+      setAddInput("");
+      toast.success("Channel added successfully.");
+      addInputRef.current?.focus();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to add channel.')
+      toast.error(
+        err instanceof Error ? err.message : "Failed to add channel.",
+      );
     } finally {
-      setAdding(false)
+      setAdding(false);
     }
-  }
+  };
 
   const savePollInterval = async (): Promise<void> => {
-    setSavingInterval(true)
-    const parsed = Number.parseInt(intervalValue, 10)
+    setSavingInterval(true);
+    const parsed = Number.parseInt(intervalValue, 10);
     try {
       const result = (await window.api.invoke(
         IPC.SETTINGS_SET_RSS_POLL_INTERVAL,
-        parsed
-      )) as IpcMutationResult
+        parsed,
+      )) as IpcMutationResult;
       if (!result.ok) {
-        toast.error(result.error ?? 'Failed to save RSS poll interval.')
-        return
+        toast.error(result.error ?? "Failed to save RSS poll interval.");
+        return;
       }
-      toast.success('RSS poll interval saved.')
+      toast.success("RSS poll interval saved.");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to save RSS poll interval.')
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : "Failed to save RSS poll interval.",
+      );
     } finally {
-      setSavingInterval(false)
+      setSavingInterval(false);
     }
-  }
+  };
 
   const pollNow = async (): Promise<void> => {
-    setPollingNow(true)
+    setPollingNow(true);
     try {
-      const result = (await window.api.invoke(IPC.YOUTUBE_POLL_NOW)) as IpcMutationResult
+      const result = (await window.api.invoke(
+        IPC.YOUTUBE_POLL_NOW,
+      )) as IpcMutationResult;
       if (!result.ok) {
-        toast.error(result.error ?? 'Failed to run YouTube RSS poll.')
-        return
+        toast.error(result.error ?? "Failed to run YouTube RSS poll.");
+        return;
       }
-      toast.success('YouTube RSS poll completed.')
+      toast.success("YouTube RSS poll completed.");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to run YouTube RSS poll.')
+      toast.error(
+        err instanceof Error ? err.message : "Failed to run YouTube RSS poll.",
+      );
     } finally {
-      setPollingNow(false)
+      setPollingNow(false);
     }
-  }
+  };
 
   const clearVideoCache = async (): Promise<void> => {
     const confirmed = window.confirm(
-      'Delete all cached YouTube videos? Channels will be kept and videos can be re-fetched on next poll.'
-    )
+      "Delete all cached YouTube videos? Channels will be kept and videos can be re-fetched on next poll.",
+    );
     if (!confirmed) {
-      return
+      return;
     }
 
-    setClearingVideoCache(true)
+    setClearingVideoCache(true);
     try {
-      const result = (await window.api.invoke(IPC.YOUTUBE_CLEAR_VIDEOS_CACHE)) as YouTubeCacheClearResult
+      const result = (await window.api.invoke(
+        IPC.YOUTUBE_CLEAR_VIDEOS_CACHE,
+      )) as YouTubeCacheClearResult;
       if (!result.ok) {
-        toast.error(result.error ?? 'Failed to clear YouTube cache.')
-        return
+        toast.error(result.error ?? "Failed to clear YouTube cache.");
+        return;
       }
-      toast.success(`YouTube cache cleared. Removed ${result.deletedCount} video entries.`)
+      toast.success(
+        `YouTube cache cleared. Removed ${result.deletedCount} video entries.`,
+      );
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to clear YouTube cache.')
+      toast.error(
+        err instanceof Error ? err.message : "Failed to clear YouTube cache.",
+      );
     } finally {
-      setClearingVideoCache(false)
+      setClearingVideoCache(false);
     }
-  }
+  };
 
   return (
     <div className="space-y-4 max-w-lg">
@@ -309,7 +364,7 @@ function YouTubeTab(): React.ReactElement {
         open={channelToRemove !== null}
         onOpenChange={(open) => {
           if (!open) {
-            setChannelToRemove(null)
+            setChannelToRemove(null);
           }
         }}
       >
@@ -319,25 +374,33 @@ function YouTubeTab(): React.ReactElement {
             <AlertDialogDescription>
               {channelToRemove
                 ? `This will remove "${channelToRemove.name}" from your configured channels.`
-                : 'This will remove the selected channel from your configured channels.'}
+                : "This will remove the selected channel from your configured channels."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={Boolean(channelToRemove && removingByChannel[channelToRemove.id])}>
+            <AlertDialogCancel
+              disabled={Boolean(
+                channelToRemove && removingByChannel[channelToRemove.id],
+              )}
+            >
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
-              disabled={Boolean(channelToRemove && removingByChannel[channelToRemove.id])}
+              disabled={Boolean(
+                channelToRemove && removingByChannel[channelToRemove.id],
+              )}
               onClick={(event) => {
                 if (!channelToRemove) {
-                  event.preventDefault()
-                  return
+                  event.preventDefault();
+                  return;
                 }
-                event.preventDefault()
-                void removeChannel(channelToRemove.id)
+                event.preventDefault();
+                void removeChannel(channelToRemove.id);
               }}
             >
-              {channelToRemove && removingByChannel[channelToRemove.id] ? 'Removing...' : 'Remove'}
+              {channelToRemove && removingByChannel[channelToRemove.id]
+                ? "Removing..."
+                : "Remove"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -346,16 +409,20 @@ function YouTubeTab(): React.ReactElement {
       <div>
         <h3 className="text-sm font-medium mb-1">YouTube Data API v3 Key</h3>
         <p className="text-xs text-muted-foreground mb-2">
-          Required for fetching video metadata. Get yours at console.cloud.google.com.
+          Required for fetching video metadata. Get yours at
+          console.cloud.google.com.
         </p>
-        <label htmlFor="youtube-api-key" className="text-xs text-muted-foreground mb-2 block">
+        <label
+          htmlFor="youtube-api-key"
+          className="text-xs text-muted-foreground mb-2 block"
+        >
           API key
         </label>
         <div className="flex gap-2">
           <div className="relative flex-1">
             <Input
               id="youtube-api-key"
-              type={showKey ? 'text' : 'password'}
+              type={showKey ? "text" : "password"}
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
               placeholder="AIzaSy..."
@@ -365,35 +432,47 @@ function YouTubeTab(): React.ReactElement {
               type="button"
               onClick={() => setShowKey((s) => !s)}
               className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              aria-label={showKey ? 'Hide API key' : 'Show API key'}
+              aria-label={showKey ? "Hide API key" : "Show API key"}
               aria-pressed={showKey}
             >
-              {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              {showKey ? (
+                <EyeOff className="h-4 w-4" />
+              ) : (
+                <Eye className="h-4 w-4" />
+              )}
             </button>
           </div>
           <Button
             onClick={() => {
-              void saveApiKey()
+              void saveApiKey();
             }}
             disabled={savingKey}
           >
-            {savingKey ? 'Saving...' : 'Save'}
+            {savingKey ? "Saving..." : "Save"}
           </Button>
-          <Button variant="outline" onClick={() => void clearApiKey()} disabled={savingKey}>
+          <Button
+            variant="outline"
+            onClick={() => void clearApiKey()}
+            disabled={savingKey}
+          >
             Clear
           </Button>
         </div>
         {apiKeyStatus?.isSet ? (
           <p className="text-xs text-muted-foreground mt-2">
-            Saved key detected (ending in {apiKeyStatus.suffix ?? 'n/a'}).
+            Saved key detected (ending in {apiKeyStatus.suffix ?? "n/a"}).
           </p>
         ) : null}
       </div>
 
       <div>
-        <h3 className="text-sm font-medium mb-2">RSS Poll Interval (minutes)</h3>
+        <h3 className="text-sm font-medium mb-2">
+          RSS Poll Interval (minutes)
+        </h3>
         <div className="flex gap-2 items-center">
-          <label htmlFor="youtube-rss-poll-interval" className="sr-only">YouTube RSS poll interval in minutes</label>
+          <label htmlFor="youtube-rss-poll-interval" className="sr-only">
+            YouTube RSS poll interval in minutes
+          </label>
           <Input
             id="youtube-rss-poll-interval"
             value={intervalValue}
@@ -401,16 +480,26 @@ function YouTubeTab(): React.ReactElement {
             inputMode="numeric"
             className="w-40"
           />
-          <Button variant="outline" onClick={() => void savePollInterval()} disabled={savingInterval}>
-            {savingInterval ? 'Saving...' : 'Save Interval'}
+          <Button
+            variant="outline"
+            onClick={() => void savePollInterval()}
+            disabled={savingInterval}
+          >
+            {savingInterval ? "Saving..." : "Save Interval"}
           </Button>
         </div>
       </div>
 
       <div>
         <h3 className="text-sm font-medium mb-2">Cache Maintenance</h3>
-        <Button variant="destructive" onClick={() => void clearVideoCache()} disabled={clearingVideoCache}>
-          {clearingVideoCache ? 'Clearing Cache...' : 'Clear Cached YouTube Videos'}
+        <Button
+          variant="destructive"
+          onClick={() => void clearVideoCache()}
+          disabled={clearingVideoCache}
+        >
+          {clearingVideoCache
+            ? "Clearing Cache..."
+            : "Clear Cached YouTube Videos"}
         </Button>
         <p className="mt-2 text-xs text-muted-foreground">
           This removes rows from yt_videos only. Channels are preserved.
@@ -420,27 +509,38 @@ function YouTubeTab(): React.ReactElement {
       <div>
         <h3 className="text-sm font-medium mb-2">Configured Channels</h3>
         {channels.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No channels added yet.</p>
+          <p className="text-sm text-muted-foreground">
+            No channels added yet.
+          </p>
         ) : (
           <div className="space-y-2">
             {channels.map((ch) => (
-              <div key={ch.channel_id} className="flex items-center justify-between py-2 border-b last:border-0 gap-3">
+              <div
+                key={ch.channel_id}
+                className="flex items-center justify-between py-2 border-b last:border-0 gap-3"
+              >
                 <div className="flex items-center gap-2">
                   {ch.thumbnail_url ? (
-                    <img src={ch.thumbnail_url} alt={`${ch.name} channel thumbnail`} className="w-7 h-7 rounded-full bg-muted" />
+                    <img
+                      src={ch.thumbnail_url}
+                      alt={`${ch.name} channel thumbnail`}
+                      className="w-7 h-7 rounded-full bg-muted"
+                    />
                   ) : (
                     <div className="w-7 h-7 rounded-full bg-muted" />
                   )}
                   <div>
                     <p className="text-sm font-medium">{ch.name}</p>
-                    <p className="text-xs text-muted-foreground font-mono">{ch.channel_id}</p>
+                    <p className="text-xs text-muted-foreground font-mono">
+                      {ch.channel_id}
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <Switch
                     checked={isEnabled(ch.channel_id, ch.enabled)}
                     onCheckedChange={(checked) => {
-                      void setChannelEnabled(ch.channel_id, checked)
+                      void setChannelEnabled(ch.channel_id, checked);
                     }}
                     aria-label={`Enable channel ${ch.name}`}
                   />
@@ -448,7 +548,7 @@ function YouTubeTab(): React.ReactElement {
                     variant="destructive"
                     size="sm"
                     onClick={() => {
-                      setChannelToRemove({ id: ch.channel_id, name: ch.name })
+                      setChannelToRemove({ id: ch.channel_id, name: ch.name });
                     }}
                     disabled={Boolean(removingByChannel[ch.channel_id])}
                   >
@@ -464,7 +564,9 @@ function YouTubeTab(): React.ReactElement {
       <div>
         <h3 className="text-sm font-medium mb-2">Add Channel</h3>
         <div className="flex gap-2">
-          <label htmlFor="youtube-add-channel" className="sr-only">YouTube channel ID, handle, or URL</label>
+          <label htmlFor="youtube-add-channel" className="sr-only">
+            YouTube channel ID, handle, or URL
+          </label>
           <Input
             id="youtube-add-channel"
             ref={addInputRef}
@@ -472,118 +574,137 @@ function YouTubeTab(): React.ReactElement {
             value={addInput}
             onChange={(e) => setAddInput(e.target.value)}
             onKeyDown={(event) => {
-              if (event.key !== 'Enter' || event.nativeEvent.isComposing) {
-                return
+              if (event.key !== "Enter" || event.nativeEvent.isComposing) {
+                return;
               }
-              event.preventDefault()
+              event.preventDefault();
               if (!canSubmitChannel) {
-                return
+                return;
               }
-              void addChannel()
+              void addChannel();
             }}
             className="flex-1"
           />
           <Button
             variant="outline"
             onClick={() => {
-              void addChannel()
+              void addChannel();
             }}
             disabled={!canSubmitChannel}
           >
-            {adding ? 'Adding...' : 'Add'}
+            {adding ? "Adding..." : "Add"}
           </Button>
         </div>
       </div>
 
       <div>
         <h3 className="text-sm font-medium mb-2">YouTube Sync</h3>
-        <Button variant="outline" onClick={() => void pollNow()} disabled={pollingNow}>
-          {pollingNow ? 'Polling...' : 'Poll Now'}
+        <Button
+          variant="outline"
+          onClick={() => void pollNow()}
+          disabled={pollingNow}
+        >
+          {pollingNow ? "Polling..." : "Poll Now"}
         </Button>
         <p className="mt-2 text-xs text-muted-foreground">
-          Runs a YouTube poll immediately using the current channel list and API key.
+          Runs a YouTube poll immediately using the current channel list and API
+          key.
         </p>
       </div>
     </div>
-  )
+  );
 }
 
 function AppearanceTab(): React.ReactElement {
-  const { theme, customThemes, refreshThemes, setTheme } = useTheme()
-  const [createOpen, setCreateOpen] = useState(false)
-  const [editingTheme, setEditingTheme] = useState<ThemeRow | null>(null)
-  const [deleteBusyId, setDeleteBusyId] = useState<string | null>(null)
-  const [exportBusyId, setExportBusyId] = useState<string | null>(null)
+  const { theme, customThemes, refreshThemes, setTheme } = useTheme();
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editingTheme, setEditingTheme] = useState<ThemeRow | null>(null);
+  const [deleteBusyId, setDeleteBusyId] = useState<string | null>(null);
+  const [exportBusyId, setExportBusyId] = useState<string | null>(null);
 
   const openCreate = (): void => {
-    setEditingTheme(null)
-    setCreateOpen(true)
-  }
+    setEditingTheme(null);
+    setCreateOpen(true);
+  };
 
   const openEdit = (row: ThemeRow): void => {
-    setEditingTheme(row)
-    setCreateOpen(true)
-  }
+    setEditingTheme(row);
+    setCreateOpen(true);
+  };
 
   const removeTheme = async (row: ThemeRow): Promise<void> => {
     if (!window.confirm(`Delete the theme "${row.name}"?`)) {
-      return
+      return;
     }
 
-    setDeleteBusyId(row.id)
+    setDeleteBusyId(row.id);
     try {
-      const result = (await window.api.invoke(IPC.THEMES_DELETE, row.id)) as IpcMutationResult
+      const result = (await window.api.invoke(
+        IPC.THEMES_DELETE,
+        row.id,
+      )) as IpcMutationResult;
       if (!result.ok) {
-        toast.error(result.error ?? 'Failed to delete theme.')
-        return
+        toast.error(result.error ?? "Failed to delete theme.");
+        return;
       }
 
       if (theme.id === row.id) {
-        await setTheme('system')
+        await setTheme("system");
       }
 
-      await refreshThemes()
-      toast.success('Theme deleted.')
+      await refreshThemes();
+      toast.success("Theme deleted.");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to delete theme.')
+      toast.error(
+        err instanceof Error ? err.message : "Failed to delete theme.",
+      );
     } finally {
-      setDeleteBusyId(null)
+      setDeleteBusyId(null);
     }
-  }
+  };
 
   const exportTheme = async (row: ThemeRow): Promise<void> => {
-    setExportBusyId(row.id)
+    setExportBusyId(row.id);
     try {
-      const result = (await window.api.invoke(IPC.THEMES_EXPORT, row.id)) as IpcMutationResult
+      const result = (await window.api.invoke(
+        IPC.THEMES_EXPORT,
+        row.id,
+      )) as IpcMutationResult;
       if (!result.ok && result.error) {
-        toast.error(result.error)
+        toast.error(result.error);
       } else if (result.ok) {
-        toast.success(`Theme "${row.name}" exported.`)
+        toast.success(`Theme "${row.name}" exported.`);
       }
       // result.ok === false && result.error === null → user cancelled, no toast
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to export theme.')
+      toast.error(
+        err instanceof Error ? err.message : "Failed to export theme.",
+      );
     } finally {
-      setExportBusyId(null)
+      setExportBusyId(null);
     }
-  }
+  };
 
   const importTheme = async (): Promise<void> => {
     try {
-      const result = (await window.api.invoke(IPC.THEMES_IMPORT)) as ThemeImportResult
+      const result = (await window.api.invoke(
+        IPC.THEMES_IMPORT,
+      )) as ThemeImportResult;
       if (!result.ok && result.error) {
-        toast.error(result.error)
+        toast.error(result.error);
       } else if (result.ok && result.theme) {
-        await refreshThemes()
-        toast.success(`Theme "${result.theme.name}" imported.`)
+        await refreshThemes();
+        toast.success(`Theme "${result.theme.name}" imported.`);
       }
       // result.ok === false && result.error === null → user cancelled, no toast
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to import theme.')
+      toast.error(
+        err instanceof Error ? err.message : "Failed to import theme.",
+      );
     }
-  }
+  };
 
-  const initialTokens = readThemeTokensFromDocument()
+  const initialTokens = readThemeTokensFromDocument();
 
   return (
     <div className="space-y-4 max-w-2xl">
@@ -593,7 +714,7 @@ function AppearanceTab(): React.ReactElement {
         initialTokens={initialTokens}
         editingTheme={editingTheme}
         onSaved={async () => {
-          await refreshThemes()
+          await refreshThemes();
         }}
       />
 
@@ -606,8 +727,10 @@ function AppearanceTab(): React.ReactElement {
           value={theme.id}
           onValueChange={(val) => {
             setTheme(val).catch((err) => {
-              toast.error(err instanceof Error ? err.message : 'Failed to apply theme.')
-            })
+              toast.error(
+                err instanceof Error ? err.message : "Failed to apply theme.",
+              );
+            });
           }}
         >
           <SelectTrigger className="w-[200px]" aria-label="Theme selection">
@@ -631,11 +754,18 @@ function AppearanceTab(): React.ReactElement {
           <div>
             <h3 className="text-sm font-medium">Custom Themes</h3>
             <p className="text-xs text-muted-foreground">
-              Create, edit, and delete custom themes backed by the local themes table.
+              Create, edit, and delete custom themes backed by the local themes
+              table.
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => { void importTheme() }}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                void importTheme();
+              }}
+            >
               <Download className="h-4 w-4" />
               Import
             </Button>
@@ -651,19 +781,29 @@ function AppearanceTab(): React.ReactElement {
         ) : (
           <div className="space-y-2">
             {customThemes.map((row) => (
-              <div key={row.id} className="flex items-center justify-between rounded-md border px-3 py-2">
+              <div
+                key={row.id}
+                className="flex items-center justify-between rounded-md border px-3 py-2"
+              >
                 <div>
                   <p className="text-sm font-medium">{row.name}</p>
                   <p className="text-[11px] text-muted-foreground">{row.id}</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button variant="ghost" size="icon" onClick={() => openEdit(row)} aria-label={`Edit theme ${row.name}`}>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => openEdit(row)}
+                    aria-label={`Edit theme ${row.name}`}
+                  >
                     <Pencil className="h-4 w-4" />
                   </Button>
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => { void exportTheme(row) }}
+                    onClick={() => {
+                      void exportTheme(row);
+                    }}
                     aria-label={`Export theme ${row.name}`}
                     disabled={exportBusyId === row.id}
                   >
@@ -673,7 +813,7 @@ function AppearanceTab(): React.ReactElement {
                     variant="ghost"
                     size="icon"
                     onClick={() => {
-                      void removeTheme(row)
+                      void removeTheme(row);
                     }}
                     aria-label={`Delete theme ${row.name}`}
                     disabled={deleteBusyId === row.id}
@@ -687,269 +827,336 @@ function AppearanceTab(): React.ReactElement {
         )}
       </div>
     </div>
-  )
+  );
 }
 
 function normalizeSubredditInput(value: string): string | null {
-  const normalized = value.trim().replace(/^r\//i, '').toLowerCase()
+  const normalized = value.trim().replace(/^r\//i, "").toLowerCase();
   if (!normalized) {
-    return null
+    return null;
   }
   if (!/^[a-z0-9_]+$/i.test(normalized)) {
-    return null
+    return null;
   }
-  return normalized
+  return normalized;
 }
 
 function RedditDigestTab(): React.ReactElement {
-  const [subreddits, setSubreddits] = useState<string[]>([])
-  const [weekStart, setWeekStart] = useState<'0' | '1'>('1')
-  const [weeks, setWeeks] = useState<DigestWeekSummary[]>([])
-  const [keepWeeks, setKeepWeeks] = useState('4')
-  const [draft, setDraft] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [syncingSubreddit, setSyncingSubreddit] = useState<string | null>(null)
-  const [pruning, setPruning] = useState(false)
-  const addDisabled = saving || syncingSubreddit !== null
+  const [subreddits, setSubreddits] = useState<string[]>([]);
+  const [weekStart, setWeekStart] = useState<"0" | "1">("1");
+  const [weeks, setWeeks] = useState<DigestWeekSummary[]>([]);
+  const [keepWeeks, setKeepWeeks] = useState("4");
+  const [draft, setDraft] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [syncingSubreddit, setSyncingSubreddit] = useState<string | null>(null);
+  const [pruning, setPruning] = useState(false);
+  const addDisabled = saving || syncingSubreddit !== null;
 
   const load = (): void => {
     window.api
-      .invoke(IPC.SETTINGS_GET, 'reddit_digest_subreddits')
+      .invoke(IPC.SETTINGS_GET, "reddit_digest_subreddits")
       .then((raw) => {
-        if (typeof raw !== 'string' || raw.trim().length === 0) {
-          setSubreddits([])
-          return
+        if (typeof raw !== "string" || raw.trim().length === 0) {
+          setSubreddits([]);
+          return;
         }
         try {
-          const parsed = JSON.parse(raw) as unknown
+          const parsed = JSON.parse(raw) as unknown;
           if (!Array.isArray(parsed)) {
-            setSubreddits([])
-            return
+            setSubreddits([]);
+            return;
           }
           setSubreddits(
             parsed
-              .filter((value): value is string => typeof value === 'string')
+              .filter((value): value is string => typeof value === "string")
               .map((value) => value.trim().toLowerCase())
-              .filter((value, index, values) => value.length > 0 && values.indexOf(value) === index)
-          )
+              .filter(
+                (value, index, values) =>
+                  value.length > 0 && values.indexOf(value) === index,
+              ),
+          );
         } catch {
-          setSubreddits([])
+          setSubreddits([]);
         }
       })
       .catch((err) => {
-        toast.error(err instanceof Error ? err.message : 'Failed to load Reddit Digest settings.')
-      })
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : "Failed to load Reddit Digest settings.",
+        );
+      });
 
     window.api
-      .invoke(IPC.SETTINGS_GET, 'reddit_digest_week_start')
+      .invoke(IPC.SETTINGS_GET, "reddit_digest_week_start")
       .then((raw) => {
-        setWeekStart(raw === '0' ? '0' : '1')
+        setWeekStart(raw === "0" ? "0" : "1");
       })
       .catch((err) => {
-        toast.error(err instanceof Error ? err.message : 'Failed to load Reddit Digest week start setting.')
-      })
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : "Failed to load Reddit Digest week start setting.",
+        );
+      });
 
     window.api
       .invoke(IPC.REDDIT_GET_DIGEST_WEEKS)
       .then((data) => {
-        setWeeks(data as DigestWeekSummary[])
+        setWeeks(data as DigestWeekSummary[]);
       })
       .catch((err) => {
-        toast.error(err instanceof Error ? err.message : 'Failed to load Reddit Digest records.')
-      })
-  }
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : "Failed to load Reddit Digest records.",
+        );
+      });
+  };
 
   useEffect(() => {
-    load()
-  }, [])
+    load();
+  }, []);
 
   useEffect(() => {
-    const unsubscribe = window.api.on(IPC.SCRIPTS_RUN_COMPLETE, (...args: unknown[]) => {
-      const event = args[0] as ScriptRunCompleteEvent
-      if (event.trigger !== 'reddit_add_sync' || event.kind !== 'run_complete') {
-        return
-      }
+    const unsubscribe = window.api.on(
+      IPC.SCRIPTS_RUN_COMPLETE,
+      (...args: unknown[]) => {
+        const event = args[0] as ScriptRunCompleteEvent;
+        if (
+          event.trigger !== "reddit_add_sync" ||
+          event.kind !== "run_complete"
+        ) {
+          return;
+        }
 
-      setSyncingSubreddit(null)
-      load()
+        setSyncingSubreddit(null);
+        load();
 
-      if (event.severity === 'error') {
-        toast.error(`Subreddit saved, but the immediate sync failed: ${event.message}`)
-        return
-      }
+        if (event.severity === "error") {
+          toast.error(
+            `Subreddit saved, but the immediate sync failed: ${event.message}`,
+          );
+          return;
+        }
 
-      toast.success(event.message)
-    })
+        toast.success(event.message);
+      },
+    );
 
-    return unsubscribe
-  }, [])
+    return unsubscribe;
+  }, []);
 
-  const persist = async (nextSubreddits: string[], successMessage: string): Promise<boolean> => {
+  const persist = async (
+    nextSubreddits: string[],
+    successMessage: string,
+  ): Promise<boolean> => {
     try {
-      await window.api.invoke(IPC.SETTINGS_SET, 'reddit_digest_subreddits', JSON.stringify(nextSubreddits))
-      setSubreddits(nextSubreddits)
-      toast.success(successMessage)
-      return true
+      await window.api.invoke(
+        IPC.SETTINGS_SET,
+        "reddit_digest_subreddits",
+        JSON.stringify(nextSubreddits),
+      );
+      setSubreddits(nextSubreddits);
+      toast.success(successMessage);
+      return true;
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to save Reddit Digest settings.')
-      return false
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : "Failed to save Reddit Digest settings.",
+      );
+      return false;
     }
-  }
+  };
 
   const addSubreddit = async (): Promise<void> => {
-    const normalized = normalizeSubredditInput(draft)
+    const normalized = normalizeSubredditInput(draft);
     if (!normalized) {
-      toast.error('Subreddits may contain letters, numbers, and underscores only.')
-      return
+      toast.error(
+        "Subreddits may contain letters, numbers, and underscores only.",
+      );
+      return;
     }
     if (subreddits.includes(normalized)) {
-      toast.error(`r/${normalized} is already configured.`)
-      return
+      toast.error(`r/${normalized} is already configured.`);
+      return;
     }
 
-    setSaving(true)
+    setSaving(true);
     try {
       const validation = (await window.api.invoke(
         IPC.REDDIT_VALIDATE_DIGEST_SUBREDDIT,
-        normalized
-      )) as IpcMutationResult
+        normalized,
+      )) as IpcMutationResult;
       if (!validation.ok) {
-        toast.error(validation.error ?? `r/${normalized} could not be added.`)
-        return
+        toast.error(validation.error ?? `r/${normalized} could not be added.`);
+        return;
       }
 
-      const next = [...subreddits, normalized].sort()
-      const saved = await persist(next, `r/${normalized} added.`)
+      const next = [...subreddits, normalized].sort();
+      const saved = await persist(next, `r/${normalized} added.`);
       if (!saved) {
-        return
+        return;
       }
 
-      setDraft('')
+      setDraft("");
 
-      setSyncingSubreddit(normalized)
+      setSyncingSubreddit(normalized);
       try {
         const syncResult = (await window.api.invoke(
           IPC.REDDIT_SYNC_DIGEST_SUBREDDITS,
-          [normalized]
-        )) as IpcMutationResult
+          [normalized],
+        )) as IpcMutationResult;
         if (!syncResult.ok) {
-          setSyncingSubreddit(null)
+          setSyncingSubreddit(null);
           toast.error(
             syncResult.error ??
-              `r/${normalized} was saved, but the immediate Reddit Digest sync could not start.`
-          )
-          return
+              `r/${normalized} was saved, but the immediate Reddit Digest sync could not start.`,
+          );
+          return;
         }
 
-        toast.success(`Syncing r/${normalized} for the current week now.`)
+        toast.success(`Syncing r/${normalized} for the current week now.`);
       } catch (err) {
-        setSyncingSubreddit(null)
+        setSyncingSubreddit(null);
         toast.error(
           err instanceof Error
             ? `r/${normalized} was saved, but the immediate sync could not start: ${err.message}`
-            : `r/${normalized} was saved, but the immediate sync could not start.`
-        )
+            : `r/${normalized} was saved, but the immediate sync could not start.`,
+        );
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to validate subreddit.')
+      toast.error(
+        err instanceof Error ? err.message : "Failed to validate subreddit.",
+      );
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
-  }
+  };
 
   const removeSubreddit = async (subreddit: string): Promise<void> => {
-    const next = subreddits.filter((value) => value !== subreddit)
-    await persist(next, `Removed r/${subreddit}.`)
-  }
+    const next = subreddits.filter((value) => value !== subreddit);
+    await persist(next, `Removed r/${subreddit}.`);
+  };
 
-  const saveWeekStart = async (nextWeekStart: '0' | '1'): Promise<void> => {
-    setSaving(true)
+  const saveWeekStart = async (nextWeekStart: "0" | "1"): Promise<void> => {
+    setSaving(true);
     try {
-      await window.api.invoke(IPC.SETTINGS_SET, 'reddit_digest_week_start', nextWeekStart)
-      setWeekStart(nextWeekStart)
-      toast.success('Week start preference saved. It will apply on the next Reddit Digest run.')
+      await window.api.invoke(
+        IPC.SETTINGS_SET,
+        "reddit_digest_week_start",
+        nextWeekStart,
+      );
+      setWeekStart(nextWeekStart);
+      toast.success(
+        "Week start preference saved. It will apply on the next Reddit Digest run.",
+      );
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to save week start preference.')
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : "Failed to save week start preference.",
+      );
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
-  }
+  };
 
   const deleteWeek = async (weekStartDate: string): Promise<void> => {
-    if (!window.confirm(`Delete all Reddit Digest posts for the week of ${weekStartDate}?`)) {
-      return
+    if (
+      !window.confirm(
+        `Delete all Reddit Digest posts for the week of ${weekStartDate}?`,
+      )
+    ) {
+      return;
     }
 
-    setPruning(true)
+    setPruning(true);
     try {
       const result = (await window.api.invoke(IPC.REDDIT_PRUNE_DIGEST_POSTS, {
-        delete_week: weekStartDate
-      })) as { ok: boolean; error: string | null; deletedCount: number }
+        delete_week: weekStartDate,
+      })) as { ok: boolean; error: string | null; deletedCount: number };
       if (!result.ok) {
-        toast.error(result.error ?? 'Failed to delete Reddit Digest week.')
-        return
+        toast.error(result.error ?? "Failed to delete Reddit Digest week.");
+        return;
       }
-      load()
-      toast.success(`Deleted ${result.deletedCount} posts for the week of ${weekStartDate}.`)
+      load();
+      toast.success(
+        `Deleted ${result.deletedCount} posts for the week of ${weekStartDate}.`,
+      );
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to delete Reddit Digest week.')
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : "Failed to delete Reddit Digest week.",
+      );
     } finally {
-      setPruning(false)
+      setPruning(false);
     }
-  }
+  };
 
   const pruneOldWeeks = async (): Promise<void> => {
-    const parsed = Number.parseInt(keepWeeks, 10)
+    const parsed = Number.parseInt(keepWeeks, 10);
     if (!Number.isFinite(parsed) || parsed < 1) {
-      toast.error('Keep last N weeks must be at least 1.')
-      return
+      toast.error("Keep last N weeks must be at least 1.");
+      return;
     }
-    if (!window.confirm(`Delete all Reddit Digest posts older than the most recent ${parsed} weeks?`)) {
-      return
+    if (
+      !window.confirm(
+        `Delete all Reddit Digest posts older than the most recent ${parsed} weeks?`,
+      )
+    ) {
+      return;
     }
 
-    setPruning(true)
+    setPruning(true);
     try {
       const result = (await window.api.invoke(IPC.REDDIT_PRUNE_DIGEST_POSTS, {
-        keep_weeks: parsed
-      })) as { ok: boolean; error: string | null; deletedCount: number }
+        keep_weeks: parsed,
+      })) as { ok: boolean; error: string | null; deletedCount: number };
       if (!result.ok) {
-        toast.error(result.error ?? 'Failed to prune Reddit Digest posts.')
-        return
+        toast.error(result.error ?? "Failed to prune Reddit Digest posts.");
+        return;
       }
-      load()
+      load();
       toast.success(
         result.deletedCount === 0
-          ? 'No old Reddit Digest weeks needed pruning.'
-          : `Pruned ${result.deletedCount} Reddit Digest posts.`
-      )
+          ? "No old Reddit Digest weeks needed pruning."
+          : `Pruned ${result.deletedCount} Reddit Digest posts.`,
+      );
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to prune Reddit Digest posts.')
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : "Failed to prune Reddit Digest posts.",
+      );
     } finally {
-      setPruning(false)
+      setPruning(false);
     }
-  }
+  };
 
   return (
     <div className="space-y-4 max-w-lg pb-8">
       <div>
         <h3 className="text-sm font-medium mb-1">Week starts on</h3>
         <p className="text-xs text-muted-foreground mb-3">
-          Choose which day starts a new Reddit Digest week bucket. This takes effect on the next script run.
+          Choose which day starts a new Reddit Digest week bucket. This takes
+          effect on the next script run.
         </p>
         <div className="flex gap-2">
           <Button
-            variant={weekStart === '0' ? 'default' : 'outline'}
+            variant={weekStart === "0" ? "default" : "outline"}
             size="sm"
-            onClick={() => void saveWeekStart('0')}
+            onClick={() => void saveWeekStart("0")}
             disabled={saving}
           >
             Sunday
           </Button>
           <Button
-            variant={weekStart === '1' ? 'default' : 'outline'}
+            variant={weekStart === "1" ? "default" : "outline"}
             size="sm"
-            onClick={() => void saveWeekStart('1')}
+            onClick={() => void saveWeekStart("1")}
             disabled={saving}
           >
             Monday
@@ -960,10 +1167,13 @@ function RedditDigestTab(): React.ReactElement {
       <div>
         <h3 className="text-sm font-medium mb-1">Tracked subreddits</h3>
         <p className="text-xs text-muted-foreground mb-3">
-          The bundled Reddit Digest script will fetch top posts for these subreddits and ingest them into the dashboard.
+          The bundled Reddit Digest script will fetch top posts for these
+          subreddits and ingest them into the dashboard.
         </p>
         <div className="flex gap-2">
-          <label htmlFor="reddit-digest-add-subreddit" className="sr-only">Subreddit name</label>
+          <label htmlFor="reddit-digest-add-subreddit" className="sr-only">
+            Subreddit name
+          </label>
           <Input
             id="reddit-digest-add-subreddit"
             value={draft}
@@ -971,17 +1181,21 @@ function RedditDigestTab(): React.ReactElement {
             placeholder="programming"
             disabled={addDisabled}
             onKeyDown={(event) => {
-              if (event.key !== 'Enter' || event.nativeEvent.isComposing) {
-                return
+              if (event.key !== "Enter" || event.nativeEvent.isComposing) {
+                return;
               }
-              event.preventDefault()
+              event.preventDefault();
               if (!draft.trim() || addDisabled) {
-                return
+                return;
               }
-              void addSubreddit()
+              void addSubreddit();
             }}
           />
-          <Button variant="outline" onClick={() => void addSubreddit()} disabled={addDisabled || draft.trim().length === 0}>
+          <Button
+            variant="outline"
+            onClick={() => void addSubreddit()}
+            disabled={addDisabled || draft.trim().length === 0}
+          >
             Add
           </Button>
         </div>
@@ -994,10 +1208,15 @@ function RedditDigestTab(): React.ReactElement {
 
       <div className="space-y-2">
         {subreddits.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No subreddits configured yet.</p>
+          <p className="text-sm text-muted-foreground">
+            No subreddits configured yet.
+          </p>
         ) : (
           subreddits.map((subreddit) => (
-            <div key={subreddit} className="flex items-center justify-between rounded-md border px-3 py-2">
+            <div
+              key={subreddit}
+              className="flex items-center justify-between rounded-md border px-3 py-2"
+            >
               <span className="text-sm font-medium">r/{subreddit}</span>
               <Button
                 variant="ghost"
@@ -1013,8 +1232,14 @@ function RedditDigestTab(): React.ReactElement {
       </div>
 
       <div className="rounded-md border bg-muted/20 px-3 py-3 text-xs text-muted-foreground space-y-1">
-        <p>The first saved subreddit auto-registers the bundled Reddit Digest script in Script Manager with a weekly Monday 09:00 schedule.</p>
-        <p>Use Script Manager to run it immediately, view live output, or adjust the schedule.</p>
+        <p>
+          The first saved subreddit auto-registers the bundled Reddit Digest
+          script in Script Manager with a weekly Monday 09:00 schedule.
+        </p>
+        <p>
+          Use Script Manager to run it immediately, view live output, or adjust
+          the schedule.
+        </p>
       </div>
 
       <div className="pt-6 border-t space-y-3">
@@ -1027,13 +1252,22 @@ function RedditDigestTab(): React.ReactElement {
 
         <div className="space-y-2">
           {weeks.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No weekly digest records yet.</p>
+            <p className="text-sm text-muted-foreground">
+              No weekly digest records yet.
+            </p>
           ) : (
             weeks.map((week) => (
-              <div key={week.week_start_date} className="flex items-center justify-between rounded-md border px-3 py-2 gap-3">
+              <div
+                key={week.week_start_date}
+                className="flex items-center justify-between rounded-md border px-3 py-2 gap-3"
+              >
                 <div>
-                  <p className="text-sm font-medium">Week of {week.week_start_date}</p>
-                  <p className="text-xs text-muted-foreground">{week.post_count} post{week.post_count === 1 ? '' : 's'}</p>
+                  <p className="text-sm font-medium">
+                    Week of {week.week_start_date}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {week.post_count} post{week.post_count === 1 ? "" : "s"}
+                  </p>
                 </div>
                 <Button
                   variant="destructive"
@@ -1056,7 +1290,9 @@ function RedditDigestTab(): React.ReactElement {
             </p>
           </div>
           <div className="flex gap-2 items-center">
-            <label htmlFor="reddit-digest-keep-weeks" className="sr-only">Number of most recent weeks to keep</label>
+            <label htmlFor="reddit-digest-keep-weeks" className="sr-only">
+              Number of most recent weeks to keep
+            </label>
             <Input
               id="reddit-digest-keep-weeks"
               value={keepWeeks}
@@ -1064,173 +1300,205 @@ function RedditDigestTab(): React.ReactElement {
               inputMode="numeric"
               className="w-28"
             />
-            <Button variant="outline" onClick={() => void pruneOldWeeks()} disabled={pruning}>
-              {pruning ? 'Pruning...' : 'Keep Last N Weeks'}
+            <Button
+              variant="outline"
+              onClick={() => void pruneOldWeeks()}
+              disabled={pruning}
+            >
+              {pruning ? "Pruning..." : "Keep Last N Weeks"}
             </Button>
           </div>
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 function GeneralTab(): React.ReactElement {
-  const { enabled, setEnabled } = useRedditDigestEnabled()
-  const { enabled: savedPostsEnabled, setEnabled: setSavedPostsEnabled } = useSavedPostsEnabled()
-  const { enabled: sportsEnabled, setEnabled: setSportsEnabled } = useSportsEnabled()
-  const { enabled: weatherEnabled, setEnabled: setWeatherEnabled } = useWeatherEnabled()
-  const [closeToTray, setCloseToTray] = useState(true)
-  const [startMinimized, setStartMinimized] = useState(false)
-  const [minimizeToTray, setMinimizeToTray] = useState(false)
-  const [launchAtLogin, setLaunchAtLogin] = useState(false)
-  const [restoreWindowBounds, setRestoreWindowBounds] = useState(true)
-  const [startMaximized, setStartMaximized] = useState(false)
-  const [autoUpdateCheckEnabled, setAutoUpdateCheckEnabled] = useState(true)
-  const [updatesSupported, setUpdatesSupported] = useState(true)
-  const [currentVersion, setCurrentVersion] = useState<string | null>(null)
-  const [resettingWindowLayout, setResettingWindowLayout] = useState(false)
-  const [checkingForUpdates, setCheckingForUpdates] = useState(false)
-  const [lastUpdateCheckOutcome, setLastUpdateCheckOutcome] = useState<string | null>(null)
-  const [lastUpdateCheckAt, setLastUpdateCheckAt] = useState<number | null>(null)
+  const { enabled, setEnabled } = useRedditDigestEnabled();
+  const { enabled: savedPostsEnabled, setEnabled: setSavedPostsEnabled } =
+    useSavedPostsEnabled();
+  const { enabled: sportsEnabled, setEnabled: setSportsEnabled } =
+    useSportsEnabled();
+  const { enabled: weatherEnabled, setEnabled: setWeatherEnabled } =
+    useWeatherEnabled();
+  const [closeToTray, setCloseToTray] = useState(true);
+  const [startMinimized, setStartMinimized] = useState(false);
+  const [minimizeToTray, setMinimizeToTray] = useState(false);
+  const [launchAtLogin, setLaunchAtLogin] = useState(false);
+  const [restoreWindowBounds, setRestoreWindowBounds] = useState(true);
+  const [startMaximized, setStartMaximized] = useState(false);
+  const [autoUpdateCheckEnabled, setAutoUpdateCheckEnabled] = useState(true);
+  const [updatesSupported, setUpdatesSupported] = useState(true);
+  const [currentVersion, setCurrentVersion] = useState<string | null>(null);
+  const [resettingWindowLayout, setResettingWindowLayout] = useState(false);
+  const [checkingForUpdates, setCheckingForUpdates] = useState(false);
+  const [lastUpdateCheckOutcome, setLastUpdateCheckOutcome] = useState<
+    string | null
+  >(null);
+  const [lastUpdateCheckAt, setLastUpdateCheckAt] = useState<number | null>(
+    null,
+  );
 
   const getUpdateOutcomeLabel = (status: UpdateStatusEvent): string | null => {
-    if (status.state === 'not-available') {
-      return `Up to date (${status.currentVersion})`
+    if (status.state === "not-available") {
+      return `Up to date (${status.currentVersion})`;
     }
 
-    if (status.state === 'available' || status.state === 'downloaded') {
-      return status.version ? `Update ${status.version} available` : 'Update available'
+    if (status.state === "available" || status.state === "downloaded") {
+      return status.version
+        ? `Update ${status.version} available`
+        : "Update available";
     }
 
-    if (status.state === 'error') {
-      return status.friendlyMessage || status.message || 'Update check failed.'
+    if (status.state === "error") {
+      return status.friendlyMessage || status.message || "Update check failed.";
     }
 
-    if (status.state === 'disabled') {
-      return status.message || 'Update checks are disabled.'
+    if (status.state === "disabled") {
+      return status.message || "Update checks are disabled.";
     }
 
-    return null
-  }
+    return null;
+  };
 
   const applyUpdateStatus = (status: UpdateStatusEvent): void => {
-    setUpdatesSupported(status.supported)
-    setCurrentVersion(status.currentVersion)
-    const outcome = getUpdateOutcomeLabel(status)
+    setUpdatesSupported(status.supported);
+    setCurrentVersion(status.currentVersion);
+    const outcome = getUpdateOutcomeLabel(status);
     if (!outcome) {
-      return
+      return;
     }
-    setLastUpdateCheckOutcome(outcome)
-    setLastUpdateCheckAt(Date.now())
-  }
+    setLastUpdateCheckOutcome(outcome);
+    setLastUpdateCheckAt(Date.now());
+  };
 
   useEffect(() => {
-    const loadFlag = (key: string, setter: (value: boolean) => void, fallback: boolean): void => {
+    const loadFlag = (
+      key: string,
+      setter: (value: boolean) => void,
+      fallback: boolean,
+    ): void => {
       window.api
         .invoke(IPC.SETTINGS_GET, key)
         .then((raw) => {
-          if (typeof raw !== 'string') {
-            setter(fallback)
-            return
+          if (typeof raw !== "string") {
+            setter(fallback);
+            return;
           }
-          setter(raw === '1' || raw === 'true')
+          setter(raw === "1" || raw === "true");
         })
         .catch((err) => {
-          setter(fallback)
-          toast.error(err instanceof Error ? err.message : `Failed to load ${key} setting.`)
-        })
-    }
+          setter(fallback);
+          toast.error(
+            err instanceof Error
+              ? err.message
+              : `Failed to load ${key} setting.`,
+          );
+        });
+    };
 
-    loadFlag('app_close_to_tray', setCloseToTray, true)
-    loadFlag('app_start_minimized', setStartMinimized, false)
-    loadFlag('app_minimize_to_tray', setMinimizeToTray, false)
-    loadFlag('app_launch_at_login', setLaunchAtLogin, false)
-    loadFlag('app_restore_window_bounds', setRestoreWindowBounds, true)
-    loadFlag('app_start_maximized', setStartMaximized, false)
-    loadFlag('app_auto_update_check_enabled', setAutoUpdateCheckEnabled, true)
+    loadFlag("app_close_to_tray", setCloseToTray, true);
+    loadFlag("app_start_minimized", setStartMinimized, false);
+    loadFlag("app_minimize_to_tray", setMinimizeToTray, false);
+    loadFlag("app_launch_at_login", setLaunchAtLogin, false);
+    loadFlag("app_restore_window_bounds", setRestoreWindowBounds, true);
+    loadFlag("app_start_maximized", setStartMaximized, false);
+    loadFlag("app_auto_update_check_enabled", setAutoUpdateCheckEnabled, true);
 
     window.api
       .invoke(IPC.UPDATES_GET_STATUS)
       .then((status) => {
-        applyUpdateStatus(status as UpdateStatusEvent)
+        applyUpdateStatus(status as UpdateStatusEvent);
       })
-      .catch(() => {
-      })
+      .catch(() => {});
 
     return window.api.on(IPC.UPDATES_STATUS, (event) => {
-      applyUpdateStatus(event as UpdateStatusEvent)
-    })
-  }, [])
+      applyUpdateStatus(event as UpdateStatusEvent);
+    });
+  }, []);
 
   const saveFlag = async (
     key: string,
     value: boolean,
     setter: (value: boolean) => void,
-    label: string
+    label: string,
   ): Promise<void> => {
     const previous =
-      key === 'app_close_to_tray'
+      key === "app_close_to_tray"
         ? closeToTray
-        : key === 'app_start_minimized'
+        : key === "app_start_minimized"
           ? startMinimized
-          : key === 'app_minimize_to_tray'
+          : key === "app_minimize_to_tray"
             ? minimizeToTray
-          : key === 'app_launch_at_login'
-            ? launchAtLogin
-            : key === 'app_restore_window_bounds'
-              ? restoreWindowBounds
-              : key === 'app_auto_update_check_enabled'
-                ? autoUpdateCheckEnabled
-              : startMaximized
+            : key === "app_launch_at_login"
+              ? launchAtLogin
+              : key === "app_restore_window_bounds"
+                ? restoreWindowBounds
+                : key === "app_auto_update_check_enabled"
+                  ? autoUpdateCheckEnabled
+                  : startMaximized;
 
-    setter(value)
+    setter(value);
     try {
-      await window.api.invoke(IPC.SETTINGS_SET, key, value ? '1' : '0')
-      toast.success(`${label} updated.`)
+      await window.api.invoke(IPC.SETTINGS_SET, key, value ? "1" : "0");
+      toast.success(`${label} updated.`);
     } catch (err) {
-      setter(previous)
-      toast.error(err instanceof Error ? err.message : `Failed to save ${label.toLowerCase()}.`)
+      setter(previous);
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : `Failed to save ${label.toLowerCase()}.`,
+      );
     }
-  }
+  };
 
   const resetWindowLayout = async (): Promise<void> => {
-    setResettingWindowLayout(true)
+    setResettingWindowLayout(true);
     try {
-      await window.api.invoke(IPC.SETTINGS_SET, 'app_window_bounds', '')
-      toast.success('Window layout reset. Default size and position will apply on next launch.')
+      await window.api.invoke(IPC.SETTINGS_SET, "app_window_bounds", "");
+      toast.success(
+        "Window layout reset. Default size and position will apply on next launch.",
+      );
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to reset window layout.')
+      toast.error(
+        err instanceof Error ? err.message : "Failed to reset window layout.",
+      );
     } finally {
-      setResettingWindowLayout(false)
+      setResettingWindowLayout(false);
     }
-  }
+  };
 
   const runManualUpdateCheck = async (): Promise<void> => {
-    setCheckingForUpdates(true)
+    setCheckingForUpdates(true);
     try {
-      const result = (await window.api.invoke(IPC.UPDATES_CHECK_FOR_UPDATES)) as IpcMutationResult
+      const result = (await window.api.invoke(
+        IPC.UPDATES_CHECK_FOR_UPDATES,
+      )) as IpcMutationResult;
       if (!result.ok) {
         // Global update-status listener in App handles user-facing updater errors.
-        return
+        return;
       }
-      toast.info('Checking for updates...')
+      toast.info("Checking for updates...");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to check for updates.')
+      toast.error(
+        err instanceof Error ? err.message : "Failed to check for updates.",
+      );
     } finally {
-      setCheckingForUpdates(false)
+      setCheckingForUpdates(false);
     }
-  }
+  };
 
   const lastUpdateCheckAtLabel =
     lastUpdateCheckAt !== null
       ? new Date(lastUpdateCheckAt).toLocaleString([], {
-          year: 'numeric',
-          month: 'short',
-          day: 'numeric',
-          hour: 'numeric',
-          minute: '2-digit'
+          year: "numeric",
+          month: "short",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
         })
-      : null
+      : null;
 
   return (
     <div className="space-y-4 max-w-lg">
@@ -1241,7 +1509,9 @@ function GeneralTab(): React.ReactElement {
         </p>
         <div className="rounded-md border px-3 py-2 max-w-md">
           <p className="text-sm">Personal News</p>
-          <p className="text-xs text-muted-foreground">Version {currentVersion ?? '—'}</p>
+          <p className="text-xs text-muted-foreground">
+            Version {currentVersion ?? "—"}
+          </p>
         </div>
       </div>
 
@@ -1254,46 +1524,65 @@ function GeneralTab(): React.ReactElement {
           <div className="rounded-md border px-3 py-2">
             <p className="text-sm font-medium">Reddit Digest</p>
             <p className="text-xs text-muted-foreground mb-3">
-              Enable or disable the Reddit Digest feature. When disabled, the dashboard widget,
-              dedicated page, and associated scripts are hidden.
+              Enable or disable the Reddit Digest feature. When disabled, the
+              dashboard widget, dedicated page, and associated scripts are
+              hidden.
             </p>
             <div className="flex items-center justify-between rounded-md border px-3 py-2 max-w-sm">
               <span className="text-sm">Enable Reddit Digest</span>
-              <Switch checked={enabled} onCheckedChange={setEnabled} aria-label="Enable Reddit Digest" />
+              <Switch
+                checked={enabled}
+                onCheckedChange={setEnabled}
+                aria-label="Enable Reddit Digest"
+              />
             </div>
           </div>
 
           <div className="rounded-md border px-3 py-2">
             <p className="text-sm font-medium">Saved Posts</p>
             <p className="text-xs text-muted-foreground mb-3">
-              Enable or disable the Saved Posts feature. When disabled, the dashboard widget,
-              dedicated page, and settings tab are hidden.
+              Enable or disable the Saved Posts feature. When disabled, the
+              dashboard widget, dedicated page, and settings tab are hidden.
             </p>
             <div className="flex items-center justify-between rounded-md border px-3 py-2 max-w-sm">
               <span className="text-sm">Enable Saved Posts</span>
-              <Switch checked={savedPostsEnabled} onCheckedChange={setSavedPostsEnabled} aria-label="Enable Saved Posts" />
+              <Switch
+                checked={savedPostsEnabled}
+                onCheckedChange={setSavedPostsEnabled}
+                aria-label="Enable Saved Posts"
+              />
             </div>
           </div>
 
           <div className="rounded-md border px-3 py-2">
             <p className="text-sm font-medium">Sports</p>
             <p className="text-xs text-muted-foreground mb-3">
-              Enable or disable the Sports feature. When disabled, the dashboard widget and settings tab are hidden.
+              Enable or disable the Sports feature. When disabled, the dashboard
+              widget and settings tab are hidden.
             </p>
             <div className="flex items-center justify-between rounded-md border px-3 py-2 max-w-sm">
               <span className="text-sm">Enable Sports</span>
-              <Switch checked={sportsEnabled} onCheckedChange={setSportsEnabled} aria-label="Enable Sports" />
+              <Switch
+                checked={sportsEnabled}
+                onCheckedChange={setSportsEnabled}
+                aria-label="Enable Sports"
+              />
             </div>
           </div>
 
           <div className="rounded-md border px-3 py-2">
             <p className="text-sm font-medium">Weather</p>
             <p className="text-xs text-muted-foreground mb-3">
-              Enable or disable the Weather feature. When disabled, the dashboard widget and settings tab are hidden.
+              Enable or disable the Weather feature. When disabled, the
+              dashboard widget and settings tab are hidden.
             </p>
             <div className="flex items-center justify-between rounded-md border px-3 py-2 max-w-sm">
               <span className="text-sm">Enable Weather</span>
-              <Switch checked={weatherEnabled} onCheckedChange={setWeatherEnabled} aria-label="Enable Weather" />
+              <Switch
+                checked={weatherEnabled}
+                onCheckedChange={setWeatherEnabled}
+                aria-label="Enable Weather"
+              />
             </div>
           </div>
         </div>
@@ -1308,17 +1597,19 @@ function GeneralTab(): React.ReactElement {
           <div className="flex items-center justify-between rounded-md border px-3 py-2">
             <div>
               <p className="text-sm">Restore last window size and position</p>
-              <p className="text-xs text-muted-foreground">Reopens where you left off on your last session.</p>
+              <p className="text-xs text-muted-foreground">
+                Reopens where you left off on your last session.
+              </p>
             </div>
             <Switch
               checked={restoreWindowBounds}
               onCheckedChange={(checked) => {
                 void saveFlag(
-                  'app_restore_window_bounds',
+                  "app_restore_window_bounds",
                   checked,
                   setRestoreWindowBounds,
-                  'Window restore behavior'
-                )
+                  "Window restore behavior",
+                );
               }}
               aria-label="Restore last window size and position"
             />
@@ -1327,17 +1618,19 @@ function GeneralTab(): React.ReactElement {
           <div className="flex items-center justify-between rounded-md border px-3 py-2">
             <div>
               <p className="text-sm">Start app minimized</p>
-              <p className="text-xs text-muted-foreground">Useful when launching automatically at sign-in.</p>
+              <p className="text-xs text-muted-foreground">
+                Useful when launching automatically at sign-in.
+              </p>
             </div>
             <Switch
               checked={startMinimized}
               onCheckedChange={(checked) => {
                 void saveFlag(
-                  'app_start_minimized',
+                  "app_start_minimized",
                   checked,
                   setStartMinimized,
-                  'Start minimized behavior'
-                )
+                  "Start minimized behavior",
+                );
               }}
               aria-label="Start app minimized"
             />
@@ -1346,17 +1639,19 @@ function GeneralTab(): React.ReactElement {
           <div className="flex items-center justify-between rounded-md border px-3 py-2">
             <div>
               <p className="text-sm">Launch at login</p>
-              <p className="text-xs text-muted-foreground">Starts Personal News when you sign in.</p>
+              <p className="text-xs text-muted-foreground">
+                Starts Personal News when you sign in.
+              </p>
             </div>
             <Switch
               checked={launchAtLogin}
               onCheckedChange={(checked) => {
                 void saveFlag(
-                  'app_launch_at_login',
+                  "app_launch_at_login",
                   checked,
                   setLaunchAtLogin,
-                  'Launch-at-login behavior'
-                )
+                  "Launch-at-login behavior",
+                );
               }}
               aria-label="Launch at login"
             />
@@ -1365,10 +1660,16 @@ function GeneralTab(): React.ReactElement {
           <div className="flex items-center justify-between gap-3 rounded-md border px-3 py-2">
             <div>
               <p className="text-sm">Reset window layout</p>
-              <p className="text-xs text-muted-foreground">Clears saved size and position. Applies next app launch.</p>
+              <p className="text-xs text-muted-foreground">
+                Clears saved size and position. Applies next app launch.
+              </p>
             </div>
-            <Button variant="outline" onClick={() => void resetWindowLayout()} disabled={resettingWindowLayout}>
-              {resettingWindowLayout ? 'Resetting...' : 'Reset'}
+            <Button
+              variant="outline"
+              onClick={() => void resetWindowLayout()}
+              disabled={resettingWindowLayout}
+            >
+              {resettingWindowLayout ? "Resetting..." : "Reset"}
             </Button>
           </div>
         </div>
@@ -1382,20 +1683,23 @@ function GeneralTab(): React.ReactElement {
         <div className="space-y-2 max-w-md">
           <div className="flex items-center justify-between rounded-md border px-3 py-2">
             <div>
-              <p className="text-sm">Automatically check for updates on startup</p>
+              <p className="text-sm">
+                Automatically check for updates on startup
+              </p>
               <p className="text-xs text-muted-foreground">
-                When off, startup checks are skipped. You can still check manually.
+                When off, startup checks are skipped. You can still check
+                manually.
               </p>
             </div>
             <Switch
               checked={autoUpdateCheckEnabled}
               onCheckedChange={(checked) => {
                 void saveFlag(
-                  'app_auto_update_check_enabled',
+                  "app_auto_update_check_enabled",
                   checked,
                   setAutoUpdateCheckEnabled,
-                  'Auto-update startup checks'
-                )
+                  "Auto-update startup checks",
+                );
               }}
               aria-label="Automatically check for updates on startup"
               disabled={!updatesSupported}
@@ -1412,21 +1716,24 @@ function GeneralTab(): React.ReactElement {
             <Button
               variant="outline"
               onClick={() => {
-                void runManualUpdateCheck()
+                void runManualUpdateCheck();
               }}
               disabled={!updatesSupported || checkingForUpdates}
             >
-              {checkingForUpdates ? 'Checking...' : 'Check now'}
+              {checkingForUpdates ? "Checking..." : "Check now"}
             </Button>
           </div>
 
           <div className="rounded-md border px-3 py-2">
             <p className="text-sm">Last update check</p>
             <p className="text-xs text-muted-foreground">
-              {lastUpdateCheckOutcome ?? 'No completed checks yet in this session.'}
+              {lastUpdateCheckOutcome ??
+                "No completed checks yet in this session."}
             </p>
             {lastUpdateCheckAtLabel ? (
-              <p className="text-xs text-muted-foreground">Updated: {lastUpdateCheckAtLabel}</p>
+              <p className="text-xs text-muted-foreground">
+                Updated: {lastUpdateCheckAtLabel}
+              </p>
             ) : null}
           </div>
         </div>
@@ -1435,23 +1742,26 @@ function GeneralTab(): React.ReactElement {
       <div>
         <h3 className="text-sm font-medium mb-1">Tray Behavior</h3>
         <p className="text-xs text-muted-foreground mb-3">
-          Control whether the app hides instead of closing to keep background polling active.
+          Control whether the app hides instead of closing to keep background
+          polling active.
         </p>
         <div className="space-y-2 max-w-md">
           <div className="flex items-center justify-between rounded-md border px-3 py-2">
             <div>
               <p className="text-sm">Hide to tray when closing window</p>
-              <p className="text-xs text-muted-foreground">Keeps background polling active after clicking X.</p>
+              <p className="text-xs text-muted-foreground">
+                Keeps background polling active after clicking X.
+              </p>
             </div>
             <Switch
               checked={closeToTray}
               onCheckedChange={(checked) => {
                 void saveFlag(
-                  'app_close_to_tray',
+                  "app_close_to_tray",
                   checked,
                   setCloseToTray,
-                  'Close-to-tray behavior'
-                )
+                  "Close-to-tray behavior",
+                );
               }}
               aria-label="Hide to tray when closing window"
             />
@@ -1460,17 +1770,19 @@ function GeneralTab(): React.ReactElement {
           <div className="flex items-center justify-between rounded-md border px-3 py-2">
             <div>
               <p className="text-sm">Hide to tray when minimizing</p>
-              <p className="text-xs text-muted-foreground">Prevents a taskbar window while the app runs in background.</p>
+              <p className="text-xs text-muted-foreground">
+                Prevents a taskbar window while the app runs in background.
+              </p>
             </div>
             <Switch
               checked={minimizeToTray}
               onCheckedChange={(checked) => {
                 void saveFlag(
-                  'app_minimize_to_tray',
+                  "app_minimize_to_tray",
                   checked,
                   setMinimizeToTray,
-                  'Minimize-to-tray behavior'
-                )
+                  "Minimize-to-tray behavior",
+                );
               }}
               aria-label="Hide to tray when minimizing"
             />
@@ -1487,17 +1799,19 @@ function GeneralTab(): React.ReactElement {
           <div className="flex items-center justify-between rounded-md border px-3 py-2">
             <div>
               <p className="text-sm">Start maximized</p>
-              <p className="text-xs text-muted-foreground">Open the app in a maximized window.</p>
+              <p className="text-xs text-muted-foreground">
+                Open the app in a maximized window.
+              </p>
             </div>
             <Switch
               checked={startMaximized}
               onCheckedChange={(checked) => {
                 void saveFlag(
-                  'app_start_maximized',
+                  "app_start_maximized",
                   checked,
                   setStartMaximized,
-                  'Start maximized behavior'
-                )
+                  "Start maximized behavior",
+                );
               }}
               aria-label="Start maximized"
             />
@@ -1505,20 +1819,26 @@ function GeneralTab(): React.ReactElement {
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 function ScriptsTab(): React.ReactElement {
-  const [dir, setDir] = useState('')
+  const [dir, setDir] = useState("");
 
   useEffect(() => {
     window.api
-      .invoke(IPC.SETTINGS_GET, 'script_home_dir')
-      .then((v) => { setDir(typeof v === 'string' ? v : '') })
-      .catch((err) => {
-        toast.error(err instanceof Error ? err.message : 'Failed to load script home directory.')
+      .invoke(IPC.SETTINGS_GET, "script_home_dir")
+      .then((v) => {
+        setDir(typeof v === "string" ? v : "");
       })
-  }, [])
+      .catch((err) => {
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : "Failed to load script home directory.",
+        );
+      });
+  }, []);
 
   return (
     <div className="space-y-4 max-w-md">
@@ -1528,7 +1848,9 @@ function ScriptsTab(): React.ReactElement {
           Base directory shown when opening the scripts folder.
         </p>
         <div className="flex gap-2">
-          <label htmlFor="script-home-directory" className="sr-only">Script home directory</label>
+          <label htmlFor="script-home-directory" className="sr-only">
+            Script home directory
+          </label>
           <Input
             id="script-home-directory"
             value={dir}
@@ -1538,14 +1860,24 @@ function ScriptsTab(): React.ReactElement {
           />
           <Button
             onClick={async () => {
-              const picked = await window.api.invoke(IPC.DIALOG_SHOW_OPEN_FOLDER) as string | null
-              if (picked === null) return
+              const picked = (await window.api.invoke(
+                IPC.DIALOG_SHOW_OPEN_FOLDER,
+              )) as string | null;
+              if (picked === null) return;
               try {
-                await window.api.invoke(IPC.SETTINGS_SET, 'script_home_dir', picked)
-                setDir(picked)
-                toast.success('Script home directory saved.')
+                await window.api.invoke(
+                  IPC.SETTINGS_SET,
+                  "script_home_dir",
+                  picked,
+                );
+                setDir(picked);
+                toast.success("Script home directory saved.");
               } catch (err) {
-                toast.error(err instanceof Error ? err.message : 'Failed to save script home directory.')
+                toast.error(
+                  err instanceof Error
+                    ? err.message
+                    : "Failed to save script home directory.",
+                );
               }
             }}
           >
@@ -1554,130 +1886,155 @@ function ScriptsTab(): React.ReactElement {
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 function SavedPostsTab(): React.ReactElement {
-  const [intervalValue, setIntervalValue] = useState('60')
-  const [savingInterval, setSavingInterval] = useState(false)
-  const [topicConfigured, setTopicConfigured] = useState(false)
-  const [topic, setTopic] = useState('')
-  const [server, setServer] = useState('')
-  const [lastPolled, setLastPolled] = useState<number | null>(null)
-  const [isStale, setIsStale] = useState(false)
-  const [showWizard, setShowWizard] = useState(false)
-  const [testing, setTesting] = useState(false)
-  const [showGuide, setShowGuide] = useState(false)
-  const [showClearConfirm, setShowClearConfirm] = useState(false)
-  const [clearing, setClearing] = useState(false)
-  const [showTagManager, setShowTagManager] = useState(false)
+  const [intervalValue, setIntervalValue] = useState("60");
+  const [savingInterval, setSavingInterval] = useState(false);
+  const [topicConfigured, setTopicConfigured] = useState(false);
+  const [topic, setTopic] = useState("");
+  const [server, setServer] = useState("");
+  const [lastPolled, setLastPolled] = useState<number | null>(null);
+  const [isStale, setIsStale] = useState(false);
+  const [showWizard, setShowWizard] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const [showTagManager, setShowTagManager] = useState(false);
 
   const loadStatus = (): void => {
     window.api
       .invoke(IPC.REDDIT_GET_NTFY_STALENESS)
       .then((result) => {
-        const s = result as { topicConfigured: boolean; lastPolledAt: number | null; isStale: boolean }
-        setTopicConfigured(s.topicConfigured)
-        setLastPolled(s.lastPolledAt)
-        setIsStale(s.isStale)
+        const s = result as {
+          topicConfigured: boolean;
+          lastPolledAt: number | null;
+          isStale: boolean;
+        };
+        setTopicConfigured(s.topicConfigured);
+        setLastPolled(s.lastPolledAt);
+        setIsStale(s.isStale);
       })
       .catch((err) => {
-        toast.error(err instanceof Error ? err.message : 'Failed to load ntfy status.')
-      })
+        toast.error(
+          err instanceof Error ? err.message : "Failed to load ntfy status.",
+        );
+      });
     window.api
-      .invoke(IPC.SETTINGS_GET, 'ntfy_poll_interval_minutes')
+      .invoke(IPC.SETTINGS_GET, "ntfy_poll_interval_minutes")
       .then((v) => {
-        if (typeof v === 'string' && v.trim()) {
-          setIntervalValue(v)
-          return
+        if (typeof v === "string" && v.trim()) {
+          setIntervalValue(v);
+          return;
         }
-        setIntervalValue('60')
+        setIntervalValue("60");
       })
       .catch(() => {
-        setIntervalValue('60')
-      })
+        setIntervalValue("60");
+      });
     window.api
-      .invoke(IPC.SETTINGS_GET, 'ntfy_topic')
-      .then((v) => setTopic((v as string) || ''))
+      .invoke(IPC.SETTINGS_GET, "ntfy_topic")
+      .then((v) => setTopic((v as string) || ""))
       .catch((err) => {
-        toast.error(err instanceof Error ? err.message : 'Failed to load ntfy topic.')
-      })
+        toast.error(
+          err instanceof Error ? err.message : "Failed to load ntfy topic.",
+        );
+      });
     window.api
-      .invoke(IPC.SETTINGS_GET, 'ntfy_server_url')
-      .then((v) => setServer((v as string) || 'https://ntfy.sh'))
+      .invoke(IPC.SETTINGS_GET, "ntfy_server_url")
+      .then((v) => setServer((v as string) || "https://ntfy.sh"))
       .catch((err) => {
-        toast.error(err instanceof Error ? err.message : 'Failed to load ntfy server URL.')
-      })
-  }
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : "Failed to load ntfy server URL.",
+        );
+      });
+  };
 
   useEffect(() => {
-    loadStatus()
-  }, [])
+    loadStatus();
+  }, []);
 
   const handleTest = async (): Promise<void> => {
-    setTesting(true)
+    setTesting(true);
     try {
-      const result = (await window.api.invoke(IPC.REDDIT_POLL_NTFY)) as { postsIngested: number }
-      toast.success(`Connected. ${result.postsIngested} messages received.`)
-      loadStatus()
+      const result = (await window.api.invoke(IPC.REDDIT_POLL_NTFY)) as {
+        postsIngested: number;
+      };
+      toast.success(`Connected. ${result.postsIngested} messages received.`);
+      loadStatus();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to reach the ntfy server.')
+      toast.error(
+        err instanceof Error ? err.message : "Failed to reach the ntfy server.",
+      );
     } finally {
-      setTesting(false)
+      setTesting(false);
     }
-  }
+  };
 
   const savePollInterval = async (): Promise<void> => {
-    setSavingInterval(true)
-    const parsed = Number.parseInt(intervalValue, 10)
+    setSavingInterval(true);
+    const parsed = Number.parseInt(intervalValue, 10);
     try {
       const result = (await window.api.invoke(
         IPC.SETTINGS_SET_NTFY_POLL_INTERVAL,
-        parsed
-      )) as IpcMutationResult
+        parsed,
+      )) as IpcMutationResult;
       if (!result.ok) {
-        toast.error(result.error ?? 'Failed to save ntfy poll interval.')
-        return
+        toast.error(result.error ?? "Failed to save ntfy poll interval.");
+        return;
       }
-      toast.success('Saved ntfy poll interval.')
+      toast.success("Saved ntfy poll interval.");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to save ntfy poll interval.')
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : "Failed to save ntfy poll interval.",
+      );
     } finally {
-      setSavingInterval(false)
+      setSavingInterval(false);
     }
-  }
+  };
 
   if (!topicConfigured) {
     return (
       <div className="space-y-4 max-w-md">
         <h3 className="text-sm font-medium">Set Up Mobile Post Saving</h3>
         <p className="text-xs text-muted-foreground">
-          Save Reddit posts from your phone using ntfy.sh, a free push notification service.
-          Personal News will automatically sync saved posts when you open it.
+          Save Reddit posts from your phone using ntfy.sh, a free push
+          notification service. Personal News will automatically sync saved
+          posts when you open it.
         </p>
         <Button onClick={() => setShowWizard(true)}>Set Up</Button>
         <NtfyOnboardingWizard
           isOpen={showWizard}
           onClose={() => setShowWizard(false)}
           onComplete={() => {
-            setShowWizard(false)
-            loadStatus()
+            setShowWizard(false);
+            loadStatus();
           }}
         />
       </div>
-    )
+    );
   }
 
   const lastPolledText = lastPolled
     ? new Date(lastPolled * 1000).toLocaleString()
-    : 'Never'
+    : "Never";
 
   return (
     <div className="space-y-4 max-w-md">
       <div>
-        <h3 className="text-sm font-medium mb-2">Sync Poll Interval (minutes)</h3>
+        <h3 className="text-sm font-medium mb-2">
+          Sync Poll Interval (minutes)
+        </h3>
         <div className="flex gap-2 items-center">
-          <label htmlFor="saved-posts-poll-interval" className="sr-only">Saved Posts sync poll interval in minutes</label>
+          <label htmlFor="saved-posts-poll-interval" className="sr-only">
+            Saved Posts sync poll interval in minutes
+          </label>
           <Input
             id="saved-posts-poll-interval"
             value={intervalValue}
@@ -1685,8 +2042,13 @@ function SavedPostsTab(): React.ReactElement {
             inputMode="numeric"
             className="w-40"
           />
-          <Button variant="outline" size="sm" onClick={() => void savePollInterval()} disabled={savingInterval}>
-            {savingInterval ? 'Saving...' : 'Save Interval'}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void savePollInterval()}
+            disabled={savingInterval}
+          >
+            {savingInterval ? "Saving..." : "Save Interval"}
           </Button>
         </div>
       </div>
@@ -1695,15 +2057,21 @@ function SavedPostsTab(): React.ReactElement {
         <h3 className="text-sm font-medium mb-2">ntfy.sh Configuration</h3>
         <div className="space-y-1 text-sm">
           <p className="flex items-center gap-1">
-            <span className="text-muted-foreground">Topic:</span>{' '}
+            <span className="text-muted-foreground">Topic:</span>{" "}
             <button
               type="button"
               className="font-mono underline underline-offset-2 decoration-muted-foreground/50 hover:text-primary transition-colors inline-flex items-center gap-1"
               onClick={() => {
-                const base = server.replace(/\/+$/, '')
-                window.api.invoke('shell:openExternal', `${base}/${topic}`).catch((err) => {
-                  toast.error(err instanceof Error ? err.message : 'Failed to open ntfy topic URL.')
-                })
+                const base = server.replace(/\/+$/, "");
+                window.api
+                  .invoke("shell:openExternal", `${base}/${topic}`)
+                  .catch((err) => {
+                    toast.error(
+                      err instanceof Error
+                        ? err.message
+                        : "Failed to open ntfy topic URL.",
+                    );
+                  });
               }}
               aria-label="Open ntfy topic URL"
             >
@@ -1712,20 +2080,29 @@ function SavedPostsTab(): React.ReactElement {
             </button>
           </p>
           <p>
-            <span className="text-muted-foreground">Server:</span>{' '}
+            <span className="text-muted-foreground">Server:</span>{" "}
             <span className="text-muted-foreground font-mono">{server}</span>
           </p>
           <p>
-            <span className="text-muted-foreground">Last synced:</span>{' '}
-            <span className={isStale ? 'text-amber-700 dark:text-amber-300 font-medium' : ''}>
+            <span className="text-muted-foreground">Last synced:</span>{" "}
+            <span
+              className={
+                isStale ? "text-amber-700 dark:text-amber-300 font-medium" : ""
+              }
+            >
               {lastPolledText}
             </span>
           </p>
         </div>
       </div>
       <div className="flex gap-2">
-        <Button variant="outline" size="sm" onClick={() => void handleTest()} disabled={testing}>
-          {testing ? 'Testing...' : 'Test Connection'}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => void handleTest()}
+          disabled={testing}
+        >
+          {testing ? "Testing..." : "Test Connection"}
         </Button>
         <Button variant="outline" size="sm" onClick={() => setShowWizard(true)}>
           Edit
@@ -1737,13 +2114,13 @@ function SavedPostsTab(): React.ReactElement {
       <NtfyOnboardingWizard
         isOpen={showWizard || showGuide}
         onClose={() => {
-          setShowWizard(false)
-          setShowGuide(false)
+          setShowWizard(false);
+          setShowGuide(false);
         }}
         onComplete={() => {
-          setShowWizard(false)
-          setShowGuide(false)
-          loadStatus()
+          setShowWizard(false);
+          setShowGuide(false);
+          loadStatus();
         }}
         initialTopic={topic}
         initialServerUrl={server}
@@ -1754,7 +2131,11 @@ function SavedPostsTab(): React.ReactElement {
         <p className="text-xs text-muted-foreground mb-3">
           Rename or delete tags across all saved posts.
         </p>
-        <Button variant="outline" size="sm" onClick={() => setShowTagManager(true)}>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setShowTagManager(true)}
+        >
           Manage Tags
         </Button>
         <TagManagementModal
@@ -1767,7 +2148,8 @@ function SavedPostsTab(): React.ReactElement {
       <div className="pt-6 border-t">
         <h3 className="text-sm font-medium mb-1">Danger Zone</h3>
         <p className="text-xs text-muted-foreground mb-3">
-          Permanently delete all saved posts from the local database. This cannot be undone.
+          Permanently delete all saved posts from the local database. This
+          cannot be undone.
         </p>
         <Button
           variant="destructive"
@@ -1775,17 +2157,21 @@ function SavedPostsTab(): React.ReactElement {
           onClick={() => setShowClearConfirm(true)}
           disabled={clearing}
         >
-          {clearing ? 'Clearing...' : 'Clear Saved Posts Database'}
+          {clearing ? "Clearing..." : "Clear Saved Posts Database"}
         </Button>
       </div>
 
-      <AlertDialog open={showClearConfirm} onOpenChange={(open) => !open && setShowClearConfirm(false)}>
+      <AlertDialog
+        open={showClearConfirm}
+        onOpenChange={(open) => !open && setShowClearConfirm(false)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Clear all saved posts?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete all saved posts from the local database. Tags, notes,
-              and post data will be lost. This action cannot be undone.
+              This will permanently delete all saved posts from the local
+              database. Tags, notes, and post data will be lost. This action
+              cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1793,42 +2179,48 @@ function SavedPostsTab(): React.ReactElement {
             <AlertDialogAction
               disabled={clearing}
               onClick={(e) => {
-                e.preventDefault()
-                setClearing(true)
+                e.preventDefault();
+                setClearing(true);
                 window.api
                   .invoke(IPC.REDDIT_CLEAR_SAVED_POSTS)
                   .then((result) => {
-                    const r = result as { deletedCount: number }
-                    toast.success(`Cleared ${r.deletedCount} Saved Posts entries.`)
+                    const r = result as { deletedCount: number };
+                    toast.success(
+                      `Cleared ${r.deletedCount} Saved Posts entries.`,
+                    );
                   })
                   .catch((err) => {
-                    toast.error(err instanceof Error ? err.message : 'Failed to clear database.')
+                    toast.error(
+                      err instanceof Error
+                        ? err.message
+                        : "Failed to clear database.",
+                    );
                   })
                   .finally(() => {
-                    setClearing(false)
-                    setShowClearConfirm(false)
-                  })
+                    setClearing(false);
+                    setShowClearConfirm(false);
+                  });
               }}
             >
-              {clearing ? 'Clearing...' : 'Clear All Posts'}
+              {clearing ? "Clearing..." : "Clear All Posts"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </div>
-  )
+  );
 }
 
 function NotifyRow({
   label,
   description,
   checked,
-  onCheckedChange
+  onCheckedChange,
 }: {
-  label: string
-  description: string
-  checked: boolean
-  onCheckedChange: (checked: boolean) => void
+  label: string;
+  description: string;
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
 }): React.ReactElement {
   return (
     <div className="flex items-start justify-between gap-4 rounded-md border px-3 py-2.5">
@@ -1843,78 +2235,96 @@ function NotifyRow({
         aria-label={label}
       />
     </div>
-  )
+  );
 }
 
 function NotificationsTab(): React.ReactElement {
-  const [prefs, setPrefs] = React.useState<NotificationPreferences | null>(null)
-  const { channels } = useYouTubeChannels()
+  const [prefs, setPrefs] = React.useState<NotificationPreferences | null>(
+    null,
+  );
+  const { channels } = useYouTubeChannels();
   const [channelNotifyPending, setChannelNotifyPending] = React.useState<
     Record<string, { newVideos?: boolean; liveStart?: boolean }>
-  >({})
+  >({});
 
   React.useEffect(() => {
     window.api
       .invoke(IPC.SETTINGS_GET_NOTIFICATION_PREFS)
       .then((data) => setPrefs(data as NotificationPreferences))
       .catch((err) => {
-        toast.error(err instanceof Error ? err.message : 'Failed to load notification settings.')
-      })
-  }, [])
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : "Failed to load notification settings.",
+        );
+      });
+  }, []);
 
   const updatePrefs = async (
-    updater: (draft: NotificationPreferences) => NotificationPreferences
+    updater: (draft: NotificationPreferences) => NotificationPreferences,
   ): Promise<void> => {
-    if (!prefs) return
-    const next = updater(prefs)
-    setPrefs(next)
+    if (!prefs) return;
+    const next = updater(prefs);
+    setPrefs(next);
     try {
       const result = (await window.api.invoke(
         IPC.SETTINGS_SET_NOTIFICATION_PREFS,
-        next
-      )) as IpcMutationResult
+        next,
+      )) as IpcMutationResult;
       if (!result.ok) {
-        toast.error(result.error ?? 'Failed to save notification settings.')
+        toast.error(result.error ?? "Failed to save notification settings.");
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to save notification settings.')
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : "Failed to save notification settings.",
+      );
     }
-  }
+  };
 
   const setChannelNotify = async (
     channelId: string,
     notifyNewVideos: boolean,
-    notifyLiveStart: boolean
+    notifyLiveStart: boolean,
   ): Promise<void> => {
     setChannelNotifyPending((prev) => ({
       ...prev,
-      [channelId]: { newVideos: notifyNewVideos, liveStart: notifyLiveStart }
-    }))
+      [channelId]: { newVideos: notifyNewVideos, liveStart: notifyLiveStart },
+    }));
     try {
       const result = (await window.api.invoke(
         IPC.YOUTUBE_SET_CHANNEL_NOTIFY,
         channelId,
         notifyNewVideos,
-        notifyLiveStart
-      )) as IpcMutationResult
+        notifyLiveStart,
+      )) as IpcMutationResult;
       if (!result.ok) {
-        toast.error(result.error ?? 'Failed to update channel notification setting.')
+        toast.error(
+          result.error ?? "Failed to update channel notification setting.",
+        );
       }
     } catch (err) {
       toast.error(
-        err instanceof Error ? err.message : 'Failed to update channel notification setting.'
-      )
+        err instanceof Error
+          ? err.message
+          : "Failed to update channel notification setting.",
+      );
     } finally {
       setChannelNotifyPending((prev) => {
-        const next = { ...prev }
-        delete next[channelId]
-        return next
-      })
+        const next = { ...prev };
+        delete next[channelId];
+        return next;
+      });
     }
-  }
+  };
 
   if (!prefs) {
-    return <p className="text-sm text-muted-foreground">Loading notification settings...</p>
+    return (
+      <p className="text-sm text-muted-foreground">
+        Loading notification settings...
+      </p>
+    );
   }
 
   return (
@@ -1924,14 +2334,18 @@ function NotificationsTab(): React.ReactElement {
         <div className="min-w-0">
           <p className="text-sm font-medium">Enable Desktop Notifications</p>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Master switch. When off, no desktop notifications are shown regardless of per-category
-            settings. Notifications only appear when the app window is not focused.
+            Master switch. When off, no desktop notifications are shown
+            regardless of per-category settings. Notifications only appear when
+            the app window is not focused.
           </p>
         </div>
         <Switch
           checked={prefs.desktopNotificationsEnabled}
           onCheckedChange={(checked) =>
-            void updatePrefs((p) => ({ ...p, desktopNotificationsEnabled: checked }))
+            void updatePrefs((p) => ({
+              ...p,
+              desktopNotificationsEnabled: checked,
+            }))
           }
           className="mt-0.5 flex-shrink-0"
           aria-label="Enable desktop notifications"
@@ -1939,15 +2353,20 @@ function NotificationsTab(): React.ReactElement {
       </div>
 
       <div
-        className={!prefs.desktopNotificationsEnabled ? 'opacity-50 pointer-events-none' : undefined}
+        className={
+          !prefs.desktopNotificationsEnabled
+            ? "opacity-50 pointer-events-none"
+            : undefined
+        }
       >
         {/* ── YouTube ──────────────────────────────────────────────── */}
         <div className="space-y-2">
           <div>
             <h3 className="text-sm font-medium">YouTube</h3>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Control which YouTube activity triggers desktop notifications. Per-channel overrides
-              are listed below the global category toggles.
+              Control which YouTube activity triggers desktop notifications.
+              Per-channel overrides are listed below the global category
+              toggles.
             </p>
           </div>
           <NotifyRow
@@ -1955,7 +2374,10 @@ function NotificationsTab(): React.ReactElement {
             description="Notify when a new video is detected for a subscribed channel during an RSS poll. Multiple new videos in one poll are grouped into a single notification."
             checked={prefs.youtube.newVideo}
             onCheckedChange={(checked) =>
-              void updatePrefs((p) => ({ ...p, youtube: { ...p.youtube, newVideo: checked } }))
+              void updatePrefs((p) => ({
+                ...p,
+                youtube: { ...p.youtube, newVideo: checked },
+              }))
             }
           />
           <NotifyRow
@@ -1963,7 +2385,10 @@ function NotificationsTab(): React.ReactElement {
             description="Notify when a subscribed channel's video transitions from Upcoming to Live. Fires one notification per live-start event."
             checked={prefs.youtube.liveStart}
             onCheckedChange={(checked) =>
-              void updatePrefs((p) => ({ ...p, youtube: { ...p.youtube, liveStart: checked } }))
+              void updatePrefs((p) => ({
+                ...p,
+                youtube: { ...p.youtube, liveStart: checked },
+              }))
             }
           />
 
@@ -1979,9 +2404,11 @@ function NotificationsTab(): React.ReactElement {
                   <span className="text-center">Live starts</span>
                 </div>
                 {channels.map((ch) => {
-                  const pending = channelNotifyPending[ch.channel_id]
-                  const notifyNew = pending?.newVideos ?? ch.notify_new_videos === 1
-                  const notifyLive = pending?.liveStart ?? ch.notify_live_start === 1
+                  const pending = channelNotifyPending[ch.channel_id];
+                  const notifyNew =
+                    pending?.newVideos ?? ch.notify_new_videos === 1;
+                  const notifyLive =
+                    pending?.liveStart ?? ch.notify_live_start === 1;
                   return (
                     <div
                       key={ch.channel_id}
@@ -2003,7 +2430,11 @@ function NotificationsTab(): React.ReactElement {
                         <Switch
                           checked={notifyNew}
                           onCheckedChange={(checked) =>
-                            void setChannelNotify(ch.channel_id, checked, notifyLive)
+                            void setChannelNotify(
+                              ch.channel_id,
+                              checked,
+                              notifyLive,
+                            )
                           }
                           aria-label={`Notify new videos for ${ch.name}`}
                         />
@@ -2012,18 +2443,22 @@ function NotificationsTab(): React.ReactElement {
                         <Switch
                           checked={notifyLive}
                           onCheckedChange={(checked) =>
-                            void setChannelNotify(ch.channel_id, notifyNew, checked)
+                            void setChannelNotify(
+                              ch.channel_id,
+                              notifyNew,
+                              checked,
+                            )
                           }
                           aria-label={`Notify live starts for ${ch.name}`}
                         />
                       </div>
                     </div>
-                  )
+                  );
                 })}
               </div>
               <p className="text-xs text-muted-foreground mt-1.5">
-                When a channel toggle is off, notifications for that channel type are suppressed even
-                if the global category toggle is on.
+                When a channel toggle is off, notifications for that channel
+                type are suppressed even if the global category toggle is on.
               </p>
             </div>
           )}
@@ -2034,7 +2469,8 @@ function NotificationsTab(): React.ReactElement {
           <div>
             <h3 className="text-sm font-medium">Weather</h3>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Desktop notifications for threshold-based weather alerts on saved locations.
+              Desktop notifications for threshold-based weather alerts on saved
+              locations.
             </p>
           </div>
           <NotifyRow
@@ -2044,7 +2480,7 @@ function NotificationsTab(): React.ReactElement {
             onCheckedChange={(checked) =>
               void updatePrefs((p) => ({
                 ...p,
-                weather: { ...p.weather, badWeather: checked }
+                weather: { ...p.weather, badWeather: checked },
               }))
             }
           />
@@ -2054,7 +2490,8 @@ function NotificationsTab(): React.ReactElement {
           <div>
             <h3 className="text-sm font-medium">Saved Posts</h3>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Notifications for ntfy.sh sync activity. Requires a configured ntfy topic.
+              Notifications for ntfy.sh sync activity. Requires a configured
+              ntfy topic.
             </p>
           </div>
           <NotifyRow
@@ -2064,7 +2501,7 @@ function NotificationsTab(): React.ReactElement {
             onCheckedChange={(checked) =>
               void updatePrefs((p) => ({
                 ...p,
-                savedPosts: { ...p.savedPosts, syncSuccess: checked }
+                savedPosts: { ...p.savedPosts, syncSuccess: checked },
               }))
             }
           />
@@ -2075,8 +2512,8 @@ function NotificationsTab(): React.ReactElement {
           <div>
             <h3 className="text-sm font-medium">Reddit Digest</h3>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Notifications for the bundled Reddit Digest script. Applies to both scheduled
-              and on-app-start runs.
+              Notifications for the bundled Reddit Digest script. Applies to
+              both scheduled and on-app-start runs.
             </p>
           </div>
           <NotifyRow
@@ -2086,7 +2523,7 @@ function NotificationsTab(): React.ReactElement {
             onCheckedChange={(checked) =>
               void updatePrefs((p) => ({
                 ...p,
-                redditDigest: { ...p.redditDigest, runSuccess: checked }
+                redditDigest: { ...p.redditDigest, runSuccess: checked },
               }))
             }
           />
@@ -2097,7 +2534,7 @@ function NotificationsTab(): React.ReactElement {
             onCheckedChange={(checked) =>
               void updatePrefs((p) => ({
                 ...p,
-                redditDigest: { ...p.redditDigest, runFailure: checked }
+                redditDigest: { ...p.redditDigest, runFailure: checked },
               }))
             }
           />
@@ -2108,8 +2545,8 @@ function NotificationsTab(): React.ReactElement {
           <div>
             <h3 className="text-sm font-medium">Script Manager</h3>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Notifications for auto-triggered script runs. Manual runs from the Script Manager UI
-              are never notified regardless of these toggles.
+              Notifications for auto-triggered script runs. Manual runs from the
+              Script Manager UI are never notified regardless of these toggles.
             </p>
           </div>
           <NotifyRow
@@ -2119,7 +2556,7 @@ function NotificationsTab(): React.ReactElement {
             onCheckedChange={(checked) =>
               void updatePrefs((p) => ({
                 ...p,
-                scriptManager: { ...p.scriptManager, autoRunSuccess: checked }
+                scriptManager: { ...p.scriptManager, autoRunSuccess: checked },
               }))
             }
           />
@@ -2130,7 +2567,7 @@ function NotificationsTab(): React.ReactElement {
             onCheckedChange={(checked) =>
               void updatePrefs((p) => ({
                 ...p,
-                scriptManager: { ...p.scriptManager, autoRunFailure: checked }
+                scriptManager: { ...p.scriptManager, autoRunFailure: checked },
               }))
             }
           />
@@ -2141,29 +2578,29 @@ function NotificationsTab(): React.ReactElement {
             onCheckedChange={(checked) =>
               void updatePrefs((p) => ({
                 ...p,
-                scriptManager: { ...p.scriptManager, startupWarning: checked }
+                scriptManager: { ...p.scriptManager, startupWarning: checked },
               }))
             }
           />
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 interface SortableSidebarListItemProps {
   item: {
-    id: SidebarItemId
-    label: string
-    description: string
-    available: boolean
-  }
-  visible: boolean
-  isFirst: boolean
-  isLast: boolean
-  statusLabel: string
-  onMoveItem: (itemId: SidebarItemId, direction: 'up' | 'down') => void
-  onSetItemHidden: (itemId: SidebarItemId, hidden: boolean) => void
+    id: SidebarItemId;
+    label: string;
+    description: string;
+    available: boolean;
+  };
+  visible: boolean;
+  isFirst: boolean;
+  isLast: boolean;
+  statusLabel: string;
+  onMoveItem: (itemId: SidebarItemId, direction: "up" | "down") => void;
+  onSetItemHidden: (itemId: SidebarItemId, hidden: boolean) => void;
 }
 
 function SortableSidebarListItem({
@@ -2173,25 +2610,32 @@ function SortableSidebarListItem({
   isLast,
   statusLabel,
   onMoveItem,
-  onSetItemHidden
+  onSetItemHidden,
 }: SortableSidebarListItemProps): React.ReactElement {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: item.id
-  })
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: item.id,
+  });
 
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.5 : 1
-  }
+    opacity: isDragging ? 0.5 : 1,
+  };
 
   return (
     <div
       ref={setNodeRef}
       style={style}
       className={cn(
-        'flex flex-col gap-3 rounded-md border px-4 py-3 md:flex-row md:items-center md:justify-between',
-        isDragging ? 'border-primary/60 bg-accent/30 shadow-sm' : undefined
+        "flex flex-col gap-3 rounded-md border px-4 py-3 md:flex-row md:items-center md:justify-between",
+        isDragging ? "border-primary/60 bg-accent/30 shadow-sm" : undefined,
       )}
     >
       <div className="flex min-w-0 items-center gap-3">
@@ -2225,7 +2669,7 @@ function SortableSidebarListItem({
             type="button"
             variant="outline"
             size="sm"
-            onClick={() => onMoveItem(item.id, 'up')}
+            onClick={() => onMoveItem(item.id, "up")}
             disabled={isFirst}
             aria-label={`Move ${item.label} up`}
             className="w-full justify-center"
@@ -2237,7 +2681,7 @@ function SortableSidebarListItem({
             type="button"
             variant="outline"
             size="sm"
-            onClick={() => onMoveItem(item.id, 'down')}
+            onClick={() => onMoveItem(item.id, "down")}
             disabled={isLast}
             aria-label={`Move ${item.label} down`}
             className="w-full justify-center"
@@ -2256,87 +2700,101 @@ function SortableSidebarListItem({
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 function SidebarTab(): React.ReactElement {
-  const { config, loading, moveItem, resetConfig, setItemHidden, setItemOrder } = useSidebarConfig()
-  const { enabled: redditDigestEnabled } = useRedditDigestEnabled()
-  const { enabled: savedPostsEnabled } = useSavedPostsEnabled()
-  const { enabled: sportsEnabled } = useSportsEnabled()
+  const {
+    config,
+    loading,
+    moveItem,
+    resetConfig,
+    setItemHidden,
+    setItemOrder,
+  } = useSidebarConfig();
+  const { enabled: redditDigestEnabled } = useRedditDigestEnabled();
+  const { enabled: savedPostsEnabled } = useSavedPostsEnabled();
+  const { enabled: sportsEnabled } = useSportsEnabled();
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates
-    })
-  )
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  );
 
   const sidebarItems: Array<{
-    id: SidebarItemId
-    label: string
-    description: string
-    available: boolean
+    id: SidebarItemId;
+    label: string;
+    description: string;
+    available: boolean;
   }> = [
     {
-      id: 'dashboard',
-      label: 'Dashboard',
-      description: 'The main dashboard route with dashboard views and widget layouts.',
-      available: true
+      id: "dashboard",
+      label: "Dashboard",
+      description:
+        "The main dashboard route with dashboard views and widget layouts.",
+      available: true,
     },
     {
-      id: 'youtube',
-      label: 'YouTube',
-      description: 'Dedicated page for subscribed channel videos and livestreams.',
-      available: true
+      id: "youtube",
+      label: "YouTube",
+      description:
+        "Dedicated page for subscribed channel videos and livestreams.",
+      available: true,
     },
     {
-      id: 'reddit-digest',
-      label: 'Reddit Digest',
-      description: 'Digest page for bundled Reddit Digest script output.',
-      available: redditDigestEnabled
+      id: "reddit-digest",
+      label: "Reddit Digest",
+      description: "Digest page for bundled Reddit Digest script output.",
+      available: redditDigestEnabled,
     },
     {
-      id: 'saved-posts',
-      label: 'Saved Posts',
-      description: 'Page for ntfy-synced Reddit saved posts.',
-      available: savedPostsEnabled
+      id: "saved-posts",
+      label: "Saved Posts",
+      description: "Page for ntfy-synced Reddit saved posts.",
+      available: savedPostsEnabled,
     },
     {
-      id: 'sports',
-      label: 'Sports',
-      description: 'Dedicated sports page and related widgets.',
-      available: sportsEnabled
+      id: "sports",
+      label: "Sports",
+      description: "Dedicated sports page and related widgets.",
+      available: sportsEnabled,
     },
     {
-      id: 'scripts',
-      label: 'Script Manager',
-      description: 'Manage custom scripts, schedules, and stale script warnings.',
-      available: true
-    }
-  ]
+      id: "scripts",
+      label: "Script Manager",
+      description:
+        "Manage custom scripts, schedules, and stale script warnings.",
+      available: true,
+    },
+  ];
 
-  const hiddenItemIds = new Set(config.hiddenItemIds)
+  const hiddenItemIds = new Set(config.hiddenItemIds);
   const orderedItems = config.itemOrder
     .map((itemId) => sidebarItems.find((item) => item.id === itemId))
-    .filter((item): item is (typeof sidebarItems)[number] => item != null)
+    .filter((item): item is (typeof sidebarItems)[number] => item != null);
 
   const handleDragEnd = (event: DragEndEvent): void => {
-    const { active, over } = event
+    const { active, over } = event;
     if (!over || active.id === over.id) {
-      return
+      return;
     }
 
-    const oldIndex = config.itemOrder.indexOf(active.id as SidebarItemId)
-    const newIndex = config.itemOrder.indexOf(over.id as SidebarItemId)
+    const oldIndex = config.itemOrder.indexOf(active.id as SidebarItemId);
+    const newIndex = config.itemOrder.indexOf(over.id as SidebarItemId);
     if (oldIndex === -1 || newIndex === -1) {
-      return
+      return;
     }
 
-    setItemOrder(arrayMove(config.itemOrder, oldIndex, newIndex))
-  }
+    setItemOrder(arrayMove(config.itemOrder, oldIndex, newIndex));
+  };
 
   if (loading) {
-    return <p className="text-sm text-muted-foreground">Loading sidebar settings...</p>
+    return (
+      <p className="text-sm text-muted-foreground">
+        Loading sidebar settings...
+      </p>
+    );
   }
 
   return (
@@ -2345,30 +2803,44 @@ function SidebarTab(): React.ReactElement {
         <div className="space-y-1">
           <h3 className="text-sm font-medium">Sidebar layout</h3>
           <p className="text-xs text-muted-foreground max-w-xl">
-            Reorder sidebar entries and hide any optional item, including Dashboard. Settings stays
-            pinned so the app remains configurable even if every other entry is hidden.
+            Reorder sidebar entries and hide any optional item, including
+            Dashboard. Settings stays pinned so the app remains configurable
+            even if every other entry is hidden.
           </p>
           <p className="text-xs text-muted-foreground">
-            Hidden items remain directly routable and feature-disabled modules still stay hidden.
+            Hidden items remain directly routable and feature-disabled modules
+            still stay hidden.
           </p>
         </div>
-        <Button variant="outline" onClick={resetConfig}>Reset to default</Button>
+        <Button variant="outline" onClick={resetConfig}>
+          Reset to default
+        </Button>
       </div>
 
-      <div className="space-y-2" onPointerDown={(event) => event.stopPropagation()}>
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <SortableContext items={orderedItems.map((item) => item.id)} strategy={verticalListSortingStrategy}>
+      <div
+        className="space-y-2"
+        onPointerDown={(event) => event.stopPropagation()}
+      >
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext
+            items={orderedItems.map((item) => item.id)}
+            strategy={verticalListSortingStrategy}
+          >
             {orderedItems.map((item, index) => {
-              const visible = !hiddenItemIds.has(item.id)
-              const isFirst = index === 0
-              const isLast = index === orderedItems.length - 1
+              const visible = !hiddenItemIds.has(item.id);
+              const isFirst = index === 0;
+              const isLast = index === orderedItems.length - 1;
               const statusLabel = item.available
                 ? visible
-                  ? 'Visible in sidebar'
-                  : 'Hidden from sidebar'
+                  ? "Visible in sidebar"
+                  : "Hidden from sidebar"
                 : visible
-                  ? 'Feature disabled in General settings; will stay hidden until re-enabled'
-                  : 'Hidden from sidebar and feature currently disabled'
+                  ? "Feature disabled in General settings; will stay hidden until re-enabled"
+                  : "Hidden from sidebar and feature currently disabled";
 
               return (
                 <SortableSidebarListItem
@@ -2381,32 +2853,41 @@ function SidebarTab(): React.ReactElement {
                   onMoveItem={moveItem}
                   onSetItemHidden={setItemHidden}
                 />
-              )
+              );
             })}
           </SortableContext>
         </DndContext>
       </div>
 
       <div className="rounded-md border px-4 py-3 text-xs text-muted-foreground">
-        <p>Settings is always pinned at the bottom of the sidebar and is not part of the reorder list.</p>
-        <p className="mt-1">Current configurable entries: {CUSTOMIZABLE_SIDEBAR_ITEM_IDS.join(', ')}.</p>
-        <p className="mt-1">Drag the grip handle to reorder, or use the Up and Down buttons for precise changes.</p>
+        <p>
+          Settings is always pinned at the bottom of the sidebar and is not part
+          of the reorder list.
+        </p>
+        <p className="mt-1">
+          Current configurable entries:{" "}
+          {CUSTOMIZABLE_SIDEBAR_ITEM_IDS.join(", ")}.
+        </p>
+        <p className="mt-1">
+          Drag the grip handle to reorder, or use the Up and Down buttons for
+          precise changes.
+        </p>
       </div>
     </div>
-  )
+  );
 }
 
 export default function Settings(): React.ReactElement {
-  const [searchParams] = useSearchParams()
-  const { enabled: redditDigestEnabled } = useRedditDigestEnabled()
-  const { enabled: savedPostsEnabled } = useSavedPostsEnabled()
-  const { enabled: sportsEnabled } = useSportsEnabled()
-  const { enabled: weatherEnabled } = useWeatherEnabled()
-  const requestedTab = searchParams.get('tab')
+  const [searchParams] = useSearchParams();
+  const { enabled: redditDigestEnabled } = useRedditDigestEnabled();
+  const { enabled: savedPostsEnabled } = useSavedPostsEnabled();
+  const { enabled: sportsEnabled } = useSportsEnabled();
+  const { enabled: weatherEnabled } = useWeatherEnabled();
+  const requestedTab = searchParams.get("tab");
   const selectedTab =
-    requestedTab === 'features' || requestedTab === 'app-behavior'
-      ? 'general'
-      : requestedTab ?? 'general'
+    requestedTab === "features" || requestedTab === "app-behavior"
+      ? "general"
+      : (requestedTab ?? "general");
 
   return (
     <div className="flex flex-col h-full px-6 py-4">
@@ -2419,8 +2900,12 @@ export default function Settings(): React.ReactElement {
           <TabsTrigger value="youtube">YouTube</TabsTrigger>
           {sportsEnabled && <TabsTrigger value="sports">Sports</TabsTrigger>}
           {weatherEnabled && <TabsTrigger value="weather">Weather</TabsTrigger>}
-          {redditDigestEnabled && <TabsTrigger value="reddit-digest">Reddit Digest</TabsTrigger>}
-          {savedPostsEnabled && <TabsTrigger value="saved-posts">Saved Posts</TabsTrigger>}
+          {redditDigestEnabled && (
+            <TabsTrigger value="reddit-digest">Reddit Digest</TabsTrigger>
+          )}
+          {savedPostsEnabled && (
+            <TabsTrigger value="saved-posts">Saved Posts</TabsTrigger>
+          )}
           <TabsTrigger value="appearance">Appearance</TabsTrigger>
           <TabsTrigger value="scripts">Scripts</TabsTrigger>
         </TabsList>
@@ -2464,5 +2949,5 @@ export default function Settings(): React.ReactElement {
         </TabsContent>
       </Tabs>
     </div>
-  )
+  );
 }
