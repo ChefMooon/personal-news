@@ -4,6 +4,25 @@ All notable changes to this project are documented in this file.
 
 The format follows Keep a Changelog, and this project uses Semantic Versioning.
 
+## [1.3.2] - 2026-05-29
+
+### Added
+
+- Added pagination for upcoming livestreams so you can browse larger stream queues without overwhelming the panel.
+- Added subreddit tag migration support in Saved Posts to improve filtering and organization for existing data.
+- Added Sidebar configuration wiring so sidebar personalization changes are applied consistently across the app.
+
+### Changed
+
+- Improved Saved Posts filtering and subreddit selection behavior, making it easier to narrow content by source and tags.
+- Improved Weather widget data handling and condition mapping, with more responsive refresh behavior from updated polling defaults.
+
+### Fixed
+
+- Fixed Sidebar collapsed state persistence so the sidebar stays in your preferred expanded or collapsed mode.
+- Fixed Saved Posts tag composer suggestion behavior to better restore expected tag suggestions.
+- Fixed a missing shared sidebar configuration IPC constant that could cause sidebar settings sync issues.
+
 ## [1.3.1] - 2026-04-23
 
 ### Changed
