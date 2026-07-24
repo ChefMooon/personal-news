@@ -330,10 +330,31 @@ export function getTrackedTeam(
   return row ? mapTeam(row) : null;
 }
 
+function ensureLeagueRowExists(
+  db: Database.Database,
+  sport: string,
+  leagueId: string,
+): void {
+  if (getLeagueById(db, leagueId)) {
+    return;
+  }
+
+  upsertLeague(db, {
+    leagueId,
+    sport,
+    name: leagueId,
+    country: null,
+    logoUrl: null,
+    enabled: true,
+  });
+}
+
 export function upsertTrackedTeam(
   db: Database.Database,
   input: UpsertTeamInput,
 ): TrackedTeam {
+  ensureLeagueRowExists(db, input.sport, input.leagueId);
+
   const addedAt = Math.floor(Date.now() / 1000);
   const nextSortOrder =
     (
@@ -411,6 +432,10 @@ export function upsertEvents(
 ): void {
   if (events.length === 0) {
     return;
+  }
+
+  for (const event of events) {
+    ensureLeagueRowExists(db, event.sport, event.leagueId);
   }
 
   const insert = db.prepare(

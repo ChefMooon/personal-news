@@ -13,6 +13,7 @@ The format follows Keep a Changelog, and this project uses Semantic Versioning.
 ### Fixed
 
 - Fixed reddit short url saved post ingestion
+- Ensure league row exists when upserting teams and events into db
 
 ## [1.3.2] - 2026-05-29
 
