@@ -65,6 +65,7 @@ import {
   type ScriptRunCompleteEvent,
   type ThemeRow,
   type UpdateStatusEvent,
+  type NtfySyncSummary,
 } from "../../../shared/ipc-types";
 import {
   Select,
@@ -1889,7 +1890,11 @@ function ScriptsTab(): React.ReactElement {
   );
 }
 
-function SavedPostsTab(): React.ReactElement {
+function SavedPostsTab({
+  autoOpenSyncDetails = false,
+}: {
+  autoOpenSyncDetails?: boolean;
+}): React.ReactElement {
   const [intervalValue, setIntervalValue] = useState("60");
   const [savingInterval, setSavingInterval] = useState(false);
   const [topicConfigured, setTopicConfigured] = useState(false);
@@ -1899,6 +1904,8 @@ function SavedPostsTab(): React.ReactElement {
   const [isStale, setIsStale] = useState(false);
   const [showWizard, setShowWizard] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [showSyncDetails, setShowSyncDetails] = useState(false);
+  const [syncSummary, setSyncSummary] = useState<NtfySyncSummary | null>(null);
   const [showGuide, setShowGuide] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [clearing, setClearing] = useState(false);
@@ -1912,10 +1919,12 @@ function SavedPostsTab(): React.ReactElement {
           topicConfigured: boolean;
           lastPolledAt: number | null;
           isStale: boolean;
+          summary: NtfySyncSummary | null;
         };
         setTopicConfigured(s.topicConfigured);
         setLastPolled(s.lastPolledAt);
         setIsStale(s.isStale);
+        setSyncSummary(s.summary ?? null);
       })
       .catch((err) => {
         toast.error(
@@ -1957,6 +1966,12 @@ function SavedPostsTab(): React.ReactElement {
   useEffect(() => {
     loadStatus();
   }, []);
+
+  useEffect(() => {
+    if (autoOpenSyncDetails) {
+      setShowSyncDetails(true);
+    }
+  }, [autoOpenSyncDetails]);
 
   const handleTest = async (): Promise<void> => {
     setTesting(true);
@@ -2125,6 +2140,41 @@ function SavedPostsTab(): React.ReactElement {
         initialTopic={topic}
         initialServerUrl={server}
       />
+
+      {showSyncDetails && syncSummary && (
+        <div className="pt-6 border-t">
+          <h3 className="text-sm font-medium mb-1">Last sync details</h3>
+          <p className="text-xs text-muted-foreground mb-3">
+            The most recent ntfy sync summary for this app session.
+          </p>
+          <div className="rounded-md border bg-muted/20 p-3 space-y-2 text-sm">
+            <p>
+              <span className="text-muted-foreground">Messages received:</span>{" "}
+              {syncSummary.messagesReceived}
+            </p>
+            <p>
+              <span className="text-muted-foreground">Posts ingested:</span>{" "}
+              {syncSummary.postsIngested}
+            </p>
+            <p>
+              <span className="text-muted-foreground">Failed links:</span>{" "}
+              {syncSummary.failedCount}
+            </p>
+            {syncSummary.error && (
+              <p className="text-amber-700 dark:text-amber-300">
+                {syncSummary.error}
+              </p>
+            )}
+            {syncSummary.failedUrls.length > 0 && (
+              <ul className="list-disc pl-5 space-y-1 text-xs text-muted-foreground">
+                {syncSummary.failedUrls.map((url) => (
+                  <li key={url}>{url}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="pt-6 border-t">
         <h3 className="text-sm font-medium mb-1">Tag Management</h3>
@@ -2884,6 +2934,7 @@ export default function Settings(): React.ReactElement {
   const { enabled: sportsEnabled } = useSportsEnabled();
   const { enabled: weatherEnabled } = useWeatherEnabled();
   const requestedTab = searchParams.get("tab");
+  const requestedSection = searchParams.get("section");
   const selectedTab =
     requestedTab === "features" || requestedTab === "app-behavior"
       ? "general"
@@ -2938,7 +2989,9 @@ export default function Settings(): React.ReactElement {
         )}
         {savedPostsEnabled && (
           <TabsContent value="saved-posts" className="mt-4">
-            <SavedPostsTab />
+            <SavedPostsTab
+              autoOpenSyncDetails={selectedTab === "saved-posts" && requestedSection === "sync-details"}
+            />
           </TabsContent>
         )}
         <TabsContent value="appearance" className="mt-4">

@@ -1,6 +1,10 @@
 import type Database from "better-sqlite3";
 import { getSetting, setSetting } from "../../settings/store";
+import type { NtfySyncFailureEntry, NtfySyncSummary } from "../../../shared/ipc-types";
 import { fetchMetadataForUrl } from "../link-sources";
+import { processNtfyMessage } from "./ntfy-message.mjs";
+
+export { processNtfyMessage };
 
 interface NtfyMessage {
   id: string;
@@ -8,30 +12,23 @@ interface NtfyMessage {
   message: string;
 }
 
-function parseNtfyMessage(msg: string): { url: string; note: string | null } {
-  const trimmed = msg.trim();
-
-  // Some ntfy share-sheet clients send JSON like {"":"https://..."} or {"url":"https://..."}
-  if (trimmed.startsWith("{")) {
-    try {
-      const json = JSON.parse(trimmed) as Record<string, unknown>;
-      for (const value of Object.values(json)) {
-        if (typeof value === "string" && /^https?:\/\//i.test(value)) {
-          return { url: value.trim(), note: null };
-        }
-      }
-    } catch {
-      // Not JSON — fall through to plain-text parsing
-    }
-  }
-
-  const newlineIdx = trimmed.indexOf("\n");
-  if (newlineIdx === -1) {
-    return { url: trimmed, note: null };
-  }
-  const url = trimmed.slice(0, newlineIdx).trim();
-  const rest = trimmed.slice(newlineIdx + 1).trim();
-  return { url, note: rest || null };
+export function buildNtfySyncSummary(input: {
+  messagesReceived: number;
+  postsIngested: number;
+  failedEntries: NtfySyncFailureEntry[];
+  error: string | null;
+  lastPolledAt: number | null;
+}): NtfySyncSummary {
+  const failedUrls = input.failedEntries.map((entry) => entry.url);
+  return {
+    messagesReceived: input.messagesReceived,
+    postsIngested: input.postsIngested,
+    failedCount: failedUrls.length,
+    failedUrls,
+    hasFailures: failedUrls.length > 0 || Boolean(input.error),
+    lastPolledAt: input.lastPolledAt,
+    error: input.error,
+  };
 }
 
 export async function pollNtfy(
@@ -39,6 +36,14 @@ export async function pollNtfy(
 ): Promise<{ postsIngested: number; messagesReceived: number }> {
   const topic = getSetting("ntfy_topic");
   if (!topic) {
+    const summary = buildNtfySyncSummary({
+      messagesReceived: 0,
+      postsIngested: 0,
+      failedEntries: [],
+      error: "No ntfy topic configured.",
+      lastPolledAt: null,
+    });
+    setSetting("ntfy_last_sync_summary", JSON.stringify(summary));
     return { postsIngested: 0, messagesReceived: 0 };
   }
 
@@ -57,6 +62,14 @@ export async function pollNtfy(
     response = await fetch(fetchUrl, { signal: controller.signal });
   } catch (error) {
     clearTimeout(timeout);
+    const summary = buildNtfySyncSummary({
+      messagesReceived: 0,
+      postsIngested: 0,
+      failedEntries: [],
+      error: `ntfy unreachable: ${error instanceof Error ? error.message : String(error)}`,
+      lastPolledAt: null,
+    });
+    setSetting("ntfy_last_sync_summary", JSON.stringify(summary));
     // Rethrow so callers can distinguish network failures from 0-ingest
     throw new Error(
       `ntfy unreachable: ${error instanceof Error ? error.message : String(error)}`,
@@ -76,6 +89,7 @@ export async function pollNtfy(
   let postsIngested = 0;
   let messagesReceived = 0;
   let lastProcessedId: string | null = null;
+  const failedEntries: NtfySyncFailureEntry[] = [];
 
   const upsert = db.prepare(`
     INSERT INTO saved_posts (post_id, title, url, permalink, subreddit, author, score, body, saved_at, tags, note, source)
@@ -103,7 +117,7 @@ export async function pollNtfy(
     lastProcessedId = msg.id;
     messagesReceived++;
 
-    const { url, note } = parseNtfyMessage(msg.message);
+    const { url, note } = processNtfyMessage(msg.message);
     console.log(
       `[ntfy] Message ${messagesReceived}: url="${url}", note=${note !== null ? `"${note}"` : "null"}`,
     );
@@ -136,14 +150,26 @@ export async function pollNtfy(
       postsIngested++;
       console.log(`[ntfy] Post ingested: ${post.postId}`);
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      failedEntries.push({ url, error: message });
       console.warn(`[ntfy] Failed to fetch metadata for ${url}:`, error);
     }
   }
 
+  const lastPolledAt = Math.floor(Date.now() / 1000);
   if (lastProcessedId) {
     setSetting("ntfy_last_message_id", lastProcessedId);
   }
-  setSetting("ntfy_last_polled_at", String(Math.floor(Date.now() / 1000)));
+  setSetting("ntfy_last_polled_at", String(lastPolledAt));
+
+  const summary = buildNtfySyncSummary({
+    messagesReceived,
+    postsIngested,
+    failedEntries,
+    error: failedEntries.length > 0 ? "One or more links could not be ingested." : null,
+    lastPolledAt,
+  });
+  setSetting("ntfy_last_sync_summary", JSON.stringify(summary));
 
   console.log(
     `[ntfy] Poll complete: ${messagesReceived} messages, ${postsIngested} posts ingested`,

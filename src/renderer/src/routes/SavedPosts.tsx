@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { IPC } from "../../../shared/ipc-types";
 import type {
@@ -230,6 +230,7 @@ function SavedPostsContent(): React.ReactElement {
     refetch,
   } = useSavedPosts(savedPostsOptions);
   const staleness = useNtfyStaleness();
+  const navigate = useNavigate();
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showTagManager, setShowTagManager] = useState(false);
   const [dismissedStale, setDismissedStale] = useState(false);
@@ -338,6 +339,10 @@ function SavedPostsContent(): React.ReactElement {
     setShowOnboarding(false);
     staleness.refetch();
     void refetch();
+  };
+
+  const handleOpenSyncDetails = (): void => {
+    navigate("/settings?tab=saved-posts&section=sync-details");
   };
 
   const limit = 50;
@@ -566,8 +571,10 @@ function SavedPostsContent(): React.ReactElement {
         <StaleWarning
           lastPolledAt={staleness.lastPolledAt}
           isStale={staleness.isStale}
+          summary={staleness.summary}
           onDismiss={() => setDismissedStale(true)}
           onSyncNow={handleSyncNow}
+          onOpenDetails={handleOpenSyncDetails}
           loading={syncing}
         />
       )}

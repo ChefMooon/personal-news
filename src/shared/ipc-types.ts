@@ -920,10 +920,26 @@ export interface SavedPostInput {
   tags: string[] | null;
 }
 
+export interface NtfySyncFailureEntry {
+  url: string;
+  error: string;
+}
+
+export interface NtfySyncSummary {
+  messagesReceived: number;
+  postsIngested: number;
+  failedCount: number;
+  failedUrls: string[];
+  hasFailures: boolean;
+  lastPolledAt: number | null;
+  error: string | null;
+}
+
 export interface NtfyStaleness {
   lastPolledAt: number | null;
   isStale: boolean;
   topicConfigured: boolean;
+  summary: NtfySyncSummary | null;
 }
 
 export interface NtfyPollResult {

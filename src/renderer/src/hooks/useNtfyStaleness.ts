@@ -11,6 +11,7 @@ export function useNtfyStaleness(): NtfyStaleness & {
     lastPolledAt: null,
     isStale: false,
     topicConfigured: false,
+    summary: null,
   });
   const [loading, setLoading] = useState(true);
 
@@ -33,6 +34,13 @@ export function useNtfyStaleness(): NtfyStaleness & {
 
   useEffect(() => {
     fetch();
+  }, []);
+
+  useEffect(() => {
+    const listener = (): void => {
+      fetch();
+    };
+    return window.api.on(IPC.REDDIT_NTFY_INGEST_COMPLETE, listener);
   }, []);
 
   return { ...data, loading, refetch: fetch };

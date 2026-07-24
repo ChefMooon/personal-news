@@ -2228,7 +2228,18 @@ export function registerIpcHandlers(): void {
     const isStale =
       topicConfigured &&
       (lastPolledAt === null || now - lastPolledAt > STALE_THRESHOLD_SEC);
-    return { lastPolledAt, isStale, topicConfigured };
+
+    let summary = null;
+    const rawSummary = getSetting("ntfy_last_sync_summary");
+    if (rawSummary) {
+      try {
+        summary = JSON.parse(rawSummary);
+      } catch {
+        summary = null;
+      }
+    }
+
+    return { lastPolledAt, isStale, topicConfigured, summary };
   });
 
   // scripts:getAll — includes is_stale computed from last successful run
