@@ -37,6 +37,11 @@ You can do it automatically:
 npm version 1.3.1 --no-git-tag-version
 ```
 
+**Note:** Run this command to update `package-lock.json`
+```bash
+npm install
+```
+
 5. Verify the release build locally (Windows):
 
 ```bash
