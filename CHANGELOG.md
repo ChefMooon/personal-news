@@ -6,6 +6,10 @@ The format follows Keep a Changelog, and this project uses Semantic Versioning.
 
 ## [1.3.3] - TBD
 
+### Added
+
+- Added tooltip to collapsed sidebar
+
 ### Fixed
 
 - Fixed reddit short url saved post ingestion

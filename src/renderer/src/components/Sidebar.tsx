@@ -17,6 +17,12 @@ import { useSidebarConfig } from "../hooks/useSidebarConfig";
 import { useRedditDigestEnabled } from "../contexts/RedditDigestEnabledContext";
 import { useSavedPostsEnabled } from "../contexts/SavedPostsEnabledContext";
 import { useSportsEnabled } from "../contexts/SportsEnabledContext";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "./ui/tooltip";
 import type { SidebarItemId } from "../../../shared/ipc-types";
 
 interface NavItem {
@@ -25,6 +31,56 @@ interface NavItem {
   label: string;
   icon: React.ReactNode;
   attention?: boolean;
+}
+
+function SidebarNavLink({
+  to,
+  label,
+  icon,
+  collapsed,
+  attention = false,
+}: {
+  to: string;
+  label: string;
+  icon: React.ReactNode;
+  collapsed: boolean;
+  attention?: boolean;
+}): React.ReactElement {
+  const navLink = (
+    <NavLink
+      to={to}
+      end={to === "/"}
+      className={({ isActive }) =>
+        cn(
+          "mx-1 flex items-center rounded-md py-2 text-sm transition-colors",
+          collapsed ? "h-10 w-10 justify-center mx-auto pl-0.5" : "mx-1 gap-3 px-3 py-2",
+          isActive
+            ? "bg-primary text-primary-foreground"
+            : attention
+              ? "bg-amber-500/10 text-muted-foreground hover:bg-amber-500/20 hover:text-foreground"
+              : "text-muted-foreground hover:bg-accent hover:text-foreground",
+        )
+      }
+    >
+      {icon}
+      {!collapsed && (
+        <span className="flex-1 truncate transition-opacity duration-150">
+          {label}
+        </span>
+      )}
+    </NavLink>
+  );
+
+  if (!collapsed) {
+    return navLink;
+  }
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{navLink}</TooltipTrigger>
+      <TooltipContent side="right">{label}</TooltipContent>
+    </Tooltip>
+  );
 }
 
 export function Sidebar(): React.ReactElement {
@@ -123,54 +179,30 @@ export function Sidebar(): React.ReactElement {
         </button>
       </div>
 
-      {/* Nav items */}
-      <nav className="flex-1 py-2">
-        {navItems.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={item.to === "/"}
-            className={({ isActive }) =>
-              cn(
-                "mx-1 flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
-                isActive
-                  ? "bg-primary text-primary-foreground"
-                  : item.attention
-                    ? "bg-amber-500/10 text-muted-foreground hover:bg-amber-500/20 hover:text-foreground"
-                    : "text-muted-foreground hover:bg-accent hover:text-foreground",
-              )
-            }
-          >
-            {item.icon}
-            {!collapsed && (
-              <span className="flex-1 truncate transition-opacity duration-150">
-                {item.label}
-              </span>
-            )}
-          </NavLink>
-        ))}
-      </nav>
+      <TooltipProvider delayDuration={120} skipDelayDuration={0}>
+        {/* Nav items */}
+        <nav className="flex-1 py-2">
+          {navItems.map((item) => (
+            <SidebarNavLink
+              key={item.to}
+              to={item.to}
+              label={item.label}
+              icon={item.icon}
+              collapsed={collapsed}
+              attention={item.attention}
+            />
+          ))}
+        </nav>
 
-      <div className="border-t py-2">
-        <NavLink
-          to="/settings"
-          className={({ isActive }) =>
-            cn(
-              "mx-1 flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
-              isActive
-                ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground hover:bg-accent hover:text-foreground",
-            )
-          }
-        >
-          <Settings className="h-5 w-5 shrink-0" />
-          {!collapsed && (
-            <span className="flex-1 truncate transition-opacity duration-150">
-              Settings
-            </span>
-          )}
-        </NavLink>
-      </div>
+        <div className="border-t py-2">
+          <SidebarNavLink
+            to="/settings"
+            label="Settings"
+            icon={<Settings className="h-5 w-5 shrink-0" />}
+            collapsed={collapsed}
+          />
+        </div>
+      </TooltipProvider>
     </div>
   );
 }
