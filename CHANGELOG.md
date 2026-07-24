@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 The format follows Keep a Changelog, and this project uses Semantic Versioning.
 
+## [1.3.3] - TBD
+
+### Fixed
+
+- Fixed reddit short url saved post ingestion
+
 ## [1.3.2] - 2026-05-29
 
 ### Added
