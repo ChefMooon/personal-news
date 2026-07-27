@@ -116,6 +116,7 @@ export const IPC = {
   SETTINGS_CLEAR_YOUTUBE_API_KEY: "settings:clearYouTubeApiKey",
   SETTINGS_SET_RSS_POLL_INTERVAL: "settings:setRssPollInterval",
   SETTINGS_SET_NTFY_POLL_INTERVAL: "settings:setNtfyPollInterval",
+  SETTINGS_SET_SAVED_POSTS_INGEST_DELAY: "settings:setSavedPostsIngestDelay",
   SETTINGS_GET_YOUTUBE_VIEW_CONFIG: "settings:getYouTubeViewConfig",
   SETTINGS_SET_YOUTUBE_VIEW_CONFIG: "settings:setYouTubeViewConfig",
   SETTINGS_GET: "settings:get",

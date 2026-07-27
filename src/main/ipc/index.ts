@@ -3137,6 +3137,21 @@ export function registerIpcHandlers(): void {
     },
   );
 
+  // settings:setSavedPostsIngestDelay
+  ipcMain.handle(
+    IPC.SETTINGS_SET_SAVED_POSTS_INGEST_DELAY,
+    (_event, seconds: number): IpcMutationResult => {
+      if (!Number.isInteger(seconds) || seconds < 5) {
+        return {
+          ok: false,
+          error: "Ingest delay must be a whole number of at least 5 seconds.",
+        };
+      }
+      setSetting("saved_posts_ingest_delay_seconds", String(seconds));
+      return { ok: true, error: null };
+    },
+  );
+
   // settings:getNotificationPrefs
   ipcMain.handle(
     IPC.SETTINGS_GET_NOTIFICATION_PREFS,

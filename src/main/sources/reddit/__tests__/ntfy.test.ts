@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildNtfySyncSummary, processNtfyMessage } from "../ntfy";
+import {
+  buildNtfySyncSummary,
+  processNtfyMessage,
+  processItemsWithDelay,
+} from "../ntfy";
 
 describe("buildNtfySyncSummary", () => {
   it("captures failed URLs and preserves the latest error", () => {
@@ -71,5 +75,28 @@ describe("buildNtfySyncSummary", () => {
     const parsed = processNtfyMessage('{"url":"https://example.com/test"}');
 
     expect(parsed).toEqual({ url: "https://example.com/test", note: null });
+  });
+});
+
+describe("processItemsWithDelay", () => {
+  it("runs items sequentially and waits between each one", async () => {
+    const order: string[] = [];
+    const delays: number[] = [];
+
+    await processItemsWithDelay(
+      ["first", "second", "third"],
+      async (value) => {
+        order.push(value);
+      },
+      {
+        delayMs: 5_000,
+        delayFn: async (ms) => {
+          delays.push(ms);
+        },
+      },
+    );
+
+    expect(order).toEqual(["first", "second", "third"]);
+    expect(delays).toEqual([5_000, 5_000]);
   });
 });

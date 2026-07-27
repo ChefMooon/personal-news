@@ -1896,7 +1896,9 @@ function SavedPostsTab({
   autoOpenSyncDetails?: boolean;
 }): React.ReactElement {
   const [intervalValue, setIntervalValue] = useState("60");
+  const [ingestDelayValue, setIngestDelayValue] = useState("5");
   const [savingInterval, setSavingInterval] = useState(false);
+  const [savingIngestDelay, setSavingIngestDelay] = useState(false);
   const [topicConfigured, setTopicConfigured] = useState(false);
   const [topic, setTopic] = useState("");
   const [server, setServer] = useState("");
@@ -1961,6 +1963,18 @@ function SavedPostsTab({
             : "Failed to load ntfy server URL.",
         );
       });
+    window.api
+      .invoke(IPC.SETTINGS_GET, "saved_posts_ingest_delay_seconds")
+      .then((v) => {
+        if (typeof v === "string" && v.trim()) {
+          setIngestDelayValue(v);
+          return;
+        }
+        setIngestDelayValue("5");
+      })
+      .catch(() => {
+        setIngestDelayValue("5");
+      });
   };
 
   useEffect(() => {
@@ -2011,6 +2025,32 @@ function SavedPostsTab({
       );
     } finally {
       setSavingInterval(false);
+    }
+  };
+
+  const saveIngestDelay = async (): Promise<void> => {
+    setSavingIngestDelay(true);
+    const parsed = Number.parseInt(ingestDelayValue, 10);
+    try {
+      if (!Number.isInteger(parsed) || parsed < 5) {
+        toast.error("Ingest delay must be a whole number of at least 5 seconds.");
+        return;
+      }
+      const result = (await window.api.invoke(
+        IPC.SETTINGS_SET_SAVED_POSTS_INGEST_DELAY,
+        parsed,
+      )) as IpcMutationResult;
+      if (!result.ok) {
+        toast.error(result.error ?? "Failed to save ingest delay.");
+        return;
+      }
+      toast.success("Saved ingest delay.");
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to save ingest delay.",
+      );
+    } finally {
+      setSavingIngestDelay(false);
     }
   };
 
@@ -2066,6 +2106,34 @@ function SavedPostsTab({
             {savingInterval ? "Saving..." : "Save Interval"}
           </Button>
         </div>
+      </div>
+
+      <div>
+        <h3 className="text-sm font-medium mb-2">Ingest Delay (seconds)</h3>
+        <div className="flex gap-2 items-center">
+          <label htmlFor="saved-posts-ingest-delay" className="sr-only">
+            Saved Posts ingest delay in seconds
+          </label>
+          <Input
+            id="saved-posts-ingest-delay"
+            value={ingestDelayValue}
+            onChange={(e) => setIngestDelayValue(e.target.value)}
+            inputMode="numeric"
+            className="w-24"
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void saveIngestDelay()}
+            disabled={savingIngestDelay}
+          >
+            {savingIngestDelay ? "Saving..." : "Save Delay"}
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground mt-1">
+          Minimum 5 seconds. This adds pacing between metadata fetches when a
+          batch of ntfy messages arrives.
+        </p>
       </div>
 
       <div>
