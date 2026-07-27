@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file.
 
 The format follows Keep a Changelog, and this project uses Semantic Versioning.
 
+## [1.3.4] - 2026-07-27
+
+### Added
+
+- Added manual link ingestion for Saved Posts so links can be imported directly from the app.
+- Added configurable sequential processing for Saved Posts batches, including a delay option to pace ingestion.
+- Added duplicate URL handling and deduplication support to reduce repeated Saved Posts imports.
+
+### Changed
+
+- Improved Saved Posts ntfy ingestion with better error handling and clearer warning/notification feedback.
+
 ## [1.3.3] - 2026-07-24
 
 ### Added
