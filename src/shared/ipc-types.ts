@@ -929,6 +929,7 @@ export interface NtfySyncSummary {
   messagesReceived: number;
   postsIngested: number;
   failedCount: number;
+  duplicateCount: number;
   failedUrls: string[];
   hasFailures: boolean;
   lastPolledAt: number | null;

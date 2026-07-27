@@ -29,11 +29,27 @@ describe("buildNtfySyncSummary", () => {
       failedEntries: [],
       error: null,
       lastPolledAt: 1_700_000_000,
+      duplicateCount: 0,
     });
 
     expect(summary.failedCount).toBe(0);
     expect(summary.failedUrls).toEqual([]);
     expect(summary.hasFailures).toBe(false);
+    expect(summary.duplicateCount).toBe(0);
+  });
+
+  it("tracks duplicate skips separately from failures", () => {
+    const summary = buildNtfySyncSummary({
+      messagesReceived: 3,
+      postsIngested: 1,
+      failedEntries: [{ url: "https://example.com/one", error: "rate limited" }],
+      error: "One or more links could not be ingested.",
+      lastPolledAt: 1_700_000_000,
+      duplicateCount: 2,
+    });
+
+    expect(summary.failedCount).toBe(1);
+    expect(summary.duplicateCount).toBe(2);
   });
 
   it("parses one-off ntfy messages through the same helper as the app", () => {

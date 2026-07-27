@@ -2160,6 +2160,10 @@ function SavedPostsTab({
               <span className="text-muted-foreground">Failed links:</span>{" "}
               {syncSummary.failedCount}
             </p>
+            <p>
+              <span className="text-muted-foreground">Duplicate skips:</span>{" "}
+              {syncSummary.duplicateCount}
+            </p>
             {syncSummary.error && (
               <p className="text-amber-700 dark:text-amber-300">
                 {syncSummary.error}

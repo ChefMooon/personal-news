@@ -3,6 +3,7 @@ import { getSetting, setSetting } from "../../settings/store";
 import type { NtfySyncFailureEntry, NtfySyncSummary } from "../../../shared/ipc-types";
 import { fetchMetadataForUrl } from "../link-sources";
 import { processNtfyMessage } from "./ntfy-message.mjs";
+import { createNtfyDedupeTracker } from "./dedupe";
 
 export { processNtfyMessage };
 
@@ -18,12 +19,14 @@ export function buildNtfySyncSummary(input: {
   failedEntries: NtfySyncFailureEntry[];
   error: string | null;
   lastPolledAt: number | null;
+  duplicateCount?: number;
 }): NtfySyncSummary {
   const failedUrls = input.failedEntries.map((entry) => entry.url);
   return {
     messagesReceived: input.messagesReceived,
     postsIngested: input.postsIngested,
     failedCount: failedUrls.length,
+    duplicateCount: input.duplicateCount ?? 0,
     failedUrls,
     hasFailures: failedUrls.length > 0 || Boolean(input.error),
     lastPolledAt: input.lastPolledAt,
@@ -88,8 +91,14 @@ export async function pollNtfy(
 
   let postsIngested = 0;
   let messagesReceived = 0;
+  let duplicateCount = 0;
   let lastProcessedId: string | null = null;
   const failedEntries: NtfySyncFailureEntry[] = [];
+  const dedupeTracker = createNtfyDedupeTracker(db);
+  const backfilledCount = dedupeTracker.backfillExistingSavedPosts();
+  if (backfilledCount > 0) {
+    console.log(`[ntfy] Backfilled ${backfilledCount} existing saved-post URLs into dedupe tracker`);
+  }
 
   const upsert = db.prepare(`
     INSERT INTO saved_posts (post_id, title, url, permalink, subreddit, author, score, body, saved_at, tags, note, source)
@@ -124,6 +133,12 @@ export async function pollNtfy(
 
     if (!/^https?:\/\//i.test(url)) {
       console.warn(`[ntfy] Skipping — not a valid HTTP URL: "${url}"`);
+      continue;
+    }
+
+    if (!dedupeTracker.shouldProcessUrl(url)) {
+      duplicateCount += 1;
+      console.log(`[ntfy] Skipping duplicate URL: ${url}`);
       continue;
     }
 
@@ -168,6 +183,7 @@ export async function pollNtfy(
     failedEntries,
     error: failedEntries.length > 0 ? "One or more links could not be ingested." : null,
     lastPolledAt,
+    duplicateCount,
   });
   setSetting("ntfy_last_sync_summary", JSON.stringify(summary));
 

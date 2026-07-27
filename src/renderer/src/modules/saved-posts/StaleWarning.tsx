@@ -24,7 +24,8 @@ export function StaleWarning({
   loading,
 }: StaleWarningProps): React.ReactElement | null {
   const hasFailures = Boolean(summary?.hasFailures);
-  if (!isStale && !hasFailures) return null;
+  const duplicateCount = summary?.duplicateCount ?? 0;
+  if (!isStale && !hasFailures && duplicateCount === 0) return null;
 
   const lastSyncText = lastPolledAt
     ? formatRelativeTime(lastPolledAt)
@@ -34,11 +35,15 @@ export function StaleWarning({
     <div className="flex items-center gap-3 rounded-md border border-amber-600/50 bg-amber-600/10 dark:border-amber-400/50 dark:bg-amber-400/10 px-4 py-3 mb-4">
       <AlertTriangle className="h-5 w-5 text-amber-700 dark:text-amber-300 shrink-0" />
       <div className="flex-1 text-sm">
-        {hasFailures ? (
+        {hasFailures || duplicateCount > 0 ? (
           <div>
             <span className="font-medium text-amber-800 dark:text-amber-200">
               Last sync had {summary?.failedCount ?? 0} failed link
-              {summary && summary.failedCount === 1 ? "" : "s"}.
+              {summary && summary.failedCount === 1 ? "" : "s"}
+              {duplicateCount > 0
+                ? ` and ${duplicateCount} duplicate skip${duplicateCount === 1 ? "" : "s"}`
+                : ""}
+              .
             </span>{" "}
             <button
               type="button"

@@ -2,6 +2,7 @@ import Database from "better-sqlite3";
 import { app } from "electron";
 import { join } from "path";
 import { existsSync, mkdirSync, readFileSync } from "fs";
+import { ensureRequiredSchemaMigrations } from "./schema";
 
 let db: Database.Database;
 
@@ -51,6 +52,7 @@ function runMigrations(database: Database.Database): void {
     6: "006_sports_team_name_normalization.sql",
     7: "007_weather_poll_interval_default.sql",
     8: "008_saved_posts_subreddit_tags.sql",
+    9: "009_ingested_links.sql",
   };
 
   // Ensure meta table exists first
@@ -169,6 +171,16 @@ function runMigrations(database: Database.Database): void {
     appliedAny = true;
     console.log(`[DB] Compatibility migration applied: ${migration.name}`);
   }
+
+  const ensuredRequiredTables = ensureRequiredSchemaMigrations(database, (migrationFile) => {
+    if (app.isPackaged) {
+      return join(process.resourcesPath, "migrations", migrationFile);
+    }
+
+    return join(__dirname, `../../src/main/db/migrations/${migrationFile}`);
+  });
+
+  appliedAny = appliedAny || ensuredRequiredTables;
 
   if (!appliedAny) {
     console.log(`[DB] Schema is up to date (version ${currentVersion})`);

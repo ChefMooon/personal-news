@@ -93,7 +93,7 @@
     "@radix-ui/react-switch": "^1.1.1",
     "@radix-ui/react-tabs": "^1.1.1",
     "@radix-ui/react-tooltip": "^1.1.4",
-    "better-sqlite3": "^11.0.0",
+    "better-sqlite3": "^11.7.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "electron-updater": "^6.6.2",
@@ -106,7 +106,7 @@
   },
   "devDependencies": {
     "@electron-toolkit/tsconfig": "^1.0.1",
-    "@electron/rebuild": "^3.6.0",
+    "@electron/rebuild": "^3.7.0",
     "@resvg/resvg-js": "^2.6.2",
     "@tailwindcss/vite": "^4.0.0",
     "@typescript-eslint/eslint-plugin": "^8.60.0",
