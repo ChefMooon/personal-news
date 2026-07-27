@@ -2147,34 +2147,53 @@ function SavedPostsTab({
           <p className="text-xs text-muted-foreground mb-3">
             The most recent ntfy sync summary for this app session.
           </p>
-          <div className="rounded-md border bg-muted/20 p-3 space-y-2 text-sm">
-            <p>
-              <span className="text-muted-foreground">Messages received:</span>{" "}
-              {syncSummary.messagesReceived}
-            </p>
-            <p>
-              <span className="text-muted-foreground">Posts ingested:</span>{" "}
-              {syncSummary.postsIngested}
-            </p>
-            <p>
-              <span className="text-muted-foreground">Failed links:</span>{" "}
-              {syncSummary.failedCount}
-            </p>
-            <p>
-              <span className="text-muted-foreground">Duplicate skips:</span>{" "}
-              {syncSummary.duplicateCount}
-            </p>
-            {syncSummary.error && (
-              <p className="text-amber-700 dark:text-amber-300">
-                {syncSummary.error}
+          <div className="rounded-md border bg-muted/20 p-3 space-y-3 text-sm">
+            <div className="space-y-1">
+              <p>
+                <span className="text-muted-foreground">Messages received:</span>{" "}
+                {syncSummary.messagesReceived}
               </p>
+              <p>
+                <span className="text-muted-foreground">Posts ingested:</span>{" "}
+                {syncSummary.postsIngested}
+              </p>
+              <p>
+                <span className="text-muted-foreground">Failed links:</span>{" "}
+                {syncSummary.failedCount}
+              </p>
+              <p>
+                <span className="text-muted-foreground">Duplicate skips:</span>{" "}
+                {syncSummary.duplicateCount}
+              </p>
+            </div>
+            {syncSummary.error && (
+              <div className="rounded border border-amber-300/60 bg-amber-50/70 px-2 py-2 text-amber-800 dark:border-amber-700/50 dark:bg-amber-950/40 dark:text-amber-200">
+                <p className="font-medium">Summary</p>
+                <p className="text-xs leading-5">{syncSummary.error}</p>
+              </div>
             )}
-            {syncSummary.failedUrls.length > 0 && (
-              <ul className="list-disc pl-5 space-y-1 text-xs text-muted-foreground">
-                {syncSummary.failedUrls.map((url) => (
-                  <li key={url}>{url}</li>
-                ))}
-              </ul>
+            {syncSummary.duplicateUrls.length > 0 && (
+              <div>
+                <p className="mb-1 font-medium">Skipped duplicates</p>
+                <ul className="list-disc pl-5 space-y-1 text-xs text-muted-foreground">
+                  {syncSummary.duplicateUrls.map((url) => (
+                    <li key={url}>{url}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {syncSummary.failureEntries.length > 0 && (
+              <div>
+                <p className="mb-1 font-medium">Failures</p>
+                <ul className="space-y-2 text-xs text-muted-foreground">
+                  {syncSummary.failureEntries.map((entry) => (
+                    <li key={`${entry.url}-${entry.error}`} className="rounded border border-muted-foreground/20 p-2">
+                      <p className="break-all font-medium text-foreground">{entry.url}</p>
+                      <p className="mt-1">{entry.error}</p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
           </div>
         </div>

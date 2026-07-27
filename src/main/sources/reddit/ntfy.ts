@@ -20,15 +20,19 @@ export function buildNtfySyncSummary(input: {
   error: string | null;
   lastPolledAt: number | null;
   duplicateCount?: number;
+  duplicateUrls?: string[];
 }): NtfySyncSummary {
   const failedUrls = input.failedEntries.map((entry) => entry.url);
+  const duplicateUrls = input.duplicateUrls ?? [];
   return {
     messagesReceived: input.messagesReceived,
     postsIngested: input.postsIngested,
     failedCount: failedUrls.length,
-    duplicateCount: input.duplicateCount ?? 0,
+    duplicateCount: input.duplicateCount ?? duplicateUrls.length,
     failedUrls,
-    hasFailures: failedUrls.length > 0 || Boolean(input.error),
+    duplicateUrls,
+    failureEntries: input.failedEntries,
+    hasFailures: failedUrls.length > 0 || duplicateUrls.length > 0 || Boolean(input.error),
     lastPolledAt: input.lastPolledAt,
     error: input.error,
   };
@@ -94,6 +98,7 @@ export async function pollNtfy(
   let duplicateCount = 0;
   let lastProcessedId: string | null = null;
   const failedEntries: NtfySyncFailureEntry[] = [];
+  const duplicateUrls: string[] = [];
   const dedupeTracker = createNtfyDedupeTracker(db);
   const backfilledCount = dedupeTracker.backfillExistingSavedPosts();
   if (backfilledCount > 0) {
@@ -138,6 +143,7 @@ export async function pollNtfy(
 
     if (!dedupeTracker.shouldProcessUrl(url)) {
       duplicateCount += 1;
+      duplicateUrls.push(url);
       console.log(`[ntfy] Skipping duplicate URL: ${url}`);
       continue;
     }
@@ -184,6 +190,7 @@ export async function pollNtfy(
     error: failedEntries.length > 0 ? "One or more links could not be ingested." : null,
     lastPolledAt,
     duplicateCount,
+    duplicateUrls,
   });
   setSetting("ntfy_last_sync_summary", JSON.stringify(summary));
 

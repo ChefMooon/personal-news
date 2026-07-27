@@ -4,6 +4,7 @@ import type {
   SavedPostMetadataPreview,
 } from "../../shared/ipc-types";
 import { fetchRedditPost } from "./reddit/metadata";
+import { isRedditPostUrl } from "./reddit/validation";
 
 // --- Source detection ---
 
@@ -134,28 +135,23 @@ export async function fetchMetadataForUrl(
   url: string,
   note: string | null,
 ): Promise<SavedPostInput> {
-  const source = detectSource(url);
+  const normalizedUrl = url.trim();
+  if (!/^https?:\/\//i.test(normalizedUrl)) {
+    throw new Error(`Unsupported URL: ${url}`);
+  }
+
+  const source = detectSource(normalizedUrl);
   const def = SOURCE_DEFINITIONS.find((d) => d.id === source);
 
   if (def) {
-    return def.fetchMetadata(url, note);
+    return def.fetchMetadata(normalizedUrl, note);
   }
 
-  // Generic fallback
-  return {
-    postId: hashUrl(url),
-    title: note || url,
-    url,
-    permalink: url,
-    subreddit: null,
-    author: null,
-    score: null,
-    body: null,
-    source: "generic",
-    savedAt: Math.floor(Date.now() / 1000),
-    note,
-    tags: null,
-  };
+  if (isRedditPostUrl(normalizedUrl)) {
+    return SOURCE_DEFINITIONS[0].fetchMetadata(normalizedUrl, note);
+  }
+
+  throw new Error(`Unsupported URL: ${url}`);
 }
 
 export async function previewSavedPostMetadata(

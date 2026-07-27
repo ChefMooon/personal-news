@@ -1,7 +1,7 @@
 import type Database from "better-sqlite3";
 import { BrowserWindow } from "electron";
 import cron, { type ScheduledTask } from "node-cron";
-import { IPC } from "../../../shared/ipc-types";
+import { IPC, type NtfyIngestCompleteEvent } from "../../../shared/ipc-types";
 import type { DataSourceModule } from "../registry";
 import { getSetting } from "../../settings/store";
 import { pollNtfy } from "./ntfy";
@@ -14,12 +14,19 @@ let pollingInProgress = false;
 let activePollIntervalMinutes = DEFAULT_NTFY_POLL_INTERVAL_MINUTES;
 let pollTask: ScheduledTask | null = null;
 
-function emitNtfyIngestComplete(postsIngested: number, error?: string): void {
+function emitNtfyIngestComplete(
+  postsIngested: number,
+  error?: string,
+  summary?: NtfyIngestCompleteEvent["summary"],
+): void {
+  const payload: NtfyIngestCompleteEvent = {
+    postsIngested,
+    error,
+    summary,
+  };
+
   for (const win of BrowserWindow.getAllWindows()) {
-    win.webContents.send(IPC.REDDIT_NTFY_INGEST_COMPLETE, {
-      postsIngested,
-      error,
-    });
+    win.webContents.send(IPC.REDDIT_NTFY_INGEST_COMPLETE, payload);
   }
 }
 
@@ -76,13 +83,15 @@ async function runNtfyPoll(options: {
   pollingInProgress = true;
   try {
     const result = await pollNtfy(dbRef);
-    emitNtfyIngestComplete(result.postsIngested);
+    const summary = getSetting("ntfy_last_sync_summary");
+    const parsedSummary = summary ? JSON.parse(summary) as NtfyIngestCompleteEvent["summary"] : null;
+    emitNtfyIngestComplete(result.postsIngested, undefined, parsedSummary);
     notifySavedPostsSync(result.postsIngested);
     return result;
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     console.error("[Reddit] ntfy poll failed:", msg);
-    emitNtfyIngestComplete(0, msg);
+    emitNtfyIngestComplete(0, msg, null);
     if (options.throwOnError) {
       throw error;
     }

@@ -1,5 +1,5 @@
 import React from "react";
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, useNavigate } from "react-router-dom";
 import { Sidebar } from "./components/Sidebar";
 import Dashboard from "./routes/Dashboard";
 import SavedPosts from "./routes/SavedPosts";
@@ -21,8 +21,10 @@ import { Toaster, toast } from "sonner";
 import {
   IPC,
   type IpcMutationResult,
+  type NtfyIngestCompleteEvent,
   type UpdateStatusEvent,
 } from "../../shared/ipc-types";
+import { buildNtfyFailureToastContent } from "./lib/ntfyNotifications";
 
 function AppShell(): React.ReactElement {
   const { loading } = useSidebarConfig();
@@ -62,6 +64,7 @@ function AppShell(): React.ReactElement {
 
 export default function App(): React.ReactElement {
   const lastUpdateToastKeyRef = React.useRef<string | null>(null);
+  const navigate = useNavigate();
 
   React.useEffect(() => {
     return window.api.on(IPC.APP_SHOW_TRAY_HINT, () => {
@@ -69,6 +72,28 @@ export default function App(): React.ReactElement {
         description:
           "Use the tray icon to reopen the app or quit it completely.",
         duration: 5000,
+      });
+    });
+  }, []);
+
+  React.useEffect(() => {
+    return window.api.on(IPC.REDDIT_NTFY_INGEST_COMPLETE, (payload) => {
+      const event = payload as NtfyIngestCompleteEvent;
+      const toastContent = buildNtfyFailureToastContent(event.summary ?? null);
+
+      if (!toastContent) {
+        return;
+      }
+
+      toast.error(toastContent.title, {
+        description: toastContent.description,
+        duration: 8000,
+        action: {
+          label: "View details",
+          onClick: () => {
+            navigate("/settings?tab=saved-posts&section=sync-details");
+          },
+        },
       });
     });
   }, []);

@@ -83,6 +83,7 @@ import {
   applyNtfyPollInterval,
   triggerNtfyPoll,
 } from "../sources/reddit/index";
+import { createNtfyDedupeTracker } from "../sources/reddit/dedupe";
 import {
   applyWeatherPollSettings,
   deleteWeatherLocation,
@@ -2286,8 +2287,19 @@ export function registerIpcHandlers(): void {
   // reddit:clearSavedPosts
   ipcMain.handle(IPC.REDDIT_CLEAR_SAVED_POSTS, (): { deletedCount: number } => {
     const db = getDb();
-    const result = db.prepare("DELETE FROM saved_posts").run();
-    return { deletedCount: result.changes };
+    const rows = db
+      .prepare("SELECT url FROM saved_posts WHERE url IS NOT NULL AND trim(url) <> ''")
+      .all() as Array<{ url: string }>;
+    const dedupeTracker = createNtfyDedupeTracker(db);
+
+    const tx = db.transaction(() => {
+      const result = db.prepare("DELETE FROM saved_posts").run();
+      const removedFromDedupe = dedupeTracker.removeUrls(rows.map((row) => row.url));
+      return { deletedCount: result.changes, removedFromDedupe };
+    });
+
+    const outcome = tx();
+    return { deletedCount: outcome.deletedCount };
   });
 
   // reddit:deleteSavedPosts
@@ -2302,11 +2314,24 @@ export function registerIpcHandlers(): void {
       }
       const db = getDb();
       const placeholders = req.post_ids.map(() => "?").join(", ");
-      const result = db
-        .prepare(`DELETE FROM saved_posts WHERE post_id IN (${placeholders})`)
-        .run(...req.post_ids);
+      const rows = db
+        .prepare(
+          `SELECT url FROM saved_posts WHERE post_id IN (${placeholders}) AND url IS NOT NULL AND trim(url) <> ''`,
+        )
+        .all(...req.post_ids) as Array<{ url: string }>;
+      const dedupeTracker = createNtfyDedupeTracker(db);
+
+      const tx = db.transaction(() => {
+        const result = db
+          .prepare(`DELETE FROM saved_posts WHERE post_id IN (${placeholders})`)
+          .run(...req.post_ids);
+        dedupeTracker.removeUrls(rows.map((row) => row.url));
+        return result.changes;
+      });
+
+      const deletedCount = tx();
       emitRedditUpdated();
-      return { ok: true, error: null, deletedCount: result.changes };
+      return { ok: true, error: null, deletedCount };
     },
   );
 

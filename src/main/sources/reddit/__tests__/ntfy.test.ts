@@ -19,6 +19,10 @@ describe("buildNtfySyncSummary", () => {
       "https://example.com/one",
       "https://example.com/two",
     ]);
+    expect(summary.failureEntries).toEqual([
+      { url: "https://example.com/one", error: "rate limited" },
+      { url: "https://example.com/two", error: "bad response" },
+    ]);
     expect(summary.error).toBe("One or more links could not be ingested.");
   });
 
@@ -30,10 +34,13 @@ describe("buildNtfySyncSummary", () => {
       error: null,
       lastPolledAt: 1_700_000_000,
       duplicateCount: 0,
+      duplicateUrls: [],
     });
 
     expect(summary.failedCount).toBe(0);
     expect(summary.failedUrls).toEqual([]);
+    expect(summary.failureEntries).toEqual([]);
+    expect(summary.duplicateUrls).toEqual([]);
     expect(summary.hasFailures).toBe(false);
     expect(summary.duplicateCount).toBe(0);
   });
@@ -46,10 +53,18 @@ describe("buildNtfySyncSummary", () => {
       error: "One or more links could not be ingested.",
       lastPolledAt: 1_700_000_000,
       duplicateCount: 2,
+      duplicateUrls: [
+        "https://example.com/duplicate-one",
+        "https://example.com/duplicate-two",
+      ],
     });
 
     expect(summary.failedCount).toBe(1);
     expect(summary.duplicateCount).toBe(2);
+    expect(summary.duplicateUrls).toEqual([
+      "https://example.com/duplicate-one",
+      "https://example.com/duplicate-two",
+    ]);
   });
 
   it("parses one-off ntfy messages through the same helper as the app", () => {

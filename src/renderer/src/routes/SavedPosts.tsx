@@ -46,6 +46,10 @@ import {
 } from "lucide-react";
 import { formatRelativeTime } from "../lib/time";
 import { toRedditPostUrl } from "../lib/utils";
+import {
+  getNtfyWarningVisibilityState,
+  setDismissedNtfyWarningKey,
+} from "../lib/ntfyWarningDismissal";
 
 function PostTagEditor({
   post,
@@ -236,6 +240,7 @@ function SavedPostsContent(): React.ReactElement {
   const [showTagManager, setShowTagManager] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [dismissedStale, setDismissedStale] = useState(false);
+  const [staleWarningVisible, setStaleWarningVisible] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [manageMode, setManageMode] = useState(false);
   const [selectedPostIds, setSelectedPostIds] = useState<Set<string>>(
@@ -289,6 +294,11 @@ function SavedPostsContent(): React.ReactElement {
   }, [staleness.loading, staleness.topicConfigured]);
 
   useEffect(() => {
+    const { shouldShow } = getNtfyWarningVisibilityState(staleness, window.localStorage);
+    setStaleWarningVisible(shouldShow);
+  }, [staleness.isStale, staleness.lastPolledAt, staleness.summary]);
+
+  useEffect(() => {
     window.api
       .invoke(IPC.REDDIT_GET_ALL_TAGS)
       .then((result) => setAllTags(result as string[]))
@@ -325,6 +335,8 @@ function SavedPostsContent(): React.ReactElement {
       await refetch();
       staleness.refetch();
       setDismissedStale(true);
+      setStaleWarningVisible(false);
+      setDismissedNtfyWarningKey(null, window.localStorage);
       toast.success("Saved Posts sync completed.");
     } catch (err) {
       toast.error(
@@ -578,12 +590,20 @@ function SavedPostsContent(): React.ReactElement {
         )}
       </div>
 
-      {!dismissedStale && (
+      {!dismissedStale && staleWarningVisible && (
         <StaleWarning
           lastPolledAt={staleness.lastPolledAt}
           isStale={staleness.isStale}
           summary={staleness.summary}
-          onDismiss={() => setDismissedStale(true)}
+          onDismiss={() => {
+            setDismissedStale(true);
+            const { warningKey } = getNtfyWarningVisibilityState(
+              staleness,
+              window.localStorage,
+            );
+            setDismissedNtfyWarningKey(warningKey, window.localStorage);
+            setStaleWarningVisible(false);
+          }}
           onSyncNow={handleSyncNow}
           onOpenDetails={handleOpenSyncDetails}
           loading={syncing}

@@ -3,6 +3,7 @@ import type Database from "better-sqlite3";
 export interface NtfyDedupeTracker {
   shouldProcessUrl(rawUrl: string, now?: number): boolean;
   backfillExistingSavedPosts(): number;
+  removeUrls(rawUrls: string[]): number;
 }
 
 export function normalizeUrlForDedupe(rawUrl: string): string | null {
@@ -101,8 +102,30 @@ export function createNtfyDedupeTracker(
     return inserted;
   }
 
+  function removeUrls(rawUrls: string[]): number {
+    const normalizedKeys = rawUrls
+      .map((rawUrl) => normalizeUrlForDedupe(rawUrl))
+      .filter((value): value is string => Boolean(value));
+
+    if (normalizedKeys.length === 0) {
+      return 0;
+    }
+
+    const placeholders = normalizedKeys.map(() => "?").join(", ");
+    const result = db
+      .prepare(`DELETE FROM ingested_links WHERE url_key IN (${placeholders})`)
+      .run(...normalizedKeys);
+
+    for (const key of normalizedKeys) {
+      seenInRun.delete(key);
+    }
+
+    return result.changes;
+  }
+
   return {
     shouldProcessUrl,
     backfillExistingSavedPosts,
+    removeUrls,
   };
 }

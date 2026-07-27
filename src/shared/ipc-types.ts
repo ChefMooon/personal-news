@@ -958,6 +958,8 @@ export interface NtfySyncSummary {
   failedCount: number;
   duplicateCount: number;
   failedUrls: string[];
+  duplicateUrls: string[];
+  failureEntries: NtfySyncFailureEntry[];
   hasFailures: boolean;
   lastPolledAt: number | null;
   error: string | null;
@@ -974,6 +976,12 @@ export interface NtfyPollResult {
   postsIngested: number;
   messagesReceived: number;
   lastPolledAt: number;
+}
+
+export interface NtfyIngestCompleteEvent {
+  postsIngested: number;
+  error?: string;
+  summary?: NtfySyncSummary | null;
 }
 
 export interface DigestViewConfig {
