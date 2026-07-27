@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { SavedPostInput } from "../../../shared/ipc-types";
-import { fetchMetadataForUrl } from "../link-sources";
+import { fetchMetadataForUrl, normalizeManualSavedPostInput } from "../link-sources";
 import { fetchRedditPost } from "../reddit/metadata";
 
 vi.mock("../reddit/metadata", () => ({
@@ -65,5 +65,19 @@ describe("link source metadata", () => {
     expect(metadata.title).toBe("Post by @User.Example");
     expect(metadata.author).toBe("User.Example");
     expect(metadata.tags).toEqual(["user.example"]);
+  });
+
+  it("normalizes manual saved-post input by trimming whitespace and preserving tags", () => {
+    const normalized = normalizeManualSavedPostInput({
+      url: " https://example.com ",
+      note: "  Keep this  ",
+      tags: [" alpha ", "beta", "", "alpha"],
+    });
+
+    expect(normalized).toEqual({
+      url: "https://example.com",
+      note: "Keep this",
+      tags: ["alpha", "beta"],
+    });
   });
 });

@@ -1,4 +1,8 @@
-import type { LinkSource, SavedPostInput } from "../../shared/ipc-types";
+import type {
+  LinkSource,
+  SavedPostInput,
+  SavedPostMetadataPreview,
+} from "../../shared/ipc-types";
 import { fetchRedditPost } from "./reddit/metadata";
 
 // --- Source detection ---
@@ -103,6 +107,29 @@ export function getSourceLabel(source: LinkSource): string {
   return def?.label ?? "Link";
 }
 
+export function normalizeManualSavedPostInput(input: {
+  url: string;
+  note?: string | null;
+  tags?: string[] | null;
+}): { url: string; note: string | null; tags: string[] } {
+  const trimmedUrl = input.url?.trim() ?? "";
+  const note = input.note?.trim() ? input.note.trim() : null;
+  const seen = new Set<string>();
+  const tags = Array.isArray(input.tags)
+    ? input.tags.reduce<string[]>((acc, tag) => {
+        const trimmed = tag.trim();
+        if (!trimmed) return acc;
+        const key = trimmed.toLowerCase();
+        if (seen.has(key)) return acc;
+        seen.add(key);
+        acc.push(trimmed);
+        return acc;
+      }, [])
+    : [];
+
+  return { url: trimmedUrl, note, tags };
+}
+
 export async function fetchMetadataForUrl(
   url: string,
   note: string | null,
@@ -128,6 +155,21 @@ export async function fetchMetadataForUrl(
     savedAt: Math.floor(Date.now() / 1000),
     note,
     tags: null,
+  };
+}
+
+export async function previewSavedPostMetadata(
+  url: string,
+  note: string | null,
+): Promise<SavedPostMetadataPreview> {
+  const metadata = await fetchMetadataForUrl(url, note);
+  return {
+    title: metadata.title,
+    source: metadata.source,
+    author: metadata.author,
+    subreddit: metadata.subreddit,
+    tags: metadata.tags ?? [],
+    note,
   };
 }
 

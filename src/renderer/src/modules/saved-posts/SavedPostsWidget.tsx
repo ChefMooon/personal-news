@@ -54,6 +54,7 @@ import {
   type SavedPostsViewConfig,
 } from "../../../../shared/ipc-types";
 import { NtfyOnboardingWizard } from "./NtfyOnboardingWizard";
+import { AddSavedPostModal } from "./AddSavedPostModal";
 
 const SOURCE_LABELS: Record<LinkSource, string> = {
   reddit: "Reddit",
@@ -188,6 +189,7 @@ function SavedPostsWidget(): React.ReactElement {
   const staleness = useNtfyStaleness();
   const navigate = useNavigate();
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [snapshotConfig, setSnapshotConfig] =
     useState<SavedPostsViewConfig | null>(null);
@@ -464,14 +466,25 @@ function SavedPostsWidget(): React.ReactElement {
             {widgetTitle}
           </CardTitle>
           <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setShowAddModal(true)}
+              className="h-6 px-2 py-0 text-[10px] font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
+            >
+              Add Post
+            </Button>
             {config.showViewAllLink && (
-              <button
+              <Button
                 type="button"
+                variant="outline"
+                size="sm"
                 onClick={() => navigate("/saved-posts")}
-                className="text-xs text-primary hover:underline"
+                className="h-6 px-2 py-0 text-[10px] font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
               >
                 View All
-              </button>
+              </Button>
             )}
             {isEditing ? (
               <div className="flex items-center gap-0.5">
@@ -570,6 +583,13 @@ function SavedPostsWidget(): React.ReactElement {
           )}
         </div>
       </CardContent>
+      <AddSavedPostModal
+        open={showAddModal}
+        onOpenChange={setShowAddModal}
+        onSaved={() => {
+          void refetch();
+        }}
+      />
       <NtfyOnboardingWizard
         isOpen={showOnboarding}
         onClose={() => setShowOnboarding(false)}

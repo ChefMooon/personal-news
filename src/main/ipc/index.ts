@@ -34,6 +34,10 @@ import type {
   SavedPostsBulkSetViewedRequest,
   SavedPostsViewedAnalyticsRequest,
   ViewedAnalytics,
+  CreateSavedPostRequest,
+  CreateSavedPostResult,
+  PreviewSavedPostMetadataRequest,
+  SavedPostMetadataPreview,
   ViewedTrendPoint,
   NtfyStaleness,
   NtfyPollResult,
@@ -70,6 +74,11 @@ import {
   applyYouTubePollInterval,
   triggerYouTubePollNow,
 } from "../sources/youtube/index";
+import {
+  fetchMetadataForUrl,
+  normalizeManualSavedPostInput,
+  previewSavedPostMetadata,
+} from "../sources/link-sources";
 import {
   applyNtfyPollInterval,
   triggerNtfyPoll,
@@ -2064,6 +2073,89 @@ export function registerIpcHandlers(): void {
         .all(...params) as Array<{ day: string; viewed_count: number }>;
 
       return buildViewedAnalytics(totals.total ?? 0, totals.viewed ?? 0, trend);
+    },
+  );
+
+  ipcMain.handle(
+    IPC.REDDIT_CREATE_SAVED_POST,
+    async (
+      _event,
+      input: CreateSavedPostRequest,
+    ): Promise<CreateSavedPostResult> => {
+      const { url: trimmedUrl, note, tags } = normalizeManualSavedPostInput(
+        input,
+      );
+      if (!trimmedUrl) {
+        return { ok: false, error: "A URL is required." };
+      }
+
+      if (!/^https?:\/\//i.test(trimmedUrl)) {
+        return { ok: false, error: "Please enter a valid HTTP or HTTPS URL." };
+      }
+
+      const db = getDb();
+
+      try {
+        const metadata = await fetchMetadataForUrl(trimmedUrl, note);
+        const normalizedTags = tags.length > 0 ? tags : metadata.tags ?? [];
+        const postId = metadata.postId;
+        const savedAt = Math.floor(Date.now() / 1000);
+
+        const upsert = db.prepare(`
+          INSERT INTO saved_posts (post_id, title, url, permalink, subreddit, author, score, body, saved_at, tags, note, source)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(post_id) DO UPDATE SET
+            title = excluded.title,
+            url = excluded.url,
+            score = excluded.score,
+            note = COALESCE(excluded.note, saved_posts.note),
+            source = excluded.source
+        `);
+
+        upsert.run(
+          postId,
+          metadata.title,
+          metadata.url,
+          metadata.permalink,
+          metadata.subreddit,
+          metadata.author,
+          metadata.score,
+          metadata.body,
+          savedAt,
+          JSON.stringify(normalizedTags),
+          note,
+          metadata.source,
+        );
+
+        emitRedditUpdated();
+        return { ok: true, error: null, created: true, postId };
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Failed to save post.";
+        return { ok: false, error: message };
+      }
+    },
+  );
+
+  ipcMain.handle(
+    IPC.REDDIT_PREVIEW_SAVED_POST_METADATA,
+    async (
+      _event,
+      input: PreviewSavedPostMetadataRequest,
+    ): Promise<SavedPostMetadataPreview> => {
+      const { url, note } = normalizeManualSavedPostInput(input);
+      if (!url) {
+        return {
+          title: "",
+          source: "generic",
+          author: null,
+          subreddit: null,
+          tags: [],
+          note,
+        };
+      }
+
+      return previewSavedPostMetadata(url, note);
     },
   );
 

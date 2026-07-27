@@ -76,6 +76,8 @@ export const IPC = {
   REDDIT_VALIDATE_DIGEST_SUBREDDIT: "reddit:validateDigestSubreddit",
   REDDIT_SYNC_DIGEST_SUBREDDITS: "reddit:syncDigestSubreddits",
   REDDIT_POLL_NTFY: "reddit:pollNtfy",
+  REDDIT_CREATE_SAVED_POST: "reddit:createSavedPost",
+  REDDIT_PREVIEW_SAVED_POST_METADATA: "reddit:previewSavedPostMetadata",
   REDDIT_GET_NTFY_STALENESS: "reddit:getNtfyStaleness",
   REDDIT_NTFY_INGEST_COMPLETE: "reddit:ntfyIngestComplete",
   REDDIT_UPDATED: "reddit:updated",
@@ -918,6 +920,31 @@ export interface SavedPostInput {
   savedAt: number;
   note: string | null;
   tags: string[] | null;
+}
+
+export interface CreateSavedPostRequest {
+  url: string;
+  note?: string | null;
+  tags?: string[] | null;
+}
+
+export interface CreateSavedPostResult extends IpcMutationResult {
+  postId?: string;
+  created?: boolean;
+}
+
+export interface PreviewSavedPostMetadataRequest {
+  url: string;
+  note?: string | null;
+}
+
+export interface SavedPostMetadataPreview {
+  title: string;
+  source: LinkSource;
+  author: string | null;
+  subreddit: string | null;
+  tags: string[];
+  note: string | null;
 }
 
 export interface NtfySyncFailureEntry {

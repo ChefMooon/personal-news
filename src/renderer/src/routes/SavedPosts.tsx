@@ -14,6 +14,7 @@ import { StaleWarning } from "../modules/saved-posts/StaleWarning";
 import { NtfyOnboardingWizard } from "../modules/saved-posts/NtfyOnboardingWizard";
 import { SavedPostItemActions } from "../modules/saved-posts/SavedPostItemActions";
 import { TagManagementModal } from "../modules/saved-posts/TagManagementModal";
+import { AddSavedPostModal } from "../modules/saved-posts/AddSavedPostModal";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -233,6 +234,7 @@ function SavedPostsContent(): React.ReactElement {
   const navigate = useNavigate();
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showTagManager, setShowTagManager] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
   const [dismissedStale, setDismissedStale] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [manageMode, setManageMode] = useState(false);
@@ -453,6 +455,14 @@ function SavedPostsContent(): React.ReactElement {
         </h1>
         <div className="flex gap-2">
           <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowAddModal(true)}
+          >
+            <Plus className="h-3.5 w-3.5 mr-1" />
+            Add Post
+          </Button>
+          <Button
             variant={hideViewed ? "default" : "outline"}
             size="sm"
             onClick={() => setHideViewed((prev) => !prev)}
@@ -481,6 +491,7 @@ function SavedPostsContent(): React.ReactElement {
           >
             {manageMode ? "Done" : "Manage Posts"}
           </Button>
+        
           <Button
             variant="outline"
             size="sm"
@@ -818,6 +829,14 @@ function SavedPostsContent(): React.ReactElement {
         )}
       </div>
 
+      <AddSavedPostModal
+        open={showAddModal}
+        onOpenChange={setShowAddModal}
+        onSaved={() => {
+          void refetch();
+          refreshAnalytics({ silent: true });
+        }}
+      />
       <NtfyOnboardingWizard
         isOpen={showOnboarding}
         onClose={() => setShowOnboarding(false)}
