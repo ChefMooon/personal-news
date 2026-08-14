@@ -53,7 +53,9 @@ describe("buildNtfySyncSummary", () => {
     const summary = buildNtfySyncSummary({
       messagesReceived: 3,
       postsIngested: 1,
-      failedEntries: [{ url: "https://example.com/one", error: "rate limited" }],
+      failedEntries: [
+        { url: "https://example.com/one", error: "rate limited" },
+      ],
       error: "One or more links could not be ingested.",
       lastPolledAt: 1_700_000_000,
       duplicateCount: 2,

@@ -30,7 +30,9 @@ export function buildNtfyWarningDismissalKey(
   return `${context.isStale ? "stale" : "active"}:${context.lastPolledAt ?? "never"}:${summaryKey}`;
 }
 
-export function getDismissedNtfyWarningKey(storage: Storage | null | undefined): string | null {
+export function getDismissedNtfyWarningKey(
+  storage: Storage | null | undefined,
+): string | null {
   if (!storage) {
     return null;
   }

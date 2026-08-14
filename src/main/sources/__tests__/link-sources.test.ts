@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import type { SavedPostInput } from "../../../shared/ipc-types";
-import { fetchMetadataForUrl, normalizeManualSavedPostInput } from "../link-sources";
+import {
+  fetchMetadataForUrl,
+  normalizeManualSavedPostInput,
+} from "../link-sources";
 import { fetchRedditPost } from "../reddit/metadata";
 
 vi.mock("../reddit/metadata", () => ({
@@ -68,15 +71,15 @@ describe("link source metadata", () => {
   });
 
   it("rejects unsupported URLs instead of creating generic saved-post metadata", async () => {
-    await expect(fetchMetadataForUrl("https://example.com", null)).rejects.toThrow(
-      "Unsupported URL: https://example.com",
-    );
+    await expect(
+      fetchMetadataForUrl("https://example.com", null),
+    ).rejects.toThrow("Unsupported URL: https://example.com");
   });
 
   it("rejects unsupported URLs instead of creating generic saved-post metadata", async () => {
-    await expect(fetchMetadataForUrl("https://example.invalid", null)).rejects.toThrow(
-      "Unsupported URL: https://example.invalid",
-    );
+    await expect(
+      fetchMetadataForUrl("https://example.invalid", null),
+    ).rejects.toThrow("Unsupported URL: https://example.invalid");
   });
 
   it("normalizes manual saved-post input by trimming whitespace and preserving tags", () => {

@@ -24,12 +24,7 @@ type StartupWarningFn = (warning: ScriptStartupWarning) => void;
 
 interface ScheduleDef {
   type:
-    | "on_app_start"
-    | "interval"
-    | "daily"
-    | "weekly"
-    | "monthly"
-    | "fixed_time";
+    "on_app_start" | "interval" | "daily" | "weekly" | "monthly" | "fixed_time";
   minutes?: number;
   run_on_app_start?: boolean;
   hour?: number;

@@ -1,6 +1,9 @@
 import type Database from "better-sqlite3";
 import { getSetting, setSetting } from "../../settings/store";
-import type { NtfySyncFailureEntry, NtfySyncSummary } from "../../../shared/ipc-types";
+import type {
+  NtfySyncFailureEntry,
+  NtfySyncSummary,
+} from "../../../shared/ipc-types";
 import { fetchMetadataForUrl } from "../link-sources";
 import { processNtfyMessage } from "./ntfy-message.mjs";
 import { createNtfyDedupeTracker } from "./dedupe";
@@ -50,7 +53,8 @@ export function buildNtfySyncSummary(input: {
     failedUrls,
     duplicateUrls,
     failureEntries: input.failedEntries,
-    hasFailures: failedUrls.length > 0 || duplicateUrls.length > 0 || Boolean(input.error),
+    hasFailures:
+      failedUrls.length > 0 || duplicateUrls.length > 0 || Boolean(input.error),
     lastPolledAt: input.lastPolledAt,
     error: input.error,
   };
@@ -79,7 +83,10 @@ export async function pollNtfy(
   const delaySeconds = delaySecondsSetting
     ? Number.parseInt(delaySecondsSetting, 10)
     : 5;
-  const delayMs = Math.max(5_000, Number.isFinite(delaySeconds) ? delaySeconds * 1_000 : 5_000);
+  const delayMs = Math.max(
+    5_000,
+    Number.isFinite(delaySeconds) ? delaySeconds * 1_000 : 5_000,
+  );
 
   const fetchUrl = `${serverUrl}/${encodeURIComponent(topic)}/json?poll=1&since=${encodeURIComponent(since)}`;
   console.log(`[ntfy] Polling: ${fetchUrl}`);
@@ -125,7 +132,9 @@ export async function pollNtfy(
   const dedupeTracker = createNtfyDedupeTracker(db);
   const backfilledCount = dedupeTracker.backfillExistingSavedPosts();
   if (backfilledCount > 0) {
-    console.log(`[ntfy] Backfilled ${backfilledCount} existing saved-post URLs into dedupe tracker`);
+    console.log(
+      `[ntfy] Backfilled ${backfilledCount} existing saved-post URLs into dedupe tracker`,
+    );
   }
 
   const upsert = db.prepare(`
@@ -225,7 +234,10 @@ export async function pollNtfy(
     messagesReceived,
     postsIngested,
     failedEntries,
-    error: failedEntries.length > 0 ? "One or more links could not be ingested." : null,
+    error:
+      failedEntries.length > 0
+        ? "One or more links could not be ingested."
+        : null,
     lastPolledAt,
     duplicateCount,
     duplicateUrls,

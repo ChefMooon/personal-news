@@ -62,7 +62,9 @@ export function AddSavedPostModal({
   const [showPreview, setShowPreview] = useState(false);
   const [preview, setPreview] = useState<SavedPostMetadataPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
-  const [urlValidation, setUrlValidation] = useState<"idle" | "valid" | "invalid">("idle");
+  const [urlValidation, setUrlValidation] = useState<
+    "idle" | "valid" | "invalid"
+  >("idle");
 
   useEffect(() => {
     if (!open) return;
@@ -99,7 +101,9 @@ export function AddSavedPostModal({
       .slice(0, 8);
   }, [allTags, newTag, selectedTags]);
 
-  const getUrlValidationState = (value: string): "idle" | "valid" | "invalid" => {
+  const getUrlValidationState = (
+    value: string,
+  ): "idle" | "valid" | "invalid" => {
     const trimmed = value.trim();
     if (!trimmed) return "idle";
 
@@ -107,7 +111,9 @@ export function AddSavedPostModal({
 
     try {
       const parsed = new URL(trimmed);
-      return parsed.protocol === "http:" || parsed.protocol === "https:" ? "valid" : "invalid";
+      return parsed.protocol === "http:" || parsed.protocol === "https:"
+        ? "valid"
+        : "invalid";
     } catch {
       return "invalid";
     }
@@ -173,7 +179,9 @@ export function AddSavedPostModal({
     setNewTag("");
   };
 
-  const handleUrlPaste = (event: React.ClipboardEvent<HTMLInputElement>): void => {
+  const handleUrlPaste = (
+    event: React.ClipboardEvent<HTMLInputElement>,
+  ): void => {
     const pasted = event.clipboardData.getData("text");
     if (pasted) {
       event.preventDefault();
@@ -201,7 +209,10 @@ export function AddSavedPostModal({
         tags: normalizeTags(selectedTags),
       };
 
-      const result = await window.api.invoke(IPC.REDDIT_CREATE_SAVED_POST, payload);
+      const result = await window.api.invoke(
+        IPC.REDDIT_CREATE_SAVED_POST,
+        payload,
+      );
       const response = result as { ok?: boolean; error?: string | null };
       if (!response.ok) {
         toast.error(response.error ?? "Failed to save post.");
@@ -212,9 +223,7 @@ export function AddSavedPostModal({
       onOpenChange(false);
       onSaved?.();
     } catch (err) {
-      toast.error(
-        err instanceof Error ? err.message : "Failed to save post.",
-      );
+      toast.error(err instanceof Error ? err.message : "Failed to save post.");
     } finally {
       setSaving(false);
     }
@@ -252,7 +261,9 @@ export function AddSavedPostModal({
                 <CircleAlert className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-destructive" />
               ) : null}
             </div>
-            <p className={`text-xs ${urlValidation === "valid" ? "text-emerald-600" : urlValidation === "invalid" ? "text-destructive" : "text-muted-foreground"}`}>
+            <p
+              className={`text-xs ${urlValidation === "valid" ? "text-emerald-600" : urlValidation === "invalid" ? "text-destructive" : "text-muted-foreground"}`}
+            >
               {urlValidation === "valid"
                 ? "This link looks valid."
                 : urlValidation === "invalid"
@@ -285,12 +296,18 @@ export function AddSavedPostModal({
             <div className="flex max-h-24 min-h-10 flex-wrap gap-1 overflow-y-auto rounded-md border border-dashed px-3 py-2">
               {selectedTags.length > 0 ? (
                 selectedTags.map((tag) => (
-                  <Badge key={tag} variant="secondary" className="gap-1 text-xs">
+                  <Badge
+                    key={tag}
+                    variant="secondary"
+                    className="gap-1 text-xs"
+                  >
                     {tag}
                     <button
                       type="button"
                       onClick={() =>
-                        setSelectedTags((current) => current.filter((value) => value !== tag))
+                        setSelectedTags((current) =>
+                          current.filter((value) => value !== tag),
+                        )
                       }
                       className="hover:text-destructive"
                       aria-label={`Remove tag ${tag}`}
@@ -300,7 +317,9 @@ export function AddSavedPostModal({
                   </Badge>
                 ))
               ) : (
-                <span className="text-xs text-muted-foreground">No tags yet.</span>
+                <span className="text-xs text-muted-foreground">
+                  No tags yet.
+                </span>
               )}
             </div>
             <div className="flex items-start gap-2">
@@ -329,7 +348,9 @@ export function AddSavedPostModal({
                           key={tag}
                           type="button"
                           onClick={() => {
-                            setSelectedTags((current) => normalizeTags([...current, tag]));
+                            setSelectedTags((current) =>
+                              normalizeTags([...current, tag]),
+                            );
                             setNewTag("");
                           }}
                           className="rounded-full border border-border bg-muted px-2 py-1 text-xs text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
@@ -341,7 +362,12 @@ export function AddSavedPostModal({
                   </div>
                 ) : null}
               </div>
-              <Button type="button" variant="outline" onClick={addTag} className="shrink-0">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={addTag}
+                className="shrink-0"
+              >
                 <Plus className="h-4 w-4" />
                 Add tag
               </Button>
@@ -377,7 +403,9 @@ export function AddSavedPostModal({
                       <p className="text-xs uppercase tracking-wide text-muted-foreground">
                         Title
                       </p>
-                      <p className="font-medium text-foreground">{preview.title}</p>
+                      <p className="font-medium text-foreground">
+                        {preview.title}
+                      </p>
                     </div>
                     <div className="flex flex-wrap gap-2 text-xs">
                       <span className="rounded-full bg-background px-2 py-1">
@@ -397,7 +425,10 @@ export function AddSavedPostModal({
                     {preview.tags.length > 0 ? (
                       <div className="flex flex-wrap gap-1">
                         {preview.tags.map((tag) => (
-                          <span key={tag} className="rounded-full border px-2 py-1 text-xs">
+                          <span
+                            key={tag}
+                            className="rounded-full border px-2 py-1 text-xs"
+                          >
                             {tag}
                           </span>
                         ))}
@@ -417,10 +448,19 @@ export function AddSavedPostModal({
         </div>
 
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={saving}
+          >
             Cancel
           </Button>
-          <Button type="button" onClick={() => void handleSubmit()} disabled={saving}>
+          <Button
+            type="button"
+            onClick={() => void handleSubmit()}
+            disabled={saving}
+          >
             {saving ? "Saving..." : "Save post"}
           </Button>
         </DialogFooter>

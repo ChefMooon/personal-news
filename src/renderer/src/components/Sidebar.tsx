@@ -53,7 +53,9 @@ function SidebarNavLink({
       className={({ isActive }) =>
         cn(
           "mx-1 flex items-center rounded-md py-2 text-sm transition-colors",
-          collapsed ? "h-10 w-10 justify-center mx-auto pl-0.5" : "mx-1 gap-3 px-3 py-2",
+          collapsed
+            ? "h-10 w-10 justify-center mx-auto pl-0.5"
+            : "mx-1 gap-3 px-3 py-2",
           isActive
             ? "bg-primary text-primary-foreground"
             : attention

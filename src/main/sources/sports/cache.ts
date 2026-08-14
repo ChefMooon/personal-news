@@ -697,8 +697,7 @@ export function getSportSyncStatus(
         WHERE sport LIKE ? AND fetch_date = ?`,
     )
     .get(`badge:${sport}:%`, "badge-sync") as
-    | { fetched_at: number | null }
-    | undefined;
+    { fetched_at: number | null } | undefined;
 
   const enabledLeagueCount = (
     db

@@ -84,7 +84,9 @@ async function runNtfyPoll(options: {
   try {
     const result = await pollNtfy(dbRef);
     const summary = getSetting("ntfy_last_sync_summary");
-    const parsedSummary = summary ? JSON.parse(summary) as NtfyIngestCompleteEvent["summary"] : null;
+    const parsedSummary = summary
+      ? (JSON.parse(summary) as NtfyIngestCompleteEvent["summary"])
+      : null;
     emitNtfyIngestComplete(result.postsIngested, undefined, parsedSummary);
     notifySavedPostsSync(result.postsIngested);
     return result;

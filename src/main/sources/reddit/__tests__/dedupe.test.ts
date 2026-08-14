@@ -4,13 +4,15 @@ import { createNtfyDedupeTracker, normalizeUrlForDedupe } from "../dedupe";
 
 describe("normalizeUrlForDedupe", () => {
   it("normalizes scheme, host, port, fragment, and trailing slash", () => {
-    expect(normalizeUrlForDedupe("https://Example.com:443/path/?q=1#fragment")).toBe(
-      "https://example.com/path/?q=1",
-    );
+    expect(
+      normalizeUrlForDedupe("https://Example.com:443/path/?q=1#fragment"),
+    ).toBe("https://example.com/path/?q=1");
   });
 
   it("removes default ports and trailing slash from root paths", () => {
-    expect(normalizeUrlForDedupe("http://example.com:80/")).toBe("http://example.com");
+    expect(normalizeUrlForDedupe("http://example.com:80/")).toBe(
+      "http://example.com",
+    );
   });
 
   it("returns null for invalid URLs", () => {
@@ -38,7 +40,9 @@ describe("createNtfyDedupeTracker", () => {
     const removedCount = tracker.removeUrls(["https://Example.com/article"]);
 
     expect(removedCount).toBe(1);
-    expect(db.prepare("SELECT COUNT(*) AS count FROM ingested_links").get()).toEqual({
+    expect(
+      db.prepare("SELECT COUNT(*) AS count FROM ingested_links").get(),
+    ).toEqual({
       count: 0,
     });
   });

@@ -6,6 +6,8 @@ import type {
   SavedPost,
   LinkSource,
   ViewedAnalytics,
+  DeleteSavedPostsResult,
+  SavedPostsBulkSetViewedResult,
 } from "../../../shared/ipc-types";
 import { useSavedPosts } from "../hooks/useSavedPosts";
 import { useNtfyStaleness } from "../hooks/useNtfyStaleness";
@@ -43,6 +45,9 @@ import {
   Plus,
   X,
   Trash2,
+  ExternalLink,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { formatRelativeTime } from "../lib/time";
 import { toRedditPostUrl } from "../lib/utils";
@@ -242,7 +247,6 @@ function SavedPostsContent(): React.ReactElement {
   const [dismissedStale, setDismissedStale] = useState(false);
   const [staleWarningVisible, setStaleWarningVisible] = useState(false);
   const [syncing, setSyncing] = useState(false);
-  const [manageMode, setManageMode] = useState(false);
   const [selectedPostIds, setSelectedPostIds] = useState<Set<string>>(
     new Set(),
   );
@@ -294,7 +298,10 @@ function SavedPostsContent(): React.ReactElement {
   }, [staleness.loading, staleness.topicConfigured]);
 
   useEffect(() => {
-    const { shouldShow } = getNtfyWarningVisibilityState(staleness, window.localStorage);
+    const { shouldShow } = getNtfyWarningVisibilityState(
+      staleness,
+      window.localStorage,
+    );
     setStaleWarningVisible(shouldShow);
   }, [staleness.isStale, staleness.lastPolledAt, staleness.summary]);
 
@@ -328,11 +335,27 @@ function SavedPostsContent(): React.ReactElement {
     refreshAnalytics();
   }, [refreshAnalytics]);
 
+  useEffect(() => {
+    setSelectedPostIds(new Set());
+  }, [search, source, subreddit, tag, hideViewed, offset]);
+
+  useEffect(() => {
+    const handleEscape = (event: KeyboardEvent): void => {
+      if (event.key === "Escape" && selectedPostIds.size > 0) {
+        setSelectedPostIds(new Set());
+      }
+    };
+
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [selectedPostIds.size]);
+
   const handleSyncNow = async (): Promise<void> => {
     setSyncing(true);
     try {
       await window.api.invoke(IPC.REDDIT_POLL_NTFY);
       await refetch();
+      setSelectedPostIds(new Set());
       staleness.refetch();
       setDismissedStale(true);
       setStaleWarningVisible(false);
@@ -385,34 +408,60 @@ function SavedPostsContent(): React.ReactElement {
     setOffset(0);
   };
 
-  const handleBulkMarkViewed = (): void => {
+  const handleBulkSetViewed = (viewed: boolean): void => {
     setBulkLoading(true);
     window.api
-      .invoke(IPC.REDDIT_BULK_SET_SAVED_VIEWED, {
-        ...analyticsScope,
-        viewed: true,
+      .invoke(IPC.REDDIT_BULK_SET_SELECTED_SAVED_VIEWED, {
+        post_ids: Array.from(selectedPostIds),
+        viewed,
       })
-      .then((result) => {
-        const payload = result as {
-          ok: boolean;
-          error: string | null;
-          updatedCount: number;
-        };
+      .then(async (result) => {
+        const payload = result as SavedPostsBulkSetViewedResult;
         if (!payload.ok) {
-          toast.error(payload.error ?? "Failed to mark posts as viewed.");
+          toast.error(
+            payload.error ??
+              `Failed to mark posts as ${viewed ? "viewed" : "unviewed"}.`,
+          );
           return;
         }
-        toast.success(`Marked ${payload.updatedCount} posts as viewed.`);
+        toast.success(
+          `Marked ${payload.updatedCount} posts as ${viewed ? "viewed" : "unviewed"}.`,
+        );
+        setSelectedPostIds(new Set());
+        await refetch();
         refreshAnalytics({ silent: true });
       })
       .catch((err) => {
         toast.error(
           err instanceof Error
             ? err.message
-            : "Failed to mark posts as viewed.",
+            : `Failed to mark posts as ${viewed ? "viewed" : "unviewed"}.`,
         );
       })
       .finally(() => setBulkLoading(false));
+  };
+
+  const handleOpenSelected = async (): Promise<void> => {
+    const selectedPosts = posts.filter((post) =>
+      selectedPostIds.has(post.post_id),
+    );
+    const results = await Promise.allSettled(
+      selectedPosts.map((post) => {
+        const url =
+          post.source === "reddit" ? toRedditPostUrl(post.permalink) : post.url;
+        return window.api.invoke(IPC.SHELL_OPEN_EXTERNAL, url);
+      }),
+    );
+    const failed = results.filter((result) => result.status === "rejected");
+    if (failed.length > 0) {
+      toast.error(
+        failed.length === selectedPosts.length
+          ? "Failed to open selected links."
+          : `Failed to open ${failed.length} selected link${failed.length === 1 ? "" : "s"}.`,
+      );
+      return;
+    }
+    handleBulkSetViewed(true);
   };
 
   const handleDeleteSelected = (): void => {
@@ -422,11 +471,7 @@ function SavedPostsContent(): React.ReactElement {
         post_ids: Array.from(selectedPostIds),
       })
       .then((result) => {
-        const payload = result as {
-          ok: boolean;
-          error: string | null;
-          deletedCount: number;
-        };
+        const payload = result as DeleteSavedPostsResult;
         if (!payload.ok) {
           toast.error(payload.error ?? "Failed to delete posts.");
           return;
@@ -435,7 +480,7 @@ function SavedPostsContent(): React.ReactElement {
           `Deleted ${payload.deletedCount} post${payload.deletedCount === 1 ? "" : "s"}.`,
         );
         setSelectedPostIds(new Set());
-        setManageMode(false);
+        void refetch();
         refreshAnalytics({ silent: true });
       })
       .catch((err) => {
@@ -484,29 +529,6 @@ function SavedPostsContent(): React.ReactElement {
           <Button
             variant="outline"
             size="sm"
-            onClick={handleBulkMarkViewed}
-            disabled={bulkLoading}
-          >
-            {bulkLoading ? "Marking..." : "Mark All Viewed"}
-          </Button>
-          <Button
-            variant={manageMode ? "default" : "outline"}
-            size="sm"
-            onClick={() => {
-              if (manageMode) {
-                setManageMode(false);
-                setSelectedPostIds(new Set());
-              } else {
-                setManageMode(true);
-              }
-            }}
-          >
-            {manageMode ? "Done" : "Manage Posts"}
-          </Button>
-        
-          <Button
-            variant="outline"
-            size="sm"
             onClick={() => setShowTagManager(true)}
           >
             <Tags className="h-3.5 w-3.5 mr-1" />
@@ -525,38 +547,6 @@ function SavedPostsContent(): React.ReactElement {
           </Button>
         </div>
       </div>
-
-      {manageMode && (
-        <div className="flex items-center gap-3 mb-3 p-2 rounded-md border bg-muted/30 text-sm">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              if (selectedPostIds.size === posts.length && posts.length > 0) {
-                setSelectedPostIds(new Set());
-              } else {
-                setSelectedPostIds(new Set(posts.map((p) => p.post_id)));
-              }
-            }}
-          >
-            {selectedPostIds.size === posts.length && posts.length > 0
-              ? "Deselect All"
-              : "Select All"}
-          </Button>
-          <span className="text-muted-foreground">
-            {selectedPostIds.size} selected
-          </span>
-          <Button
-            variant="destructive"
-            size="sm"
-            disabled={selectedPostIds.size === 0}
-            onClick={() => setShowDeleteConfirm(true)}
-          >
-            <Trash2 className="h-3.5 w-3.5 mr-1" />
-            Delete Selected ({selectedPostIds.size})
-          </Button>
-        </div>
-      )}
 
       <div className="mb-3 p-2 rounded-md border bg-muted/20 text-xs">
         {!analytics ? (
@@ -680,6 +670,72 @@ function SavedPostsContent(): React.ReactElement {
         )}
       </div>
 
+      {selectedPostIds.size > 0 && (
+        <div className="flex items-center gap-2 flex-wrap mb-4 p-2 rounded-md border bg-muted/30 text-sm">
+          <span className="text-muted-foreground mr-1">
+            {selectedPostIds.size} selected
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              if (selectedPostIds.size === posts.length) {
+                setSelectedPostIds(new Set());
+              } else {
+                setSelectedPostIds(new Set(posts.map((post) => post.post_id)));
+              }
+            }}
+          >
+            {selectedPostIds.size === posts.length
+              ? "Deselect All"
+              : "Select All Visible"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void handleOpenSelected()}
+            disabled={bulkLoading}
+          >
+            <ExternalLink className="h-3.5 w-3.5 mr-1" />
+            Open Links
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleBulkSetViewed(true)}
+            disabled={bulkLoading}
+          >
+            <Eye className="h-3.5 w-3.5 mr-1" />
+            Mark Viewed
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleBulkSetViewed(false)}
+            disabled={bulkLoading}
+          >
+            <EyeOff className="h-3.5 w-3.5 mr-1" />
+            Mark Unviewed
+          </Button>
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={() => setShowDeleteConfirm(true)}
+            disabled={bulkLoading}
+          >
+            <Trash2 className="h-3.5 w-3.5 mr-1" />
+            Delete
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setSelectedPostIds(new Set())}
+          >
+            Clear
+          </Button>
+        </div>
+      )}
+
       {/* Post list */}
       <div className="flex-1 overflow-auto">
         {loading && posts.length === 0 ? (
@@ -733,28 +789,26 @@ function SavedPostsContent(): React.ReactElement {
               >
                 {({ onContextMenu, trigger, viewedToggle }) => (
                   <div
-                    className="flex items-start gap-3 py-3 px-3 rounded-md hover:bg-muted/50 border-b last:border-0"
+                    className={`flex items-start gap-3 py-3 px-3 rounded-md border-b last:border-0 ${selectedPostIds.has(post.post_id) ? "bg-primary/10" : "hover:bg-muted/50"}`}
                     onContextMenu={onContextMenu}
                   >
-                    {manageMode && (
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 rounded border-border cursor-pointer accent-primary mt-1 shrink-0"
-                        checked={selectedPostIds.has(post.post_id)}
-                        onChange={() => {
-                          setSelectedPostIds((prev) => {
-                            const next = new Set(prev);
-                            if (next.has(post.post_id)) {
-                              next.delete(post.post_id);
-                            } else {
-                              next.add(post.post_id);
-                            }
-                            return next;
-                          });
-                        }}
-                        aria-label={`Select post: ${post.title}`}
-                      />
-                    )}
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-border cursor-pointer accent-primary mt-1 shrink-0"
+                      checked={selectedPostIds.has(post.post_id)}
+                      onChange={() => {
+                        setSelectedPostIds((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(post.post_id)) {
+                            next.delete(post.post_id);
+                          } else {
+                            next.add(post.post_id);
+                          }
+                          return next;
+                        });
+                      }}
+                      aria-label={`Select post: ${post.title}`}
+                    />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-0.5">
                         <Badge variant="outline" className="text-xs shrink-0">

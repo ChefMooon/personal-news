@@ -66,6 +66,7 @@ export const IPC = {
   REDDIT_GET_SAVED_POSTS: "reddit:getSavedPosts",
   REDDIT_SET_SAVED_POST_VIEWED: "reddit:setSavedPostViewed",
   REDDIT_BULK_SET_SAVED_VIEWED: "reddit:bulkSetSavedViewed",
+  REDDIT_BULK_SET_SELECTED_SAVED_VIEWED: "reddit:bulkSetSelectedSavedViewed",
   REDDIT_GET_SAVED_VIEWED_ANALYTICS: "reddit:getSavedViewedAnalytics",
   REDDIT_PRUNE_DIGEST_POSTS: "reddit:pruneDigestPosts",
   REDDIT_UPDATE_SAVED_POST_NOTE: "reddit:updateSavedPostNote",
@@ -859,6 +860,17 @@ export interface SavedPostsBulkSetViewedRequest {
   tag_filter?: string[];
   no_tags_only?: boolean;
   source_filter?: LinkSource[];
+}
+
+export interface SelectedSavedPostsBulkSetViewedRequest {
+  post_ids: string[];
+  viewed: boolean;
+}
+
+export interface SavedPostsBulkSetViewedResult {
+  ok: boolean;
+  error: string | null;
+  updatedCount: number;
 }
 
 export interface DeleteSavedPostsRequest {

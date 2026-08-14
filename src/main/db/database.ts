@@ -172,13 +172,16 @@ function runMigrations(database: Database.Database): void {
     console.log(`[DB] Compatibility migration applied: ${migration.name}`);
   }
 
-  const ensuredRequiredTables = ensureRequiredSchemaMigrations(database, (migrationFile) => {
-    if (app.isPackaged) {
-      return join(process.resourcesPath, "migrations", migrationFile);
-    }
+  const ensuredRequiredTables = ensureRequiredSchemaMigrations(
+    database,
+    (migrationFile) => {
+      if (app.isPackaged) {
+        return join(process.resourcesPath, "migrations", migrationFile);
+      }
 
-    return join(__dirname, `../../src/main/db/migrations/${migrationFile}`);
-  });
+      return join(__dirname, `../../src/main/db/migrations/${migrationFile}`);
+    },
+  );
 
   appliedAny = appliedAny || ensuredRequiredTables;
 

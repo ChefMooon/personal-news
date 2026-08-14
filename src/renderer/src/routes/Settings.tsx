@@ -2033,7 +2033,9 @@ function SavedPostsTab({
     const parsed = Number.parseInt(ingestDelayValue, 10);
     try {
       if (!Number.isInteger(parsed) || parsed < 5) {
-        toast.error("Ingest delay must be a whole number of at least 5 seconds.");
+        toast.error(
+          "Ingest delay must be a whole number of at least 5 seconds.",
+        );
         return;
       }
       const result = (await window.api.invoke(
@@ -2218,7 +2220,9 @@ function SavedPostsTab({
           <div className="rounded-md border bg-muted/20 p-3 space-y-3 text-sm">
             <div className="space-y-1">
               <p>
-                <span className="text-muted-foreground">Messages received:</span>{" "}
+                <span className="text-muted-foreground">
+                  Messages received:
+                </span>{" "}
                 {syncSummary.messagesReceived}
               </p>
               <p>
@@ -2255,8 +2259,13 @@ function SavedPostsTab({
                 <p className="mb-1 font-medium">Failures</p>
                 <ul className="space-y-2 text-xs text-muted-foreground">
                   {syncSummary.failureEntries.map((entry) => (
-                    <li key={`${entry.url}-${entry.error}`} className="rounded border border-muted-foreground/20 p-2">
-                      <p className="break-all font-medium text-foreground">{entry.url}</p>
+                    <li
+                      key={`${entry.url}-${entry.error}`}
+                      className="rounded border border-muted-foreground/20 p-2"
+                    >
+                      <p className="break-all font-medium text-foreground">
+                        {entry.url}
+                      </p>
                       <p className="mt-1">{entry.error}</p>
                     </li>
                   ))}
@@ -3081,7 +3090,10 @@ export default function Settings(): React.ReactElement {
         {savedPostsEnabled && (
           <TabsContent value="saved-posts" className="mt-4">
             <SavedPostsTab
-              autoOpenSyncDetails={selectedTab === "saved-posts" && requestedSection === "sync-details"}
+              autoOpenSyncDetails={
+                selectedTab === "saved-posts" &&
+                requestedSection === "sync-details"
+              }
             />
           </TabsContent>
         )}

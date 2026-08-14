@@ -16,8 +16,12 @@ export function normalizeUrlForDedupe(rawUrl: string): string | null {
     const parsedUrl = new URL(trimmedUrl);
     const protocol = parsedUrl.protocol.toLowerCase();
     const hostname = parsedUrl.hostname.toLowerCase();
-    const defaultPort = protocol === "http:" ? "80" : protocol === "https:" ? "443" : null;
-    const port = parsedUrl.port && parsedUrl.port !== defaultPort ? `:${parsedUrl.port}` : "";
+    const defaultPort =
+      protocol === "http:" ? "80" : protocol === "https:" ? "443" : null;
+    const port =
+      parsedUrl.port && parsedUrl.port !== defaultPort
+        ? `:${parsedUrl.port}`
+        : "";
     const path = parsedUrl.pathname === "/" ? "" : parsedUrl.pathname;
     const search = parsedUrl.search || "";
 
@@ -49,7 +53,10 @@ export function createNtfyDedupeTracker(
       source = COALESCE(ingested_links.source, excluded.source)
   `);
 
-  function shouldProcessUrl(rawUrl: string, now = Math.floor(Date.now() / 1000)): boolean {
+  function shouldProcessUrl(
+    rawUrl: string,
+    now = Math.floor(Date.now() / 1000),
+  ): boolean {
     const normalizedUrl = normalizeUrlForDedupe(rawUrl);
     if (!normalizedUrl) {
       return true;
@@ -59,7 +66,8 @@ export function createNtfyDedupeTracker(
       return false;
     }
 
-    const existing = existingStmt.get(normalizedUrl) as { "1"?: number } | undefined;
+    const existing = existingStmt.get(normalizedUrl) as
+      { "1"?: number } | undefined;
     if (existing) {
       seenInRun.add(normalizedUrl);
       return false;
@@ -71,9 +79,11 @@ export function createNtfyDedupeTracker(
   }
 
   function backfillExistingSavedPosts(): number {
-    const rows = db.prepare(
-      "SELECT url, saved_at FROM saved_posts WHERE url IS NOT NULL AND trim(url) <> ''",
-    ).all() as Array<{ url: string; saved_at: number | null }>;
+    const rows = db
+      .prepare(
+        "SELECT url, saved_at FROM saved_posts WHERE url IS NOT NULL AND trim(url) <> ''",
+      )
+      .all() as Array<{ url: string; saved_at: number | null }>;
 
     let inserted = 0;
     const now = Math.floor(Date.now() / 1000);
@@ -84,7 +94,8 @@ export function createNtfyDedupeTracker(
         continue;
       }
 
-      const existing = existingStmt.get(normalizedUrl) as { "1"?: number } | undefined;
+      const existing = existingStmt.get(normalizedUrl) as
+        { "1"?: number } | undefined;
       if (existing) {
         continue;
       }

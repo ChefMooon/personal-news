@@ -32,6 +32,8 @@ import type {
   SavedPostSummary,
   SavedPost,
   SavedPostsBulkSetViewedRequest,
+  SelectedSavedPostsBulkSetViewedRequest,
+  SavedPostsBulkSetViewedResult,
   SavedPostsViewedAnalyticsRequest,
   ViewedAnalytics,
   CreateSavedPostRequest,
@@ -1060,12 +1062,7 @@ async function resolveChannelFromInput(input: string): Promise<YtChannel> {
 
 interface ScheduleDef {
   type:
-    | "on_app_start"
-    | "interval"
-    | "daily"
-    | "weekly"
-    | "monthly"
-    | "fixed_time";
+    "on_app_start" | "interval" | "daily" | "weekly" | "monthly" | "fixed_time";
   minutes?: number;
   run_on_app_start?: boolean;
   hour?: number;
@@ -1374,8 +1371,7 @@ function getCurrentThemeInfo(): ThemeInfo {
   if (!BUILT_IN_THEME_IDS.has(id)) {
     const db = getDb();
     const row = db.prepare("SELECT tokens FROM themes WHERE id = ?").get(id) as
-      | { tokens: string }
-      | undefined;
+      { tokens: string } | undefined;
     if (row) {
       try {
         const parsed = JSON.parse(row.tokens) as unknown;
@@ -2045,6 +2041,35 @@ export function registerIpcHandlers(): void {
     },
   );
 
+  // reddit:bulkSetSelectedSavedViewed
+  ipcMain.handle(
+    IPC.REDDIT_BULK_SET_SELECTED_SAVED_VIEWED,
+    (
+      _event,
+      options: SelectedSavedPostsBulkSetViewedRequest,
+    ): SavedPostsBulkSetViewedResult => {
+      if (!options?.post_ids?.length) {
+        return { ok: true, error: null, updatedCount: 0 };
+      }
+
+      const db = getDb();
+      const viewedAt = options.viewed ? Math.floor(Date.now() / 1000) : null;
+      const placeholders = options.post_ids.map(() => "?").join(", ");
+      const update = db.prepare(
+        `UPDATE saved_posts SET viewed_at = ? WHERE post_id IN (${placeholders})`,
+      );
+      const tx = db.transaction(
+        () => update.run(viewedAt, ...options.post_ids).changes,
+      );
+      const updatedCount = tx();
+
+      if (updatedCount > 0) {
+        emitRedditUpdated();
+      }
+      return { ok: true, error: null, updatedCount };
+    },
+  );
+
   // reddit:getSavedViewedAnalytics
   ipcMain.handle(
     IPC.REDDIT_GET_SAVED_VIEWED_ANALYTICS,
@@ -2083,9 +2108,11 @@ export function registerIpcHandlers(): void {
       _event,
       input: CreateSavedPostRequest,
     ): Promise<CreateSavedPostResult> => {
-      const { url: trimmedUrl, note, tags } = normalizeManualSavedPostInput(
-        input,
-      );
+      const {
+        url: trimmedUrl,
+        note,
+        tags,
+      } = normalizeManualSavedPostInput(input);
       if (!trimmedUrl) {
         return { ok: false, error: "A URL is required." };
       }
@@ -2098,7 +2125,7 @@ export function registerIpcHandlers(): void {
 
       try {
         const metadata = await fetchMetadataForUrl(trimmedUrl, note);
-        const normalizedTags = tags.length > 0 ? tags : metadata.tags ?? [];
+        const normalizedTags = tags.length > 0 ? tags : (metadata.tags ?? []);
         const postId = metadata.postId;
         const savedAt = Math.floor(Date.now() / 1000);
 
@@ -2288,13 +2315,17 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC.REDDIT_CLEAR_SAVED_POSTS, (): { deletedCount: number } => {
     const db = getDb();
     const rows = db
-      .prepare("SELECT url FROM saved_posts WHERE url IS NOT NULL AND trim(url) <> ''")
+      .prepare(
+        "SELECT url FROM saved_posts WHERE url IS NOT NULL AND trim(url) <> ''",
+      )
       .all() as Array<{ url: string }>;
     const dedupeTracker = createNtfyDedupeTracker(db);
 
     const tx = db.transaction(() => {
       const result = db.prepare("DELETE FROM saved_posts").run();
-      const removedFromDedupe = dedupeTracker.removeUrls(rows.map((row) => row.url));
+      const removedFromDedupe = dedupeTracker.removeUrls(
+        rows.map((row) => row.url),
+      );
       return { deletedCount: result.changes, removedFromDedupe };
     });
 
