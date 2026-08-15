@@ -25,27 +25,12 @@ import {
   CheckCircle2,
   CircleAlert,
 } from "lucide-react";
+import { getManagedTagSuggestions, normalizeTags } from "./tag-utils";
 
 interface AddSavedPostModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSaved?: () => void;
-}
-
-function normalizeTags(tags: string[]): string[] {
-  const seen = new Set<string>();
-  const normalized: string[] = [];
-
-  for (const tag of tags) {
-    const trimmed = tag.trim();
-    if (!trimmed) continue;
-    const key = trimmed.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    normalized.push(trimmed);
-  }
-
-  return normalized;
 }
 
 export function AddSavedPostModal({
@@ -92,14 +77,10 @@ export function AddSavedPostModal({
     }
   }, [open]);
 
-  const managedTagSuggestions = useMemo(() => {
-    const query = newTag.trim().toLowerCase();
-
-    return allTags
-      .filter((tag) => !selectedTags.includes(tag))
-      .filter((tag) => (query ? tag.toLowerCase().includes(query) : true))
-      .slice(0, 8);
-  }, [allTags, newTag, selectedTags]);
+  const managedTagSuggestions = useMemo(
+    () => getManagedTagSuggestions(allTags, selectedTags, newTag),
+    [allTags, newTag, selectedTags],
+  );
 
   const getUrlValidationState = (
     value: string,

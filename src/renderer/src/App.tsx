@@ -18,6 +18,7 @@ import { useSidebarConfig } from "./hooks/useSidebarConfig";
 import { RadioPlayer } from "./components/RadioPlayer";
 import { WindowTitleBar } from "./components/WindowTitleBar";
 import { Toaster, toast } from "sonner";
+import { TooltipProvider } from "./components/ui/tooltip";
 import {
   IPC,
   type IpcMutationResult,
@@ -31,27 +32,29 @@ function AppShell(): React.ReactElement {
 
   return (
     <RadioPlayerProvider>
-      <div className="flex h-screen w-screen flex-col overflow-hidden bg-background">
-        <WindowTitleBar />
-        <div
-          className="flex flex-1 overflow-hidden"
-          style={{ visibility: loading ? "hidden" : "visible" }}
-        >
-          <Sidebar />
-          <main className="flex-1 overflow-auto">
-            <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/reddit-digest" element={<RedditDigest />} />
-              <Route path="/saved-posts" element={<SavedPosts />} />
-              <Route path="/youtube" element={<YouTubePage />} />
-              <Route path="/sports" element={<SportsPage />} />
-              <Route path="/scripts" element={<ScriptManager />} />
-              <Route path="/settings" element={<Settings />} />
-            </Routes>
-          </main>
-          <RadioPlayer />
+      <TooltipProvider delayDuration={120} skipDelayDuration={0}>
+        <div className="flex h-screen w-screen flex-col overflow-hidden bg-background">
+          <WindowTitleBar />
+          <div
+            className="flex flex-1 overflow-hidden"
+            style={{ visibility: loading ? "hidden" : "visible" }}
+          >
+            <Sidebar />
+            <main className="flex-1 overflow-auto">
+              <Routes>
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/reddit-digest" element={<RedditDigest />} />
+                <Route path="/saved-posts" element={<SavedPosts />} />
+                <Route path="/youtube" element={<YouTubePage />} />
+                <Route path="/sports" element={<SportsPage />} />
+                <Route path="/scripts" element={<ScriptManager />} />
+                <Route path="/settings" element={<Settings />} />
+              </Routes>
+            </main>
+            <RadioPlayer />
+          </div>
         </div>
-      </div>
+      </TooltipProvider>
       <Toaster
         position="bottom-right"
         richColors

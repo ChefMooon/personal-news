@@ -8,6 +8,7 @@ import type {
   ViewedAnalytics,
   DeleteSavedPostsResult,
   SavedPostsBulkSetViewedResult,
+  IpcMutationResult,
 } from "../../../shared/ipc-types";
 import { useSavedPosts } from "../hooks/useSavedPosts";
 import { useNtfyStaleness } from "../hooks/useNtfyStaleness";
@@ -30,6 +31,11 @@ import {
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "../components/ui/tooltip";
 import {
   Select,
   SelectContent,
@@ -55,6 +61,10 @@ import {
   getNtfyWarningVisibilityState,
   setDismissedNtfyWarningKey,
 } from "../lib/ntfyWarningDismissal";
+import {
+  getManagedTagSuggestions,
+  normalizeTags,
+} from "../modules/saved-posts/tag-utils";
 
 function PostTagEditor({
   post,
@@ -67,38 +77,59 @@ function PostTagEditor({
 }): React.ReactElement {
   const [adding, setAdding] = useState(false);
   const [newTag, setNewTag] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const closeEditor = (): void => {
+    setAdding(false);
+    setNewTag("");
+  };
+
+  const updateTags = async (tags: string[]): Promise<boolean> => {
+    if (saving) return false;
+    setSaving(true);
+    try {
+      const result = (await window.api.invoke(
+        IPC.REDDIT_UPDATE_POST_TAGS,
+        post.post_id,
+        normalizeTags(tags),
+      )) as IpcMutationResult;
+      if (!result.ok) {
+        toast.error(result.error ?? "Failed to update tags.");
+        return false;
+      }
+      onUpdate();
+      return true;
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to update tags.",
+      );
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const handleAddTag = async (): Promise<void> => {
     const trimmed = newTag.trim();
     if (!trimmed) return;
-    const updated = [...post.tags, trimmed];
-    await window.api.invoke(IPC.REDDIT_UPDATE_POST_TAGS, post.post_id, updated);
-    setNewTag("");
-    setAdding(false);
-    onUpdate();
+    if (await updateTags([...post.tags, trimmed])) closeEditor();
   };
 
   const handlePickSuggestion = async (tag: string): Promise<void> => {
-    const updated = [...post.tags, tag];
-    await window.api.invoke(IPC.REDDIT_UPDATE_POST_TAGS, post.post_id, updated);
-    setNewTag("");
-    setAdding(false);
-    onUpdate();
+    if (await updateTags([...post.tags, tag])) closeEditor();
   };
 
   const handleRemoveTag = async (tag: string): Promise<void> => {
     const updated = post.tags.filter((t) => t !== tag);
-    await window.api.invoke(IPC.REDDIT_UPDATE_POST_TAGS, post.post_id, updated);
-    onUpdate();
+    await updateTags(updated);
   };
 
-  const managedTagSuggestions = allTags
-    .filter((tag) => !post.tags.includes(tag))
-    .filter((tag) => {
-      const query = newTag.trim().toLowerCase();
-      return query ? tag.toLowerCase().includes(query) : true;
-    })
-    .slice(0, 8);
+  const managedTagSuggestions = getManagedTagSuggestions(
+    allTags,
+    post.tags,
+    newTag,
+  );
+  const suggestionsId = `managed-tags-${post.post_id}`;
 
   return (
     <div className="flex items-center gap-1 flex-wrap">
@@ -108,8 +139,9 @@ function PostTagEditor({
           <button
             type="button"
             onClick={() => void handleRemoveTag(tag)}
-            className="hover:text-destructive"
+            className="rounded-sm hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             aria-label={`Remove tag ${tag}`}
+            disabled={saving}
           >
             <X className="h-3 w-3" />
           </button>
@@ -121,14 +153,18 @@ function PostTagEditor({
             <Input
               value={newTag}
               onChange={(e) => setNewTag(e.target.value)}
-              className="h-6 w-24 text-xs"
+              className="h-7 w-28 text-xs"
               placeholder="tag name"
               aria-label="New tag name"
               onKeyDown={(e) => {
-                if (e.key === "Enter") void handleAddTag();
-                if (e.key === "Escape") setAdding(false);
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void handleAddTag();
+                }
+                if (e.key === "Escape") closeEditor();
               }}
               autoFocus
+              disabled={saving}
             />
             <Button
               size="sm"
@@ -136,15 +172,39 @@ function PostTagEditor({
               className="h-6 w-6 shrink-0 p-0"
               onClick={() => void handleAddTag()}
               aria-label="Add tag"
+              disabled={saving}
             >
               <Plus className="h-3 w-3" />
             </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 w-6 shrink-0 p-0"
+              onClick={closeEditor}
+              aria-label="Close tag editor"
+              disabled={saving}
+            >
+              <X className="h-3 w-3" />
+            </Button>
           </div>
           {managedTagSuggestions.length > 0 ? (
-            <div className="rounded-md border bg-background p-2 shadow-sm">
+            <div
+              id={suggestionsId}
+              className="rounded-md border bg-background p-2 shadow-sm"
+              aria-label="Managed tag suggestions"
+            >
               <div className="mb-2 flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
                 <span>Managed tags</span>
-                <span>{managedTagSuggestions.length} suggestions</span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-5 w-5 p-0"
+                  onClick={closeEditor}
+                  aria-label="Close managed tag suggestions"
+                >
+                  <X className="h-3 w-3" />
+                </Button>
               </div>
               <div className="flex flex-wrap gap-1">
                 {managedTagSuggestions.map((tag) => (
@@ -152,7 +212,8 @@ function PostTagEditor({
                     key={tag}
                     type="button"
                     onClick={() => void handlePickSuggestion(tag)}
-                    className="rounded-full border border-border bg-muted px-2 py-1 text-[11px] text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                    className="rounded-full border border-border bg-muted px-2 py-1 text-[11px] text-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    disabled={saving}
                   >
                     {tag}
                   </button>
@@ -162,14 +223,23 @@ function PostTagEditor({
           ) : null}
         </div>
       ) : (
-        <button
-          type="button"
-          onClick={() => setAdding(true)}
-          className="text-xs text-muted-foreground hover:text-foreground"
-          aria-pressed={adding}
-        >
-          + tag
-        </button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={() => {
+                setNewTag("");
+                setAdding(true);
+              }}
+              className="rounded-sm text-xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-expanded={adding}
+              aria-controls={suggestionsId}
+            >
+              + tag
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>Add a tag to this post</TooltipContent>
+        </Tooltip>
       )}
     </div>
   );

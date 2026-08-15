@@ -45,6 +45,7 @@ import {
   AlertDialogTitle,
 } from "../../components/ui/alert-dialog";
 import { cn } from "../../lib/utils";
+import { getManagedTagSuggestions, normalizeTags } from "./tag-utils";
 
 interface SavedPostItemActionsProps {
   post: SavedPost;
@@ -67,22 +68,6 @@ interface MenuPosition {
 const MENU_WIDTH = 208;
 const MENU_HEIGHT = 176;
 const VIEWPORT_PADDING = 12;
-
-function normalizeTags(tags: string[]): string[] {
-  const seen = new Set<string>();
-  const normalized: string[] = [];
-
-  for (const tag of tags) {
-    const trimmed = tag.trim();
-    if (!trimmed) continue;
-    const key = trimmed.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    normalized.push(trimmed);
-  }
-
-  return normalized;
-}
 
 function clampMenuPosition(x: number, y: number): MenuPosition {
   const maxX = Math.max(
@@ -291,14 +276,10 @@ export function SavedPostItemActions({
     }
   }, [closeMenu, onAfterMutation, post.post_id]);
 
-  const managedTagSuggestions = useMemo(() => {
-    const query = newTag.trim().toLowerCase();
-
-    return allTags
-      .filter((tag) => !draftTags.includes(tag))
-      .filter((tag) => (query ? tag.toLowerCase().includes(query) : true))
-      .slice(0, 8);
-  }, [allTags, draftTags, newTag]);
+  const managedTagSuggestions = useMemo(
+    () => getManagedTagSuggestions(allTags, draftTags, newTag),
+    [allTags, draftTags, newTag],
+  );
 
   const trigger = (
     <button
