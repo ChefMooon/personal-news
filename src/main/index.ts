@@ -21,6 +21,7 @@ import { YouTubeModule } from "./sources/youtube/index";
 import { RedditModule } from "./sources/reddit/index";
 import { ScriptManagerModule } from "./sources/scripts/index";
 import { WeatherModule } from "./sources/weather/index";
+import { AstronomyModule } from "./sources/astronomy/index";
 import { SportsModule } from "./sources/sports/index";
 import { attachWindowListeners } from "./notifications/notification-service";
 import { getSetting, setSetting } from "./settings/store";
@@ -623,6 +624,7 @@ app.whenReady().then(() => {
     registerModule(RedditModule);
     registerModule(ScriptManagerModule);
     registerModule(WeatherModule);
+    registerModule(AstronomyModule);
     registerModule(SportsModule);
 
     initializeAll(db);

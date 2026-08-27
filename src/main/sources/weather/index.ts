@@ -2,6 +2,7 @@ import { BrowserWindow } from "electron";
 import type Database from "better-sqlite3";
 import { IPC } from "../../../shared/ipc-types";
 import type {
+  AstronomySnapshot,
   IpcMutationResult,
   WeatherAlert,
   WeatherCurrentConditions,
@@ -16,6 +17,19 @@ import type {
 import { getSetting, setSetting } from "../../settings/store";
 import { notifyWeatherAlerts } from "../../notifications/notification-service";
 import type { DataSourceModule } from "../registry";
+import {
+  isValidLatitude,
+  isValidLongitude,
+  isValidTimeZone,
+} from "../../../shared/astronomy-utils";
+import {
+  onLocationRemoved as onAstronomyLocationRemoved,
+  onLocationSaved as onAstronomyLocationSaved,
+  onLocationChanged as onAstronomyLocationChanged,
+  getAstronomySettings,
+  triggerAstronomyRefresh,
+} from "../astronomy/index";
+import { readCachedSnapshot } from "../astronomy/cache";
 import {
   floorUnixSecondsToHour,
   mapCurrentConditions,
@@ -214,9 +228,9 @@ async function fetchGeocodingResults(
     .filter((entry) => {
       return (
         typeof entry.name === "string" &&
-        typeof entry.latitude === "number" &&
-        typeof entry.longitude === "number" &&
-        typeof entry.timezone === "string"
+        isValidLatitude(entry.latitude) &&
+        isValidLongitude(entry.longitude) &&
+        isValidTimeZone(entry.timezone)
       );
     })
     .map((entry) => ({
@@ -235,7 +249,20 @@ async function fetchGeocodingResults(
 
 function saveLocation(location: WeatherSearchResult): WeatherLocation {
   const db = ensureDb();
+  if (
+    !isValidLatitude(location.latitude) ||
+    !isValidLongitude(location.longitude) ||
+    !isValidTimeZone(location.timezone)
+  ) {
+    throw new Error("Invalid Weather location coordinates or timezone.");
+  }
   const id = normalizeLocationId(location);
+  const prior = db
+    .prepare(
+      "SELECT latitude, longitude, timezone FROM weather_locations WHERE id = ?",
+    )
+    .get(id) as
+    { latitude: number; longitude: number; timezone: string } | undefined;
   const createdAt = Math.floor(Date.now() / 1000);
 
   db.prepare(
@@ -271,6 +298,17 @@ function saveLocation(location: WeatherSearchResult): WeatherLocation {
     throw new Error("Failed to save weather location.");
   }
 
+  if (
+    prior &&
+    (prior.latitude !== location.latitude ||
+      prior.longitude !== location.longitude ||
+      prior.timezone !== location.timezone)
+  ) {
+    onAstronomyLocationChanged(id);
+  } else {
+    onAstronomyLocationSaved(id);
+  }
+
   return saved;
 }
 
@@ -287,6 +325,8 @@ function removeLocation(locationId: string): IpcMutationResult {
   if (settings.defaultLocationId === locationId) {
     setSettings({ ...settings, defaultLocationId: null });
   }
+
+  onAstronomyLocationRemoved(locationId);
 
   emitWeatherUpdated();
   schedulePolling();
@@ -351,6 +391,18 @@ function getSnapshot(locationId: string): WeatherSnapshot | null {
     ? ({ ...cachedCurrent, yesterday: undefined } as WeatherCurrentConditions)
     : null;
   const now = Math.floor(Date.now() / 1000);
+
+  // Astronomy enrichment: absent or failed astronomy never invalidates weather.
+  let astronomy: AstronomySnapshot | null = null;
+  try {
+    astronomy = getAstronomySettings().enabled
+      ? readCachedSnapshot(db, locationId)
+      : null;
+  } catch (error) {
+    console.error("[Weather] Astronomy enrichment failed:", error);
+    astronomy = null;
+  }
+
   return {
     location,
     fetchedAt: row.fetched_at,
@@ -370,6 +422,7 @@ function getSnapshot(locationId: string): WeatherSnapshot | null {
     alerts: row.alerts_json
       ? (JSON.parse(row.alerts_json) as WeatherAlert[])
       : [],
+    astronomy,
   };
 }
 
@@ -686,6 +739,17 @@ async function refreshLocation(
       "UPDATE weather_alert_state SET last_notified_at = ? WHERE location_id = ?",
     ).run(fetchedAt, location.id);
   }
+
+  // Astronomy enrichment after successful Weather persistence. Astronomy
+  // failure must never reject or roll back the Weather refresh.
+  try {
+    await triggerAstronomyRefresh(location.id, result.current.time);
+  } catch (error) {
+    console.error(
+      `[Astronomy] Post-weather refresh failed for ${location.id}:`,
+      error,
+    );
+  }
 }
 
 async function doRefresh(locationId?: string): Promise<number> {
@@ -830,6 +894,8 @@ export const WeatherModule: DataSourceModule = {
   initialize(db: Database.Database): void {
     dbRef = db;
     schedulePolling();
+  },
+  start(): void {
     if (isWeatherEnabled() && listLocations().length > 0) {
       void triggerWeatherRefresh().catch((error) => {
         console.error("[Weather] Initial refresh failed:", error);

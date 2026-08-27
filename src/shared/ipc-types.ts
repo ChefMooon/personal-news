@@ -21,6 +21,13 @@ export const IPC = {
   WEATHER_SET_SETTINGS: "weather:setSettings",
   WEATHER_GET_STATUS: "weather:getStatus",
   WEATHER_UPDATED: "weather:updated",
+  ASTRONOMY_GET_SNAPSHOT: "astronomy:getSnapshot",
+  ASTRONOMY_REFRESH: "astronomy:refresh",
+  ASTRONOMY_REFRESH_ALL: "astronomy:refreshAll",
+  ASTRONOMY_GET_SETTINGS: "astronomy:getSettings",
+  ASTRONOMY_SET_SETTINGS: "astronomy:setSettings",
+  ASTRONOMY_GET_STATUS: "astronomy:getStatus",
+  ASTRONOMY_UPDATED: "astronomy:updated",
   SETTINGS_GET_SPORTS_SETTINGS: "settings:getSportsSettings",
   SETTINGS_UPDATE_SPORTS_SETTINGS: "settings:updateSportsSettings",
   SPORTS_GET_TODAY_EVENTS: "sports:getTodayEvents",
@@ -564,6 +571,7 @@ export interface WeatherSnapshot {
   yesterday: WeatherDailyPoint | null;
   airQuality: number | null;
   alerts: WeatherAlert[];
+  astronomy: AstronomySnapshot | null;
 }
 
 export interface WeatherAlertThresholds {
@@ -595,14 +603,13 @@ export interface WeatherViewConfig {
   locationId: string | null;
   detailLevel: "summary" | "standard" | "detailed";
   displayMode: "current" | "current_all" | "current_hourly" | "current_daily";
-  forecastView: "all" | "hourly" | "daily";
   hourlyMetric: "overview" | "precipitation" | "wind" | "humidity";
   showAlerts: boolean;
+  showAstronomy: boolean;
   showPrecipitation: boolean;
   showWind: boolean;
   showHumidity: boolean;
   showFeelsLike: boolean;
-  showSunTimes: boolean;
   showYesterday: boolean;
   showAirQuality: boolean;
   showVisibility: boolean;
@@ -1047,4 +1054,167 @@ export interface GetSavedPostsRequest {
   sort_dir?: "asc" | "desc";
   limit?: number;
   offset?: number;
+}
+
+// ---------------------------------------------------------------------------
+// Astronomy
+// ---------------------------------------------------------------------------
+
+export const ASTRONOMY_MOON_PHASE_NAMES = [
+  "new",
+  "waxing_crescent",
+  "first_quarter",
+  "waxing_gibbous",
+  "full",
+  "waning_gibbous",
+  "last_quarter",
+  "waning_crescent",
+] as const;
+
+export type AstronomyMoonPhaseName =
+  (typeof ASTRONOMY_MOON_PHASE_NAMES)[number];
+
+export type AstronomyWaxingTrend = "waxing" | "waning";
+
+export interface AstronomyMoonData {
+  phaseAngle: number;
+  phaseName: AstronomyMoonPhaseName;
+  illuminationPercent: number;
+  trend: AstronomyWaxingTrend;
+  synodicProgress: number;
+  distanceKm: number | null;
+  librationLatitude: number | null;
+  librationLongitude: number | null;
+  nextPrimaryPhaseName: AstronomyMoonPhaseName | null;
+  nextPrimaryPhaseTime: number | null;
+  nextPerigeeTime: number | null;
+  nextApogeeTime: number | null;
+}
+
+export interface AstronomyHorizonBody {
+  riseTime: number | null;
+  setTime: number | null;
+}
+
+export interface AstronomySolarState {
+  state:
+    | "night"
+    | "astronomical_twilight"
+    | "nautical_twilight"
+    | "civil_twilight"
+    | "day";
+}
+
+export interface AstronomyHorizonData {
+  sun: AstronomyHorizonBody;
+  moon: AstronomyHorizonBody;
+  sunAltitude: number | null;
+  sunAzimuth: number | null;
+  moonAltitude: number | null;
+  moonAzimuth: number | null;
+  solarState: AstronomySolarState["state"];
+}
+
+export interface AstronomyPlanetData {
+  body: string;
+  altitude: number | null;
+  azimuth: number | null;
+  riseTime: number | null;
+  setTime: number | null;
+  magnitude: number | null;
+  illuminationPercent: number | null;
+  phaseAngle: number | null;
+  heliocentricDistanceAu: number | null;
+  geocentricDistanceAu: number | null;
+  eclipticLongitude: number | null;
+  eclipticLatitude: number | null;
+  skyState: "up" | "below_horizon" | "too_bright" | "unknown";
+}
+
+export type AstronomyEventFamily =
+  "season" | "lunar_eclipse" | "solar_eclipse" | "transit";
+
+export interface AstronomyGlobalEvent {
+  family: AstronomyEventFamily;
+  label: string;
+  time: number;
+  localVisibility: null;
+}
+
+export type AstronomyGroupStatus = "fresh" | "stale" | "unavailable";
+
+export interface AstronomyGroups {
+  moon: { status: AstronomyGroupStatus; data: AstronomyMoonData | null };
+  horizon: { status: AstronomyGroupStatus; data: AstronomyHorizonData | null };
+  planets: { status: AstronomyGroupStatus; data: AstronomyPlanetData[] };
+  events: { status: AstronomyGroupStatus; data: AstronomyGlobalEvent[] };
+}
+
+export type AstronomySnapshotStatus = "complete" | "partial" | "unavailable";
+
+export interface AstronomySnapshot {
+  locationId: string;
+  forTimestamp: number;
+  calculatedAt: number;
+  stale: boolean;
+  status: AstronomySnapshotStatus;
+  groups: AstronomyGroups;
+}
+
+export interface AstronomySettings {
+  enabled: boolean;
+  pollIntervalMinutes: number;
+}
+
+export const DEFAULT_ASTRONOMY_SETTINGS: AstronomySettings = {
+  enabled: true,
+  pollIntervalMinutes: 60,
+};
+
+export const ASTRONOMY_MIN_POLL_INTERVAL_MINUTES = 15;
+export const ASTRONOMY_MAX_POLL_INTERVAL_MINUTES = 1440;
+
+export function normalizeAstronomyPollInterval(value: unknown): number {
+  const numeric =
+    typeof value === "number"
+      ? value
+      : typeof value === "string" && value.trim() !== ""
+        ? Number(value)
+        : NaN;
+  if (!Number.isFinite(numeric)) {
+    return DEFAULT_ASTRONOMY_SETTINGS.pollIntervalMinutes;
+  }
+  return Math.max(
+    ASTRONOMY_MIN_POLL_INTERVAL_MINUTES,
+    Math.min(ASTRONOMY_MAX_POLL_INTERVAL_MINUTES, Math.round(numeric)),
+  );
+}
+
+export function normalizeAstronomySettings(raw: unknown): AstronomySettings {
+  const candidate = (raw ?? {}) as Partial<AstronomySettings>;
+  return {
+    enabled:
+      typeof candidate.enabled === "boolean"
+        ? candidate.enabled
+        : DEFAULT_ASTRONOMY_SETTINGS.enabled,
+    pollIntervalMinutes: normalizeAstronomyPollInterval(
+      candidate.pollIntervalMinutes,
+    ),
+  };
+}
+
+export interface AstronomyStatus {
+  locationCount: number;
+  cachedLocationCount: number;
+  lastCalculatedAt: number | null;
+  enabled: boolean;
+}
+
+export interface AstronomyRefreshResult extends IpcMutationResult {
+  refreshedCount: number;
+}
+
+export interface AstronomyUpdatedEvent {
+  locationIds: string[];
+  ok: boolean;
 }

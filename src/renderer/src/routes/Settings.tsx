@@ -31,6 +31,7 @@ import { useTheme } from "../providers/ThemeProvider";
 import { useYouTubeChannels } from "../hooks/useYouTubeChannels";
 import { useSidebarConfig } from "../hooks/useSidebarConfig";
 import { useRedditDigestEnabled } from "../contexts/RedditDigestEnabledContext";
+import { useAstronomyEnabled } from "../contexts/AstronomyEnabledContext";
 import { useSavedPostsEnabled } from "../contexts/SavedPostsEnabledContext";
 import { useSportsEnabled } from "../contexts/SportsEnabledContext";
 import { useWeatherEnabled } from "../contexts/WeatherEnabledContext";
@@ -1317,6 +1318,8 @@ function RedditDigestTab(): React.ReactElement {
 
 function GeneralTab(): React.ReactElement {
   const { enabled, setEnabled } = useRedditDigestEnabled();
+  const { enabled: astronomyEnabled, setEnabled: setAstronomyEnabled } =
+    useAstronomyEnabled();
   const { enabled: savedPostsEnabled, setEnabled: setSavedPostsEnabled } =
     useSavedPostsEnabled();
   const { enabled: sportsEnabled, setEnabled: setSportsEnabled } =
@@ -1583,6 +1586,23 @@ function GeneralTab(): React.ReactElement {
                 checked={weatherEnabled}
                 onCheckedChange={setWeatherEnabled}
                 aria-label="Enable Weather"
+              />
+            </div>
+          </div>
+
+          <div className="rounded-md border px-3 py-2">
+            <p className="text-sm font-medium">Astronomy</p>
+            <p className="text-xs text-muted-foreground mb-3">
+              Enable or disable the Astronomy feature. When disabled, astronomy
+              data is hidden and calculations stop, but cached data and widget
+              settings are retained.
+            </p>
+            <div className="flex items-center justify-between rounded-md border px-3 py-2 max-w-sm">
+              <span className="text-sm">Enable Astronomy</span>
+              <Switch
+                checked={astronomyEnabled}
+                onCheckedChange={setAstronomyEnabled}
+                aria-label="Enable Astronomy"
               />
             </div>
           </div>

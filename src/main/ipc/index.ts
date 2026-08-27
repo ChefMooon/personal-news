@@ -16,6 +16,10 @@ import {
   normalizeSidebarConfig,
 } from "../../shared/ipc-types";
 import type {
+  AstronomyRefreshResult,
+  AstronomySettings,
+  AstronomySnapshot,
+  AstronomyStatus,
   WeatherSearchResult,
   WeatherSettings,
   WeatherStatus,
@@ -98,6 +102,13 @@ import {
   triggerWeatherRefresh,
   updateWeatherSettings,
 } from "../sources/weather/index";
+import {
+  getAstronomySettings,
+  getAstronomySnapshot,
+  getAstronomyStatus,
+  triggerAstronomyRefresh,
+  updateAstronomySettings,
+} from "../sources/astronomy/index";
 import { registerSportsIpcHandlers } from "../sources/sports/ipc";
 import {
   activeRuns,
@@ -3341,6 +3352,44 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle(IPC.WEATHER_GET_STATUS, (): WeatherStatus => {
     return getWeatherStatus();
+  });
+
+  // --- Astronomy ---
+
+  ipcMain.handle(
+    IPC.ASTRONOMY_GET_SNAPSHOT,
+    (_event, locationId: string): AstronomySnapshot | null => {
+      return getAstronomySnapshot(locationId);
+    },
+  );
+
+  ipcMain.handle(
+    IPC.ASTRONOMY_REFRESH,
+    async (_event, locationId?: string): Promise<AstronomyRefreshResult> => {
+      return triggerAstronomyRefresh(locationId);
+    },
+  );
+
+  ipcMain.handle(
+    IPC.ASTRONOMY_REFRESH_ALL,
+    (): Promise<AstronomyRefreshResult> => {
+      return triggerAstronomyRefresh();
+    },
+  );
+
+  ipcMain.handle(IPC.ASTRONOMY_GET_SETTINGS, (): AstronomySettings => {
+    return getAstronomySettings();
+  });
+
+  ipcMain.handle(
+    IPC.ASTRONOMY_SET_SETTINGS,
+    (_event, settings: Partial<AstronomySettings>): AstronomySettings => {
+      return updateAstronomySettings(settings);
+    },
+  );
+
+  ipcMain.handle(IPC.ASTRONOMY_GET_STATUS, (): AstronomyStatus => {
+    return getAstronomyStatus();
   });
 
   // settings:get (generic)

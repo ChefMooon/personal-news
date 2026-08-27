@@ -8,6 +8,7 @@ import {
   Bookmark,
   CloudSun,
   Trophy,
+  Moon,
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -23,6 +24,7 @@ import { useRedditDigest } from "../hooks/useRedditDigest";
 import { useSavedPostsEnabled } from "../contexts/SavedPostsEnabledContext";
 import { useSportsEnabled } from "../contexts/SportsEnabledContext";
 import { useWeatherEnabled } from "../contexts/WeatherEnabledContext";
+import { useAstronomyEnabled } from "../contexts/AstronomyEnabledContext";
 import type { WidgetLayout } from "../../../shared/ipc-types";
 import { cn } from "../lib/utils";
 
@@ -70,6 +72,11 @@ const MODULE_META: Record<
       "Today's schedule plus your tracked teams for supported sports.",
     icon: <Trophy className="h-7 w-7 text-amber-600" />,
   },
+  astronomy: {
+    description:
+      "Moon phase, horizon times, planets, and upcoming global sky events for a saved location.",
+    icon: <Moon className="h-7 w-7 text-indigo-400" />,
+  },
 };
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -89,6 +96,7 @@ export function AddWidgetModal({
   const { enabled: savedPostsEnabled } = useSavedPostsEnabled();
   const { enabled: sportsEnabled } = useSportsEnabled();
   const { enabled: weatherEnabled } = useWeatherEnabled();
+  const { enabled: astronomyEnabled } = useAstronomyEnabled();
   const availableSubreddits = useMemo(
     () => [...new Set(posts.map((p) => p.subreddit))].sort(),
     [posts],
@@ -213,6 +221,7 @@ export function AddWidgetModal({
               savedPostsEnabled={savedPostsEnabled}
               sportsEnabled={sportsEnabled}
               weatherEnabled={weatherEnabled}
+              astronomyEnabled={astronomyEnabled}
             />
           ) : (
             <ConfigureForm
@@ -255,11 +264,13 @@ function WidgetPicker({
   savedPostsEnabled,
   sportsEnabled,
   weatherEnabled,
+  astronomyEnabled,
 }: {
   onSelect: (id: string) => void;
   savedPostsEnabled: boolean;
   sportsEnabled: boolean;
   weatherEnabled: boolean;
+  astronomyEnabled: boolean;
 }): React.ReactElement {
   return (
     <div className="grid grid-cols-1 gap-3">
@@ -272,6 +283,9 @@ function WidgetPicker({
           return null;
         }
         if (mod.id === "weather" && !weatherEnabled) {
+          return null;
+        }
+        if (mod.id === "astronomy" && !astronomyEnabled) {
           return null;
         }
         const meta = MODULE_META[mod.id];

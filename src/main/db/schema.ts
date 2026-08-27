@@ -10,6 +10,11 @@ interface RequiredSchemaMigration {
 
 const REQUIRED_SCHEMA_MIGRATIONS: RequiredSchemaMigration[] = [
   {
+    name: "astronomy-cache-table",
+    migrationFile: "010_astronomy_cache.sql",
+    shouldApply: (database) => !tableExists(database, "astronomy_cache"),
+  },
+  {
     name: "ingested-links-table",
     migrationFile: "009_ingested_links.sql",
     shouldApply: (database) => !tableExists(database, "ingested_links"),

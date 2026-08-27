@@ -18,6 +18,7 @@ import {
   X,
 } from "lucide-react";
 import { useWidgetInstance } from "../../contexts/WidgetInstanceContext";
+import { useAstronomyEnabled } from "../../contexts/AstronomyEnabledContext";
 import {
   useWeatherConfig,
   DEFAULT_WEATHER_VIEW_CONFIG,
@@ -45,6 +46,7 @@ import {
 } from "../../components/ui/alert-dialog";
 import { cn } from "../../lib/utils";
 import { WeatherSettingsPanel } from "./WeatherSettingsPanel";
+import { AstronomyStrip } from "./AstronomyStrip";
 import { registerRendererModule } from "../registry";
 import type {
   WeatherDailyPoint,
@@ -129,19 +131,6 @@ function formatVisibility(value: number | null): string {
 
 function formatAqi(value: number | null): string {
   return value == null ? "-" : String(Math.round(value));
-}
-
-function formatTime(value: number | null, settings: WeatherSettings): string {
-  if (value == null) return "-";
-  const hour12 =
-    settings.timeFormat === "system"
-      ? undefined
-      : settings.timeFormat === "12h";
-  return new Date(value * 1000).toLocaleTimeString([], {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12,
-  });
 }
 
 function formatHourLabel(value: number, settings: WeatherSettings): string {
@@ -634,6 +623,7 @@ function WeatherWidget(): React.ReactElement {
   const { instanceId, label } = useWidgetInstance();
   const widgetTitle = label ?? "Weather";
   const { config, setConfig } = useWeatherConfig(instanceId);
+  const { enabled: astronomyFeatureEnabled } = useAstronomyEnabled();
   const { locations, search, saveLocation } = useWeatherLocations();
   const { settings } = useWeatherSettings();
   const effectiveLocationId = config.locationId ?? settings.defaultLocationId;
@@ -674,6 +664,9 @@ function WeatherWidget(): React.ReactElement {
     () => formatLastSynced(snapshot?.fetchedAt ?? null, settings),
     [snapshot?.fetchedAt, settings],
   );
+
+  // App-level Astronomy gate combined with the instance-scoped choice.
+  const astronomyVisible = astronomyFeatureEnabled && config.showAstronomy;
 
   const refreshNow = async (): Promise<void> => {
     const now = Date.now();
@@ -741,6 +734,14 @@ function WeatherWidget(): React.ReactElement {
   ): void => {
     setConfig({ ...config, hourlyMetric });
   };
+
+  const hourlyContentWidth = Math.min(
+    Math.max(
+      (snapshot?.hourly.slice(0, hourlyCount(config)).length ?? 0) * 58,
+      340,
+    ),
+    760,
+  );
 
   const preview = (
     <div className="space-y-3">
@@ -834,73 +835,32 @@ function WeatherWidget(): React.ReactElement {
             </div>
           )}
 
-          {config.showSunTimes && snapshot.daily[0] && (
-            <div className="flex items-center gap-3 rounded-md border px-3 py-2 text-xs text-muted-foreground">
-              <span>
-                Sunrise {formatTime(snapshot.daily[0].sunrise, settings)}
-              </span>
-              <span>
-                Sunset {formatTime(snapshot.daily[0].sunset, settings)}
-              </span>
-            </div>
+          {astronomyVisible && snapshot.location.timezone && (
+            <AstronomyStrip
+              astronomy={snapshot.astronomy}
+              timezone={snapshot.location.timezone}
+              settings={settings}
+              contentWidth={hourlyContentWidth}
+            />
           )}
 
           {config.displayMode !== "current" && (
             <>
-              {config.displayMode === "current_all" && (
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex overflow-hidden rounded-md border text-[11px]">
-                    {(["all", "hourly", "daily"] as const).map((tab) => (
-                      <button
-                        key={tab}
-                        type="button"
-                        className={cn(
-                          "px-2.5 py-1 transition-colors",
-                          config.forecastView === tab
-                            ? "bg-accent text-foreground font-medium"
-                            : "text-muted-foreground hover:bg-accent/50",
-                        )}
-                        onClick={() =>
-                          setConfig({ ...config, forecastView: tab })
-                        }
-                      >
-                        {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
               {config.displayMode === "current_all" ? (
-                config.forecastView === "all" ? (
-                  <div className="space-y-3">
-                    <DailyForecast
-                      points={snapshot.daily}
-                      yesterday={snapshot.yesterday}
-                      config={config}
-                      settings={settings}
-                    />
-                    <HourlyTimeline
-                      points={snapshot.hourly}
-                      config={config}
-                      settings={settings}
-                      onMetricChange={updateHourlyMetric}
-                    />
-                  </div>
-                ) : config.forecastView === "hourly" ? (
-                  <HourlyTimeline
-                    points={snapshot.hourly}
-                    config={config}
-                    settings={settings}
-                    onMetricChange={updateHourlyMetric}
-                  />
-                ) : (
+                <div className="space-y-3">
                   <DailyForecast
                     points={snapshot.daily}
                     yesterday={snapshot.yesterday}
                     config={config}
                     settings={settings}
                   />
-                )
+                  <HourlyTimeline
+                    points={snapshot.hourly}
+                    config={config}
+                    settings={settings}
+                    onMetricChange={updateHourlyMetric}
+                  />
+                </div>
               ) : config.displayMode === "current_hourly" ? (
                 <HourlyTimeline
                   points={snapshot.hourly}

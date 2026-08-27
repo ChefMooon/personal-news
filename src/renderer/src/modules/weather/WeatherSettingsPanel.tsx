@@ -316,11 +316,11 @@ export function WeatherSettingsPanel({
                 />
               </div>
               <div className="flex items-center justify-between">
-                <label className="text-sm">Show sunrise and sunset</label>
+                <label className="text-sm">Show astronomy</label>
                 <Switch
-                  checked={config.showSunTimes}
+                  checked={config.showAstronomy}
                   onCheckedChange={(checked) =>
-                    onChange({ ...config, showSunTimes: checked })
+                    onChange({ ...config, showAstronomy: checked })
                   }
                 />
               </div>

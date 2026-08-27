@@ -4,6 +4,7 @@ export interface DataSourceModule {
   id: string;
   displayName: string;
   initialize(db: Database.Database): void;
+  start?(): void;
   shutdown(): void;
 }
 
@@ -17,6 +18,9 @@ export function initializeAll(db: Database.Database): void {
   for (const mod of modules) {
     mod.initialize(db);
     console.log(`[Sources] Initialized: ${mod.id}`);
+  }
+  for (const mod of modules) {
+    mod.start?.();
   }
 }
 

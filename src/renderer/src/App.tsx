@@ -9,6 +9,7 @@ import ScriptManager from "./routes/ScriptManager";
 import Settings from "./routes/Settings";
 import SportsPage from "./routes/Sports";
 import { RedditDigestEnabledProvider } from "./contexts/RedditDigestEnabledContext";
+import { AstronomyEnabledProvider } from "./contexts/AstronomyEnabledContext";
 import { RadioPlayerProvider } from "./contexts/RadioPlayerContext";
 import { SavedPostsEnabledProvider } from "./contexts/SavedPostsEnabledContext";
 import { SidebarConfigProvider } from "./contexts/SidebarConfigContext";
@@ -181,11 +182,13 @@ export default function App(): React.ReactElement {
     <RedditDigestEnabledProvider>
       <SavedPostsEnabledProvider>
         <SportsEnabledProvider>
-          <WeatherEnabledProvider>
-            <SidebarConfigProvider>
-              <AppShell />
-            </SidebarConfigProvider>
-          </WeatherEnabledProvider>
+          <AstronomyEnabledProvider>
+            <WeatherEnabledProvider>
+              <SidebarConfigProvider>
+                <AppShell />
+              </SidebarConfigProvider>
+            </WeatherEnabledProvider>
+          </AstronomyEnabledProvider>
         </SportsEnabledProvider>
       </SavedPostsEnabledProvider>
     </RedditDigestEnabledProvider>

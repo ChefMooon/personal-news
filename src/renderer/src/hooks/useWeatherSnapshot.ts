@@ -43,5 +43,18 @@ export function useWeatherSnapshot(locationId: string | null): {
     });
   }, [refetch]);
 
+  useEffect(() => {
+    return window.api.on(IPC.ASTRONOMY_UPDATED, (event) => {
+      const locationIds = (event as { locationIds?: string[] }).locationIds;
+      if (
+        !locationIds ||
+        locationId == null ||
+        locationIds.includes(locationId)
+      ) {
+        refetch();
+      }
+    });
+  }, [locationId, refetch]);
+
   return { snapshot, loading, refetch };
 }

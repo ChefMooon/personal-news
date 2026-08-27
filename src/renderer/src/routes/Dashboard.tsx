@@ -45,6 +45,7 @@ import { useSavedPostsEnabled } from "../contexts/SavedPostsEnabledContext";
 import { useRedditDigestEnabled } from "../contexts/RedditDigestEnabledContext";
 import { useSportsEnabled } from "../contexts/SportsEnabledContext";
 import { useWeatherEnabled } from "../contexts/WeatherEnabledContext";
+import { useAstronomyEnabled } from "../contexts/AstronomyEnabledContext";
 import { normalizeSportsViewConfig } from "../hooks/useSportsViewConfig";
 import { Tabs, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { DashboardGlyph } from "../lib/dashboard-icons";
@@ -233,6 +234,7 @@ import "../modules/reddit/RedditDigestWidget";
 import "../modules/saved-posts/SavedPostsWidget";
 import "../modules/sports";
 import "../modules/weather/WeatherWidget";
+import "../modules/astronomy/AstronomyWidget";
 
 export default function Dashboard(): React.ReactElement {
   const {
@@ -254,6 +256,7 @@ export default function Dashboard(): React.ReactElement {
   const { enabled: savedPostsEnabled } = useSavedPostsEnabled();
   const { enabled: sportsEnabled } = useSportsEnabled();
   const { enabled: weatherEnabled } = useWeatherEnabled();
+  const { enabled: astronomyEnabled } = useAstronomyEnabled();
   const [editMode, setEditMode] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [dashboardDialogMode, setDashboardDialogMode] = useState<
@@ -898,6 +901,8 @@ export default function Dashboard(): React.ReactElement {
                   if (instance.moduleId === "sports" && !sportsEnabled)
                     return null;
                   if (instance.moduleId === "weather" && !weatherEnabled)
+                    return null;
+                  if (instance.moduleId === "astronomy" && !astronomyEnabled)
                     return null;
                   const mod = getModule(instance.moduleId);
                   if (!mod) return null;

@@ -53,6 +53,7 @@ function runMigrations(database: Database.Database): void {
     7: "007_weather_poll_interval_default.sql",
     8: "008_saved_posts_subreddit_tags.sql",
     9: "009_ingested_links.sql",
+    10: "010_astronomy_cache.sql",
   };
 
   // Ensure meta table exists first
