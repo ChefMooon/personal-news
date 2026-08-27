@@ -230,12 +230,6 @@ function CurrentDetailGrid({
       visible: config.showHumidity,
     },
     {
-      key: "feels",
-      label: "Feels like",
-      value: formatTemp(current.apparentTemperature, settings),
-      visible: config.showFeelsLike,
-    },
-    {
       key: "visibility",
       label: "Visibility",
       value: formatVisibility(current.visibility),
@@ -264,7 +258,7 @@ function CurrentDetailGrid({
   if (details.length === 0) return <></>;
 
   return (
-    <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3 lg:grid-cols-4">
+    <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-left sm:grid-cols-3 lg:grid-cols-5">
       {details.map((detail) => (
         <div key={detail.key} className="min-w-0">
           <p className="truncate text-[10px] font-medium text-muted-foreground">
@@ -759,46 +753,50 @@ function WeatherWidget(): React.ReactElement {
         </div>
       ) : (
         <>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-5">
-            <div className="flex items-start gap-2.5 sm:shrink-0">
-              <div className="shrink-0 [&_svg]:h-9 [&_svg]:w-9">
-                {weatherIcon(
-                  snapshot.current.weatherCode,
-                  snapshot.current.isDay,
-                )}
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-baseline gap-1.5 leading-none">
-                  <span className="text-3xl font-light">
-                    {formatTemp(snapshot.current.temperature, settings)}
-                  </span>
-                  {config.showFeelsLike && (
-                    <span className="text-xs text-muted-foreground">
-                      feels{" "}
-                      {formatTemp(
-                        snapshot.current.apparentTemperature,
-                        settings,
+          <div className="w-fit max-w-full rounded-xl border bg-muted/5 p-2.5">
+            <div className="max-w-full" style={{ width: hourlyContentWidth }}>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-5">
+                <div className="flex items-start gap-2.5 sm:shrink-0">
+                  <div className="shrink-0 [&_svg]:h-9 [&_svg]:w-9">
+                    {weatherIcon(
+                      snapshot.current.weatherCode,
+                      snapshot.current.isDay,
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-baseline gap-1.5 leading-none">
+                      <span className="text-3xl font-light">
+                        {formatTemp(snapshot.current.temperature, settings)}
+                      </span>
+                      {config.showFeelsLike && (
+                        <span className="text-xs text-muted-foreground">
+                          feels{" "}
+                          {formatTemp(
+                            snapshot.current.apparentTemperature,
+                            settings,
+                          )}
+                        </span>
                       )}
-                    </span>
-                  )}
+                    </div>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {formatLocationName(snapshot)}
+                    </p>
+                    {snapshot.stale && (
+                      <Badge variant="secondary" className="mt-1.5">
+                        Stale
+                      </Badge>
+                    )}
+                  </div>
                 </div>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {formatLocationName(snapshot)}
-                </p>
-                {snapshot.stale && (
-                  <Badge variant="secondary" className="mt-1.5">
-                    Stale
-                  </Badge>
-                )}
-              </div>
-            </div>
 
-            <div className="min-w-0 flex-1 sm:max-w-[42rem]">
-              <CurrentDetailGrid
-                snapshot={snapshot}
-                config={config}
-                settings={settings}
-              />
+                <div className="min-w-0 flex-1 sm:max-w-[42rem]">
+                  <CurrentDetailGrid
+                    snapshot={snapshot}
+                    config={config}
+                    settings={settings}
+                  />
+                </div>
+              </div>
             </div>
           </div>
 
@@ -848,12 +846,19 @@ function WeatherWidget(): React.ReactElement {
             <>
               {config.displayMode === "current_all" ? (
                 <div className="space-y-3">
-                  <DailyForecast
-                    points={snapshot.daily}
-                    yesterday={snapshot.yesterday}
-                    config={config}
-                    settings={settings}
-                  />
+                  <div className="w-fit max-w-full rounded-xl border bg-muted/5 p-2.5">
+                    <div
+                      className="max-w-full"
+                      style={{ width: hourlyContentWidth }}
+                    >
+                      <DailyForecast
+                        points={snapshot.daily}
+                        yesterday={snapshot.yesterday}
+                        config={config}
+                        settings={settings}
+                      />
+                    </div>
+                  </div>
                   <HourlyTimeline
                     points={snapshot.hourly}
                     config={config}
@@ -869,12 +874,19 @@ function WeatherWidget(): React.ReactElement {
                   onMetricChange={updateHourlyMetric}
                 />
               ) : (
-                <DailyForecast
-                  points={snapshot.daily}
-                  yesterday={snapshot.yesterday}
-                  config={config}
-                  settings={settings}
-                />
+                <div className="w-fit max-w-full rounded-xl border bg-muted/5 p-2.5">
+                  <div
+                    className="max-w-full"
+                    style={{ width: hourlyContentWidth }}
+                  >
+                    <DailyForecast
+                      points={snapshot.daily}
+                      yesterday={snapshot.yesterday}
+                      config={config}
+                      settings={settings}
+                    />
+                  </div>
+                </div>
               )}
             </>
           )}
