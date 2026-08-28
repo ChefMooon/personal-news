@@ -55,53 +55,68 @@ Suggested re-prompt when version is not greater than current:
 - Compare `version` to `currentVersion` using semantic version comparison.
 - If `version` is missing, invalid, or not strictly greater than `currentVersion`, ask with `vscode/askQuestions` and repeat validation.
 
-2. Sync main branch.
+2. Run the release preflight before changing or syncing anything.
+- Confirm the current branch is `main`.
+- Check `git status --short`; if any changes are present, stop and ask the user to commit or stash them. Do not checkout, pull, or modify a dirty worktree.
+- Confirm the remote is available and `main` can be fast-forwarded from `origin/main`.
+- Compute `tagVersion` and check both local and remote tags. If the tag already exists, stop and ask; never delete or recreate it unless the user explicitly requests a rerun.
+
+3. Sync main branch.
 ```bash
 git checkout main
 git pull origin main
 ```
 
-3. Confirm release notes are ready.
+4. Confirm release notes are ready.
 - Ensure `CHANGELOG.md` contains the matching version section.
 - The release notes body must be sourced from that exact section (same headings/bullets style used in the `v1.3.1` release).
 
-4. Update package versions.
+5. Update package versions.
 ```bash
 npm version <version> --no-git-tag-version
 ```
 
-5. Verify production build on Windows.
+6. Verify production build on Windows.
 ```bash
 npm run verify:production:win
 ```
 
-6. Commit release prep.
+7. Commit release prep.
 ```bash
 git add package.json package-lock.json CHANGELOG.md
 git commit -m "chore(release): v<version>"
 git push origin main
 ```
 
-7. Create annotated tag with the computed `tagVersion`.
+8. Create annotated tag with the computed `tagVersion`.
 ```bash
 git tag -a <tagVersion> -m "Release <tagVersion>"
 ```
 
-8. Push the tag to trigger release workflow.
+9. Push the tag to trigger release workflow.
 ```bash
 git push origin <tagVersion>
 ```
 
-9. Verify workflow completed for the tag.
-- Watch `Release (Windows)` in GitHub Actions for the pushed tag.
+10. Verify workflow completed for the tag.
+- Record the run ID and URL for the run triggered by `<tagVersion>`.
+- Prefer machine-readable polling with `gh run list` or `gh run view` and JSON fields for `status` and `conclusion`.
+- Poll at a bounded interval until the run is complete. Continue only when `status` is `completed` and `conclusion` is `success`.
+- If GitHub CLI output is not capture-safe, use the authenticated GitHub REST API for `actions/runs` and poll the same fields. If the run fails, times out, or cannot be identified, stop with the run URL, status, and the exact next resume step; do not edit notes or publish.
 
-10. Populate draft release notes from `CHANGELOG.md`.
+11. Verify the draft release before changing its notes.
+- Confirm a GitHub release exists for `<tagVersion>`, is still a draft, and has the expected Windows installer asset.
+- If the release is missing, published unexpectedly, or lacks the installer, stop with a checkpoint and do not apply notes.
+
+12. Populate draft release notes from `CHANGELOG.md`.
 - Extract the section for `version` from `CHANGELOG.md`:
   - Start at: `## [<version>] - ...`
   - End before the next `## [` heading (or end-of-file).
 - Remove the section title line (`## [<version>] - ...`) from the extracted notes body.
 - Keep the remaining markdown content exactly as-is (for example `### Added`, `### Changed`, `### Fixed`, bullet lists).
-- Apply those notes to the release for `<tagVersion>` before publishing.
+- Require that the section exists and has non-empty content.
+- First run the helper with `--dry-run` and inspect the extracted notes. Apply the same notes only after the dry-run matches the requested section.
+- Apply those notes to the draft release for `<tagVersion>` before publishing.
 
 Use the helper command:
 ```bash
@@ -114,13 +129,21 @@ npm run release:notes -- 1.3.1 release
 npm run release:notes -- 1.3.1 beta
 ```
 
-11. Publish draft release.
-- Open GitHub Releases, review title/notes/assets, and publish the draft.
+13. Publish draft release.
+- Review the title, notes, and assets after the notes update.
+- Ask the user for explicit confirmation immediately before publishing. Do not publish without confirmation.
+- After confirmation, publish the draft through the repository's GitHub release workflow or the authenticated GitHub CLI.
 
-12. Post-publish checks.
+14. Post-publish checks.
 - Release is Published (not Draft).
 - Installer asset exists.
 - Optional quick install smoke test.
+
+## Failure and Resume Rules
+
+- Treat each numbered procedure step as a checkpoint. If a command fails, stop at that step and report the command, relevant output, and whether any remote mutation completed.
+- Do not repeat commit, tag, notes, or publish actions automatically after a failure. Resume only after checking the current branch, commit, tag, release, and draft state.
+- The re-run procedure below is an exception only when the user explicitly asks to re-run an existing tag.
 
 ## Re-run Existing Tag (Use With Care)
 
