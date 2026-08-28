@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useRedditDigest } from "../../hooks/useRedditDigest";
 import {
   DEFAULT_DIGEST_VIEW_CONFIG,
@@ -16,6 +17,7 @@ import {
   CardTitle,
   CardContent,
 } from "../../components/ui/card";
+import { Button } from "../../components/ui/button";
 import {
   Tabs,
   TabsList,
@@ -53,10 +55,10 @@ function RedditDigestWidget(): React.ReactElement {
   const [editContentHeight, setEditContentHeight] = useState<number | null>(
     null,
   );
-  const [isExpanded, setIsExpanded] = useState(false);
   const [smallGroupIndex, setSmallGroupIndex] = useState(0);
   const [contentWidth, setContentWidth] = useState(0);
   const cardContentRef = useRef<HTMLDivElement | null>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const element = cardContentRef.current;
@@ -210,7 +212,6 @@ function RedditDigestWidget(): React.ReactElement {
     groupKeys.some(
       (key) => (groups.get(key)?.length ?? 0) > config.max_posts_per_group,
     ),
-    isExpanded,
   );
   useEffect(() => {
     setSmallGroupIndex((index) =>
@@ -223,9 +224,9 @@ function RedditDigestWidget(): React.ReactElement {
       ? groupKeys.length > 0
         ? [groupKeys[smallGroupIndex]]
         : []
-      : isExpanded
-        ? groupKeys
-        : groupKeys.slice(0, contentPolicy.groupLimit);
+      : contentPolicy.effectiveMode === "columns"
+        ? groupKeys.slice(0, contentPolicy.columnCount)
+        : groupKeys;
   const widgetTitle = label ?? "Reddit Digest";
   const effectiveLoading = loading || weeksLoading;
 
@@ -305,7 +306,7 @@ function RedditDigestWidget(): React.ReactElement {
     <div
       className="grid min-w-0 gap-4"
       style={{
-        gridTemplateColumns: `repeat(${Math.max(1, Math.min(displayGroupKeys.length, Math.floor(contentWidth / 220) || 1))}, minmax(0, 1fr))`,
+        gridTemplateColumns: `repeat(${contentPolicy.columnCount}, minmax(0, 1fr))`,
       }}
     >
       {displayGroupKeys.map((key) => (
@@ -350,12 +351,6 @@ function RedditDigestWidget(): React.ReactElement {
     </Tabs>
   );
 
-  const hasDisclosure =
-    contentPolicy.hasMorePosts && !isExpanded && size !== "small";
-  const omittedGroupCount = Math.max(
-    0,
-    groupKeys.length - contentPolicy.groupLimit,
-  );
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -373,8 +368,18 @@ function RedditDigestWidget(): React.ReactElement {
               </span>
             )}
           </div>
-          {isEditing ? (
-            <div className="flex items-center gap-0.5">
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => navigate("/reddit-digest")}
+              className="h-6 px-2 py-0 text-[10px] font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
+            >
+              View All
+            </Button>
+            {isEditing ? (
+              <div className="flex items-center gap-0.5">
               <button
                 type="button"
                 className="p-1 rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
@@ -421,16 +426,17 @@ function RedditDigestWidget(): React.ReactElement {
                 <X className="h-4 w-4" />
               </button>
             </div>
-          ) : (
-            <button
-              type="button"
-              className="p-1 rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-              aria-label="Reddit Digest widget settings"
-              onClick={handleOpenEdit}
-            >
-              <Settings2 className="h-4 w-4" />
-            </button>
-          )}
+            ) : (
+              <button
+                type="button"
+                className="p-1 rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                aria-label="Reddit Digest widget settings"
+                onClick={handleOpenEdit}
+              >
+                <Settings2 className="h-4 w-4" />
+              </button>
+            )}
+          </div>
         </div>
       </CardHeader>
       <CardContent
@@ -448,18 +454,6 @@ function RedditDigestWidget(): React.ReactElement {
             }
           >
             {digestContent}
-            {hasDisclosure && (
-              <button
-                type="button"
-                className="mt-3 text-xs font-medium text-primary hover:underline"
-                onClick={() => setIsExpanded(true)}
-              >
-                Show more content
-                {omittedGroupCount > 0
-                  ? ` (${omittedGroupCount} more ${omittedGroupCount === 1 ? "subreddit" : "subreddits"})`
-                  : ""}
-              </button>
-            )}
           </div>
           {isEditing && (
             <div className="reddit-digest-card-edit__panel">

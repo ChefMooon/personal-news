@@ -11,7 +11,6 @@ describe("getRedditDigestContentPolicy", () => {
         DEFAULT_DIGEST_VIEW_CONFIG,
         3,
         true,
-        false,
       ),
     ).toEqual({
       effectiveMode: "tabs",
@@ -20,11 +19,12 @@ describe("getRedditDigestContentPolicy", () => {
       hasMoreGroups: true,
       hasMorePosts: true,
       hasMoreContent: true,
+      columnCount: 1,
       overflow: "hidden",
     });
   });
 
-  it("enables the single content viewport after Small disclosure", () => {
+  it("keeps the Small widget viewport contained without disclosure", () => {
     expect(
       getRedditDigestContentPolicy(
         "small",
@@ -32,9 +32,8 @@ describe("getRedditDigestContentPolicy", () => {
         DEFAULT_DIGEST_VIEW_CONFIG,
         1,
         false,
-        true,
       ).overflow,
-    ).toBe("auto");
+    ).toBe("hidden");
   });
 
   it("uses Medium columns only when the allocated content is wide enough", () => {
@@ -45,7 +44,6 @@ describe("getRedditDigestContentPolicy", () => {
         DEFAULT_DIGEST_VIEW_CONFIG,
         4,
         false,
-        false,
       ).effectiveMode,
     ).toBe("tabs");
     expect(
@@ -55,12 +53,38 @@ describe("getRedditDigestContentPolicy", () => {
         DEFAULT_DIGEST_VIEW_CONFIG,
         4,
         false,
-        false,
       ).effectiveMode,
     ).toBe("columns");
+    expect(
+      getRedditDigestContentPolicy(
+        "medium",
+        660,
+        DEFAULT_DIGEST_VIEW_CONFIG,
+        6,
+        false,
+      ).columnCount,
+    ).toBe(3);
+    expect(
+      getRedditDigestContentPolicy(
+        "medium",
+        928,
+        DEFAULT_DIGEST_VIEW_CONFIG,
+        6,
+        false,
+      ).columnCount,
+    ).toBe(4);
+    expect(
+      getRedditDigestContentPolicy(
+        "medium",
+        1164,
+        DEFAULT_DIGEST_VIEW_CONFIG,
+        6,
+        false,
+      ).columnCount,
+    ).toBe(5);
   });
 
-  it("preserves the configured mode as input while capping Medium content", () => {
+  it("preserves the configured mode while showing all Medium groups", () => {
     const policy = getRedditDigestContentPolicy(
       "medium",
       800,
@@ -71,16 +95,16 @@ describe("getRedditDigestContentPolicy", () => {
       },
       6,
       true,
-      false,
     );
 
     expect(policy).toMatchObject({
       effectiveMode: "tabs",
-      groupLimit: 4,
+      groupLimit: Number.POSITIVE_INFINITY,
       postsPerGroupLimit: 4,
-      hasMoreGroups: true,
-      hasMorePosts: true,
-      hasMoreContent: true,
+      hasMoreGroups: false,
+      hasMorePosts: false,
+      hasMoreContent: false,
+      columnCount: 0,
       overflow: "hidden",
     });
   });
@@ -93,7 +117,6 @@ describe("getRedditDigestContentPolicy", () => {
         DEFAULT_DIGEST_VIEW_CONFIG,
         12,
         true,
-        false,
       ),
     ).toMatchObject({
       groupLimit: Number.POSITIVE_INFINITY,
@@ -101,7 +124,38 @@ describe("getRedditDigestContentPolicy", () => {
       hasMoreGroups: false,
       hasMorePosts: false,
       hasMoreContent: false,
+      columnCount: 3,
       overflow: "auto",
     });
+  });
+
+  it("clamps Medium and Large columns to the available group count", () => {
+    expect(
+      getRedditDigestContentPolicy(
+        "medium",
+        1100,
+        DEFAULT_DIGEST_VIEW_CONFIG,
+        1,
+        false,
+      ).columnCount,
+    ).toBe(1);
+    expect(
+      getRedditDigestContentPolicy(
+        "large",
+        1100,
+        DEFAULT_DIGEST_VIEW_CONFIG,
+        2,
+        false,
+      ).columnCount,
+    ).toBe(2);
+    expect(
+      getRedditDigestContentPolicy(
+        "large",
+        1100,
+        DEFAULT_DIGEST_VIEW_CONFIG,
+        0,
+        false,
+      ).columnCount,
+    ).toBe(0);
   });
 });
