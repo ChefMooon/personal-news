@@ -237,10 +237,7 @@ function MoonCard({
   if (!moon) {
     return (
       <div
-        className={cn(
-          "flex min-w-0 flex-col gap-2",
-          alignBottom && "h-full",
-        )}
+        className={cn("flex min-w-0 flex-col gap-2", alignBottom && "h-full")}
       >
         <div className="flex min-w-0 items-center gap-3">
           <MoonPhaseGlyph
@@ -289,9 +286,7 @@ function MoonCard({
   )}% illuminated`;
 
   return (
-    <div
-      className={cn("flex min-w-0 flex-col gap-2", alignBottom && "h-full")}
-    >
+    <div className={cn("flex min-w-0 flex-col gap-2", alignBottom && "h-full")}>
       <div className="flex min-w-0 items-center gap-3">
         <MoonPhaseGlyph
           phaseAngle={moon.phaseAngle}
@@ -415,7 +410,8 @@ function NextPhaseCard({
       {milestone ? (
         <>
           <p className="break-words text-xs font-semibold text-foreground">
-            {moonPhaseDisplayName(milestone.name)}{" · "}
+            {moonPhaseDisplayName(milestone.name)}
+            {" · "}
             {countdownLabel(milestone.time, nowSeconds)}
           </p>
           <div>
@@ -607,10 +603,9 @@ export function AstronomyStrip({
           </div>
         )}
         {stacked ? (
-          <p
-            className="mt-3 shrink-0 border-t pt-2 text-right text-[10px] text-muted-foreground"
-          >
-            Updated: {formatCalculatedAt(
+          <p className="mt-3 shrink-0 border-t pt-2 text-right text-[10px] text-muted-foreground">
+            Updated:{" "}
+            {formatCalculatedAt(
               astronomy?.calculatedAt ?? null,
               timezone,
               settings.timeFormat,
@@ -619,7 +614,8 @@ export function AstronomyStrip({
         ) : (
           !compact && (
             <p className="absolute bottom-2 right-3 text-[10px] text-muted-foreground">
-              Updated: {formatCalculatedAt(
+              Updated:{" "}
+              {formatCalculatedAt(
                 astronomy?.calculatedAt ?? null,
                 timezone,
                 settings.timeFormat,

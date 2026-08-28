@@ -380,52 +380,52 @@ function RedditDigestWidget(): React.ReactElement {
             </Button>
             {isEditing ? (
               <div className="flex items-center gap-0.5">
-              <button
-                type="button"
-                className="p-1 rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                onClick={handleReset}
-                title="Reset to when you opened this"
-                aria-label="Reset settings"
-              >
-                <RotateCcw className="h-4 w-4" />
-              </button>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <button
-                    type="button"
-                    className="p-1 rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                    title="Restore defaults"
-                    aria-label="Restore default settings"
-                  >
-                    <RefreshCcw className="h-4 w-4" />
-                  </button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Restore Defaults</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      Reset all Reddit Digest widget settings to their defaults?
-                      This cannot be undone.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleFactoryReset}>
-                      Confirm
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-              <button
-                type="button"
-                className="p-1 rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                onClick={handleClose}
-                title="Close settings"
-                aria-label="Close settings"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
+                <button
+                  type="button"
+                  className="p-1 rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                  onClick={handleReset}
+                  title="Reset to when you opened this"
+                  aria-label="Reset settings"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                </button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <button
+                      type="button"
+                      className="p-1 rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                      title="Restore defaults"
+                      aria-label="Restore default settings"
+                    >
+                      <RefreshCcw className="h-4 w-4" />
+                    </button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Restore Defaults</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Reset all Reddit Digest widget settings to their
+                        defaults? This cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleFactoryReset}>
+                        Confirm
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+                <button
+                  type="button"
+                  className="p-1 rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                  onClick={handleClose}
+                  title="Close settings"
+                  aria-label="Close settings"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
             ) : (
               <button
                 type="button"

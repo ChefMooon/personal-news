@@ -49,8 +49,7 @@ export function getRedditDigestContentPolicy(
   groupCount: number,
   hasPostsBeyondLimit: boolean,
 ): RedditDigestContentPolicy {
-  const groupLimit =
-    size === "small" ? 1 : Number.POSITIVE_INFINITY;
+  const groupLimit = size === "small" ? 1 : Number.POSITIVE_INFINITY;
   const postsPerGroupLimit =
     size === "small"
       ? Math.min(config.max_posts_per_group, 2)
@@ -69,8 +68,8 @@ export function getRedditDigestContentPolicy(
     size === "small"
       ? 1
       : effectiveMode === "columns"
-      ? getResponsiveColumnCount(availableWidth, groupCount)
-      : 0;
+        ? getResponsiveColumnCount(availableWidth, groupCount)
+        : 0;
 
   return {
     effectiveMode,
