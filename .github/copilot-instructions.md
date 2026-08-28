@@ -71,6 +71,7 @@ Do not bypass these boundaries:
 
 ### IPC Pattern
 
+- Before making IPC changes, use this file's Architecture and Boundaries and IPC Pattern sections as the first context anchor, then inspect `src/shared/ipc-types.ts` for the contract and `src/main/ipc/index.ts` for the registration exemplar.
 - Define new channel names in IPC constant object in src/shared/ipc-types.ts.
 - Register handlers in src/main/ipc/index.ts with ipcMain.handle.
 - Use window.api.invoke in renderer hooks/components.
