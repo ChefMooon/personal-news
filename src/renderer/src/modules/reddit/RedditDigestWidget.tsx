@@ -7,7 +7,9 @@ import {
 import { useRedditDigestWeeks } from "../../hooks/useRedditDigestWeeks";
 import { useWidgetInstance } from "../../contexts/WidgetInstanceContext";
 import { RedditDigestSettingsPanel } from "./RedditDigestSettingsPanel";
+import { WidgetSizeControl } from "../../components/WidgetSizeControl";
 import { SubredditColumn } from "./SubredditColumn";
+import { getRedditDigestContentPolicy } from "./reddit-content-policy";
 import {
   Card,
   CardHeader,
@@ -40,7 +42,8 @@ import type {
 } from "../../../../shared/ipc-types";
 
 function RedditDigestWidget(): React.ReactElement {
-  const { instanceId, label } = useWidgetInstance();
+  const { instanceId, label, size, editMode, onSizeChange } =
+    useWidgetInstance();
   const { config, setConfig } = useRedditDigestConfig(instanceId);
   const { weeks, loading: weeksLoading } = useRedditDigestWeeks();
   const [isEditing, setIsEditing] = useState(false);
@@ -50,7 +53,24 @@ function RedditDigestWidget(): React.ReactElement {
   const [editContentHeight, setEditContentHeight] = useState<number | null>(
     null,
   );
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [smallGroupIndex, setSmallGroupIndex] = useState(0);
+  const [contentWidth, setContentWidth] = useState(0);
   const cardContentRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const element = cardContentRef.current;
+    if (!element) {
+      return;
+    }
+    const updateWidth = (): void => {
+      setContentWidth(element.getBoundingClientRect().width);
+    };
+    updateWidth();
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     if (!isEditing) {
@@ -182,6 +202,30 @@ function RedditDigestWidget(): React.ReactElement {
     );
     return [...orderedKeys, ...remainingKeys];
   }, [config.group_by, groups, orderedSubreddits]);
+  const contentPolicy = getRedditDigestContentPolicy(
+    size,
+    contentWidth,
+    config,
+    groupKeys.length,
+    groupKeys.some(
+      (key) => (groups.get(key)?.length ?? 0) > config.max_posts_per_group,
+    ),
+    isExpanded,
+  );
+  useEffect(() => {
+    setSmallGroupIndex((index) =>
+      groupKeys.length === 0 ? 0 : Math.min(index, groupKeys.length - 1),
+    );
+  }, [groupKeys]);
+
+  const displayGroupKeys =
+    size === "small"
+      ? groupKeys.length > 0
+        ? [groupKeys[smallGroupIndex]]
+        : []
+      : isExpanded
+        ? groupKeys
+        : groupKeys.slice(0, contentPolicy.groupLimit);
   const widgetTitle = label ?? "Reddit Digest";
   const effectiveLoading = loading || weeksLoading;
 
@@ -219,6 +263,34 @@ function RedditDigestWidget(): React.ReactElement {
     setSnapshotConfig(DEFAULT_DIGEST_VIEW_CONFIG);
   }
 
+  const hasSmallGroupNavigation = size === "small" && groupKeys.length > 0;
+  const smallSubredditSelector = hasSmallGroupNavigation ? (
+    <div className="mb-2 flex min-w-0 items-center gap-1 border-b pb-2">
+      <div className="min-w-0 flex-1 overflow-x-auto">
+        <div className="flex w-max gap-1">
+          {groupKeys.map((key, index) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setSmallGroupIndex(index)}
+              className={`shrink-0 rounded-md px-2 py-1 text-xs font-medium transition-colors ${
+                index === smallGroupIndex
+                  ? "bg-accent text-foreground"
+                  : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
+              }`}
+              aria-current={index === smallGroupIndex ? "page" : undefined}
+            >
+              {key === "All" ? key : `r/${key}`}
+            </button>
+          ))}
+        </div>
+      </div>
+      <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+        {smallGroupIndex + 1}/{groupKeys.length}
+      </span>
+    </div>
+  ) : null;
+
   const digestContent = effectiveLoading ? (
     <p className="text-sm text-muted-foreground">Loading posts...</p>
   ) : visiblePosts.length === 0 ? (
@@ -229,41 +301,61 @@ function RedditDigestWidget(): React.ReactElement {
     <p className="text-sm text-muted-foreground">
       No posts match the current filter.
     </p>
-  ) : config.layout_mode === "columns" ? (
+  ) : contentPolicy.effectiveMode === "columns" ? (
     <div
-      className="grid gap-4"
-      style={{ gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}
+      className="grid min-w-0 gap-4"
+      style={{
+        gridTemplateColumns: `repeat(${Math.max(1, Math.min(displayGroupKeys.length, Math.floor(contentWidth / 220) || 1))}, minmax(0, 1fr))`,
+      }}
     >
-      {groupKeys.map((key) => (
+      {displayGroupKeys.map((key) => (
         <SubredditColumn
           key={key}
           label={key}
           posts={groups.get(key) ?? []}
-          maxPosts={config.max_posts_per_group}
+          maxPosts={contentPolicy.postsPerGroupLimit}
+          showPagination={size === "large"}
         />
       ))}
     </div>
+  ) : size === "small" ? (
+    <div className="min-w-0">
+      {smallSubredditSelector}
+      <SubredditColumn
+        label={displayGroupKeys[0] ?? "All"}
+        posts={groups.get(displayGroupKeys[0]) ?? []}
+        maxPosts={contentPolicy.postsPerGroupLimit}
+        showLabel={false}
+        showPagination
+      />
+    </div>
   ) : (
-    <Tabs defaultValue={groupKeys[0]}>
+    <Tabs defaultValue={displayGroupKeys[0]}>
       <TabsList className="mb-2 flex-wrap h-auto">
-        {groupKeys.map((key) => (
+        {displayGroupKeys.map((key) => (
           <TabsTrigger key={key} value={key} className="text-xs">
             {key === "All" ? "All" : `r/${key}`}
           </TabsTrigger>
         ))}
       </TabsList>
-      {groupKeys.map((key) => (
+      {displayGroupKeys.map((key) => (
         <TabsContent key={key} value={key}>
           <SubredditColumn
             label={key}
             posts={groups.get(key) ?? []}
-            maxPosts={config.max_posts_per_group}
+            maxPosts={contentPolicy.postsPerGroupLimit}
           />
         </TabsContent>
       ))}
     </Tabs>
   );
 
+  const hasDisclosure =
+    contentPolicy.hasMorePosts && !isExpanded && size !== "small";
+  const omittedGroupCount = Math.max(
+    0,
+    groupKeys.length - contentPolicy.groupLimit,
+  );
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -343,11 +435,11 @@ function RedditDigestWidget(): React.ReactElement {
       </CardHeader>
       <CardContent
         ref={cardContentRef}
-        style={
-          isEditing && editContentHeight
+        style={{
+          ...(isEditing && editContentHeight
             ? { height: editContentHeight, overflow: "hidden" }
-            : undefined
-        }
+            : { overflowY: contentPolicy.overflow }),
+        }}
       >
         <div className={isEditing ? "reddit-digest-card-edit" : undefined}>
           <div
@@ -356,6 +448,18 @@ function RedditDigestWidget(): React.ReactElement {
             }
           >
             {digestContent}
+            {hasDisclosure && (
+              <button
+                type="button"
+                className="mt-3 text-xs font-medium text-primary hover:underline"
+                onClick={() => setIsExpanded(true)}
+              >
+                Show more content
+                {omittedGroupCount > 0
+                  ? ` (${omittedGroupCount} more ${omittedGroupCount === 1 ? "subreddit" : "subreddits"})`
+                  : ""}
+              </button>
+            )}
           </div>
           {isEditing && (
             <div className="reddit-digest-card-edit__panel">
@@ -364,6 +468,13 @@ function RedditDigestWidget(): React.ReactElement {
                 availableSubreddits={availableSubreddits}
                 availableWeeks={weeks}
                 onChange={setConfig}
+                sizeControl={
+                  <WidgetSizeControl
+                    size={size}
+                    editMode={editMode}
+                    onChange={onSizeChange}
+                  />
+                }
               />
             </div>
           )}

@@ -36,20 +36,26 @@ The app is navigated via a **collapsible left sidebar**. The sidebar maximizes v
 
 ### 3.1 Layout Model
 
-- The dashboard is a vertical stack of **widgets**.
-- Each widget occupies the full width of the content area.
-- Users can **reorder widget instances** by drag and drop (vertical axis).
+- The dashboard uses a responsive two-dimensional grid of **widget instances**.
+- The authoritative layout is a 12-column reference grid; 8-, 4-, and 1-column
+  projections are derived at runtime as the window narrows.
+- Users can **reposition widget instances** with the dedicated drag handle or
+  one-cell directional controls while Dashboard edit mode is active.
 - The dashboard supports **multiple instances** of the same widget type. Each instance can have its own label and its own per-instance settings.
 - Users can **toggle widgets** on/off via the Settings screen or a quick-toggle control on the dashboard (e.g., an edit mode toggle that reveals hide/show controls per widget).
-- Widget order, visibility, instance metadata, and per-instance settings are persisted between app restarts.
+- Widget geometry, visibility, instance metadata, size preset, and per-instance settings are persisted between app restarts. Derived breakpoint layouts are not persisted.
 
 ### 3.2 Dashboard Edit Mode
 
 - A button (e.g., "Edit Layout") activates edit mode.
 - In edit mode, drag handles appear on each widget. Widgets can be reordered.
+- In edit mode, each widget's settings panel exposes Small, Medium, and Large
+  footprint presets. Preset changes compact the grid deterministically.
 - Each widget gains a toggle (eye icon or checkbox) to show/hide it.
 - Each widget can be renamed inline, removed from the layout, or duplicated by adding another instance of the same module type.
 - Exiting edit mode saves the layout.
+- The grid is non-resizable; there are no freeform resize handles. Size and
+  content-detail/view settings are independent.
 
 ### 3.3 Empty State
 

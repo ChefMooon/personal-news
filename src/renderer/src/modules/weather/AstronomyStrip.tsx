@@ -408,6 +408,66 @@ function NextPhaseCard({
   );
 }
 
+function CompactAstronomyRow({
+  astronomy,
+  horizon,
+  timezone,
+  settings,
+}: {
+  astronomy: AstronomySnapshot | null;
+  horizon: AstronomySnapshot["groups"]["horizon"]["data"] | null;
+  timezone: string;
+  settings: WeatherSettings;
+}): React.ReactElement {
+  const moon = astronomy?.groups.moon.data ?? null;
+  const milestone = nextPrimaryPhaseMilestone(astronomy);
+  const nowSeconds = Math.floor(useNowMilliseconds(milestone != null) / 1000);
+  const sunTimes = horizon
+    ? `${formatHorizonTime(horizon.sun.riseTime, timezone, settings.timeFormat) ?? "-"} / ${formatHorizonTime(horizon.sun.setTime, timezone, settings.timeFormat) ?? "-"}`
+    : "- / -";
+  const moonLabel = moon
+    ? `${moonPhaseDisplayName(moon.phaseName)} ${Math.round(moon.illuminationPercent)}%`
+    : "Unavailable";
+  const nextPhaseLabel = milestone
+    ? `${moonPhaseDisplayName(milestone.name)} ${countdownLabel(milestone.time, nowSeconds)}`
+    : "Unavailable";
+  const solarLabel = horizon
+    ? solarStateLabel(horizon.solarState)
+    : "Unavailable";
+
+  return (
+    <div className="grid min-w-0 grid-cols-4 divide-x divide-border text-[10px]">
+      <div className="min-w-0 pr-2">
+        <p className="truncate text-muted-foreground">Sunrise / sunset</p>
+        <p className="truncate font-semibold tabular-nums">{sunTimes}</p>
+      </div>
+      <div className="flex min-w-0 items-center gap-1.5 px-2">
+        <MoonPhaseGlyph
+          phaseAngle={moon?.phaseAngle ?? null}
+          illuminationPercent={moon?.illuminationPercent ?? null}
+          label={moonLabel}
+          size={20}
+        />
+        <div className="min-w-0">
+          <p className="truncate text-muted-foreground">Moon</p>
+          <p className="break-words font-semibold leading-tight">{moonLabel}</p>
+        </div>
+      </div>
+      <div className="min-w-0 px-2">
+        <p className="truncate text-muted-foreground">Next phase</p>
+        <p className="break-words font-semibold leading-tight">
+          {nextPhaseLabel}
+        </p>
+      </div>
+      <div className="flex min-w-0 items-center justify-end pl-2">
+        <Badge variant="secondary" className="max-w-full">
+          <span className="whitespace-normal text-center">{solarLabel}</span>
+        </Badge>
+      </div>
+    </div>
+  );
+}
+
 /**
  * Three-card astronomy strip rendered inside the Weather widget when both the
  * app-level Astronomy feature and the instance `showAstronomy` setting are on.
@@ -419,11 +479,15 @@ export function AstronomyStrip({
   timezone,
   settings,
   contentWidth,
+  stacked = false,
+  compact = false,
 }: {
   astronomy: AstronomySnapshot | null;
   timezone: string;
   settings: WeatherSettings;
   contentWidth: number;
+  stacked?: boolean;
+  compact?: boolean;
 }): React.ReactElement {
   const horizon =
     astronomy?.groups.horizon.status === "unavailable"
@@ -433,37 +497,62 @@ export function AstronomyStrip({
   return (
     <section
       aria-label="Astronomy"
-      className="w-fit max-w-full rounded-md border px-3 py-2.5"
+      className={cn(
+        "w-full max-w-full rounded-md border",
+        stacked && "h-full",
+        compact ? "px-2.5 py-1.5" : "px-3 py-2.5",
+      )}
     >
-      <div className="w-full max-w-[760px]" style={{ width: contentWidth }}>
-        <div className="mb-2 flex min-h-6 items-center justify-between gap-2">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Astronomy
-          </h3>
-          <Badge variant="secondary" className="max-w-full">
-            <span className="truncate">
-              {horizon ? solarStateLabel(horizon.solarState) : "Unavailable"}
-            </span>
-          </Badge>
-        </div>
-        <div className="grid min-h-[76px] grid-cols-1 items-center gap-y-3 sm:grid-cols-3 sm:gap-x-0 sm:divide-x sm:divide-border [&>*]:sm:px-4 [&>*]:sm:first:pl-0 [&>*]:sm:last:pr-0">
-          <HorizonCard
-            horizon={horizon}
-            timezone={timezone}
-            settings={settings}
-          />
-          <MoonCard
+      <div
+        className="w-full max-w-full"
+        style={{ width: "100%", maxWidth: stacked ? contentWidth : undefined }}
+      >
+        {!compact && (
+          <div className="mb-2 flex min-h-6 items-center justify-between gap-2">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Astronomy
+            </h3>
+            <Badge variant="secondary" className="max-w-full">
+              <span className="truncate">
+                {horizon ? solarStateLabel(horizon.solarState) : "Unavailable"}
+              </span>
+            </Badge>
+          </div>
+        )}
+        {compact ? (
+          <CompactAstronomyRow
             astronomy={astronomy}
             horizon={horizon}
             timezone={timezone}
             settings={settings}
           />
-          <NextPhaseCard
-            astronomy={astronomy}
-            timezone={timezone}
-            settings={settings}
-          />
-        </div>
+        ) : (
+          <div
+            className={cn(
+              "grid min-h-[76px] grid-cols-1 gap-y-3",
+              stacked
+                ? "items-start sm:grid-cols-1"
+                : "items-center sm:grid-cols-3 sm:gap-x-0 sm:divide-x sm:divide-border [&>*]:sm:px-4 [&>*]:sm:first:pl-0 [&>*]:sm:last:pr-0",
+            )}
+          >
+            <HorizonCard
+              horizon={horizon}
+              timezone={timezone}
+              settings={settings}
+            />
+            <MoonCard
+              astronomy={astronomy}
+              horizon={horizon}
+              timezone={timezone}
+              settings={settings}
+            />
+            <NextPhaseCard
+              astronomy={astronomy}
+              timezone={timezone}
+              settings={settings}
+            />
+          </div>
+        )}
       </div>
     </section>
   );

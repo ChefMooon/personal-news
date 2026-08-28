@@ -31,6 +31,34 @@ export function isLiveStatus(status: string | null): boolean {
 }
 
 export type GamePhase = "scheduled" | "live" | "finished";
+export type GameOutcome = "win" | "loss" | "tie" | null;
+
+export function getGameOutcome(
+  game: SportEvent | null,
+  trackedSide: "home" | "away" | null,
+): GameOutcome {
+  if (!game || trackedSide === null || getGamePhase(game) !== "finished") {
+    return null;
+  }
+
+  const trackedScore = Number.parseInt(
+    trackedSide === "home" ? (game.homeScore ?? "") : (game.awayScore ?? ""),
+    10,
+  );
+  const opponentScore = Number.parseInt(
+    trackedSide === "home" ? (game.awayScore ?? "") : (game.homeScore ?? ""),
+    10,
+  );
+  if (!Number.isFinite(trackedScore) || !Number.isFinite(opponentScore)) {
+    return null;
+  }
+
+  if (trackedScore === opponentScore) {
+    return "tie";
+  }
+
+  return trackedScore > opponentScore ? "win" : "loss";
+}
 
 export function getEventStartAt(game: SportEvent | null): number | null {
   if (!game) {

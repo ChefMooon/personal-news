@@ -13,12 +13,15 @@ import { SPORTS_WIDGET_OPTIONS } from "../../../../shared/sports";
 export function SportsSettingsPanel({
   config,
   setConfig,
+  sizeControl,
 }: {
   config: SportsViewConfig;
   setConfig: (config: SportsViewConfig) => void;
+  sizeControl?: React.ReactNode;
 }): React.ReactElement {
   return (
     <div className="flex w-full flex-col gap-4 overflow-y-auto pr-1">
+      {sizeControl}
       <div>
         <h3 className="text-sm font-medium">Widget Settings</h3>
         <p className="text-xs text-muted-foreground">

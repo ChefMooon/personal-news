@@ -9,6 +9,7 @@ interface VideoCarouselProps {
   maxItems?: number;
   sortDirection?: "newest" | "oldest";
   density?: "compact" | "detailed";
+  rows?: 1 | 2;
 }
 
 export function VideoCarousel({
@@ -16,6 +17,7 @@ export function VideoCarousel({
   maxItems = 15,
   sortDirection = "newest",
   density = "detailed",
+  rows = 1,
 }: VideoCarouselProps): React.ReactElement {
   const scrollRootRef = useRef<HTMLDivElement | null>(null);
   const viewportRef = useRef<HTMLDivElement | null>(null);
@@ -174,7 +176,14 @@ export function VideoCarousel({
       )}
 
       <ScrollArea ref={scrollRootRef} className="w-full">
-        <div ref={cardsContainerRef} className="flex gap-3 pb-3">
+        <div
+          ref={cardsContainerRef}
+          className={
+            rows === 2
+              ? "grid grid-flow-col grid-rows-2 auto-cols-max gap-x-3 gap-y-2 pb-3"
+              : "flex gap-3 pb-3"
+          }
+        >
           {displayVideos.map((video) => (
             <VideoCard key={video.video_id} video={video} density={density} />
           ))}

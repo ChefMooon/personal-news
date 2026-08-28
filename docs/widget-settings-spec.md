@@ -19,12 +19,34 @@ The YouTube, Reddit Digest, and Saved Posts widgets are the current reference im
 
 Settings are opened and closed inline — there is no modal overlay. The settings panel slides into the right side of the widget's `CardContent` area, leaving the live content visible on the left.
 
-| State | Header right side | CardContent |
-|-------|-------------------|-------------|
-| Normal | `<Settings2>` button | Widget content (full width) |
+| State   | Header right side                                       | CardContent                                                      |
+| ------- | ------------------------------------------------------- | ---------------------------------------------------------------- |
+| Normal  | `<Settings2>` button                                    | Widget content (full width)                                      |
 | Editing | `<RotateCcw>` + `<RefreshCcw>` (in AlertDialog) + `<X>` | Two-column grid: preview (left) + settings panel (right, 300 px) |
 
 Changes to settings take effect **immediately** — there is no Save button. Revert controls give the user an escape hatch without requiring an explicit save/cancel flow.
+
+### 2.1 Dashboard Widget Size
+
+Each widget settings panel begins with the shared Small, Medium, and Large size
+control. The selected preset belongs to the dashboard widget instance and changes
+its canonical grid footprint; it does not modify the widget's saved detail level,
+view mode, card density, filters, or other content settings. The control is
+discoverable but disabled unless Dashboard edit mode is active. The dashboard
+persists only its canonical 12-column geometry and derives narrower breakpoint
+layouts at runtime. All widgets use Small `6 x 6`, Medium `12 x 9`, and Large
+`12 x 12` baseline dimensions, with no custom height or resize control. Astronomy
+may expand beyond its selected baseline at runtime when detailed content needs
+more rows; that expansion is recomputed and is not a user setting or persisted
+geometry.
+
+Each widget derives its presentation from the selected size without mutating
+saved detail, view-mode, card-density, filter, or fetch-limit settings. Small
+and Medium policies may cap content and expose a More or Details path; collapsed
+capped states do not scroll, while expanded or Large content may scroll only in
+the widget's designated content viewport. Text, settings, and cards wrap within
+the assigned width. Horizontal scrolling is reserved for intentional media or
+timeline content, and must not become page-level overflow.
 
 ---
 
@@ -63,11 +85,11 @@ Example header structure (normal mode):
 
 The `<Settings2>` button is replaced by a three-control row (no extra wrapper padding between items, `gap-0.5`):
 
-| Position | Icon | Action | Tooltip / aria-label |
-|----------|------|--------|----------------------|
-| 1st | `<RotateCcw>` | Revert all changes made since opening | "Reset to when you opened this" |
-| 2nd | `<RefreshCcw>` | Restore factory defaults (requires confirmation) | "Restore defaults" |
-| 3rd | `<X>` | Close settings panel | "Close settings" |
+| Position | Icon           | Action                                           | Tooltip / aria-label            |
+| -------- | -------------- | ------------------------------------------------ | ------------------------------- |
+| 1st      | `<RotateCcw>`  | Revert all changes made since opening            | "Reset to when you opened this" |
+| 2nd      | `<RefreshCcw>` | Restore factory defaults (requires confirmation) | "Restore defaults"              |
+| 3rd      | `<X>`          | Close settings panel                             | "Close settings"                |
 
 All controls use the same button class as the settings trigger above.
 
@@ -87,12 +109,21 @@ Example header structure (edit mode):
 <div className="flex items-center gap-2">
   {/* secondary actions remain here */}
   <div className="flex items-center gap-0.5">
-    <button className="p-1 rounded ..." onClick={handleReset} title="Reset to when you opened this" aria-label="Reset settings">
+    <button
+      className="p-1 rounded ..."
+      onClick={handleReset}
+      title="Reset to when you opened this"
+      aria-label="Reset settings"
+    >
       <RotateCcw className="h-4 w-4" />
     </button>
     <AlertDialog>
       <AlertDialogTrigger asChild>
-        <button className="p-1 rounded ..." title="Restore defaults" aria-label="Restore default settings">
+        <button
+          className="p-1 rounded ..."
+          title="Restore defaults"
+          aria-label="Restore default settings"
+        >
           <RefreshCcw className="h-4 w-4" />
         </button>
       </AlertDialogTrigger>
@@ -100,16 +131,24 @@ Example header structure (edit mode):
         <AlertDialogHeader>
           <AlertDialogTitle>Restore Defaults</AlertDialogTitle>
           <AlertDialogDescription>
-            Reset all [Widget Name] widget settings to their defaults? This cannot be undone.
+            Reset all [Widget Name] widget settings to their defaults? This
+            cannot be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction onClick={handleFactoryReset}>Confirm</AlertDialogAction>
+          <AlertDialogAction onClick={handleFactoryReset}>
+            Confirm
+          </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
-    <button className="p-1 rounded ..." onClick={handleClose} title="Close settings" aria-label="Close settings">
+    <button
+      className="p-1 rounded ..."
+      onClick={handleClose}
+      title="Close settings"
+      aria-label="Close settings"
+    >
       <X className="h-4 w-4" />
     </button>
   </div>
@@ -142,8 +181,8 @@ When settings close, the style is removed and the card returns to its natural co
 Inside `CardContent`, wrap the content in a conditional CSS class that applies a two-column grid only while editing:
 
 ```tsx
-<div className={isEditing ? 'my-widget-card-edit' : undefined}>
-  <div className={isEditing ? 'my-widget-card-edit__preview' : undefined}>
+<div className={isEditing ? "my-widget-card-edit" : undefined}>
+  <div className={isEditing ? "my-widget-card-edit__preview" : undefined}>
     {/* normal widget content — unchanged */}
   </div>
   {isEditing && (
@@ -190,35 +229,35 @@ Replace `my-widget` with the kebab-case module id of the new widget.
 Add these four pieces of state plus the `cardContentRef` to the main widget component (not the settings panel):
 
 ```tsx
-const [isEditing, setIsEditing]               = useState(false)
-const [snapshotConfig, setSnapshotConfig]     = useState<MyViewConfig | null>(null)
-const [editContentHeight, setEditContentHeight] = useState<number | null>(null)
-const cardContentRef = useRef<HTMLDivElement | null>(null)
+const [isEditing, setIsEditing] = useState(false);
+const [snapshotConfig, setSnapshotConfig] = useState<MyViewConfig | null>(null);
+const [editContentHeight, setEditContentHeight] = useState<number | null>(null);
+const cardContentRef = useRef<HTMLDivElement | null>(null);
 ```
 
 Add these four handlers:
 
 ```tsx
 function handleOpenEdit(): void {
-  const currentHeight = cardContentRef.current?.getBoundingClientRect().height
-  if (currentHeight && currentHeight > 0) setEditContentHeight(currentHeight)
-  setSnapshotConfig(config)
-  setIsEditing(true)
+  const currentHeight = cardContentRef.current?.getBoundingClientRect().height;
+  if (currentHeight && currentHeight > 0) setEditContentHeight(currentHeight);
+  setSnapshotConfig(config);
+  setIsEditing(true);
 }
 
 function handleClose(): void {
-  setIsEditing(false)
-  setSnapshotConfig(null)
-  setEditContentHeight(null)
+  setIsEditing(false);
+  setSnapshotConfig(null);
+  setEditContentHeight(null);
 }
 
 function handleReset(): void {
-  if (snapshotConfig) setConfig(snapshotConfig)
+  if (snapshotConfig) setConfig(snapshotConfig);
 }
 
 function handleFactoryReset(): void {
-  setConfig(DEFAULT_MY_VIEW_CONFIG)
-  setSnapshotConfig(DEFAULT_MY_VIEW_CONFIG)
+  setConfig(DEFAULT_MY_VIEW_CONFIG);
+  setSnapshotConfig(DEFAULT_MY_VIEW_CONFIG);
 }
 ```
 
@@ -226,13 +265,13 @@ Add an Escape-key listener tied to `isEditing`:
 
 ```tsx
 useEffect(() => {
-  if (!isEditing) return
+  if (!isEditing) return;
   const handler = (e: KeyboardEvent): void => {
-    if (e.key === 'Escape') handleClose()
-  }
-  window.addEventListener('keydown', handler)
-  return () => window.removeEventListener('keydown', handler)
-}, [isEditing]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (e.key === "Escape") handleClose();
+  };
+  window.addEventListener("keydown", handler);
+  return () => window.removeEventListener("keydown", handler);
+}, [isEditing]); // eslint-disable-line react-hooks/exhaustive-deps
 ```
 
 ---
@@ -245,10 +284,10 @@ Each widget's settings panel lives in a separate file: `src/renderer/src/modules
 
 ```tsx
 interface MyWidgetSettingsPanelProps {
-  config: MyViewConfig
-  onChange: (config: MyViewConfig) => void
+  config: MyViewConfig;
+  onChange: (config: MyViewConfig) => void;
   // pass other read-only data the panel needs, e.g.:
-  availableSubreddits?: string[]
+  availableSubreddits?: string[];
 }
 ```
 
@@ -259,9 +298,7 @@ There is **no local draft state** in the panel. Changes call `onChange` directly
 ```tsx
 <div className="flex flex-col h-full w-full min-w-0 flex-1">
   <ScrollArea className="h-full w-full">
-    <div className="space-y-5 pb-2 pr-4">
-      {/* sections */}
-    </div>
+    <div className="space-y-5 pb-2 pr-4">{/* sections */}</div>
   </ScrollArea>
 </div>
 ```
@@ -329,7 +366,10 @@ Do not end the final section with a `<Separator />`.
 ```tsx
 <div className="space-y-2">
   {items.map(({ value, label }) => (
-    <label key={value} className="flex items-center gap-2 text-sm cursor-pointer">
+    <label
+      key={value}
+      className="flex items-center gap-2 text-sm cursor-pointer"
+    >
       <input
         type="checkbox"
         checked={!config.filter || config.filter.includes(value)}
@@ -349,28 +389,33 @@ If the list can grow long, constrain it with `max-h-32 overflow-y-auto` on the w
 Use `<GripVertical>` as a visual-only drag affordance and `<ArrowUp>` / `<ArrowDown>` buttons for accessible reordering:
 
 ```tsx
-{config.order.map((item, idx) => (
-  <div key={item} className="flex items-center gap-2 px-2 py-1.5 rounded border bg-muted/30 text-sm">
-    <GripVertical className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-    <span className="flex-1">{LABEL_MAP[item]}</span>
-    <button
-      type="button"
-      disabled={idx === 0}
-      onClick={() => moveItem(item, 'up')}
-      className="p-0.5 hover:bg-muted rounded disabled:opacity-30"
+{
+  config.order.map((item, idx) => (
+    <div
+      key={item}
+      className="flex items-center gap-2 px-2 py-1.5 rounded border bg-muted/30 text-sm"
     >
-      <ArrowUp className="h-3.5 w-3.5" />
-    </button>
-    <button
-      type="button"
-      disabled={idx === config.order.length - 1}
-      onClick={() => moveItem(item, 'down')}
-      className="p-0.5 hover:bg-muted rounded disabled:opacity-30"
-    >
-      <ArrowDown className="h-3.5 w-3.5" />
-    </button>
-  </div>
-))}
+      <GripVertical className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+      <span className="flex-1">{LABEL_MAP[item]}</span>
+      <button
+        type="button"
+        disabled={idx === 0}
+        onClick={() => moveItem(item, "up")}
+        className="p-0.5 hover:bg-muted rounded disabled:opacity-30"
+      >
+        <ArrowUp className="h-3.5 w-3.5" />
+      </button>
+      <button
+        type="button"
+        disabled={idx === config.order.length - 1}
+        onClick={() => moveItem(item, "down")}
+        className="p-0.5 hover:bg-muted rounded disabled:opacity-30"
+      >
+        <ArrowDown className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  ));
+}
 ```
 
 ---
@@ -380,48 +425,53 @@ Use `<GripVertical>` as a visual-only drag affordance and `<ArrowUp>` / `<ArrowD
 Per-widget configuration is stored via the IPC `settings:get` / `settings:set` channels, keyed by instance ID. Create a dedicated hook: `src/renderer/src/hooks/useMyWidgetConfig.ts`.
 
 ```ts
-import { useState, useEffect } from 'react'
-import type { MyViewConfig } from '../../../shared/ipc-types'
+import { useState, useEffect } from "react";
+import type { MyViewConfig } from "../../../shared/ipc-types";
 
 export const DEFAULT_MY_VIEW_CONFIG: MyViewConfig = {
   // all fields with their defaults
-}
+};
 
 export function useMyWidgetConfig(instanceId: string): {
-  config: MyViewConfig
-  setConfig: (newConfig: MyViewConfig) => void
+  config: MyViewConfig;
+  setConfig: (newConfig: MyViewConfig) => void;
 } {
-  const [config, setConfigState] = useState<MyViewConfig>(DEFAULT_MY_VIEW_CONFIG)
-  const storageKey = `my_widget_view_config:${instanceId}`
+  const [config, setConfigState] = useState<MyViewConfig>(
+    DEFAULT_MY_VIEW_CONFIG,
+  );
+  const storageKey = `my_widget_view_config:${instanceId}`;
 
   useEffect(() => {
     window.api
-      .invoke('settings:get', storageKey)
+      .invoke("settings:get", storageKey)
       .then((raw) => {
         if (raw) {
           try {
             setConfigState({
               ...DEFAULT_MY_VIEW_CONFIG,
-              ...(JSON.parse(raw as string) as Partial<MyViewConfig>)
-            })
-          } catch { /* use default on parse error */ }
+              ...(JSON.parse(raw as string) as Partial<MyViewConfig>),
+            });
+          } catch {
+            /* use default on parse error */
+          }
         }
       })
-      .catch(console.error)
-  }, [instanceId])
+      .catch(console.error);
+  }, [instanceId]);
 
   const setConfig = (newConfig: MyViewConfig): void => {
-    setConfigState(newConfig)
+    setConfigState(newConfig);
     window.api
-      .invoke('settings:set', storageKey, JSON.stringify(newConfig))
-      .catch(console.error)
-  }
+      .invoke("settings:set", storageKey, JSON.stringify(newConfig))
+      .catch(console.error);
+  };
 
-  return { config, setConfig }
+  return { config, setConfig };
 }
 ```
 
 Rules:
+
 - Always export `DEFAULT_MY_VIEW_CONFIG` so the widget can use it in `handleFactoryReset()`.
 - Merge loaded config with defaults (`{ ...DEFAULT_MY_VIEW_CONFIG, ...parsed }`) to tolerate missing fields after config schema additions.
 - The storage key must include the `instanceId` so multiple instances of the same widget type have independent settings.
@@ -432,20 +482,20 @@ Rules:
 
 When adding a new widget that follows this spec, create or modify these files:
 
-| File | What to do |
-|------|------------|
-| `src/renderer/src/modules/<widget>/MyWidget.tsx` | Add `isEditing`, `snapshotConfig`, `editContentHeight`, `cardContentRef`, the four handlers, the Escape listener, and the conditional header / CardContent layout |
-| `src/renderer/src/modules/<widget>/MyWidgetSettingsPanel.tsx` | New file — settings form component (no local state, calls `onChange` directly) |
-| `src/renderer/src/hooks/useMyWidgetConfig.ts` | New file — config persistence hook with exported default config |
-| `src/renderer/src/assets/main.css` | Add `my-widget-card-edit`, `my-widget-card-edit__preview`, `my-widget-card-edit__panel` CSS classes |
-| `src/shared/ipc-types.ts` | Add `MyViewConfig` interface |
+| File                                                          | What to do                                                                                                                                                        |
+| ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/renderer/src/modules/<widget>/MyWidget.tsx`              | Add `isEditing`, `snapshotConfig`, `editContentHeight`, `cardContentRef`, the four handlers, the Escape listener, and the conditional header / CardContent layout |
+| `src/renderer/src/modules/<widget>/MyWidgetSettingsPanel.tsx` | New file — settings form component (no local state, calls `onChange` directly)                                                                                    |
+| `src/renderer/src/hooks/useMyWidgetConfig.ts`                 | New file — config persistence hook with exported default config                                                                                                   |
+| `src/renderer/src/assets/main.css`                            | Add `my-widget-card-edit`, `my-widget-card-edit__preview`, `my-widget-card-edit__panel` CSS classes                                                               |
+| `src/shared/ipc-types.ts`                                     | Add `MyViewConfig` interface                                                                                                                                      |
 
 ---
 
 ## 9. Reference Implementations
 
-| Widget | Widget component | Settings panel | Config hook |
-|--------|------------------|----------------|-------------|
-| YouTube | `src/renderer/src/modules/youtube/YouTubeWidget.tsx` | `YouTubeSettingsPanel.tsx` | `useYouTubeViewConfig.ts` |
-| Reddit Digest | `src/renderer/src/modules/reddit/RedditDigestWidget.tsx` | `RedditDigestSettingsPanel.tsx` | `useRedditDigestConfig.ts` |
-| Saved Posts | `src/renderer/src/modules/saved-posts/SavedPostsWidget.tsx` | `SavedPostsSettingsPanel.tsx` | `useSavedPostsConfig.ts` |
+| Widget        | Widget component                                            | Settings panel                  | Config hook                |
+| ------------- | ----------------------------------------------------------- | ------------------------------- | -------------------------- |
+| YouTube       | `src/renderer/src/modules/youtube/YouTubeWidget.tsx`        | `YouTubeSettingsPanel.tsx`      | `useYouTubeViewConfig.ts`  |
+| Reddit Digest | `src/renderer/src/modules/reddit/RedditDigestWidget.tsx`    | `RedditDigestSettingsPanel.tsx` | `useRedditDigestConfig.ts` |
+| Saved Posts   | `src/renderer/src/modules/saved-posts/SavedPostsWidget.tsx` | `SavedPostsSettingsPanel.tsx`   | `useSavedPostsConfig.ts`   |

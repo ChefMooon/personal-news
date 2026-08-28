@@ -1,6 +1,13 @@
 import React, { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
+  default as GridLayout,
+  useContainerWidth,
+  type Layout as GridLayoutItems,
+} from "react-grid-layout";
+import "react-grid-layout/css/styles.css";
+import "react-resizable/css/styles.css";
+import {
   DndContext,
   closestCenter,
   pointerWithin,
@@ -13,12 +20,7 @@ import {
   type DragOverEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import {
-  SortableContext,
-  sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
-  arrayMove,
-} from "@dnd-kit/sortable";
+import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { useWidgetLayout } from "../hooks/useWidgetLayout";
 import { WidgetWrapper } from "../components/WidgetWrapper";
 import { WidgetTransferDialog } from "../components/WidgetTransferDialog";
@@ -67,6 +69,9 @@ import {
   type SportsSettings,
   type SportsViewConfig,
   type SportSyncStatus,
+  type WidgetGeometry,
+  type WidgetInstance,
+  type WidgetLayout,
 } from "../../../shared/ipc-types";
 import {
   ALL_SPORTS_ID,
@@ -76,6 +81,145 @@ import {
   normalizeSportsStartupRefreshStaleMinutes,
   type SupportedSport,
 } from "../../../shared/sports";
+import {
+  DASHBOARD_GRID_BREAKPOINTS,
+  DASHBOARD_GRID_COLUMNS,
+  DASHBOARD_GRID_COLUMNS_BY_BREAKPOINT,
+  DASHBOARD_GRID_GAP,
+  DASHBOARD_GRID_ROW_HEIGHT,
+  getWidgetFootprint,
+  getWidgetInsertionY,
+  moveWidget,
+  normalizeWidgetLayout,
+  projectWidgetLayout,
+  reorderWidgetByY,
+  setWidgetSize,
+} from "../../../shared/dashboard-grid";
+
+interface DashboardGridSurfaceProps {
+  layout: WidgetLayout;
+  runtimeRows: Record<string, number>;
+  children: React.ReactNode;
+  onLayoutCommit: (geometry: Record<string, WidgetGeometry>) => void;
+  onTabDrop: (instanceId: string, targetViewId: string) => void;
+}
+
+function DashboardGridSurface({
+  layout,
+  runtimeRows,
+  children,
+  onLayoutCommit,
+  onTabDrop,
+}: DashboardGridSurfaceProps): React.ReactElement {
+  const { width, containerRef, mounted } = useContainerWidth({
+    measureBeforeMount: true,
+  });
+  if (!mounted) {
+    return (
+      <div
+        ref={containerRef as React.Ref<HTMLDivElement>}
+        className="min-h-32"
+      />
+    );
+  }
+
+  return (
+    <div
+      ref={containerRef as React.Ref<HTMLDivElement>}
+      className="dashboard-grid w-full"
+    >
+      <GridLayout
+        width={width}
+        gridConfig={{
+          cols: getGridColumns(width),
+          rowHeight: DASHBOARD_GRID_ROW_HEIGHT,
+          margin: [DASHBOARD_GRID_GAP, DASHBOARD_GRID_GAP],
+          containerPadding: [0, 0],
+        }}
+        dragConfig={{
+          enabled: false,
+          cancel: "button, input, textarea, select, a",
+        }}
+        resizeConfig={{ enabled: false }}
+        layout={toGridLayout(
+          projectWidgetLayout(layout, getGridColumns(width)),
+          layout,
+          runtimeRows,
+        )}
+        onDragStop={(
+          _currentLayout,
+          _oldItem,
+          newItem,
+          _placeholder,
+          event,
+        ) => {
+          if (!newItem) return;
+          const point =
+            event instanceof MouseEvent
+              ? { x: event.clientX, y: event.clientY }
+              : event instanceof TouchEvent && event.changedTouches[0]
+                ? {
+                    x: event.changedTouches[0].clientX,
+                    y: event.changedTouches[0].clientY,
+                  }
+                : null;
+          const tab = point
+            ? document
+                .elementFromPoint(point.x, point.y)
+                ?.closest<HTMLElement>("[data-dashboard-tab-id]")
+            : null;
+          const targetViewId = tab?.dataset.dashboardTabId;
+          if (targetViewId) {
+            onTabDrop(newItem.i, targetViewId);
+            return;
+          }
+          const current = layout.widget_geometry?.[newItem.i];
+          if (!current) return;
+          onLayoutCommit({
+            ...layout.widget_geometry,
+            [newItem.i]: {
+              ...current,
+              x: Math.round(
+                (newItem.x * DASHBOARD_GRID_COLUMNS) / getGridColumns(width),
+              ),
+              y: newItem.y,
+            },
+          });
+        }}
+      >
+        {children}
+      </GridLayout>
+    </div>
+  );
+}
+
+function getGridColumns(width: number): number {
+  if (width >= DASHBOARD_GRID_BREAKPOINTS.xl) {
+    return DASHBOARD_GRID_COLUMNS_BY_BREAKPOINT.xl;
+  }
+  if (width >= DASHBOARD_GRID_BREAKPOINTS.lg) {
+    return DASHBOARD_GRID_COLUMNS_BY_BREAKPOINT.lg;
+  }
+  if (width >= DASHBOARD_GRID_BREAKPOINTS.md) {
+    return DASHBOARD_GRID_COLUMNS_BY_BREAKPOINT.md;
+  }
+  return DASHBOARD_GRID_COLUMNS_BY_BREAKPOINT.xs;
+}
+
+function toGridLayout(
+  geometry: Record<string, { x: number; y: number; w: number; h: number }>,
+  layout: WidgetLayout,
+  runtimeRows: Record<string, number>,
+): GridLayoutItems {
+  return Object.entries(geometry).map(([i, item]) => ({
+    i,
+    ...item,
+    h:
+      layout.widget_instances[i]?.moduleId === "astronomy"
+        ? item.h + Math.max(0, Math.floor(runtimeRows[i] ?? 0))
+        : item.h,
+  }));
+}
 
 const DASHBOARD_TAB_DROP_PREFIX = "dashboard-tab:";
 const DASHBOARD_INSERT_DROP_PREFIX = "dashboard-insert:";
@@ -258,6 +402,7 @@ export default function Dashboard(): React.ReactElement {
   const { enabled: weatherEnabled } = useWeatherEnabled();
   const { enabled: astronomyEnabled } = useAstronomyEnabled();
   const [editMode, setEditMode] = useState(false);
+  const [runtimeRows, setRuntimeRows] = useState<Record<string, number>>({});
   const [showAddModal, setShowAddModal] = useState(false);
   const [dashboardDialogMode, setDashboardDialogMode] = useState<
     "create" | "edit" | null
@@ -494,11 +639,9 @@ export default function Dashboard(): React.ReactElement {
 
     if (active.id === over.id) return;
 
-    const oldIndex = layout.widget_order.indexOf(activeId);
-    const newIndex = layout.widget_order.indexOf(over.id as string);
-    const newOrder = arrayMove(layout.widget_order, oldIndex, newIndex);
-
-    setActiveLayout({ ...layout, widget_order: newOrder });
+    if (layout.widget_order.includes(String(over.id))) {
+      setActiveLayout(layout);
+    }
   }
 
   function handleDragStart(event: DragStartEvent): void {
@@ -567,55 +710,82 @@ export default function Dashboard(): React.ReactElement {
   }
 
   function handleMoveUp(instanceId: string): void {
-    const index = layout.widget_order.indexOf(instanceId);
-    if (index <= 0) return;
-    setActiveLayout({
-      ...layout,
-      widget_order: arrayMove(layout.widget_order, index, index - 1),
-    });
+    setActiveLayout((currentLayout) =>
+      moveWidget(currentLayout, instanceId, "up"),
+    );
   }
 
   function handleMoveDown(instanceId: string): void {
-    const index = layout.widget_order.indexOf(instanceId);
-    if (index < 0 || index >= layout.widget_order.length - 1) return;
-    setActiveLayout({
-      ...layout,
-      widget_order: arrayMove(layout.widget_order, index, index + 1),
-    });
+    setActiveLayout((currentLayout) =>
+      moveWidget(currentLayout, instanceId, "down"),
+    );
+  }
+
+  function handleMoveLeft(instanceId: string): void {
+    setActiveLayout(moveWidget(layout, instanceId, "left"));
+  }
+
+  function handleMoveRight(instanceId: string): void {
+    setActiveLayout(moveWidget(layout, instanceId, "right"));
+  }
+
+  function handleSizeChange(
+    instanceId: string,
+    size: WidgetInstance["size"],
+  ): void {
+    setActiveLayout(setWidgetSize(layout, instanceId, size));
   }
 
   function handleAddFromModal(config: AddWidgetConfig): void {
     const instanceId = `${config.moduleId}_${Date.now()}`;
+    const canonicalLayout = normalizeWidgetLayout(layout);
+    const newInstance: WidgetInstance = {
+      instanceId,
+      moduleId: config.moduleId,
+      label: config.label,
+      size: "medium",
+    };
 
     // Build new widget_order based on requested position
     let newOrder: string[];
     if (config.position === "top") {
-      newOrder = [instanceId, ...layout.widget_order];
+      newOrder = [instanceId, ...canonicalLayout.widget_order];
     } else if (config.position === "bottom") {
-      newOrder = [...layout.widget_order, instanceId];
+      newOrder = [...canonicalLayout.widget_order, instanceId];
     } else {
-      const afterIndex = layout.widget_order.indexOf(config.position.afterId);
+      const afterIndex = canonicalLayout.widget_order.indexOf(
+        config.position.afterId,
+      );
       if (afterIndex === -1) {
-        newOrder = [...layout.widget_order, instanceId];
+        newOrder = [...canonicalLayout.widget_order, instanceId];
       } else {
         newOrder = [
-          ...layout.widget_order.slice(0, afterIndex + 1),
+          ...canonicalLayout.widget_order.slice(0, afterIndex + 1),
           instanceId,
-          ...layout.widget_order.slice(afterIndex + 1),
+          ...canonicalLayout.widget_order.slice(afterIndex + 1),
         ];
       }
     }
 
+    const insertionY = getWidgetInsertionY(canonicalLayout, config.position);
+
     setActiveLayout({
-      ...layout,
+      ...canonicalLayout,
       widget_order: newOrder,
-      widget_visibility: { ...layout.widget_visibility, [instanceId]: true },
+      widget_visibility: {
+        ...canonicalLayout.widget_visibility,
+        [instanceId]: true,
+      },
       widget_instances: {
-        ...layout.widget_instances,
+        ...canonicalLayout.widget_instances,
+        [instanceId]: newInstance,
+      },
+      widget_geometry: {
+        ...canonicalLayout.widget_geometry,
         [instanceId]: {
-          instanceId,
-          moduleId: config.moduleId,
-          label: config.label,
+          x: 0,
+          y: insertionY,
+          ...getWidgetFootprint(newInstance.moduleId, newInstance.size),
         },
       },
     });
@@ -827,6 +997,7 @@ export default function Dashboard(): React.ReactElement {
                       >
                         <TabsTrigger
                           value={view.id}
+                          data-dashboard-tab-id={view.id}
                           className="shrink-0 gap-2 rounded-md border border-transparent px-4 py-1 data-[state=active]:border-border"
                           title={
                             editMode
@@ -855,7 +1026,7 @@ export default function Dashboard(): React.ReactElement {
             </div>
           </div>
 
-          <div className="flex-1 p-6 space-y-6 w-full">
+          <div className="flex-1 p-6 w-full">
             {layout.widget_order.length === 0 ? (
               <div className="rounded-xl border border-dashed bg-card/70 px-6 py-10 text-center">
                 <h2 className="text-lg font-semibold">
@@ -884,9 +1055,27 @@ export default function Dashboard(): React.ReactElement {
                 )}
               </div>
             ) : (
-              <SortableContext
-                items={layout.widget_order}
-                strategy={verticalListSortingStrategy}
+              <DashboardGridSurface
+                layout={layout}
+                runtimeRows={runtimeRows}
+                onTabDrop={(instanceId, targetViewId) => {
+                  if (targetViewId !== activeViewId) {
+                    moveWidgetToView({
+                      sourceViewId: activeViewId,
+                      targetViewId,
+                      instanceId,
+                      switchToTarget: true,
+                    });
+                  }
+                }}
+                onLayoutCommit={(nextGeometry) =>
+                  setActiveLayout(
+                    normalizeWidgetLayout({
+                      ...layout,
+                      widget_geometry: nextGeometry,
+                    }),
+                  )
+                }
               >
                 {layout.widget_order.map((instanceId) => {
                   const instance = layout.widget_instances[instanceId];
@@ -907,52 +1096,107 @@ export default function Dashboard(): React.ReactElement {
                   const mod = getModule(instance.moduleId);
                   if (!mod) return null;
                   const WidgetComponent = mod.widget;
-                  const widgetIndex = layout.widget_order.indexOf(instanceId);
                   return (
-                    <React.Fragment key={instanceId}>
-                      {widgetIndex === 0 ? (
-                        <DashboardInsertionDropTarget
-                          dropId={createDashboardInsertDropId(
-                            activeViewId,
-                            "top",
-                          )}
-                          label="Drop here to place at the top of this dashboard"
-                          visible={showingCrossViewInsertTargets}
-                        />
-                      ) : null}
-                      <WidgetInstanceContext.Provider value={instance}>
-                        <WidgetWrapper
-                          id={instanceId}
-                          label={instance.label}
-                          defaultLabel={mod.displayName}
-                          editMode={editMode}
-                          visible={
-                            layout.widget_visibility[instanceId] !== false
-                          }
-                          isFirst={widgetIndex === 0}
-                          isLast={
-                            widgetIndex === layout.widget_order.length - 1
-                          }
-                          onToggleVisibility={handleToggleVisibility}
-                          onRename={handleRename}
-                          onRemove={handleRemove}
-                          onMoveUp={handleMoveUp}
-                          onMoveDown={handleMoveDown}
-                        >
-                          <WidgetComponent />
-                        </WidgetWrapper>
+                    <WidgetWrapper
+                      key={instanceId}
+                      id={instanceId}
+                      label={instance.label}
+                      defaultLabel={mod.displayName}
+                      editMode={editMode}
+                      visible={layout.widget_visibility[instanceId] !== false}
+                      onToggleVisibility={handleToggleVisibility}
+                      onRename={handleRename}
+                      onRemove={handleRemove}
+                      onMoveUp={handleMoveUp}
+                      onMoveDown={handleMoveDown}
+                      onMoveLeft={handleMoveLeft}
+                      onMoveRight={handleMoveRight}
+                      onManualDragCommit={(
+                        instanceId,
+                        deltaX,
+                        deltaY,
+                        point,
+                      ) => {
+                        const tab = document
+                          .elementFromPoint(point.x, point.y)
+                          ?.closest<HTMLElement>("[data-dashboard-tab-id]");
+                        const targetViewId = tab?.dataset.dashboardTabId;
+                        if (targetViewId && targetViewId !== activeViewId) {
+                          moveWidgetToView({
+                            sourceViewId: activeViewId,
+                            targetViewId,
+                            instanceId,
+                            switchToTarget: true,
+                          });
+                          return;
+                        }
+                        const gridWidth =
+                          document.querySelector<HTMLElement>(
+                            ".dashboard-grid",
+                          )?.clientWidth;
+                        if (!gridWidth) return;
+                        const columns = getGridColumns(gridWidth);
+                        const cellWidth =
+                          (gridWidth - DASHBOARD_GRID_GAP * (columns - 1)) /
+                          columns;
+                        const current = layout.widget_geometry?.[instanceId];
+                        if (!current) return;
+                        const nextX =
+                          current.x +
+                          Math.round(deltaX / (cellWidth + DASHBOARD_GRID_GAP));
+                        const nextY =
+                          current.y +
+                          Math.round(
+                            deltaY /
+                              (DASHBOARD_GRID_ROW_HEIGHT + DASHBOARD_GRID_GAP),
+                          );
+                        const reorderedLayout = reorderWidgetByY(
+                          layout,
+                          instanceId,
+                          nextY,
+                        );
+                        setActiveLayout(
+                          normalizeWidgetLayout({
+                            ...reorderedLayout,
+                            widget_geometry: {
+                              ...reorderedLayout.widget_geometry,
+                              [instanceId]: {
+                                ...current,
+                                x: nextX,
+                                y: nextY,
+                              },
+                            },
+                          }),
+                        );
+                      }}
+                    >
+                      <WidgetInstanceContext.Provider
+                        value={{
+                          ...instance,
+                          editMode,
+                          onSizeChange: (size) =>
+                            handleSizeChange(instanceId, size),
+                          onRuntimeRowsChange: (rows) =>
+                            setRuntimeRows((current) => {
+                              const normalized = Math.max(0, Math.floor(rows));
+                              if (normalized === 0) {
+                                if (!(instanceId in current)) return current;
+                                const next = { ...current };
+                                delete next[instanceId];
+                                return next;
+                              }
+                              if (current[instanceId] === normalized)
+                                return current;
+                              return { ...current, [instanceId]: normalized };
+                            }),
+                        }}
+                      >
+                        <WidgetComponent />
                       </WidgetInstanceContext.Provider>
-                      <DashboardInsertionDropTarget
-                        dropId={createDashboardInsertDropId(activeViewId, {
-                          afterId: instanceId,
-                        })}
-                        label={`Drop here to place after ${instance.label ?? mod.displayName}`}
-                        visible={showingCrossViewInsertTargets}
-                      />
-                    </React.Fragment>
+                    </WidgetWrapper>
                   );
                 })}
-              </SortableContext>
+              </DashboardGridSurface>
             )}
           </div>
 

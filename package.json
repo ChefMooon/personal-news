@@ -61,6 +61,7 @@
     "lint": "eslint . --ext .js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix",
     "generate:icons": "node scripts/generate-icons.mjs",
     "test:ntfy-message": "node scripts/test-ntfy-message.mjs",
+    "test:dashboard-drag": "node scripts/test-dashboard-drag.mjs",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
@@ -101,6 +102,7 @@
     "fast-xml-parser": "^4.3.6",
     "lucide-react": "^0.460.0",
     "node-cron": "^3.0.3",
+    "react-grid-layout": "^2.2.4",
     "react-router-dom": "^7.0.2",
     "sonner": "^2.0.7",
     "tailwind-merge": "^2.5.4"
@@ -124,6 +126,7 @@
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-prettier": "^5.0.1",
     "eslint-plugin-react-hooks": "^7.1.1",
+    "playwright": "^1.62.1",
     "png-to-ico": "^2.1.8",
     "prettier": "^3.3.3",
     "tailwindcss": "^4.0.0",

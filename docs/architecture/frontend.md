@@ -7,7 +7,7 @@
 
 ## 1. Overview
 
-The renderer process is a React 18 single-page application bundled by electron-vite (Vite under the hood). Routing is client-side only (no URLs, no history API — Electron loads `index.html` directly). State management is local React state + custom hooks backed by IPC calls. No global state library (Redux, Zustand, etc.) is used — the IPC layer is the source of truth; React state is a cache.
+The renderer process is a React 19 single-page application bundled by electron-vite (Vite under the hood). Routing is client-side only (no URLs, no history API — Electron loads `index.html` directly). State management is local React state + custom hooks backed by IPC calls. No global state library (Redux, Zustand, etc.) is used — the IPC layer is the source of truth; React state is a cache.
 
 A `ThemeProvider` wraps the entire app at the root level (`main.tsx`) and is responsible for applying the active theme to the document. It reads `active_theme_id` via IPC on mount and responds to theme changes by toggling the `data-theme` attribute on `<html>` (for built-in themes) or by injecting CSS custom property overrides from the `themes` DB table (for user-created themes). This keeps the theme concern entirely inside `ThemeProvider` — no other component needs to know about theme logic.
 
@@ -15,18 +15,18 @@ A `ThemeProvider` wraps the entire app at the root level (`main.tsx`) and is res
 
 ## 2. Routing
 
-React Router v6 with `MemoryRouter` (required in Electron — no `BrowserRouter` since there is no web server).
+React Router v7 with `MemoryRouter` (required in Electron — no `BrowserRouter` since there is no web server).
 
 ### Route Table
 
-| Path | Component | Notes |
-|------|-----------|-------|
-| `/` | `Dashboard` | Default route |
-| `/youtube` | `YouTubePage` | Full-page YouTube view |
-| `/reddit-digest` | `RedditDigest` | Present only when the feature is enabled |
-| `/saved-posts` | `SavedPosts` | Present only when the feature is enabled; opens ntfy onboarding when no topic is configured |
-| `/scripts` | `ScriptManager` | Shows stale badge on nav item when relevant |
-| `/settings` | `Settings` | Tabbed settings plus feature flags, notifications, updates, and Saved Posts sync controls |
+| Path             | Component       | Notes                                                                                       |
+| ---------------- | --------------- | ------------------------------------------------------------------------------------------- |
+| `/`              | `Dashboard`     | Default route                                                                               |
+| `/youtube`       | `YouTubePage`   | Full-page YouTube view                                                                      |
+| `/reddit-digest` | `RedditDigest`  | Present only when the feature is enabled                                                    |
+| `/saved-posts`   | `SavedPosts`    | Present only when the feature is enabled; opens ntfy onboarding when no topic is configured |
+| `/scripts`       | `ScriptManager` | Shows stale badge on nav item when relevant                                                 |
+| `/settings`      | `Settings`      | Tabbed settings plus feature flags, notifications, updates, and Saved Posts sync controls   |
 
 Navigation is via the collapsible left sidebar. `App.tsx` renders the sidebar, the current route, the Sonner toast container, and the notifications flyout trigger.
 
@@ -48,9 +48,8 @@ ThemeProvider  ← wraps entire app; applies active_theme_id to <html data-theme
     └── route area
         ├── Dashboard
         │   ├── DashboardEditModeToggle
-        │   └── DndContext (@dnd-kit/core)
-        │       └── SortableContext
-        │           └── WidgetWrapper[] (one per widget instance, in widget_order)
+        │   └── GridLayout (react-grid-layout, non-resizable)
+        │       └── WidgetWrapper[] (one per widget instance, in widget_order)
         │               ├── YouTubeWidget
         │               │   └── ChannelRow[] (one per enabled channel)
         │               │       ├── StreamPanel (left — upcoming/live streams)
@@ -61,8 +60,11 @@ ThemeProvider  ← wraps entire app; applies active_theme_id to <html data-theme
         │               │   ├── DigestViewControls (sort dropdown + layout mode toggle)
         │               │   └── [columns mode] SubredditColumn[] | [tabs mode] DigestTabs
         │               │       └── DigestPostRow[]
-        │               └── SavedPostsWidget
-        │                   └── SavedPostSummaryRow[] (up to 5 most recent posts)
+        │               ├── SavedPostsWidget
+        │               │   └── SavedPostSummaryRow[] (size-policy capped)
+        │               ├── SportsWidget
+        │               ├── WeatherWidget
+        │               └── AstronomyWidget
         │
         ├── SavedPosts
         │   ├── StaleWarning            ← shown when last poll >24h ago
@@ -125,7 +127,7 @@ function useYouTubeChannels() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    window.api.invoke('youtube:getChannels').then((data) => {
+    window.api.invoke("youtube:getChannels").then((data) => {
       setChannels(data as Channel[]);
       setLoading(false);
     });
@@ -134,12 +136,12 @@ function useYouTubeChannels() {
   // Subscribe to push updates from main process
   useEffect(() => {
     const handler = () => {
-      window.api.invoke('youtube:getChannels').then((data) => {
+      window.api.invoke("youtube:getChannels").then((data) => {
         setChannels(data as Channel[]);
       });
     };
-    window.api.on('youtube:updated', handler);
-    return () => window.api.off('youtube:updated', handler);
+    window.api.on("youtube:updated", handler);
+    return () => window.api.off("youtube:updated", handler);
   }, []);
 
   return { channels, loading };
@@ -152,14 +154,14 @@ When the main process completes a background task (RSS poll, script run, ntfy in
 
 **Push channels (main → renderer):**
 
-| Channel | Meaning |
-|---------|---------|
-| `youtube:updated` | New videos or stream status changes available |
-| `scripts:output` | Chunk of stdout/stderr from running script |
-| `scripts:runComplete` | Script finished — payload: `{ scriptId, exitCode }` |
-| `reddit:ntfyIngestComplete` | ntfy startup/scheduled/manual ingestion finished |
-| `app:showTrayHint` | Show the first-close tray hint toast |
-| `updates:status` | Auto-update state changed |
+| Channel                     | Meaning                                             |
+| --------------------------- | --------------------------------------------------- |
+| `youtube:updated`           | New videos or stream status changes available       |
+| `scripts:output`            | Chunk of stdout/stderr from running script          |
+| `scripts:runComplete`       | Script finished — payload: `{ scriptId, exitCode }` |
+| `reddit:ntfyIngestComplete` | ntfy startup/scheduled/manual ingestion finished    |
+| `app:showTrayHint`          | Show the first-close tray hint toast                |
+| `updates:status`            | Auto-update state changed                           |
 
 ### 4.3 IPC Type Safety
 
@@ -168,8 +170,8 @@ The preload script exposes typed wrappers. All IPC channel names and payload sha
 ```typescript
 // src/shared/ipc-types.ts
 export type IpcChannels = {
-  'youtube:getChannels': { args: []; return: Channel[] };
-  'youtube:addChannel': { args: [channelIdOrUrl: string]; return: Channel };
+  "youtube:getChannels": { args: []; return: Channel[] };
+  "youtube:addChannel": { args: [channelIdOrUrl: string]; return: Channel };
   // ...
 };
 ```
@@ -184,24 +186,24 @@ The renderer-side module registry is intentionally small: it maps module IDs to 
 
 ```typescript
 // src/renderer/modules/registry.ts
-import { YouTubeWidget } from './youtube/YouTubeWidget';
-import { RedditDigestWidget } from './reddit/RedditDigestWidget';
-import { SavedPostsWidget } from './saved-posts/SavedPostsWidget';
+import { YouTubeWidget } from "./youtube/YouTubeWidget";
+import { RedditDigestWidget } from "./reddit/RedditDigestWidget";
+import { SavedPostsWidget } from "./saved-posts/SavedPostsWidget";
 
 export const moduleRegistry: RendererModule[] = [
   {
-    id: 'youtube',
-    displayName: 'YouTube',
+    id: "youtube",
+    displayName: "YouTube",
     widget: YouTubeWidget,
   },
   {
-    id: 'reddit_digest',
-    displayName: 'Reddit Digest',
+    id: "reddit_digest",
+    displayName: "Reddit Digest",
     widget: RedditDigestWidget,
   },
   {
-    id: 'saved_posts',
-    displayName: 'Saved Posts',
+    id: "saved_posts",
+    displayName: "Saved Posts",
     widget: SavedPostsWidget,
   },
 ];
@@ -213,15 +215,21 @@ The dashboard supports **multiple instances of the same module**. The `WidgetLay
 
 ```typescript
 interface WidgetInstance {
-  instanceId: string   // e.g. "reddit_digest_1", "reddit_digest_1714000000000"
-  moduleId: string     // e.g. "reddit_digest"
-  label: string | null // user-supplied name; null = use module's displayName
+  instanceId: string; // e.g. "reddit_digest_1", "reddit_digest_1714000000000"
+  moduleId: string; // e.g. "reddit_digest"
+  label: string | null; // user-supplied name; null = use module's displayName
+  size: "small" | "medium" | "large"; // dashboard footprint preset
 }
 
 interface WidgetLayout {
-  widget_order: string[]                       // array of instanceIds
-  widget_visibility: Record<string, boolean>   // keyed by instanceId
-  widget_instances: Record<string, WidgetInstance>
+  layout_version: number; // current canonical layout shape
+  widget_order: string[]; // array of instanceIds
+  widget_visibility: Record<string, boolean>; // keyed by instanceId
+  widget_instances: Record<string, WidgetInstance>;
+  widget_geometry: Record<
+    string,
+    { x: number; y: number; w: number; h: number }
+  >;
 }
 ```
 
@@ -249,6 +257,27 @@ interface WidgetLayout {
 })}
 ```
 
+The dashboard persists one canonical 12-column reference layout through the
+dashboard-views settings IPC channel. `widget_geometry` stores integer `x`, `y`,
+`w`, and `h` values in reference-grid units; 8-, 4-, and 1-column layouts are
+projected at runtime and are not persisted separately. Existing layouts migrate
+to Large instances in their prior order, while newly added instances default to
+Medium. Every widget uses the shared Small `6 x 4`, Medium `12 x 8`, and Large
+`12 x 12` baselines; legacy saved widths and heights are replaced by the
+selected baseline while saved positions are retained. The grid is non-resizable
+and layout mutations are available only in Dashboard edit mode. Astronomy may
+request extra runtime rows for detailed content, but those rows remain renderer
+state and are recomputed rather than persisted.
+
+Each widget owns a size-aware content policy and derives its effective
+presentation at render time. Small and Medium policies prioritize or cap content
+without rewriting saved widget settings and provide a More or Details path when
+content is omitted. A collapsed capped state does not scroll; expanded or Large
+content uses one designated internal vertical viewport. Text, cards, headers,
+and settings use width-safe wrapping, while horizontal scrolling is limited to
+intentional media or timeline regions. The six dashboard widgets are YouTube,
+Reddit Digest, Saved Posts, Sports, Weather, and Astronomy.
+
 ### 5.5 Layout Migration
 
 `useWidgetLayout` automatically migrates the old format (where `widget_order` contained moduleIds directly) to the new instance format on first load. The migrated layout is written back to storage transparently. Old format: `widget_order: ["youtube", "reddit_digest"]` → New format: instances `youtube_1`, `reddit_digest_1` etc.
@@ -273,12 +302,16 @@ The Settings route is composed explicitly from settings tabs and feature section
   - An "Add widget" strip appears at the bottom of the dashboard showing one button per registered module. Clicking adds a new instance of that module to the end of `widget_order`.
 - Drag-end handler, rename, add, and remove all call `setLayout` which persists the full `WidgetLayout` object via `settings:setWidgetLayout`.
 - Exiting edit mode (clicking "Done") simply sets `editMode = false`.
+- Each widget settings panel exposes Small, Medium, and Large as a shared size
+  control. The control remains visible but disabled outside Dashboard edit mode;
+  changing it updates the instance size and canonical geometry without changing
+  the widget's saved detail, view-mode, or card-density settings.
 
 ### 6.2 ntfy Onboarding Wizard
 
 - `SavedPosts.tsx` derives the onboarding state from `reddit:getNtfyStaleness` plus raw `settings:get('ntfy_topic')` / `settings:get('ntfy_server_url')` values.
 - If no topic is configured, it opens `NtfyOnboardingWizard`.
-- The wizard owns the multi-step flow and is also reused from the Saved Posts settings tab.
+  Every widget uses the shared Small `6 x 6`, Medium `12 x 9`, and Large
 - Completing the wizard persists plain settings values, closes the wizard, and refreshes Saved Posts state.
 
 ### 6.3 Stale Script Badge

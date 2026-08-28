@@ -402,16 +402,23 @@ function getDefaultWidgetLayout(): WidgetLayout {
       saved_posts_1: true,
     },
     widget_instances: {
-      youtube_1: { instanceId: "youtube_1", moduleId: "youtube", label: null },
+      youtube_1: {
+        instanceId: "youtube_1",
+        moduleId: "youtube",
+        label: null,
+        size: "large",
+      },
       reddit_digest_1: {
         instanceId: "reddit_digest_1",
         moduleId: "reddit_digest",
         label: null,
+        size: "large",
       },
       saved_posts_1: {
         instanceId: "saved_posts_1",
         moduleId: "saved_posts",
         label: null,
+        size: "large",
       },
     },
   };

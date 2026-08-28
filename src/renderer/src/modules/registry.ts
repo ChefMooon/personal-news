@@ -12,7 +12,15 @@ export const moduleRegistry: RendererModule[] = [];
 
 // Populated lazily in each module's own file to avoid circular imports
 export function registerRendererModule(mod: RendererModule): void {
-  moduleRegistry.push(mod);
+  const existingIndex = moduleRegistry.findIndex(
+    (registered) => registered.id === mod.id,
+  );
+  if (existingIndex === -1) {
+    moduleRegistry.push(mod);
+    return;
+  }
+
+  moduleRegistry[existingIndex] = mod;
 }
 
 export function getModule(id: string): RendererModule | undefined {

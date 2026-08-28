@@ -3,7 +3,11 @@ import type {
   SportEvent,
   SportTeamEvents,
 } from "../../../../../shared/ipc-types";
-import { getTodayGame, resolveTrackedTeamSide } from "../side-resolution";
+import {
+  getPreviousGame,
+  getTodayGame,
+  resolveTrackedTeamSide,
+} from "../side-resolution";
 
 function makeEvent(overrides: Partial<SportEvent> = {}): SportEvent {
   return {
@@ -65,6 +69,16 @@ describe("team side resolution and today selection", () => {
     expect(side).toBeNull();
   });
 
+  it("does not trust an ID when the event name belongs to another team", () => {
+    const side = resolveTrackedTeamSide(
+      makeEvent({ homeTeamId: "team-raptors", homeTeam: "Kansas City Royals" }),
+      "team-raptors",
+      "Toronto Raptors",
+    );
+
+    expect(side).toBeNull();
+  });
+
   it("prefers next-today game over last-today game", () => {
     const events: SportTeamEvents = {
       last: [
@@ -80,5 +94,69 @@ describe("team side resolution and today selection", () => {
 
     const game = getTodayGame(events, "2026-04-23");
     expect(game?.eventId).toBe("evt-next");
+  });
+
+  it("rejects a same-day event that does not contain the tracked team", () => {
+    const events: SportTeamEvents = {
+      last: [],
+      next: [makeEvent({ eventId: "wrong-team" })],
+    };
+
+    expect(
+      getTodayGame(events, "2026-04-23", "team-raptors", "Toronto Raptors"),
+    ).toBeTruthy();
+    expect(
+      getTodayGame(
+        events,
+        "2026-04-23",
+        "team-maple-leafs",
+        "Toronto Maple Leafs",
+      ),
+    ).toBeNull();
+  });
+
+  it("skips unrelated and current events when selecting the previous game", () => {
+    const events: SportTeamEvents = {
+      last: [
+        makeEvent({
+          eventId: "wrong-team",
+          homeTeamId: "team-maple-leafs",
+          homeTeam: "Toronto Maple Leafs",
+        }),
+        makeEvent({ eventId: "current-game" }),
+        makeEvent({
+          eventId: "previous-game",
+          awayTeamId: "team-knicks",
+          awayTeam: "New York Knicks",
+        }),
+      ],
+      next: [],
+    };
+
+    expect(
+      getPreviousGame(events, "team-raptors", "Toronto Raptors", "current-game")
+        ?.eventId,
+    ).toBe("previous-game");
+  });
+
+  it("rejects previous events with a conflicting tracked team ID and name", () => {
+    const events: SportTeamEvents = {
+      last: [
+        makeEvent({
+          eventId: "conflicting-game",
+          homeTeam: "Kansas City Royals",
+        }),
+      ],
+      next: [],
+    };
+
+    expect(
+      getPreviousGame(
+        events,
+        "team-raptors",
+        "Toronto Raptors",
+        "current-game",
+      ),
+    ).toBeNull();
   });
 });

@@ -13,7 +13,7 @@ export const DEFAULT_WEATHER_VIEW_CONFIG: WeatherViewConfig = {
   showWind: true,
   showHumidity: false,
   showFeelsLike: true,
-  showYesterday: false,
+  showYesterday: true,
   showAirQuality: true,
   showVisibility: true,
   showUvIndex: true,

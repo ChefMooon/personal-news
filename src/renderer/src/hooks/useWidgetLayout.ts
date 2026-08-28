@@ -10,8 +10,14 @@ import type {
   DashboardViewsState,
   WidgetLayout,
   WidgetInstance,
+  WidgetGeometry,
 } from "../../../shared/ipc-types";
 import { getModule } from "../modules/registry";
+import {
+  getWidgetFootprint,
+  getWidgetInsertionY,
+  normalizeWidgetLayout,
+} from "../../../shared/dashboard-grid";
 
 type WidgetTransferPosition = "top" | "bottom" | { afterId: string };
 
@@ -23,7 +29,11 @@ interface CrossViewWidgetTransferInput {
   switchToTarget?: boolean;
 }
 
+type WidgetLayoutUpdate =
+  WidgetLayout | ((currentLayout: WidgetLayout) => WidgetLayout);
+
 const DEFAULT_LAYOUT: WidgetLayout = {
+  layout_version: 2,
   widget_order: ["youtube_1", "reddit_digest_1", "saved_posts_1"],
   widget_visibility: {
     youtube_1: true,
@@ -31,17 +41,29 @@ const DEFAULT_LAYOUT: WidgetLayout = {
     saved_posts_1: true,
   },
   widget_instances: {
-    youtube_1: { instanceId: "youtube_1", moduleId: "youtube", label: null },
+    youtube_1: {
+      instanceId: "youtube_1",
+      moduleId: "youtube",
+      label: null,
+      size: "large",
+    },
     reddit_digest_1: {
       instanceId: "reddit_digest_1",
       moduleId: "reddit_digest",
       label: null,
+      size: "large",
     },
     saved_posts_1: {
       instanceId: "saved_posts_1",
       moduleId: "saved_posts",
       label: null,
+      size: "large",
     },
+  },
+  widget_geometry: {
+    youtube_1: { x: 0, y: 0, w: 12, h: 12 },
+    reddit_digest_1: { x: 0, y: 12, w: 12, h: 12 },
+    saved_posts_1: { x: 0, y: 24, w: 12, h: 12 },
   },
 };
 
@@ -81,9 +103,11 @@ function isDashboardIcon(value: unknown): value is DashboardIcon {
 
 function createEmptyLayout(): WidgetLayout {
   return {
+    layout_version: 2,
     widget_order: [],
     widget_visibility: {},
     widget_instances: {},
+    widget_geometry: {},
   };
 }
 
@@ -165,7 +189,10 @@ function normalizeDashboardView(
   };
 }
 
-function migrateDashboardViewsState(raw: unknown): DashboardViewsState {
+function migrateDashboardViewsState(raw: unknown): {
+  state: DashboardViewsState;
+  cloneInstanceConfigs: DashboardConfigCloneOperation[];
+} {
   const candidate = raw as Partial<DashboardViewsState>;
   const rawViews = candidate.views;
   const rawOrder = Array.isArray(candidate.view_order)
@@ -173,7 +200,7 @@ function migrateDashboardViewsState(raw: unknown): DashboardViewsState {
     : [];
 
   if (!rawViews || typeof rawViews !== "object") {
-    return DEFAULT_DASHBOARD_VIEWS_STATE;
+    return { state: DEFAULT_DASHBOARD_VIEWS_STATE, cloneInstanceConfigs: [] };
   }
 
   const viewsRecord = rawViews as Record<string, unknown>;
@@ -191,7 +218,7 @@ function migrateDashboardViewsState(raw: unknown): DashboardViewsState {
   const finalOrder = [...orderedIds, ...discoveredIds];
 
   if (finalOrder.length === 0) {
-    return DEFAULT_DASHBOARD_VIEWS_STATE;
+    return { state: DEFAULT_DASHBOARD_VIEWS_STATE, cloneInstanceConfigs: [] };
   }
 
   const views = Object.fromEntries(
@@ -201,10 +228,54 @@ function migrateDashboardViewsState(raw: unknown): DashboardViewsState {
     ]),
   );
 
-  return {
-    view_order: finalOrder,
-    views,
-  };
+  const usedInstanceIds = new Set<string>();
+  const cloneInstanceConfigs: DashboardConfigCloneOperation[] = [];
+  for (const viewId of finalOrder) {
+    const view = views[viewId];
+    const nextOrder: string[] = [];
+    const nextInstances = { ...view.layout.widget_instances };
+    const nextVisibility = { ...view.layout.widget_visibility };
+    const nextGeometry = { ...view.layout.widget_geometry };
+    for (const instanceId of view.layout.widget_order) {
+      let nextInstanceId = instanceId;
+      let suffix = 2;
+      while (usedInstanceIds.has(nextInstanceId)) {
+        nextInstanceId = `${instanceId}__duplicate_${suffix}`;
+        suffix += 1;
+      }
+      usedInstanceIds.add(nextInstanceId);
+      nextOrder.push(nextInstanceId);
+      if (nextInstanceId !== instanceId) {
+        nextInstances[nextInstanceId] = {
+          ...nextInstances[instanceId],
+          instanceId: nextInstanceId,
+        };
+        nextVisibility[nextInstanceId] = nextVisibility[instanceId] ?? true;
+        if (nextGeometry[instanceId]) {
+          nextGeometry[nextInstanceId] = nextGeometry[instanceId];
+        }
+        delete nextInstances[instanceId];
+        delete nextVisibility[instanceId];
+        delete nextGeometry[instanceId];
+        cloneInstanceConfigs.push({
+          sourceInstanceId: instanceId,
+          targetInstanceId: nextInstanceId,
+        });
+      }
+    }
+    views[viewId] = {
+      ...view,
+      layout: {
+        ...view.layout,
+        widget_order: nextOrder,
+        widget_instances: nextInstances,
+        widget_visibility: nextVisibility,
+        widget_geometry: nextGeometry,
+      },
+    };
+  }
+
+  return { state: { view_order: finalOrder, views }, cloneInstanceConfigs };
 }
 
 function pruneDashboardViewsState(state: DashboardViewsState): {
@@ -317,11 +388,23 @@ function cloneLayoutWithNewInstanceIds(layout: WidgetLayout): {
     }),
   ) as Record<string, boolean>;
 
+  const geometryEntries: Array<[string, WidgetGeometry]> = [];
+  widget_order.forEach((instanceId, index) => {
+    const sourceId = layout.widget_order[index];
+    const geometry = layout.widget_geometry?.[sourceId];
+    if (geometry) {
+      geometryEntries.push([instanceId, { ...geometry }]);
+    }
+  });
+  const widget_geometry = Object.fromEntries(geometryEntries);
+
   return {
     layout: {
+      layout_version: layout.layout_version,
       widget_order,
       widget_instances,
       widget_visibility,
+      widget_geometry,
     },
     cloneOperations,
   };
@@ -340,61 +423,7 @@ function cloneLayoutWithNewInstanceIds(layout: WidgetLayout): {
  *     Creates canonical "_1" instance IDs and maps old visibility keys.
  */
 function migrateLayout(raw: unknown): WidgetLayout {
-  const data = raw as Partial<WidgetLayout> & { widget_order?: string[] };
-
-  // Case 1: fully migrated
-  if (data.widget_instances && Object.keys(data.widget_instances).length > 0) {
-    return {
-      widget_order: data.widget_order ?? [],
-      widget_visibility: data.widget_visibility ?? {},
-      widget_instances: data.widget_instances,
-    };
-  }
-
-  // Cases 2 & 3: reconstruct widget_instances from widget_order.
-  // An already-generated instance ID always ends with _<digits>
-  // (e.g. "youtube_1", "reddit_digest_1704892344567").
-  const INSTANCE_ID_RE = /^(.+)_\d+$/;
-  const storedOrder: string[] = data.widget_order ?? [
-    "youtube",
-    "reddit_digest",
-    "saved_posts",
-  ];
-  const storedVisibility = (data.widget_visibility ?? {}) as Record<
-    string,
-    boolean
-  >;
-
-  const instances: Record<string, WidgetInstance> = {};
-  const newOrder: string[] = [];
-  const newVisibility: Record<string, boolean> = {};
-
-  for (const item of storedOrder) {
-    const match = INSTANCE_ID_RE.exec(item);
-    if (match) {
-      // Case 2: item is already an instance ID — reconstruct the entry
-      const instanceId = item;
-      const moduleId = match[1];
-      instances[instanceId] = { instanceId, moduleId, label: null };
-      newOrder.push(instanceId);
-      // Visibility was stored under the instance ID key
-      newVisibility[instanceId] = storedVisibility[instanceId] !== false;
-    } else {
-      // Case 3: item is a raw module ID — generate a canonical instance ID
-      const moduleId = item;
-      const instanceId = `${moduleId}_1`;
-      instances[instanceId] = { instanceId, moduleId, label: null };
-      newOrder.push(instanceId);
-      // Visibility was stored under the module ID key in the old format
-      newVisibility[instanceId] = storedVisibility[moduleId] !== false;
-    }
-  }
-
-  return {
-    widget_order: newOrder,
-    widget_visibility: newVisibility,
-    widget_instances: instances,
-  };
+  return normalizeWidgetLayout(raw);
 }
 
 /**
@@ -425,9 +454,20 @@ function pruneLayout(layout: WidgetLayout): {
 
   return {
     layout: {
+      ...layout,
       widget_order: validIds,
       widget_visibility: cleanVisibility,
       widget_instances: cleanInstances,
+      widget_geometry: Object.fromEntries(
+        validIds
+          .map((id) => [id, layout.widget_geometry?.[id]] as const)
+          .filter(
+            (
+              entry,
+            ): entry is readonly [string, NonNullable<(typeof entry)[1]>] =>
+              entry[1] !== undefined,
+          ),
+      ),
     },
     changed: true,
   };
@@ -439,7 +479,7 @@ export function useWidgetLayout(): {
   activeView: DashboardView;
   setActiveViewId: (viewId: string) => void;
   setActiveLayout: (
-    layout: WidgetLayout,
+    layout: WidgetLayoutUpdate,
     options?: Omit<DashboardViewsMutation, "state">,
   ) => void;
   createDashboardView: (input: {
@@ -465,6 +505,8 @@ export function useWidgetLayout(): {
   );
   const [loading, setLoading] = useState(true);
   const activeViewIdRef = useRef(DEFAULT_DASHBOARD_VIEW_ID);
+  const stateRef = useRef(state);
+  const persistenceQueueRef = useRef(Promise.resolve());
 
   const dashboardViews = useMemo(
     () =>
@@ -499,20 +541,38 @@ export function useWidgetLayout(): {
     options?: Omit<DashboardViewsMutation, "state">,
     nextActiveViewId?: string | null,
   ): void => {
+    stateRef.current = nextState;
     setState(nextState);
     setResolvedActiveViewId(nextState, nextActiveViewId);
-    window.api
-      .invoke(IPC.SETTINGS_SET_DASHBOARD_VIEWS, {
-        state: nextState,
-        deleteInstanceIds: options?.deleteInstanceIds,
-        cloneInstanceConfigs: options?.cloneInstanceConfigs,
-      } satisfies DashboardViewsMutation)
+    persistenceQueueRef.current = persistenceQueueRef.current
+      .catch(() => undefined)
+      .then(async () => {
+        await window.api.invoke(IPC.SETTINGS_SET_DASHBOARD_VIEWS, {
+          state: nextState,
+          deleteInstanceIds: options?.deleteInstanceIds,
+          cloneInstanceConfigs: options?.cloneInstanceConfigs,
+        } satisfies DashboardViewsMutation);
+      })
       .catch((err) => {
-        toast.error(
-          err instanceof Error
-            ? err.message
-            : "Failed to save dashboard views.",
-        );
+        window.api
+          .invoke(IPC.SETTINGS_GET_DASHBOARD_VIEWS)
+          .then((data) => {
+            const migrated = migrateDashboardViewsState(data);
+            const authoritative = pruneDashboardViewsState(migrated.state);
+            stateRef.current = authoritative.state;
+            setState(authoritative.state);
+            setResolvedActiveViewId(authoritative.state);
+            toast.error(
+              err instanceof Error
+                ? `${err.message} Local changes were discarded.`
+                : "Failed to save dashboard views. Local changes were discarded.",
+            );
+          })
+          .catch(() => {
+            toast.error(
+              "Failed to save dashboard views and reload authoritative state. Your changes remain unsaved.",
+            );
+          });
       });
   };
 
@@ -525,14 +585,16 @@ export function useWidgetLayout(): {
           state: prunedState,
           changed,
           removedInstanceIds,
-        } = pruneDashboardViewsState(migrated);
+        } = pruneDashboardViewsState(migrated.state);
+        stateRef.current = prunedState;
         setState(prunedState);
         setResolvedActiveViewId(prunedState, prunedState.view_order[0] ?? null);
-        if (changed) {
+        if (changed || migrated.cloneInstanceConfigs.length > 0) {
           window.api
             .invoke(IPC.SETTINGS_SET_DASHBOARD_VIEWS, {
               state: prunedState,
               deleteInstanceIds: removedInstanceIds,
+              cloneInstanceConfigs: migrated.cloneInstanceConfigs,
             } satisfies DashboardViewsMutation)
             .catch((err) => {
               toast.error(
@@ -563,19 +625,28 @@ export function useWidgetLayout(): {
   };
 
   const setActiveLayout = (
-    newLayout: WidgetLayout,
+    layoutUpdate: WidgetLayoutUpdate,
     options?: Omit<DashboardViewsMutation, "state">,
   ): void => {
-    const resolvedId = resolveActiveViewId(state, activeViewIdRef.current);
-    const currentView = state.views[resolvedId];
+    const currentState = stateRef.current;
+    const resolvedId = resolveActiveViewId(
+      currentState,
+      activeViewIdRef.current,
+    );
+    const currentView = currentState.views[resolvedId];
     if (!currentView) {
       return;
     }
 
+    const newLayout =
+      typeof layoutUpdate === "function"
+        ? layoutUpdate(currentView.layout)
+        : layoutUpdate;
+
     const nextState: DashboardViewsState = {
-      ...state,
+      ...currentState,
       views: {
-        ...state.views,
+        ...currentState.views,
         [resolvedId]: {
           ...currentView,
           layout: newLayout,
@@ -782,30 +853,44 @@ export function useWidgetLayout(): {
       sourceView.layout.widget_instances;
     const { [instanceId]: _removedVisibility, ...remainingVisibility } =
       sourceView.layout.widget_visibility;
+    const { [instanceId]: _removedGeometry, ...remainingGeometry } =
+      sourceView.layout.widget_geometry ?? {};
 
-    const nextSourceLayout: WidgetLayout = {
+    const nextSourceLayout = normalizeWidgetLayout({
+      ...sourceView.layout,
       widget_order: sourceView.layout.widget_order.filter(
         (id) => id !== instanceId,
       ),
       widget_instances: remainingInstances,
       widget_visibility: remainingVisibility,
-    };
+      widget_geometry: remainingGeometry,
+    });
 
-    const nextTargetLayout: WidgetLayout = {
+    const canonicalTargetLayout = normalizeWidgetLayout(targetView.layout);
+    const nextTargetLayout = normalizeWidgetLayout({
+      ...canonicalTargetLayout,
       widget_order: insertWidgetInstance(
-        targetView.layout.widget_order,
+        canonicalTargetLayout.widget_order,
         instanceId,
         position,
       ),
       widget_instances: {
-        ...targetView.layout.widget_instances,
+        ...canonicalTargetLayout.widget_instances,
         [instanceId]: widgetInstance,
       },
       widget_visibility: {
-        ...targetView.layout.widget_visibility,
+        ...canonicalTargetLayout.widget_visibility,
         [instanceId]: sourceVisibility,
       },
-    };
+      widget_geometry: {
+        ...canonicalTargetLayout.widget_geometry,
+        [instanceId]: {
+          x: 0,
+          y: getWidgetInsertionY(canonicalTargetLayout, position),
+          ...getWidgetFootprint(widgetInstance.moduleId, widgetInstance.size),
+        },
+      },
+    });
 
     const nextState: DashboardViewsState = {
       ...state,
@@ -864,22 +949,35 @@ export function useWidgetLayout(): {
       instanceId: nextInstanceId,
     };
 
-    const nextTargetLayout: WidgetLayout = {
+    const canonicalTargetLayout = normalizeWidgetLayout(targetView.layout);
+    const nextTargetLayout = normalizeWidgetLayout({
+      ...canonicalTargetLayout,
       widget_order: insertWidgetInstance(
-        targetView.layout.widget_order,
+        canonicalTargetLayout.widget_order,
         nextInstanceId,
         position,
       ),
       widget_instances: {
-        ...targetView.layout.widget_instances,
+        ...canonicalTargetLayout.widget_instances,
         [nextInstanceId]: nextWidgetInstance,
       },
       widget_visibility: {
-        ...targetView.layout.widget_visibility,
+        ...canonicalTargetLayout.widget_visibility,
         [nextInstanceId]:
           sourceView.layout.widget_visibility[instanceId] ?? true,
       },
-    };
+      widget_geometry: {
+        ...canonicalTargetLayout.widget_geometry,
+        [nextInstanceId]: {
+          x: 0,
+          y: getWidgetInsertionY(canonicalTargetLayout, position),
+          ...getWidgetFootprint(
+            nextWidgetInstance.moduleId,
+            nextWidgetInstance.size,
+          ),
+        },
+      },
+    });
 
     const nextState: DashboardViewsState = {
       ...state,

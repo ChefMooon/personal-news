@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useState } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import type {
   SportEvent,
   SportLeague,
@@ -1083,6 +1084,67 @@ function TodayRestingRow({
   );
 }
 
+function NoGameTodayCarousel({
+  teams,
+  showSportLabels,
+  leaguesById,
+}: {
+  teams: TrackedTeam[];
+  showSportLabels: boolean;
+  leaguesById: Record<string, SportLeague>;
+}): React.ReactElement {
+  const [index, setIndex] = useState(0);
+  const team = teams[index] ?? teams[0];
+
+  if (!team) return <></>;
+
+  return (
+    <div className="min-w-0 rounded-lg border bg-muted/10 p-2">
+      <div className="flex items-center justify-between gap-2">
+        <p className="truncate text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          No game today
+        </p>
+        <div className="flex shrink-0 items-center gap-1">
+          <button
+            type="button"
+            className="rounded p-1 hover:bg-accent disabled:opacity-40"
+            onClick={() => setIndex((value) => Math.max(0, value - 1))}
+            disabled={index === 0}
+            aria-label="Previous team"
+          >
+            <ChevronLeft className="h-3.5 w-3.5" />
+          </button>
+          <span className="text-[10px] text-muted-foreground">
+            {index + 1}/{teams.length}
+          </span>
+          <button
+            type="button"
+            className="rounded p-1 hover:bg-accent disabled:opacity-40"
+            onClick={() =>
+              setIndex((value) => Math.min(teams.length - 1, value + 1))
+            }
+            disabled={index === teams.length - 1}
+            aria-label="Next team"
+          >
+            <ChevronRight className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+      <div className="mt-1 flex min-w-0 items-center gap-2">
+        <TeamBadge team={team} size="sm" />
+        <div className="min-w-0">
+          <p className="truncate text-xs font-semibold" title={team.name}>
+            {team.name}
+          </p>
+          <p className="truncate text-[10px] text-muted-foreground">
+            {getTeamMeta(team, leaguesById, showSportLabels)}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function TodayView({
   teams,
   teamEventsById,
@@ -1092,6 +1154,8 @@ function TodayView({
   today,
   showSportLabels,
   leaguesById,
+  showTeamCarousel,
+  hideTodayGameCards,
 }: {
   teams: TrackedTeam[];
   teamEventsById: Record<string, SportTeamEvents>;
@@ -1101,6 +1165,8 @@ function TodayView({
   today: string;
   showSportLabels: boolean;
   leaguesById: Record<string, SportLeague>;
+  showTeamCarousel: boolean;
+  hideTodayGameCards: boolean;
 }): React.ReactElement {
   const playing = teams.filter(
     (team) => getTodayGame(teamEventsById[team.teamId], today) !== null,
@@ -1116,21 +1182,29 @@ function TodayView({
           None of your teams are playing today.
         </div>
         {resting.length > 0 ? (
-          <div className="space-y-1.5">
-            {resting.map((team) => {
-              const nextGame = teamEventsById[team.teamId]?.next?.[0] ?? null;
-              return (
-                <TodayRestingRow
-                  key={team.teamId}
-                  team={team}
-                  nextGame={nextGame}
-                  showTime={showTime}
-                  showSportLabels={showSportLabels}
-                  leaguesById={leaguesById}
-                />
-              );
-            })}
-          </div>
+          showTeamCarousel ? (
+            <NoGameTodayCarousel
+              teams={resting}
+              showSportLabels={showSportLabels}
+              leaguesById={leaguesById}
+            />
+          ) : (
+            <div className="space-y-1.5">
+              {resting.map((team) => {
+                const nextGame = teamEventsById[team.teamId]?.next?.[0] ?? null;
+                return (
+                  <TodayRestingRow
+                    key={team.teamId}
+                    team={team}
+                    nextGame={nextGame}
+                    showTime={showTime}
+                    showSportLabels={showSportLabels}
+                    leaguesById={leaguesById}
+                  />
+                );
+              })}
+            </div>
+          )
         ) : null}
       </div>
     );
@@ -1138,49 +1212,58 @@ function TodayView({
 
   return (
     <div className="space-y-3">
-      {playing.map((team) => {
-        const events = teamEventsById[team.teamId];
-        const todayGame = getTodayGame(events, today);
-        const lastGame = getFirstDifferentGame(
-          events?.last,
-          todayGame?.eventId ?? null,
-        );
-        return (
-          <TodayGameCard
-            key={team.teamId}
-            team={team}
-            todayGame={todayGame}
-            lastGame={lastGame}
-            showTime={showTime}
-            showVenue={showVenue}
-            showLiveStartTime={showLiveStartTime}
+      {!hideTodayGameCards &&
+        playing.map((team) => {
+          const events = teamEventsById[team.teamId];
+          const todayGame = getTodayGame(events, today);
+          const lastGame = getFirstDifferentGame(
+            events?.last,
+            todayGame?.eventId ?? null,
+          );
+          return (
+            <TodayGameCard
+              key={team.teamId}
+              team={team}
+              todayGame={todayGame}
+              lastGame={lastGame}
+              showTime={showTime}
+              showVenue={showVenue}
+              showLiveStartTime={showLiveStartTime}
+              showSportLabels={showSportLabels}
+              leaguesById={leaguesById}
+            />
+          );
+        })}
+
+      {resting.length > 0 ? (
+        showTeamCarousel ? (
+          <NoGameTodayCarousel
+            teams={resting}
             showSportLabels={showSportLabels}
             leaguesById={leaguesById}
           />
-        );
-      })}
-
-      {resting.length > 0 ? (
-        <div>
-          <p className="mb-1.5 px-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/60">
-            No game today
-          </p>
-          <div className="space-y-1.5">
-            {resting.map((team) => {
-              const nextGame = teamEventsById[team.teamId]?.next?.[0] ?? null;
-              return (
-                <TodayRestingRow
-                  key={team.teamId}
-                  team={team}
-                  nextGame={nextGame}
-                  showTime={showTime}
-                  showSportLabels={showSportLabels}
-                  leaguesById={leaguesById}
-                />
-              );
-            })}
+        ) : (
+          <div>
+            <p className="mb-1.5 px-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/60">
+              No game today
+            </p>
+            <div className="space-y-1.5">
+              {resting.map((team) => {
+                const nextGame = teamEventsById[team.teamId]?.next?.[0] ?? null;
+                return (
+                  <TodayRestingRow
+                    key={team.teamId}
+                    team={team}
+                    nextGame={nextGame}
+                    showTime={showTime}
+                    showSportLabels={showSportLabels}
+                    leaguesById={leaguesById}
+                  />
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )
       ) : null}
     </div>
   );
@@ -1195,6 +1278,8 @@ export function MyTeamsView({
   showLiveStartTime,
   viewMode,
   showSportLabels = false,
+  showTeamCarousel = false,
+  hideTodayGameCards = false,
 }: {
   teams: TrackedTeam[];
   teamEventsById: Record<string, SportTeamEvents>;
@@ -1204,6 +1289,8 @@ export function MyTeamsView({
   showLiveStartTime: boolean;
   viewMode: "today" | "summarized" | "standard" | "detailed";
   showSportLabels?: boolean;
+  showTeamCarousel?: boolean;
+  hideTodayGameCards?: boolean;
 }): React.ReactElement {
   const today = getTodayString();
 
@@ -1226,6 +1313,8 @@ export function MyTeamsView({
         showLiveStartTime={showLiveStartTime}
         today={today}
         showSportLabels={showSportLabels}
+        showTeamCarousel={showTeamCarousel}
+        hideTodayGameCards={hideTodayGameCards}
       />
     );
   }

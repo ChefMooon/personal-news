@@ -7,6 +7,7 @@ import {
 import { useWidgetInstance } from "../../contexts/WidgetInstanceContext";
 import { ChannelRow } from "./ChannelRow";
 import { YouTubeSettingsPanel } from "./YouTubeSettingsPanel";
+import { WidgetSizeControl } from "../../components/WidgetSizeControl";
 import {
   Card,
   CardHeader,
@@ -27,6 +28,7 @@ import {
   AlertDialogTrigger,
 } from "../../components/ui/alert-dialog";
 import { registerRendererModule } from "../registry";
+import { getYouTubeContentPolicy } from "./youtube-content-policy";
 import type {
   YtChannel,
   YouTubeViewConfig,
@@ -74,11 +76,16 @@ function computeDisplayedChannels(
 }
 
 function YouTubeWidget(): React.ReactElement {
-  const { instanceId, label } = useWidgetInstance();
+  const { instanceId, label, size, editMode, onSizeChange } =
+    useWidgetInstance();
   const widgetTitle = label ?? "YouTube";
   const { channels, loading } = useYouTubeChannels();
   const { config: viewConfig, setConfig } = useYouTubeViewConfig(instanceId);
   const [isEditing, setIsEditing] = useState(false);
+  const contentPolicy = useMemo(
+    () => getYouTubeContentPolicy(size, viewConfig.cardDensity, isEditing),
+    [isEditing, size, viewConfig.cardDensity],
+  );
   const [snapshotConfig, setSnapshotConfig] =
     useState<YouTubeViewConfig | null>(null);
   const [editContentHeight, setEditContentHeight] = useState<number | null>(
@@ -87,6 +94,7 @@ function YouTubeWidget(): React.ReactElement {
   const [collapsedChannels, setCollapsedChannels] = useState<
     Record<string, boolean>
   >({});
+  const [expandedChannels, setExpandedChannels] = useState(false);
   const cardContentRef = useRef<HTMLDivElement | null>(null);
 
   // Reset per-channel collapse state when the default changes
@@ -105,8 +113,12 @@ function YouTubeWidget(): React.ReactElement {
   }, [isEditing]);
 
   const displayedChannels = useMemo(
-    () => computeDisplayedChannels(channels, viewConfig),
-    [channels, viewConfig],
+    () =>
+      computeDisplayedChannels(channels, viewConfig).slice(
+        0,
+        contentPolicy.channelLimit,
+      ),
+    [channels, contentPolicy.channelLimit, viewConfig],
   );
 
   const isChannelCollapsed = (channelId: string): boolean => {
@@ -122,6 +134,15 @@ function YouTubeWidget(): React.ReactElement {
   };
 
   const enabledCount = channels.filter((c) => c.enabled).length;
+  const allDisplayedChannels = useMemo(
+    () => computeDisplayedChannels(channels, viewConfig),
+    [channels, viewConfig],
+  );
+  const hasMoreChannels =
+    allDisplayedChannels.length > contentPolicy.channelLimit;
+  const visibleChannels = expandedChannels
+    ? allDisplayedChannels
+    : displayedChannels;
 
   function handleOpenEdit(): void {
     const currentHeight =
@@ -162,24 +183,37 @@ function YouTubeWidget(): React.ReactElement {
         </p>
       ) : (
         <div>
-          {displayedChannels.map((channel, idx) => (
+          {visibleChannels.map((channel, idx) => (
             <div key={channel.channel_id}>
               {idx > 0 && <Separator className="my-1" />}
               <ChannelRow
                 channel={channel}
                 viewConfig={viewConfig}
                 isCollapsed={isChannelCollapsed(channel.channel_id)}
+                compactRows={contentPolicy.compactRows}
+                carouselRows={contentPolicy.carouselRows}
                 onToggleCollapse={() => toggleCollapse(channel.channel_id)}
               />
             </div>
           ))}
+          {hasMoreChannels && (
+            <button
+              type="button"
+              className="mt-2 text-xs font-medium text-primary hover:underline"
+              onClick={() => setExpandedChannels((expanded) => !expanded)}
+            >
+              {expandedChannels
+                ? "Show fewer channels"
+                : `Show ${allDisplayedChannels.length - contentPolicy.channelLimit} more channel${allDisplayedChannels.length - contentPolicy.channelLimit === 1 ? "" : "s"}`}
+            </button>
+          )}
         </div>
       )}
     </>
   );
 
   return (
-    <Card>
+    <Card className="flex h-full min-h-0 flex-col overflow-hidden">
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <CardTitle className="text-base flex items-center gap-2">
@@ -248,10 +282,14 @@ function YouTubeWidget(): React.ReactElement {
       </CardHeader>
       <CardContent
         ref={cardContentRef}
+        className={`youtube-card-content min-h-0 flex-1 ${size === "large" || expandedChannels ? "overflow-y-auto" : "overflow-hidden"}`}
         style={
           isEditing && editContentHeight
             ? { height: editContentHeight, overflow: "hidden" }
-            : undefined
+            : {
+                overflowY:
+                  size === "large" || expandedChannels ? "auto" : "hidden",
+              }
         }
       >
         <div className={isEditing ? "youtube-card-edit" : undefined}>
@@ -264,6 +302,13 @@ function YouTubeWidget(): React.ReactElement {
                 channels={channels}
                 config={viewConfig}
                 onChange={setConfig}
+                sizeControl={
+                  <WidgetSizeControl
+                    size={size}
+                    editMode={editMode}
+                    onChange={onSizeChange}
+                  />
+                }
               />
             </div>
           )}

@@ -8,6 +8,7 @@ import RedditDigest from "./routes/RedditDigest";
 import ScriptManager from "./routes/ScriptManager";
 import Settings from "./routes/Settings";
 import SportsPage from "./routes/Sports";
+import AstronomyDetails from "./routes/AstronomyDetails";
 import { RedditDigestEnabledProvider } from "./contexts/RedditDigestEnabledContext";
 import { AstronomyEnabledProvider } from "./contexts/AstronomyEnabledContext";
 import { RadioPlayerProvider } from "./contexts/RadioPlayerContext";
@@ -48,6 +49,10 @@ function AppShell(): React.ReactElement {
                 <Route path="/saved-posts" element={<SavedPosts />} />
                 <Route path="/youtube" element={<YouTubePage />} />
                 <Route path="/sports" element={<SportsPage />} />
+                <Route
+                  path="/astronomy/details"
+                  element={<AstronomyDetails />}
+                />
                 <Route path="/scripts" element={<ScriptManager />} />
                 <Route path="/settings" element={<Settings />} />
               </Routes>

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
 import {
   Globe,
   MoonStar,
@@ -60,6 +61,7 @@ import {
   MoonPhaseGlyph,
   SunGlyph,
 } from "../weather/AstronomyStrip";
+import { WidgetSizeControl } from "../../components/WidgetSizeControl";
 import type {
   AstronomyGlobalEvent,
   AstronomyHorizonData,
@@ -69,6 +71,10 @@ import type {
 } from "../../../../shared/ipc-types";
 import { IPC } from "../../../../shared/ipc-types";
 import type { AstronomyRefreshResult } from "../../../../shared/ipc-types";
+import { getAstronomyContentPolicy } from "./astronomy-content-policy";
+import { AstronomySmall } from "./AstronomySmall";
+import { AstronomyMedium } from "./AstronomyMedium";
+import { AstronomyLarge } from "./AstronomyLarge";
 import {
   clampSynodicProgress,
   countdownLabel,
@@ -861,10 +867,10 @@ function EventsDetailSection({
           className="min-w-0 space-y-1 rounded-md border p-2"
         >
           <p className="truncate text-xs font-medium">{event.label}</p>
-          <p className="flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
             <span>{eventFamilyLabel(event.family)}</span>
             <GlobalScopeBadge />
-          </p>
+          </div>
           <p className="text-[11px]">
             {formatEventDateTime(event.time, timezone, timeFormat) ??
               "Unavailable"}
@@ -875,7 +881,7 @@ function EventsDetailSection({
   );
 }
 
-function SummaryView({
+export function SummaryView({
   astronomy,
   timezone,
   timeFormat,
@@ -948,7 +954,7 @@ function SummaryView({
   );
 }
 
-function DetailedView({
+export function DetailedView({
   astronomy,
   timezone,
   timeFormat,
@@ -1030,6 +1036,7 @@ interface AstronomySettingsPanelProps {
   onChange: (config: AstronomyViewConfig) => void;
   locations: WeatherLocation[];
   defaultLocationId: string | null;
+  sizeControl?: React.ReactNode;
 }
 
 function AstronomySettingsPanel({
@@ -1037,6 +1044,7 @@ function AstronomySettingsPanel({
   onChange,
   locations,
   defaultLocationId,
+  sizeControl,
 }: AstronomySettingsPanelProps): React.ReactElement {
   const currentValue = config.locationId ?? "__default__";
   const defaultLocationLabel = useMemo(() => {
@@ -1053,6 +1061,7 @@ function AstronomySettingsPanel({
     <div className="flex h-full w-full min-w-0 flex-1 flex-col">
       <ScrollArea className="h-full w-full">
         <div className="space-y-5 pb-2 pr-4">
+          {sizeControl}
           <div>
             <h3 className="mb-3 text-sm font-semibold">Location</h3>
             <label className="mb-2 block text-sm">Displayed location</label>
@@ -1115,8 +1124,16 @@ function AstronomySettingsPanel({
 }
 
 function AstronomyWidget(): React.ReactElement {
-  const { instanceId, label } = useWidgetInstance();
+  const {
+    instanceId,
+    label,
+    size,
+    editMode,
+    onSizeChange,
+    onRuntimeRowsChange,
+  } = useWidgetInstance();
   const widgetTitle = label ?? "Astronomy";
+  const navigate = useNavigate();
   const { enabled: featureEnabled } = useAstronomyEnabled();
   const { config, setConfig } = useAstronomyConfig(instanceId);
   const { locations, loading: locationsLoading } = useWeatherLocations();
@@ -1145,8 +1162,64 @@ function AstronomyWidget(): React.ReactElement {
     null,
   );
   const [refreshing, setRefreshing] = useState(false);
+  const [disclosed, setDisclosed] = useState(false);
+  const [contentWidth, setContentWidth] = useState<number | null>(null);
   const lastManualRefreshAt = useRef<number | null>(null);
   const cardContentRef = useRef<HTMLDivElement | null>(null);
+  const contentViewportRef = useRef<HTMLDivElement | null>(null);
+
+  const contentPolicy = getAstronomyContentPolicy({
+    size,
+    savedViewMode: config.viewMode,
+    availableWidth: contentWidth,
+    snapshot,
+    disclosed,
+  });
+
+  useEffect(() => {
+    const content = contentViewportRef.current;
+    if (!content) return;
+    const updateWidth = (): void => {
+      setContentWidth(content.getBoundingClientRect().width);
+    };
+    updateWidth();
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, [size, isEditing]);
+
+  useEffect(() => {
+    if (isEditing || !contentPolicy.measureRuntimeRows) {
+      onRuntimeRowsChange(0);
+      return;
+    }
+
+    const content = contentViewportRef.current;
+    if (!content) return;
+
+    const baselineRows = size === "medium" ? 8 : 12;
+    const baselineContentHeight = baselineRows * 56 - 80;
+    const updateRows = (): void => {
+      const extraRows = Math.max(
+        0,
+        Math.ceil((content.scrollHeight - baselineContentHeight) / 56),
+      );
+      onRuntimeRowsChange(extraRows);
+    };
+
+    updateRows();
+    const observer = new ResizeObserver(updateRows);
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, [
+    contentPolicy.measureRuntimeRows,
+    contentWidth,
+    disclosed,
+    isEditing,
+    onRuntimeRowsChange,
+    size,
+    snapshot,
+  ]);
 
   const nowMilliseconds = useNowMilliseconds(
     featureEnabled && snapshot != null,
@@ -1263,8 +1336,19 @@ function AstronomyWidget(): React.ReactElement {
     setSnapshotConfig(DEFAULT_ASTRONOMY_VIEW_CONFIG);
   }
 
+  const openDetails = (): void => {
+    if (effectiveLocationId) {
+      navigate(
+        `/astronomy/details?locationId=${encodeURIComponent(effectiveLocationId)}`,
+      );
+    }
+  };
+
   const preview = (
-    <div className="space-y-3">
+    <div
+      ref={contentViewportRef}
+      className="astronomy-content-viewport flex min-h-0 min-w-0 flex-1 flex-col space-y-3"
+    >
       {!effectiveLocationId ? (
         <div className="rounded-md border border-dashed px-4 py-5 text-sm text-muted-foreground">
           No saved Weather location available. Save a location in Settings -
@@ -1280,20 +1364,44 @@ function AstronomyWidget(): React.ReactElement {
               action or wait for the next scheduled update.
             </div>
           )}
-          {config.viewMode === "detailed" ? (
-            <DetailedView
+          {size === "small" ? (
+            <AstronomySmall
               astronomy={snapshot}
               timezone={timezone}
               timeFormat={weatherSettings.timeFormat}
               nowSeconds={nowSeconds}
+            />
+          ) : size === "medium" ? (
+            <AstronomyMedium
+              astronomy={snapshot}
+              timezone={timezone}
+              timeFormat={weatherSettings.timeFormat}
+              nowSeconds={nowSeconds}
+              eventLimit={contentPolicy.eventLimit ?? 3}
             />
           ) : (
-            <SummaryView
+            <AstronomyLarge
               astronomy={snapshot}
               timezone={timezone}
               timeFormat={weatherSettings.timeFormat}
               nowSeconds={nowSeconds}
+              detailed={contentPolicy.effectiveViewMode === "detailed"}
             />
+          )}
+          {contentPolicy.detailsAvailable && (
+            <div className="flex justify-end pt-1">
+              <button
+                type="button"
+                className="text-xs font-medium text-primary underline-offset-4 hover:underline"
+                onClick={() => {
+                  setDisclosed(true);
+                  openDetails();
+                }}
+                disabled={!effectiveLocationId}
+              >
+                {disclosed ? "Open full details" : "Details"}
+              </button>
+            </div>
           )}
         </>
       )}
@@ -1301,7 +1409,7 @@ function AstronomyWidget(): React.ReactElement {
   );
 
   return (
-    <Card>
+    <Card className="flex min-h-0 flex-col">
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between gap-2">
           <div>
@@ -1392,6 +1500,7 @@ function AstronomyWidget(): React.ReactElement {
       </CardHeader>
       <CardContent
         ref={cardContentRef}
+        className="astronomy-card-content flex min-h-0 flex-1 flex-col overflow-hidden"
         style={
           isEditing && editContentHeight
             ? { height: editContentHeight, overflow: "hidden" }
@@ -1400,7 +1509,11 @@ function AstronomyWidget(): React.ReactElement {
       >
         <div className={isEditing ? "astronomy-card-edit" : undefined}>
           <div
-            className={isEditing ? "astronomy-card-edit__preview" : undefined}
+            className={
+              isEditing
+                ? "astronomy-card-edit__preview"
+                : "flex min-h-0 flex-1 flex-col"
+            }
           >
             {preview}
           </div>
@@ -1409,6 +1522,13 @@ function AstronomyWidget(): React.ReactElement {
               <AstronomySettingsPanel
                 config={config}
                 onChange={setConfig}
+                sizeControl={
+                  <WidgetSizeControl
+                    size={size}
+                    editMode={editMode}
+                    onChange={onSizeChange}
+                  />
+                }
                 locations={locations}
                 defaultLocationId={weatherSettings.defaultLocationId}
               />

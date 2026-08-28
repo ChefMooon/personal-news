@@ -75,6 +75,7 @@ interface SavedPostsSettingsPanelProps {
   availableSubreddits: string[];
   availableTags: string[];
   onChange: (config: SavedPostsViewConfig) => void;
+  sizeControl?: React.ReactNode;
 }
 
 export function SavedPostsSettingsPanel({
@@ -82,6 +83,7 @@ export function SavedPostsSettingsPanel({
   availableSubreddits,
   availableTags,
   onChange,
+  sizeControl,
 }: SavedPostsSettingsPanelProps): React.ReactElement {
   const { instanceId } = useWidgetInstance();
   const [draft, setDraft] = useState<SavedPostsViewConfig>(config);
@@ -251,6 +253,7 @@ export function SavedPostsSettingsPanel({
     <div className="flex flex-col h-full w-full min-w-0 flex-1">
       <ScrollArea className="h-full w-full">
         <div className="space-y-5 pb-2 pl-2 pr-4">
+          {sizeControl}
           {/* ── Sources ── */}
           <div>
             <SectionHeader title="Sources" />

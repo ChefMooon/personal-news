@@ -55,6 +55,11 @@ import {
 } from "../../../../shared/ipc-types";
 import { NtfyOnboardingWizard } from "./NtfyOnboardingWizard";
 import { AddSavedPostModal } from "./AddSavedPostModal";
+import { WidgetSizeControl } from "../../components/WidgetSizeControl";
+import {
+  getSavedPostsContentPolicy,
+  SAVED_POSTS_SIZE_LIMITS,
+} from "./saved-posts-content-policy";
 
 const SOURCE_LABELS: Record<LinkSource, string> = {
   reddit: "Reddit",
@@ -86,6 +91,7 @@ function PostCard({
     showUrl: boolean;
     showBodyPreview: boolean;
     cardDensity: "compact" | "detailed";
+    size: "small" | "medium" | "large";
   };
   onOpen: (post: SavedPost) => void;
   onToggleViewed: (post: SavedPost, viewed: boolean) => void;
@@ -105,8 +111,8 @@ function PostCard({
         <div
           className={
             config.cardDensity === "compact"
-              ? "flex items-start gap-2 py-1 w-full"
-              : "flex items-start gap-2 py-2 px-2 rounded bg-muted/30 w-full hover:bg-muted/50 transition-colors"
+              ? "flex h-full items-start gap-2 py-1 px-2 rounded bg-muted/30 w-full hover:bg-muted/50 transition-colors"
+              : "flex h-full items-start gap-2 py-3 px-2 rounded bg-muted/30 w-full hover:bg-muted/50 transition-colors"
           }
           onContextMenu={onContextMenu}
         >
@@ -201,8 +207,8 @@ function SavedPostsWidget(): React.ReactElement {
   const measuredRowCountRef = useRef<number | null>(null);
 
   // Fetch posts with the widget's configured filters
-  const { posts, loading, refetch } = useSavedPosts({
-    limit: config.max_posts,
+  const { posts, total, loading, error, refetch } = useSavedPosts({
+    limit: Math.max(config.max_posts, SAVED_POSTS_SIZE_LIMITS[instance.size]),
     offset: 0,
     subreddit_filter: config.subreddit_filter,
     tag_filter: config.tag_filter,
@@ -406,29 +412,58 @@ function SavedPostsWidget(): React.ReactElement {
     showUrl: config.showUrl,
     showBodyPreview: config.showBodyPreview,
     cardDensity: config.cardDensity,
+    size: instance.size,
   };
 
-  const renderPostList = (postsToRender: SavedPost[]): React.ReactElement => (
-    <div
-      className={config.cardDensity === "compact" ? "space-y-2" : "space-y-3"}
-    >
-      {postsToRender.map((post) => (
-        <PostCard
-          key={post.post_id}
-          post={post}
-          allTags={allTags}
-          config={cardConfig}
-          onOpen={handleOpenExternal}
-          onToggleViewed={handleToggleViewed}
-          onAfterMutation={handleAfterMutation}
-        />
-      ))}
-    </div>
-  );
+  const contentPolicy = getSavedPostsContentPolicy({
+    size: instance.size,
+    configuredMaxPosts: config.max_posts,
+    fetchedPostCount: posts.length,
+    totalPostCount: total,
+    expanded: false,
+  });
+
+  const effectiveCardConfig = {
+    ...cardConfig,
+    showMetadata: config.showMetadata && contentPolicy.showMetadata,
+    showBodyPreview: config.showBodyPreview && contentPolicy.showBodyPreview,
+    cardDensity: contentPolicy.effectiveCardDensity,
+  };
+
+  const renderPostList = (postsToRender: SavedPost[]): React.ReactElement =>
+    (() => {
+      return (
+        <div
+          className={
+            contentPolicy.columnCount === 2
+              ? "grid h-full min-h-0 grid-cols-2 auto-rows-fr gap-x-4 gap-y-3"
+              : config.cardDensity === "compact"
+                ? "space-y-1"
+                : "grid h-full min-h-0 grid-cols-1 auto-rows-fr gap-y-3"
+          }
+        >
+          {postsToRender.map((post) => (
+            <PostCard
+              key={post.post_id}
+              post={post}
+              allTags={allTags}
+              config={effectiveCardConfig}
+              onOpen={handleOpenExternal}
+              onToggleViewed={handleToggleViewed}
+              onAfterMutation={handleAfterMutation}
+            />
+          ))}
+        </div>
+      );
+    })();
 
   const renderPreviewContent = (): React.ReactNode => {
     if (loading && posts.length === 0) {
       return <p className="text-sm text-muted-foreground">Loading...</p>;
+    }
+
+    if (error && posts.length === 0) {
+      return <p className="text-sm text-destructive">{error}</p>;
     }
 
     if (posts.length === 0) {
@@ -437,7 +472,10 @@ function SavedPostsWidget(): React.ReactElement {
       );
     }
 
+    const visiblePosts = posts.slice(0, contentPolicy.visiblePostLimit);
+
     if (groupedPosts) {
+      const visiblePostIds = new Set(visiblePosts.map((post) => post.post_id));
       return (
         <div className="space-y-4">
           {groupedPosts.map(({ source, posts: groupPosts }) => (
@@ -447,14 +485,16 @@ function SavedPostsWidget(): React.ReactElement {
                   {SOURCE_LABELS[source]}
                 </h4>
               )}
-              {renderPostList(groupPosts)}
+              {renderPostList(
+                groupPosts.filter((post) => visiblePostIds.has(post.post_id)),
+              )}
             </div>
           ))}
         </div>
       );
     }
 
-    return renderPostList(posts);
+    return renderPostList(visiblePosts);
   };
 
   return (
@@ -549,11 +589,13 @@ function SavedPostsWidget(): React.ReactElement {
       </CardHeader>
       <CardContent
         ref={cardContentRef}
-        className="relative"
+        className="relative flex min-h-0 flex-1 flex-col"
         style={
-          isEditing && editContentHeight
-            ? { height: editContentHeight, overflow: "hidden" }
-            : undefined
+          isEditing
+            ? editContentHeight
+              ? { height: editContentHeight, overflow: "hidden" }
+              : undefined
+            : { overflowY: contentPolicy.viewportOverflow }
         }
       >
         {isEditing && (
@@ -567,7 +609,9 @@ function SavedPostsWidget(): React.ReactElement {
         )}
         <div className={isEditing ? "saved-posts-card-edit" : undefined}>
           <div
-            className={isEditing ? "saved-posts-card-edit__preview" : undefined}
+            className={
+              isEditing ? "saved-posts-card-edit__preview" : "min-h-0 flex-1"
+            }
           >
             {renderPreviewContent()}
           </div>
@@ -578,6 +622,13 @@ function SavedPostsWidget(): React.ReactElement {
                 availableSubreddits={availableSubreddits}
                 availableTags={allTags}
                 onChange={setConfig}
+                sizeControl={
+                  <WidgetSizeControl
+                    size={instance.size}
+                    editMode={instance.editMode}
+                    onChange={instance.onSizeChange}
+                  />
+                }
               />
             </div>
           )}

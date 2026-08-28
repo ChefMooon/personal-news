@@ -331,6 +331,7 @@ interface YouTubeSettingsPanelProps {
   channels: YtChannel[];
   config: YouTubeViewConfig;
   onChange: (config: YouTubeViewConfig) => void;
+  sizeControl?: React.ReactNode;
 }
 
 type MediaFilterKey =
@@ -352,6 +353,7 @@ export function YouTubeSettingsPanel({
   channels,
   config,
   onChange,
+  sizeControl,
 }: YouTubeSettingsPanelProps): React.ReactElement {
   const { instanceId } = useWidgetInstance();
   const [draft, setDraft] = useState<YouTubeViewConfig>(config);
@@ -478,6 +480,7 @@ export function YouTubeSettingsPanel({
     <div className="flex flex-col h-full">
       <ScrollArea className="h-full">
         <div className="space-y-5 pb-2 pl-2 pr-4">
+          {sizeControl}
           <div>
             <button
               type="button"

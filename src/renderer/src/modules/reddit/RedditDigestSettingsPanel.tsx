@@ -51,6 +51,7 @@ interface RedditDigestSettingsPanelProps {
   availableSubreddits: string[];
   availableWeeks: DigestWeekSummary[];
   onChange: (config: DigestViewConfig) => void;
+  sizeControl?: React.ReactNode;
 }
 
 const WEEK_RANGE_OPTIONS = [2, 4, 8, 12];
@@ -174,6 +175,7 @@ export function RedditDigestSettingsPanel({
   availableSubreddits,
   availableWeeks,
   onChange,
+  sizeControl,
 }: RedditDigestSettingsPanelProps): React.ReactElement {
   const { instanceId } = useWidgetInstance();
   const [draft, setDraft] = useState<DigestViewConfig>(config);
@@ -352,6 +354,7 @@ export function RedditDigestSettingsPanel({
     <div className="flex flex-col h-full w-full min-w-0 flex-1">
       <ScrollArea className="h-full w-full">
         <div className="space-y-5 pb-2 pl-2 pr-4">
+          {sizeControl}
           <div>
             <button
               type="button"

@@ -35,6 +35,7 @@ let persistWindowBoundsTimer: ReturnType<typeof setTimeout> | null = null;
 
 const SMOKE_TEST_FLAG = "--smoke-test";
 const SMOKE_TEST_OUTPUT_FLAG = "--smoke-output";
+const REMOTE_DEBUGGING_PORT_ENV = "ELECTRON_REMOTE_DEBUGGING_PORT";
 
 type SmokeReportPayload = {
   ok: boolean;
@@ -66,6 +67,23 @@ function getDesktopPlatform(): "darwin" | "win32" | "linux" {
     return process.platform;
   }
   return "linux";
+}
+
+function configureRemoteDebugging(): void {
+  const rawPort = process.env[REMOTE_DEBUGGING_PORT_ENV];
+  if (!rawPort) {
+    return;
+  }
+
+  const port = Number.parseInt(rawPort, 10);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    console.error(`[Debug] Invalid remote debugging port: ${rawPort}`);
+    return;
+  }
+
+  app.commandLine.appendSwitch("remote-debugging-port", String(port));
+  app.commandLine.appendSwitch("remote-allow-origins", "*");
+  console.log(`[Debug] Remote debugging enabled on port ${port}`);
 }
 
 function isSmokeTestRun(): boolean {
@@ -556,6 +574,8 @@ function createWindow(): BrowserWindow {
 
   return mainWindow;
 }
+
+configureRemoteDebugging();
 
 app.whenReady().then(() => {
   try {

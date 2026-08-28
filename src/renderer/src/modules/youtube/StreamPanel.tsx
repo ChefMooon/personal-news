@@ -9,9 +9,13 @@ const STREAMS_PER_PAGE = 2;
 
 interface StreamPanelProps {
   streams: YtVideo[];
+  compact?: boolean;
 }
 
-export function StreamPanel({ streams }: StreamPanelProps): React.ReactElement {
+export function StreamPanel({
+  streams,
+  compact = false,
+}: StreamPanelProps): React.ReactElement {
   const [, setTick] = useState(0);
   const [currentPage, setCurrentPage] = useState(0);
 
@@ -80,7 +84,13 @@ export function StreamPanel({ streams }: StreamPanelProps): React.ReactElement {
   };
 
   return (
-    <div className="flex flex-col gap-2 w-[200px] shrink-0">
+    <div
+      className={
+        compact
+          ? "flex flex-col gap-1.5 w-[160px] shrink-0"
+          : "flex flex-col gap-2 w-[200px] shrink-0"
+      }
+    >
       <div className="flex items-center justify-between gap-1">
         <h4 className="min-w-0 truncate whitespace-nowrap text-xs font-medium text-foreground">
           Upcoming Streams
@@ -136,7 +146,11 @@ export function StreamPanel({ streams }: StreamPanelProps): React.ReactElement {
                     );
                   });
                 }}
-                className="w-full text-left px-3 py-2 group cursor-pointer transition-colors hover:bg-accent/40"
+                className={
+                  compact
+                    ? "w-full text-left px-2 py-1.5 group cursor-pointer transition-colors hover:bg-accent/40"
+                    : "w-full text-left px-3 py-2 group cursor-pointer transition-colors hover:bg-accent/40"
+                }
               >
                 <div className="flex flex-col gap-1">
                   <p className="text-xs font-medium line-clamp-2 leading-tight text-card-foreground group-hover:text-primary transition-colors">

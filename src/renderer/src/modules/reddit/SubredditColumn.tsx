@@ -7,12 +7,16 @@ interface SubredditColumnProps {
   label: string;
   posts: DigestPost[];
   maxPosts?: number;
+  showPagination?: boolean;
+  showLabel?: boolean;
 }
 
 export function SubredditColumn({
   label,
   posts,
   maxPosts,
+  showPagination = false,
+  showLabel = true,
 }: SubredditColumnProps): React.ReactElement {
   const [currentPage, setCurrentPage] = useState(0);
   const postIdentitySignature = posts
@@ -44,9 +48,11 @@ export function SubredditColumn({
 
   return (
     <div className="min-w-0">
-      <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 pb-1 border-b">
-        {label === "All" ? label : `r/${label}`}
-      </div>
+      {showLabel && (
+        <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 pb-1 border-b">
+          {label === "All" ? label : `r/${label}`}
+        </div>
+      )}
       <div>
         {pagedPosts.map((post) => (
           <DigestPostRow
@@ -55,7 +61,7 @@ export function SubredditColumn({
           />
         ))}
       </div>
-      {totalPages > 1 && (
+      {(showPagination || totalPages > 1) && (
         <div className="flex items-center justify-center gap-2 mt-3 pt-2 border-t text-xs text-muted-foreground">
           <button
             type="button"

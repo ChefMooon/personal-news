@@ -12,6 +12,8 @@ describe("stored Weather widget config normalization", () => {
     });
     expect(config.showAstronomy).toBe(true);
     expect(DEFAULT_WEATHER_VIEW_CONFIG.showAstronomy).toBe(true);
+    expect(config.showYesterday).toBe(true);
+    expect(DEFAULT_WEATHER_VIEW_CONFIG.showYesterday).toBe(true);
   });
 
   it("preserves an explicit showAstronomy choice", () => {

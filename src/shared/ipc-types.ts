@@ -360,12 +360,24 @@ export interface WidgetInstance {
   instanceId: string;
   moduleId: string;
   label: string | null;
+  size: WidgetSize;
+}
+
+export type WidgetSize = "small" | "medium" | "large";
+
+export interface WidgetGeometry {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
 }
 
 export interface WidgetLayout {
   widget_order: string[];
   widget_visibility: Record<string, boolean>;
   widget_instances: Record<string, WidgetInstance>;
+  layout_version?: number;
+  widget_geometry?: Record<string, WidgetGeometry>;
 }
 
 export type DashboardIcon =

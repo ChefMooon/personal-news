@@ -23,6 +23,7 @@ import type {
 interface WeatherSettingsPanelProps {
   config: WeatherViewConfig;
   onChange: (config: WeatherViewConfig) => void;
+  sizeControl?: React.ReactNode;
   locations: WeatherLocation[];
   defaultLocationId: string | null;
   settings: WeatherSettings;
@@ -43,6 +44,7 @@ function formatLocationLabel(
 export function WeatherSettingsPanel({
   config,
   onChange,
+  sizeControl,
   locations,
   defaultLocationId,
   settings,
@@ -92,6 +94,7 @@ export function WeatherSettingsPanel({
     <div className="flex flex-col h-full w-full min-w-0 flex-1">
       <ScrollArea className="h-full w-full">
         <div className="space-y-5 pb-2 pr-4">
+          {sizeControl}
           <div>
             <h3 className="text-sm font-semibold mb-3">Location</h3>
             <div className="space-y-4">

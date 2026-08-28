@@ -1,0 +1,117 @@
+[
+  {
+    "type": "electron",
+    "message": "> personal-news@1.3.4 dev\n> electron-vite dev",
+    "timestamp": "2026-08-28T05:17:25.784Z"
+  },
+  {
+    "type": "electron",
+    "message": "\u001b[36mvite v5.4.21 \u001b[32mbuilding SSR bundle for development...\u001b[36m\u001b[39m",
+    "timestamp": "2026-08-28T05:17:26.492Z"
+  },
+  {
+    "type": "electron",
+    "message": "transforming...",
+    "timestamp": "2026-08-28T05:17:26.556Z"
+  },
+  {
+    "type": "electron",
+    "message": "\u001b[32m✓\u001b[39m 36 modules transformed.",
+    "timestamp": "2026-08-28T05:17:27.008Z"
+  },
+  {
+    "type": "electron",
+    "message": "rendering chunks...",
+    "timestamp": "2026-08-28T05:17:27.092Z"
+  },
+  {
+    "type": "electron",
+    "message": "\u001b[2mout/main/\u001b[22m\u001b[36mindex.js  \u001b[39m\u001b[1m\u001b[2m342.65 kB\u001b[22m\u001b[1m\u001b[22m",
+    "timestamp": "2026-08-28T05:17:27.097Z"
+  },
+  {
+    "type": "electron",
+    "message": "\u001b[32m✓ built in 580ms\u001b[39m\n\u001b[32m\nbuild the electron main process successfully\u001b[39m",
+    "timestamp": "2026-08-28T05:17:27.097Z"
+  },
+  {
+    "type": "electron",
+    "message": "\u001b[90m\n-----\n\u001b[39m",
+    "timestamp": "2026-08-28T05:17:27.097Z"
+  },
+  {
+    "type": "electron",
+    "message": "\u001b[36mvite v5.4.21 \u001b[32mbuilding SSR bundle for development...\u001b[36m\u001b[39m",
+    "timestamp": "2026-08-28T05:17:27.100Z"
+  },
+  {
+    "type": "electron",
+    "message": "transforming...",
+    "timestamp": "2026-08-28T05:17:27.103Z"
+  },
+  {
+    "type": "electron",
+    "message": "\u001b[32m✓\u001b[39m 2 modules transformed.",
+    "timestamp": "2026-08-28T05:17:27.112Z"
+  },
+  {
+    "type": "electron",
+    "message": "rendering chunks...",
+    "timestamp": "2026-08-28T05:17:27.116Z"
+  },
+  {
+    "type": "electron",
+    "message": "\u001b[2mout/preload/\u001b[22m\u001b[36mindex.js  \u001b[39m\u001b[1m\u001b[2m10.67 kB\u001b[22m\u001b[1m\u001b[22m",
+    "timestamp": "2026-08-28T05:17:27.117Z"
+  },
+  {
+    "type": "electron",
+    "message": "\u001b[32m✓ built in 17ms\u001b[39m\n\u001b[32m\nbuild the electron preload files successfully\u001b[39m\n\u001b[90m\n-----\n\u001b[39m",
+    "timestamp": "2026-08-28T05:17:27.118Z"
+  },
+  {
+    "type": "electron",
+    "message": "Port 5173 is in use, trying another one...",
+    "timestamp": "2026-08-28T05:17:27.151Z"
+  },
+  {
+    "type": "electron",
+    "message": "\u001b[32mdev server running for the electron renderer process at:\n\u001b[39m",
+    "timestamp": "2026-08-28T05:17:27.154Z"
+  },
+  {
+    "type": "electron",
+    "message": "\u001b[32m➜\u001b[39m  \u001b[1mLocal\u001b[22m:   \u001b[36mhttp://localhost:\u001b[1m5174\u001b[22m/\u001b[39m",
+    "timestamp": "2026-08-28T05:17:27.154Z"
+  },
+  {
+    "type": "electron",
+    "message": "\u001b[2m  \u001b[32m➜\u001b[39m  \u001b[1mNetwork\u001b[22m\u001b[2m: use \u001b[22m\u001b[1m--host\u001b[22m\u001b[2m to expose\u001b[22m",
+    "timestamp": "2026-08-28T05:17:27.154Z"
+  },
+  {
+    "type": "electron",
+    "message": "\u001b[32m\nstart electron app...\n\u001b[39m",
+    "timestamp": "2026-08-28T05:17:27.166Z"
+  },
+  {
+    "type": "electron",
+    "message": "",
+    "timestamp": "2026-08-28T05:17:27.193Z"
+  },
+  {
+    "type": "electron",
+    "message": "[Debug] Remote debugging enabled on port 9222",
+    "timestamp": "2026-08-28T05:17:27.441Z"
+  },
+  {
+    "type": "electron-error",
+    "message": "DevTools listening on ws://127.0.0.1:9222/devtools/browser/d4067e72-40f9-4a94-894f-1eb9a5dfd5c6",
+    "timestamp": "2026-08-28T05:17:27.465Z"
+  },
+  {
+    "type": "failure",
+    "message": "Error: Electron remote debugging did not open on http://127.0.0.1:9222\n    at connectToDevTools (file:///C:/Users/justi/Documents/Git/general-dev/personal-news/personal-news/scripts/test-dashboard-drag.mjs:30:9)\n    at async main (file:///C:/Users/justi/Documents/Git/general-dev/personal-news/personal-news/scripts/test-dashboard-drag.mjs:68:13)\n    at async file:///C:/Users/justi/Documents/Git/general-dev/personal-news/personal-news/scripts/test-dashboard-drag.mjs:430:3",
+    "timestamp": "2026-08-28T05:17:55.699Z"
+  }
+]
