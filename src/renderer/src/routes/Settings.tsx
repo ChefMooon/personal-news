@@ -55,7 +55,11 @@ import {
 } from "../components/ThemeCreatorDialog";
 import {
   CUSTOMIZABLE_SIDEBAR_ITEM_IDS,
+  ASTRONOMY_MAX_POLL_INTERVAL_MINUTES,
+  ASTRONOMY_MIN_POLL_INTERVAL_MINUTES,
+  DEFAULT_ASTRONOMY_SETTINGS,
   IPC,
+  type AstronomySettings,
   type IpcMutationResult,
   type ThemeImportResult,
   type YouTubeCacheClearResult,
@@ -1311,6 +1315,101 @@ function RedditDigestTab(): React.ReactElement {
             </Button>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function AstronomyTab(): React.ReactElement {
+  const [intervalValue, setIntervalValue] = useState(
+    String(DEFAULT_ASTRONOMY_SETTINGS.pollIntervalMinutes),
+  );
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    window.api
+      .invoke(IPC.ASTRONOMY_GET_SETTINGS)
+      .then((data) => {
+        const settings = data as Partial<AstronomySettings> | null;
+        if (typeof settings?.pollIntervalMinutes === "number") {
+          setIntervalValue(String(settings.pollIntervalMinutes));
+        }
+      })
+      .catch((err) => {
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : "Failed to load Astronomy refresh settings.",
+        );
+      });
+  }, []);
+
+  const saveInterval = async (): Promise<void> => {
+    const parsed = Number.parseInt(intervalValue, 10);
+    if (!Number.isFinite(parsed)) {
+      toast.error("Enter an Astronomy refresh interval in minutes.");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const data = await window.api.invoke(IPC.ASTRONOMY_SET_SETTINGS, {
+        pollIntervalMinutes: parsed,
+      });
+      const settings = data as AstronomySettings;
+      setIntervalValue(String(settings.pollIntervalMinutes));
+      toast.success("Astronomy refresh interval updated.");
+    } catch (err) {
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : "Failed to save Astronomy refresh settings.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="max-w-md space-y-4">
+      <div>
+        <h3 className="mb-1 text-sm font-medium">Astronomy Refresh</h3>
+        <p className="text-xs text-muted-foreground">
+          Weather refreshes always update Astronomy. This optional interval
+          refreshes Astronomy between Weather updates.
+        </p>
+      </div>
+      <div className="rounded-md border px-3 py-3">
+        <label
+          htmlFor="astronomy-refresh-interval"
+          className="text-sm font-medium"
+        >
+          Additional refresh interval
+        </label>
+        <div className="mt-3 flex items-center gap-2">
+          <Input
+            id="astronomy-refresh-interval"
+            value={intervalValue}
+            onChange={(event) => setIntervalValue(event.target.value)}
+            inputMode="numeric"
+            type="number"
+            min={ASTRONOMY_MIN_POLL_INTERVAL_MINUTES}
+            max={ASTRONOMY_MAX_POLL_INTERVAL_MINUTES}
+            className="w-28"
+          />
+          <span className="text-sm text-muted-foreground">minutes</span>
+          <Button
+            variant="outline"
+            onClick={() => void saveInterval()}
+            disabled={saving}
+          >
+            {saving ? "Saving..." : "Save"}
+          </Button>
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Allowed range: {ASTRONOMY_MIN_POLL_INTERVAL_MINUTES} to{" "}
+          {ASTRONOMY_MAX_POLL_INTERVAL_MINUTES} minutes.
+        </p>
       </div>
     </div>
   );
@@ -3053,6 +3152,7 @@ export default function Settings(): React.ReactElement {
   const { enabled: savedPostsEnabled } = useSavedPostsEnabled();
   const { enabled: sportsEnabled } = useSportsEnabled();
   const { enabled: weatherEnabled } = useWeatherEnabled();
+  const { enabled: astronomyEnabled } = useAstronomyEnabled();
   const requestedTab = searchParams.get("tab");
   const requestedSection = searchParams.get("section");
   const selectedTab =
@@ -3071,6 +3171,9 @@ export default function Settings(): React.ReactElement {
           <TabsTrigger value="youtube">YouTube</TabsTrigger>
           {sportsEnabled && <TabsTrigger value="sports">Sports</TabsTrigger>}
           {weatherEnabled && <TabsTrigger value="weather">Weather</TabsTrigger>}
+          {astronomyEnabled && (
+            <TabsTrigger value="astronomy">Astronomy</TabsTrigger>
+          )}
           {redditDigestEnabled && (
             <TabsTrigger value="reddit-digest">Reddit Digest</TabsTrigger>
           )}
@@ -3100,6 +3203,11 @@ export default function Settings(): React.ReactElement {
         {weatherEnabled && (
           <TabsContent value="weather" className="mt-4">
             <WeatherSettingsTab />
+          </TabsContent>
+        )}
+        {astronomyEnabled && (
+          <TabsContent value="astronomy" className="mt-4">
+            <AstronomyTab />
           </TabsContent>
         )}
         {redditDigestEnabled && (

@@ -84,9 +84,11 @@ describe("astronomy module lifecycle", () => {
     const next = updateAstronomySettings({ pollIntervalMinutes: 5 });
     expect(next.pollIntervalMinutes).toBe(15);
     expect(next.enabled).toBe(true);
+    expect(getAstronomySettings().pollIntervalMinutes).toBe(15);
 
     const clampedHigh = updateAstronomySettings({ pollIntervalMinutes: 9999 });
     expect(clampedHigh.pollIntervalMinutes).toBe(1440);
+    expect(getAstronomySettings().pollIntervalMinutes).toBe(1440);
   });
 
   it("falls back to defaults on malformed stored settings", () => {
