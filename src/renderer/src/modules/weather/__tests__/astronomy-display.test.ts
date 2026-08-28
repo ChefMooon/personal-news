@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { AstronomySnapshot } from "../../../../../shared/ipc-types";
 import {
   countdownLabel,
+  formatCalculatedAt,
   formatHorizonTime,
   formatNextPhaseDateTime,
   moonPhaseDisplayName,
@@ -72,6 +73,17 @@ describe("timezone-aware formatting", () => {
     expect(formatHorizonTime(null, "America/New_York", "24h")).toBeNull();
     expect(formatNextPhaseDateTime(null, "UTC", "24h")).toBeNull();
     expect(formatHorizonTime(TS, "Not/AZone", "24h")).toBeNull();
+  });
+
+  it("formats calculated-at timestamps in the selected timezone", () => {
+    expect(formatCalculatedAt(TS, "America/New_York", "24h")).toMatch(
+      /Jul\s*4.*8:00/,
+    );
+    expect(formatCalculatedAt(TS, "Pacific/Kiritimati", "24h")).toMatch(
+      /Jul\s*5.*2:00/,
+    );
+    expect(formatCalculatedAt(null, "UTC", "24h")).toBeNull();
+    expect(formatCalculatedAt(TS, "Not/AZone", "24h")).toBeNull();
   });
 });
 

@@ -86,6 +86,18 @@ export function formatNextPhaseDateTime(
   }
 }
 
+/** Localized calculated-at timestamp for an astronomy snapshot. */
+export function formatCalculatedAt(
+  unixSeconds: number | null | undefined,
+  timeZone: string | null,
+  timeFormat: WeatherSettings["timeFormat"],
+): string | null {
+  if (unixSeconds == null || !Number.isFinite(unixSeconds) || !timeZone) {
+    return null;
+  }
+  return formatNextPhaseDateTime(unixSeconds, timeZone, timeFormat);
+}
+
 /**
  * Relative countdown wording at minute/hour/day boundaries, derived from the
  * current clock so it never freezes at fetch time.

@@ -1,13 +1,19 @@
 import React, { useEffect, useState } from "react";
-import { TrendingDown, TrendingUp } from "lucide-react";
+import { Clock3, TrendingDown, TrendingUp } from "lucide-react";
 import type {
   AstronomySnapshot,
   WeatherSettings,
 } from "../../../../shared/ipc-types";
 import { Badge } from "../../components/ui/badge";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "../../components/ui/tooltip";
 import { cn } from "../../lib/utils";
 import {
   countdownLabel,
+  formatCalculatedAt,
   formatHorizonTime,
   formatNextPhaseDateTime,
   moonPhaseDisplayName,
@@ -215,11 +221,13 @@ function MoonCard({
   horizon,
   timezone,
   settings,
+  alignBottom = false,
 }: {
   astronomy: AstronomySnapshot | null;
   horizon: AstronomySnapshot["groups"]["horizon"]["data"] | null;
   timezone: string;
   settings: WeatherSettings;
+  alignBottom?: boolean;
 }): React.ReactElement {
   const moon =
     astronomy?.groups.moon.status === "unavailable"
@@ -228,7 +236,12 @@ function MoonCard({
 
   if (!moon) {
     return (
-      <div className="flex min-w-0 flex-col gap-2">
+      <div
+        className={cn(
+          "flex min-w-0 flex-col gap-2",
+          alignBottom && "h-full",
+        )}
+      >
         <div className="flex min-w-0 items-center gap-3">
           <MoonPhaseGlyph
             phaseAngle={null}
@@ -243,7 +256,7 @@ function MoonCard({
             </p>
           </div>
         </div>
-        <div className="space-y-1.5">
+        <div className={cn("space-y-1.5", alignBottom && "mt-auto")}>
           <HorizonRow
             label="Moonrise"
             body="moon"
@@ -276,7 +289,9 @@ function MoonCard({
   )}% illuminated`;
 
   return (
-    <div className="flex min-w-0 flex-col gap-2">
+    <div
+      className={cn("flex min-w-0 flex-col gap-2", alignBottom && "h-full")}
+    >
       <div className="flex min-w-0 items-center gap-3">
         <MoonPhaseGlyph
           phaseAngle={moon.phaseAngle}
@@ -294,7 +309,7 @@ function MoonCard({
           </p>
         </div>
       </div>
-      <div className="space-y-1.5">
+      <div className={cn("space-y-1.5", alignBottom && "mt-auto")}>
         <HorizonRow
           label="Moonrise"
           body="moon"
@@ -324,19 +339,26 @@ function HorizonCard({
   horizon,
   timezone,
   settings,
+  alignBottom = false,
 }: {
   horizon: AstronomySnapshot["groups"]["horizon"]["data"] | null;
   timezone: string;
   settings: WeatherSettings;
+  alignBottom?: boolean;
 }): React.ReactElement {
   return (
-    <div className="min-w-0 space-y-1.5">
+    <div
+      className={cn(
+        "min-w-0 space-y-1.5",
+        alignBottom && "flex h-full flex-col",
+      )}
+    >
       <h4 className="flex items-center gap-2 text-xs font-semibold">
         <SunGlyph />
         <span>Sun</span>
       </h4>
       {horizon ? (
-        <>
+        <div className={cn(alignBottom && "mt-auto")}>
           <HorizonRow
             label="Sunrise"
             body="sun"
@@ -357,12 +379,12 @@ function HorizonCard({
               settings.timeFormat,
             )}
           />
-        </>
+        </div>
       ) : (
-        <>
+        <div className={cn(alignBottom && "mt-auto")}>
           <HorizonRow label="Sunrise" body="sun" direction="rise" time={null} />
           <HorizonRow label="Sunset" body="sun" direction="set" time={null} />
-        </>
+        </div>
       )}
     </div>
   );
@@ -372,32 +394,39 @@ function NextPhaseCard({
   astronomy,
   timezone,
   settings,
+  alignBottom = false,
 }: {
   astronomy: AstronomySnapshot | null;
   timezone: string;
   settings: WeatherSettings;
+  alignBottom?: boolean;
 }): React.ReactElement {
   const milestone = nextPrimaryPhaseMilestone(astronomy);
   const nowSeconds = Math.floor(useNowMilliseconds(milestone != null) / 1000);
 
   return (
-    <div className="min-w-0 space-y-1.5">
+    <div
+      className={cn(
+        "min-w-0 space-y-1.5",
+        alignBottom && "flex h-full flex-col",
+      )}
+    >
       <h4 className="text-xs font-semibold">Next phase</h4>
       {milestone ? (
         <>
-          <p className="truncate text-xs font-medium">
-            {moonPhaseDisplayName(milestone.name)}
-          </p>
-          <p className="text-xs font-semibold text-foreground">
+          <p className="break-words text-xs font-semibold text-foreground">
+            {moonPhaseDisplayName(milestone.name)}{" · "}
             {countdownLabel(milestone.time, nowSeconds)}
           </p>
-          <p className="text-[11px] text-muted-foreground">
-            {formatNextPhaseDateTime(
-              milestone.time,
-              timezone,
-              settings.timeFormat,
-            ) ?? "Unavailable"}
-          </p>
+          <div>
+            <p className="text-[11px] text-muted-foreground">
+              {formatNextPhaseDateTime(
+                milestone.time,
+                timezone,
+                settings.timeFormat,
+              ) ?? "Unavailable"}
+            </p>
+          </div>
         </>
       ) : (
         <p className="text-[11px] text-muted-foreground">
@@ -434,6 +463,12 @@ function CompactAstronomyRow({
   const solarLabel = horizon
     ? solarStateLabel(horizon.solarState)
     : "Unavailable";
+  const updatedLabel =
+    formatCalculatedAt(
+      astronomy?.calculatedAt ?? null,
+      timezone,
+      settings.timeFormat,
+    ) ?? "Never";
 
   return (
     <div className="grid min-w-0 grid-cols-4 divide-x divide-border text-[10px]">
@@ -459,10 +494,22 @@ function CompactAstronomyRow({
           {nextPhaseLabel}
         </p>
       </div>
-      <div className="flex min-w-0 items-center justify-end pl-2">
+      <div className="flex min-w-0 flex-col items-end justify-center gap-0.5 pl-2 text-right">
         <Badge variant="secondary" className="max-w-full">
           <span className="whitespace-normal text-center">{solarLabel}</span>
         </Badge>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <p
+              className="flex max-w-full items-center justify-end gap-0.5 whitespace-nowrap text-[8px] leading-tight text-muted-foreground"
+              aria-label={`Updated: ${updatedLabel}`}
+            >
+              <Clock3 aria-hidden="true" className="size-2.5 shrink-0" />
+              <span>{updatedLabel}</span>
+            </p>
+          </TooltipTrigger>
+          <TooltipContent>Updated: {updatedLabel}</TooltipContent>
+        </Tooltip>
       </div>
     </div>
   );
@@ -498,17 +545,21 @@ export function AstronomyStrip({
     <section
       aria-label="Astronomy"
       className={cn(
-        "w-full max-w-full rounded-md border",
-        stacked && "h-full",
+        "relative w-full max-w-full rounded-md border",
+        stacked && "flex h-full min-h-0 flex-col",
+        !stacked && !compact && "pb-7",
         compact ? "px-2.5 py-1.5" : "px-3 py-2.5",
       )}
     >
       <div
-        className="w-full max-w-full"
+        className={cn(
+          "w-full max-w-full",
+          stacked && "flex min-h-0 flex-1 flex-col",
+        )}
         style={{ width: "100%", maxWidth: stacked ? contentWidth : undefined }}
       >
         {!compact && (
-          <div className="mb-2 flex min-h-6 items-center justify-between gap-2">
+          <div className="mb-2 flex min-h-6 shrink-0 items-center justify-between gap-2">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Astronomy
             </h3>
@@ -529,29 +580,52 @@ export function AstronomyStrip({
         ) : (
           <div
             className={cn(
-              "grid min-h-[76px] grid-cols-1 gap-y-3",
               stacked
-                ? "items-start sm:grid-cols-1"
-                : "items-center sm:grid-cols-3 sm:gap-x-0 sm:divide-x sm:divide-border [&>*]:sm:px-4 [&>*]:sm:first:pl-0 [&>*]:sm:last:pr-0",
+                ? "flex min-h-0 flex-1 flex-col items-stretch justify-between gap-3"
+                : "grid min-h-[76px] grid-cols-1 gap-y-3 items-center sm:grid-cols-3 sm:gap-x-0 sm:divide-x sm:divide-border [&>*]:sm:px-4 [&>*]:sm:first:pl-0 [&>*]:sm:last:pr-0",
             )}
           >
             <HorizonCard
               horizon={horizon}
               timezone={timezone}
               settings={settings}
+              alignBottom={!stacked}
             />
             <MoonCard
               astronomy={astronomy}
               horizon={horizon}
               timezone={timezone}
               settings={settings}
+              alignBottom={!stacked}
             />
             <NextPhaseCard
               astronomy={astronomy}
               timezone={timezone}
               settings={settings}
+              alignBottom={!stacked}
             />
           </div>
+        )}
+        {stacked ? (
+          <p
+            className="mt-3 shrink-0 border-t pt-2 text-right text-[10px] text-muted-foreground"
+          >
+            Updated: {formatCalculatedAt(
+              astronomy?.calculatedAt ?? null,
+              timezone,
+              settings.timeFormat,
+            ) ?? "Never"}
+          </p>
+        ) : (
+          !compact && (
+            <p className="absolute bottom-2 right-3 text-[10px] text-muted-foreground">
+              Updated: {formatCalculatedAt(
+                astronomy?.calculatedAt ?? null,
+                timezone,
+                settings.timeFormat,
+              ) ?? "Never"}
+            </p>
+          )
         )}
       </div>
     </section>

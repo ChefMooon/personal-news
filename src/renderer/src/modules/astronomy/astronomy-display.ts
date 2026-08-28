@@ -3,23 +3,19 @@ import type {
   AstronomyGlobalEvent,
   AstronomyHorizonData,
   AstronomyPlanetData,
-  WeatherSettings,
 } from "../../../../shared/ipc-types";
 
 // Generic astronomy presentation helpers are shared with the Weather strip so
 // both renderer surfaces use one implementation.
-import { formatNextPhaseDateTime } from "../weather/astronomy-display";
-
 export {
   countdownLabel,
+  formatCalculatedAt,
   formatHorizonTime,
   formatNextPhaseDateTime,
   moonPhaseDisplayName,
   nextPrimaryPhaseMilestone,
   solarStateLabel,
 } from "../weather/astronomy-display";
-
-type TimeFormat = WeatherSettings["timeFormat"];
 
 /** Maximum number of events shown in the compact summary list. */
 export const SUMMARY_EVENT_LIMIT = 5;
@@ -39,7 +35,6 @@ export function eventFamilyLabel(
 ): string {
   return family ? EVENT_FAMILY_LABELS[family] : "Unavailable";
 }
-
 /**
  * Factual geometry state for one planet entry, derived only from backend
  * fields. Never claims real-world visibility or viewing suitability.
@@ -277,16 +272,4 @@ export function skyArcPosition(
     xPercent: xFraction * 100,
     yPercent: (1 - clampedAltitude / 90) * 100,
   };
-}
-
-/** Localized "calculated at" stamp in the selected location timezone. */
-export function formatCalculatedAt(
-  unixSeconds: number | null | undefined,
-  timeZone: string | null,
-  timeFormat: TimeFormat,
-): string | null {
-  if (unixSeconds == null || !Number.isFinite(unixSeconds) || !timeZone) {
-    return null;
-  }
-  return formatNextPhaseDateTime(unixSeconds, timeZone, timeFormat);
 }
