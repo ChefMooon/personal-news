@@ -27,14 +27,21 @@ import { WidgetTransferDialog } from "../components/WidgetTransferDialog";
 import { getModule } from "../modules/registry";
 import { Button } from "../components/ui/button";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "../components/ui/tooltip";
+import {
   ArrowLeft,
   ArrowRightLeft,
   ArrowRight,
   Check,
   Copy,
+  LayoutDashboard,
   Pencil,
   Plus,
   Settings2,
+  SquarePlus,
   Trash2,
 } from "lucide-react";
 import { WidgetInstanceContext } from "../contexts/WidgetInstanceContext";
@@ -224,7 +231,6 @@ function toGridLayout(
 const DASHBOARD_TAB_DROP_PREFIX = "dashboard-tab:";
 const DASHBOARD_INSERT_DROP_PREFIX = "dashboard-insert:";
 const TAB_AUTO_SWITCH_DELAY_MS = 450;
-
 function getSportsForWidget(rawConfig: unknown): SupportedSport[] {
   let parsedConfig: Partial<SportsViewConfig> = {};
 
@@ -369,6 +375,39 @@ function DashboardInsertionDropTarget({
     >
       {label}
     </div>
+  );
+}
+
+function DashboardToolbarIconButton({
+  label,
+  disabled = false,
+  onClick,
+  children,
+}: {
+  label: string;
+  disabled?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}): React.ReactElement {
+  const button = (
+    <Button
+      variant="outline"
+      size="icon"
+      aria-label={label}
+      disabled={disabled}
+      onClick={onClick}
+    >
+      {children}
+    </Button>
+  );
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        {disabled ? <span className="shrink-0">{button}</span> : button}
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -892,97 +931,85 @@ export default function Dashboard(): React.ReactElement {
         <div className="min-h-full flex flex-col">
           <div className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
             <div className="flex flex-col gap-2 px-6 py-1">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                <div>
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="shrink-0">
                   <h1 className="text-xl font-semibold">Dashboard</h1>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-8"
-                    onClick={() => setDashboardDialogMode("create")}
-                  >
-                    <Plus className="mr-1 h-4 w-4" />
-                    New Dashboard
-                  </Button>
-                  {editMode && (
-                    <>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setShowAddModal(true)}
-                        title="Add widget"
-                      >
-                        <Plus className="mr-1 h-4 w-4" />
-                        Add Widget
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setDashboardDialogMode("edit")}
-                      >
-                        <Pencil className="mr-1 h-4 w-4" />
-                        Edit Tab
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => duplicateDashboardView(activeView.id)}
-                      >
-                        <Copy className="mr-1 h-4 w-4" />
-                        Duplicate
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => moveDashboardView(activeView.id, "left")}
-                        disabled={!canMoveViewLeft}
-                      >
-                        <ArrowLeft className="mr-1 h-4 w-4" />
-                        Move Left
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                          moveDashboardView(activeView.id, "right")
-                        }
-                        disabled={!canMoveViewRight}
-                      >
-                        <ArrowRight className="mr-1 h-4 w-4" />
-                        Move Right
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setDeleteDialogOpen(true)}
-                        disabled={!canDeleteView}
-                      >
-                        <Trash2 className="mr-1 h-4 w-4" />
-                        Delete Dashboard
-                      </Button>
-                    </>
-                  )}
-                  <Button
-                    variant={editMode ? "default" : "outline"}
-                    size="sm"
-                    className="h-8"
-                    onClick={() => setEditMode((value) => !value)}
-                  >
-                    {editMode ? (
+                <div className="min-w-0 flex-1 overflow-x-auto">
+                  <div className="flex w-max min-w-full shrink-0 items-center justify-end gap-2">
+                    <DashboardToolbarIconButton
+                      label="New Dashboard"
+                      onClick={() => setDashboardDialogMode("create")}
+                    >
+                      <LayoutDashboard />
+                    </DashboardToolbarIconButton>
+                    {editMode && (
                       <>
-                        <Check className="mr-1 h-4 w-4" />
-                        Done
-                      </>
-                    ) : (
-                      <>
-                        <Settings2 className="mr-1 h-4 w-4" />
-                        Edit Layout
+                        <DashboardToolbarIconButton
+                          label="Add Widget"
+                          onClick={() => setShowAddModal(true)}
+                        >
+                          <SquarePlus />
+                        </DashboardToolbarIconButton>
+                        <DashboardToolbarIconButton
+                          label="Edit Tab"
+                          onClick={() => setDashboardDialogMode("edit")}
+                        >
+                          <Pencil />
+                        </DashboardToolbarIconButton>
+                        <DashboardToolbarIconButton
+                          label="Duplicate"
+                          onClick={() => duplicateDashboardView(activeView.id)}
+                        >
+                          <Copy />
+                        </DashboardToolbarIconButton>
+                        <DashboardToolbarIconButton
+                          label="Move Left"
+                          onClick={() =>
+                            moveDashboardView(activeView.id, "left")
+                          }
+                          disabled={!canMoveViewLeft}
+                        >
+                          <ArrowLeft />
+                        </DashboardToolbarIconButton>
+                        <DashboardToolbarIconButton
+                          label="Move Right"
+                          onClick={() =>
+                            moveDashboardView(activeView.id, "right")
+                          }
+                          disabled={!canMoveViewRight}
+                        >
+                          <ArrowRight />
+                        </DashboardToolbarIconButton>
+                        <DashboardToolbarIconButton
+                          label="Delete Dashboard"
+                          onClick={() => setDeleteDialogOpen(true)}
+                          disabled={!canDeleteView}
+                        >
+                          <Trash2 />
+                        </DashboardToolbarIconButton>
                       </>
                     )}
-                  </Button>
+                    <Button
+                      variant={editMode ? "default" : "outline"}
+                      size="sm"
+                      className="h-8"
+                      onClick={() => setEditMode((value) => !value)}
+                    >
+                      {editMode ? (
+                        <>
+                          <Check className="mr-1 h-4 w-4" />
+                          Done
+                        </>
+                      ) : (
+                        <>
+                          <Settings2 className="mr-1 h-4 w-4" />
+                          Edit Layout
+                        </>
+                      )}
+                    </Button>
+                  </div>
                 </div>
               </div>
 
