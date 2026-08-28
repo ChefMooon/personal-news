@@ -4,6 +4,27 @@ All notable changes to this project are documented in this file.
 
 The format follows Keep a Changelog, and this project uses Semantic Versioning.
 
+## [1.4.0] - 2026-08-28
+
+### Added
+
+- Added an Astronomy widget with astronomy data, detailed views, and an astronomy summary strip in the Weather widget.
+- Added Astronomy refresh settings so data updates can be configured from Settings.
+- Added bulk selection and action controls to Saved Posts.
+- Improved Saved Posts tag management for faster organization and editing.
+- Added duplicate detection for ntfy-ingested Saved Posts to prevent repeated imports.
+
+### Changed
+
+- Improved dashboard layouts with responsive widget sizing and more flexible arrangements across screen sizes.
+- Refined Weather forecast cards and Reddit Digest columns for clearer, more consistent layouts.
+- Added snapshot update times to Astronomy views so you can see how current the displayed data is.
+
+### Fixed
+
+- Kept Dashboard toolbar and edit-mode controls compact and aligned on a single row.
+- Fixed Reddit Digest layout behavior so subreddit columns remain properly arranged.
+
 ## [1.3.4] - 2026-07-27
 
 ### Added
