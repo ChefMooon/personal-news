@@ -14,7 +14,7 @@ export function WidgetTransferButton({
   return (
     <button
       type="button"
-      className="p-1 rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+      className="rounded p-0 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
       onClick={() => openTransferDialog(instanceId)}
       title="Move or copy to another dashboard"
       aria-label="Move or copy widget to another dashboard"

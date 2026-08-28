@@ -292,12 +292,12 @@ export const WidgetWrapper = React.forwardRef<
       }}
     >
       {editMode && (
-        <div className="flex items-center gap-1 mb-1 px-1">
+        <div className="absolute left-1 top-1 z-10 flex h-4 items-center gap-1 px-1">
           {/* Drag handle */}
           <span
             role="button"
             tabIndex={0}
-            className="dashboard-grid-drag-handle cursor-grab active:cursor-grabbing p-1 rounded text-muted-foreground hover:text-foreground hover:bg-accent"
+            className="dashboard-grid-drag-handle cursor-grab active:cursor-grabbing rounded p-0 text-muted-foreground hover:bg-accent hover:text-foreground"
             aria-label="Drag widget"
             onPointerDown={handleManualDragStart}
             onPointerMove={handleManualDragMove}
@@ -312,7 +312,7 @@ export const WidgetWrapper = React.forwardRef<
           <button
             type="button"
             onClick={() => onMoveUp(id)}
-            className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-30 disabled:cursor-not-allowed"
+            className="rounded p-0 text-muted-foreground hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
             aria-label="Move widget up"
           >
             <ChevronUp className="h-4 w-4" />
@@ -322,7 +322,7 @@ export const WidgetWrapper = React.forwardRef<
           <button
             type="button"
             onClick={() => onMoveDown(id)}
-            className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-30 disabled:cursor-not-allowed"
+            className="rounded p-0 text-muted-foreground hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
             aria-label="Move widget down"
           >
             <ChevronDown className="h-4 w-4" />
@@ -331,7 +331,7 @@ export const WidgetWrapper = React.forwardRef<
           <button
             type="button"
             onClick={() => onMoveLeft(id)}
-            className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-accent"
+            className="rounded p-0 text-muted-foreground hover:bg-accent hover:text-foreground"
             aria-label="Move widget left"
           >
             <ArrowLeft className="h-4 w-4" />
@@ -339,7 +339,7 @@ export const WidgetWrapper = React.forwardRef<
           <button
             type="button"
             onClick={() => onMoveRight(id)}
-            className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-accent"
+            className="rounded p-0 text-muted-foreground hover:bg-accent hover:text-foreground"
             aria-label="Move widget right"
           >
             <ArrowRight className="h-4 w-4" />
@@ -351,7 +351,7 @@ export const WidgetWrapper = React.forwardRef<
           <button
             type="button"
             onClick={() => onToggleVisibility(id)}
-            className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-accent"
+            className="rounded p-0 text-muted-foreground hover:bg-accent hover:text-foreground"
             aria-label={visible ? "Hide widget" : "Show widget"}
             aria-pressed={!visible}
           >
@@ -379,7 +379,7 @@ export const WidgetWrapper = React.forwardRef<
             <button
               type="button"
               onClick={startRename}
-              className="flex-1 text-left flex items-center gap-1.5 px-1 py-0.5 rounded text-xs text-muted-foreground hover:text-foreground hover:bg-accent group"
+              className="flex flex-1 items-center gap-1.5 rounded px-1 py-0 text-left text-xs text-muted-foreground hover:bg-accent hover:text-foreground group"
               title="Click to rename"
             >
               <span className="truncate">{label ?? defaultLabel}</span>
@@ -391,7 +391,7 @@ export const WidgetWrapper = React.forwardRef<
           <button
             type="button"
             onClick={() => onRemove(id)}
-            className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-accent"
+            className="rounded p-0 text-muted-foreground hover:bg-accent hover:text-destructive"
             aria-label="Remove widget"
           >
             <Trash2 className="h-4 w-4" />
