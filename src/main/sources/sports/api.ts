@@ -13,6 +13,10 @@ const ESPN_CORE_BASE_URL = "https://sports.core.api.espn.com/v2";
 const SPORTS_API_MIN_INTERVAL_MS = 500;
 const SPORTS_API_MAX_RETRIES = 3;
 
+function isTransientSportsApiStatus(status: number): boolean {
+  return status === 408 || status === 425 || status === 429 || status >= 500;
+}
+
 let lastSportsRequestAt = 0;
 let sportsRequestQueue: Promise<void> = Promise.resolve();
 let leaguesCatalogPromise: Promise<SportLeague[]> | null = null;
@@ -314,7 +318,10 @@ async function request<T>(
       return extractFirstArray<T>(payload);
     }
 
-    if (response.status === 429 && attempt < SPORTS_API_MAX_RETRIES) {
+    if (
+      isTransientSportsApiStatus(response.status) &&
+      attempt < SPORTS_API_MAX_RETRIES
+    ) {
       const retryAfterMs = parseRetryAfterMs(
         response.headers.get("retry-after"),
       );
@@ -351,7 +358,10 @@ async function requestJsonFromUrl<T>(url: string): Promise<T> {
       }
     }
 
-    if (response.status === 429 && attempt < SPORTS_API_MAX_RETRIES) {
+    if (
+      isTransientSportsApiStatus(response.status) &&
+      attempt < SPORTS_API_MAX_RETRIES
+    ) {
       const retryAfterMs = parseRetryAfterMs(
         response.headers.get("retry-after"),
       );

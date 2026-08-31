@@ -596,11 +596,42 @@ async function refreshTrackedTeam(
   fetchedDate: string,
 ): Promise<void> {
   const db = ensureDb();
-  const [lastEvents, nextEvents] = await Promise.all([
+  const [lastResult, nextResult] = await Promise.allSettled([
     fetchLastEventsForTeam(team.teamId),
     fetchNextEventsForTeam(team.teamId),
   ]);
-  const events = [...lastEvents, ...nextEvents];
+  const events = [
+    ...(lastResult.status === "fulfilled" ? lastResult.value : []),
+    ...(nextResult.status === "fulfilled" ? nextResult.value : []),
+  ];
+
+  if (lastResult.status === "rejected" || nextResult.status === "rejected") {
+    const errors = [lastResult, nextResult]
+      .filter(
+        (result): result is PromiseRejectedResult =>
+          result.status === "rejected",
+      )
+      .map((result) =>
+        result.reason instanceof Error
+          ? result.reason.message
+          : String(result.reason),
+      );
+    console.warn(
+      `[Sports] Team refresh incomplete for ${team.name}; retaining cached data:`,
+      errors.join("; "),
+    );
+    emitSportsFetchWarning({
+      sport: team.sport,
+      message: `Some data for ${team.name} is temporarily unavailable; using cached data`,
+      severity: "warning",
+      timestamp: Date.now(),
+    });
+  }
+
+  if (events.length === 0) {
+    return;
+  }
+
   const leagueName = getLeagueById(db, team.leagueId)?.name;
   await backfillEventTeamBadges(db, events, team.sport, leagueName);
   upsertEvents(db, events, fetchedDate);
