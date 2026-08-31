@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { WeatherHourlyPoint } from "../../../../../shared/ipc-types";
 import {
+  clampRainProbability,
+  formatRainProbability,
   hourlyChartCoordinates,
   hourlyMetricValue,
 } from "../weather-hourly-chart";
@@ -17,6 +19,20 @@ const point = (values: Partial<WeatherHourlyPoint>): WeatherHourlyPoint => ({
 });
 
 describe("hourly chart helpers", () => {
+  it("formats and clamps hourly rain probabilities", () => {
+    expect(formatRainProbability(null)).toBe("-");
+    expect(formatRainProbability(0)).toBe("0%");
+    expect(formatRainProbability(42.4)).toBe("42%");
+    expect(formatRainProbability(100)).toBe("100%");
+    expect(formatRainProbability(125)).toBe("100%");
+    expect(formatRainProbability(-10)).toBe("0%");
+
+    expect(clampRainProbability(null)).toBeNull();
+    expect(clampRainProbability(50)).toBe(50);
+    expect(clampRainProbability(125)).toBe(100);
+    expect(clampRainProbability(-10)).toBe(0);
+  });
+
   it("selects the value for each chart metric", () => {
     const weatherPoint = point({
       temperature: 12,

@@ -15,6 +15,8 @@ import {
   windUnit,
 } from "./WeatherSummary";
 import {
+  clampRainProbability,
+  formatRainProbability,
   hourlyChartCoordinates,
   type HourlyChartCoordinate,
   type HourlyChartMetric,
@@ -80,6 +82,35 @@ function formatChartValue(
       : metric === "wind"
         ? formatNumber(value, windUnit(settings))
         : formatCompactNumber(value, "%");
+}
+
+function RainProbabilityPill({
+  probability,
+}: {
+  probability: number | null;
+}): React.ReactElement {
+  const clamped = clampRainProbability(probability);
+  const label =
+    clamped == null
+      ? "Chance of rain unavailable"
+      : `Chance of rain ${Math.round(clamped)} percent`;
+  return (
+    <div
+      role="progressbar"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={clamped ?? undefined}
+      aria-label={label}
+      className="relative w-full overflow-hidden rounded-md bg-muted/20 px-1.5 py-1 text-center text-[11px] font-semibold"
+    >
+      <div
+        aria-hidden="true"
+        className="absolute inset-y-0 left-0 bg-sky-500/50"
+        style={{ width: `${clamped ?? 0}%` }}
+      />
+      <span className="relative">{formatRainProbability(probability)}</span>
+    </div>
+  );
 }
 
 function TemperatureAreaChart({
@@ -286,7 +317,13 @@ export function WeatherHourly({
           {visible.map((point, index) => (
             <div
               key={point.time}
-              className="flex min-w-0 flex-col items-center gap-0.5 text-center"
+              aria-current={index === 0 ? "time" : undefined}
+              className={cn(
+                "flex min-w-0 flex-col items-center gap-0.5 rounded-md px-1 py-1 text-center",
+                index === 0
+                  ? "border border-primary/40 bg-primary/10"
+                  : "bg-transparent",
+              )}
             >
               <span className="text-[10px] leading-none text-muted-foreground">
                 {index === 0 ? "Now" : formatHourLabel(point.time, settings)}
@@ -322,12 +359,19 @@ export function WeatherHourly({
             }}
           >
             {visible.map((point) => (
-              <div
-                key={`${point.time}:${config.hourlyMetric}`}
-                className="rounded-md bg-muted/20 px-1.5 py-1 text-center text-[11px] font-semibold"
-              >
-                {metricValue(point)}
-              </div>
+              config.hourlyMetric === "overview" ? (
+                <RainProbabilityPill
+                  key={point.time}
+                  probability={point.precipitationProbability}
+                />
+              ) : (
+                <div
+                  key={`${point.time}:${config.hourlyMetric}`}
+                  className="rounded-md bg-muted/20 px-1.5 py-1 text-center text-[11px] font-semibold"
+                >
+                  {metricValue(point)}
+                </div>
+              )
             ))}
           </div>
         )}

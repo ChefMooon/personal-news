@@ -23,6 +23,15 @@ export function hourlyMetricValue(
         : point.relativeHumidity;
 }
 
+export function clampRainProbability(value: number | null): number | null {
+  return value == null ? null : Math.min(100, Math.max(0, value));
+}
+
+export function formatRainProbability(value: number | null): string {
+  const clamped = clampRainProbability(value);
+  return clamped == null ? "-" : `${Math.round(clamped)}%`;
+}
+
 export function hourlyChartCoordinates(
   points: WeatherHourlyPoint[],
   metric: HourlyChartMetric,
