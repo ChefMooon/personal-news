@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file.
 
 The format follows Keep a Changelog, and this project uses Semantic Versioning.
 
+## [1.4.1] - 2026-08-31
+
+### Fixed
+
+- Improved Sports widget reliability by tolerating temporary provider failures during refreshes.
+- Improved Weather hourly forecast indicators so conditions are represented more clearly.
+- Fixed Weather alert dialog placement so alerts appear in the correct position.
+
 ## [1.4.0] - 2026-08-28
 
 ### Added
