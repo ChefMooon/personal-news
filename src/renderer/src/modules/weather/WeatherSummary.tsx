@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
   Cloud,
@@ -11,7 +11,6 @@ import {
   CloudSun,
   Moon,
   Sun,
-  X,
 } from "lucide-react";
 import { Badge } from "../../components/ui/badge";
 import { cn } from "../../lib/utils";
@@ -20,15 +19,16 @@ import type {
   WeatherSnapshot,
   WeatherViewConfig,
 } from "../../../../shared/ipc-types";
-import type { WeatherContentPolicy } from "./weather-content-policy";
+import type {
+  WeatherAlertPresentation,
+  WeatherContentPolicy,
+} from "./weather-content-policy";
 
 export interface WeatherLayoutProps {
   snapshot: WeatherSnapshot;
   config: WeatherViewConfig;
   settings: WeatherSettings;
   policy: WeatherContentPolicy;
-  alertDismissed: boolean;
-  onDismissAlert: () => void;
   onMetricChange: (metric: WeatherViewConfig["hourlyMetric"]) => void;
 }
 export function weatherIcon(
@@ -119,11 +119,13 @@ export function WeatherSummary({
   config,
   settings,
   compact = false,
+  trailing,
 }: {
   snapshot: WeatherSnapshot;
   config: WeatherViewConfig;
   settings: WeatherSettings;
   compact?: boolean;
+  trailing?: React.ReactNode;
 }): React.ReactElement {
   const current = snapshot.current;
   if (!current)
@@ -181,115 +183,187 @@ export function WeatherSummary({
   return (
     <section
       className={cn(
-        "flex min-w-0 items-start gap-3 rounded-md border bg-muted/5",
+        "min-w-0 rounded-md border bg-muted/5",
         compact ? "p-2" : "p-3",
       )}
       aria-label="Current weather"
     >
-      <div className="flex min-w-0 flex-1 items-start gap-2.5">
-        <div className="shrink-0">
-          {weatherIcon(current.weatherCode, current.isDay, compact)}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-baseline gap-1.5 leading-none">
-            <span
-              className={
-                compact ? "text-2xl font-light" : "text-3xl font-light"
-              }
-            >
-              {formatTemp(current.temperature, settings)}
-            </span>
-            {config.showFeelsLike && (
-              <span className="text-xs text-muted-foreground">
-                feels {formatTemp(current.apparentTemperature, settings)}
+      <div
+        className={cn(
+          "grid min-w-0 gap-3",
+          trailing
+            ? "grid-cols-[minmax(9rem,1.1fr)_minmax(0,2fr)_auto]"
+            : "grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)]",
+        )}
+      >
+        <div className="flex min-w-0 items-start gap-2.5">
+          <div className="shrink-0">
+            {weatherIcon(current.weatherCode, current.isDay, compact)}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-baseline gap-1.5 leading-none">
+              <span
+                className={
+                  compact ? "text-2xl font-light" : "text-3xl font-light"
+                }
+              >
+                {formatTemp(current.temperature, settings)}
               </span>
+              {config.showFeelsLike && (
+                <span className="text-xs text-muted-foreground">
+                  feels {formatTemp(current.apparentTemperature, settings)}
+                </span>
+              )}
+            </div>
+            <p
+              className={cn(
+                "mt-1 break-words text-xs text-muted-foreground",
+                trailing && "line-clamp-2",
+              )}
+            >
+              {locationName(snapshot)}
+            </p>
+            {snapshot.stale && (
+              <Badge variant="secondary" className="mt-1">
+                Stale
+              </Badge>
             )}
           </div>
-          <p className="mt-1 break-words text-xs text-muted-foreground">
-            {locationName(snapshot)}
-          </p>
-          {snapshot.stale && (
-            <Badge variant="secondary" className="mt-1">
-              Stale
-            </Badge>
-          )}
         </div>
+        {details.length > 0 && (
+          <div
+            className={cn(
+              "grid min-w-0 self-center text-left",
+              compact
+                ? "grid-cols-4 gap-x-2 gap-y-1"
+                : trailing
+                  ? "grid-cols-4 gap-x-3 gap-y-2"
+                  : "grid-cols-4 gap-x-3 gap-y-2 lg:grid-cols-5",
+            )}
+          >
+            {details.map(([label, value]) => (
+              <div key={label} className="min-w-0">
+                <p
+                  className={cn(
+                    "truncate font-medium text-muted-foreground",
+                    compact ? "text-[9px]" : "text-[10px]",
+                  )}
+                >
+                  {label}
+                </p>
+                <p
+                  className={cn(
+                    "truncate font-semibold leading-tight",
+                    compact ? "text-[10px]" : "text-xs",
+                  )}
+                >
+                  {value}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+        {trailing && <div className="self-start">{trailing}</div>}
       </div>
-      {details.length > 0 && (
-        <div
-          className={cn(
-            "grid min-w-0 text-left",
-            compact
-              ? "w-[62%] grid-cols-4 gap-x-2 gap-y-1 self-center"
-              : "w-[60%] grid-cols-4 gap-x-3 gap-y-2 self-center lg:grid-cols-5",
-          )}
-        >
-          {details.map(([label, value]) => (
-            <div key={label} className="min-w-0">
-              <p
-                className={cn(
-                  "truncate font-medium text-muted-foreground",
-                  compact ? "text-[9px]" : "text-[10px]",
-                )}
-              >
-                {label}
-              </p>
-              <p
-                className={cn(
-                  "truncate font-semibold leading-tight",
-                  compact ? "text-[10px]" : "text-xs",
-                )}
-              >
-                {value}
-              </p>
-            </div>
-          ))}
-        </div>
-      )}
     </section>
   );
 }
-export function WeatherAlerts({
+
+export function WeatherInlineAlert({
   snapshot,
-  alertDismissed,
-  onDismissAlert,
   visible,
   detail,
-}: Pick<
-  WeatherLayoutProps,
-  "snapshot" | "alertDismissed" | "onDismissAlert"
-> & {
+  presentation,
+}: Pick<WeatherLayoutProps, "snapshot"> & {
   visible: boolean;
   detail: "summary" | "detailed";
+  presentation: WeatherAlertPresentation;
 }): React.ReactElement | null {
-  if (!visible || alertDismissed || snapshot.alerts.length === 0) return null;
+  const title = snapshot.alerts.map((alert) => alert.title).join(" · ");
+  const showTitle = presentation !== "icon";
+  const showDetails = presentation === "detailed" && detail === "detailed";
+  const [popoverOpen, setPopoverOpen] = useState(false);
+  const alertRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!popoverOpen) return;
+    const handlePointerDown = (event: PointerEvent): void => {
+      if (!alertRef.current?.contains(event.target as Node)) {
+        setPopoverOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === "Escape") setPopoverOpen(false);
+    };
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [popoverOpen]);
+  if (!visible || snapshot.alerts.length === 0) return null;
+  if (presentation === "icon") {
+    return (
+      <div ref={alertRef} className="relative self-start">
+        <button
+          type="button"
+          className="rounded-md border border-amber-500/20 bg-amber-500/10 p-1.5 text-amber-500 hover:bg-amber-500/20"
+          aria-label="Show weather alert"
+          aria-expanded={popoverOpen}
+          aria-haspopup="dialog"
+          onClick={() => setPopoverOpen((open) => !open)}
+        >
+          <AlertTriangle className="h-4 w-4" />
+        </button>
+        {popoverOpen && (
+          <div
+            className="absolute right-0 top-full z-20 mt-2 w-64 max-w-[calc(100vw-2rem)] rounded-md border border-amber-500/20 bg-popover p-3 text-popover-foreground shadow-lg"
+            role="dialog"
+            aria-label="Weather alerts"
+          >
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-medium">{title}</p>
+                {snapshot.alerts.map((alert) => (
+                  <p
+                    key={alert.id}
+                    className="mt-1 break-words text-[10px] text-muted-foreground"
+                  >
+                    {alert.message}
+                  </p>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
   return (
-    <div className="flex min-w-0 items-start justify-between gap-2 rounded-md border border-amber-500/20 bg-amber-500/10 px-3 py-1.5">
-      <div className="flex min-w-0 items-start gap-2">
-        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
-        <div className="min-w-0">
-          <p className="break-words text-xs font-medium text-amber-600 dark:text-amber-400">
-            {snapshot.alerts.map((alert) => alert.title).join(" · ")}
-          </p>
-          {detail === "detailed" &&
+    <div
+      className={cn(
+        "flex min-w-0 items-start rounded-md border border-amber-500/20 bg-amber-500/10 text-amber-600 dark:text-amber-400",
+        "max-w-[min(100%,20rem)] gap-1.5 px-2 py-1.5",
+      )}
+      role="alert"
+      aria-label={title}
+    >
+      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+      {showTitle && (
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[10px] font-medium">{title}</p>
+          {showDetails &&
             snapshot.alerts.map((alert) => (
               <p
                 key={alert.id}
-                className="break-words text-[10px] text-muted-foreground"
+                className="break-words text-[9px] text-muted-foreground"
               >
                 {alert.message}
               </p>
             ))}
         </div>
-      </div>
-      <button
-        type="button"
-        className="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
-        aria-label="Dismiss alert"
-        onClick={onDismissAlert}
-      >
-        <X className="h-3.5 w-3.5" />
-      </button>
+      )}
     </div>
   );
 }

@@ -66,14 +66,10 @@ function WeatherWidget(): React.ReactElement {
   const [editContentHeight, setEditContentHeight] = useState<number | null>(
     null,
   );
-  const [alertDismissed, setAlertDismissed] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [contentWidth, setContentWidth] = useState<number | undefined>();
   const lastManualRefreshAt = useRef<number | null>(null);
   const cardContentRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    setAlertDismissed(false);
-  }, [snapshot?.fetchedAt]);
   useEffect(() => {
     const element = cardContentRef.current;
     if (!element) return;
@@ -160,8 +156,6 @@ function WeatherWidget(): React.ReactElement {
         config,
         settings,
         policy,
-        alertDismissed,
-        onDismissAlert: () => setAlertDismissed(true),
         onMetricChange: updateHourlyMetric,
       }
     : null;

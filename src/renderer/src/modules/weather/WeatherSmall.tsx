@@ -1,6 +1,7 @@
 import React from "react";
 import type { WeatherLayoutProps } from "./WeatherSummary";
-import { WeatherAlerts, WeatherSummary } from "./WeatherSummary";
+import { WeatherInlineAlert, WeatherSummary } from "./WeatherSummary";
+import { WeatherAlertCard } from "./WeatherAlertCard";
 import { WeatherHourly } from "./WeatherHourly";
 import { WeatherAstronomy } from "./WeatherAstronomy";
 
@@ -13,11 +14,24 @@ export function WeatherSmall(props: WeatherLayoutProps): React.ReactElement {
         config={config}
         settings={settings}
         compact
-      />
-      <WeatherAlerts
-        {...props}
-        visible={policy.showAlerts}
-        detail={policy.alertDetail}
+        trailing={
+          policy.showAlerts ? (
+            policy.alertPresentation === "icon" ? (
+              <WeatherInlineAlert
+                {...props}
+                visible={policy.showAlerts}
+                detail={policy.alertDetail}
+                presentation={policy.alertPresentation}
+              />
+            ) : (
+              <WeatherAlertCard
+                snapshot={snapshot}
+                visible={policy.showAlerts}
+                detail={policy.alertDetail}
+              />
+            )
+          ) : undefined
+        }
       />
       {policy.showAstronomy && snapshot.location.timezone && (
         <WeatherAstronomy

@@ -2,6 +2,7 @@ import type { WeatherViewConfig } from "../../../../shared/ipc-types";
 
 export type WeatherWidgetSize = "small" | "medium" | "large";
 export type WeatherLayoutMode = "small" | "medium" | "large";
+export type WeatherAlertPresentation = "icon" | "summary" | "detailed";
 
 export interface WeatherContentPolicy {
   layout: WeatherLayoutMode;
@@ -12,6 +13,7 @@ export interface WeatherContentPolicy {
   showAstronomy: boolean;
   showAlerts: boolean;
   alertDetail: "summary" | "detailed";
+  alertPresentation: WeatherAlertPresentation;
   summaryDetail: WeatherViewConfig["detailLevel"];
   hourlyPresentation: "compact" | "standard" | "tabbed";
   verticalOverflow: "none" | "weather-column" | "widget";
@@ -26,6 +28,8 @@ export function getWeatherContentPolicy(
   availableWidth?: number,
 ): WeatherContentPolicy {
   if (size === "small") {
+    const alertPresentation: WeatherAlertPresentation =
+      availableWidth == null || availableWidth <= 640 ? "icon" : "summary";
     return {
       layout: "small",
       hourlyCap: 12,
@@ -35,6 +39,7 @@ export function getWeatherContentPolicy(
       showAstronomy: astronomyVisible,
       showAlerts: hasAlerts,
       alertDetail: "summary",
+      alertPresentation,
       summaryDetail: "summary",
       hourlyPresentation: "compact",
       verticalOverflow: "none",
@@ -44,6 +49,18 @@ export function getWeatherContentPolicy(
 
   if (size === "medium") {
     const stacked = availableWidth == null || availableWidth < 640;
+    const effectiveWidth =
+      availableWidth == null
+        ? undefined
+        : astronomyVisible && !stacked
+          ? availableWidth * 0.75 - 12
+          : availableWidth;
+    const alertPresentation: WeatherAlertPresentation =
+      effectiveWidth == null || effectiveWidth <= 640
+        ? "icon"
+        : effectiveWidth < 760
+          ? "summary"
+          : "detailed";
     const dailyCap =
       config.detailLevel === "summary"
         ? 3
@@ -63,6 +80,7 @@ export function getWeatherContentPolicy(
       showAstronomy: astronomyVisible,
       showAlerts: hasAlerts,
       alertDetail: config.detailLevel === "detailed" ? "detailed" : "summary",
+      alertPresentation,
       summaryDetail: config.detailLevel,
       hourlyPresentation: "standard",
       verticalOverflow: stacked ? "widget" : "weather-column",
@@ -86,6 +104,7 @@ export function getWeatherContentPolicy(
     showAstronomy: astronomyVisible,
     showAlerts: hasAlerts,
     alertDetail: config.detailLevel === "detailed" ? "detailed" : "summary",
+    alertPresentation: "detailed",
     summaryDetail: config.detailLevel,
     hourlyPresentation: "tabbed",
     verticalOverflow: "widget",

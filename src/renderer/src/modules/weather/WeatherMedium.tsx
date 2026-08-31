@@ -1,6 +1,6 @@
 import React from "react";
 import type { WeatherLayoutProps } from "./WeatherSummary";
-import { WeatherAlerts, WeatherSummary } from "./WeatherSummary";
+import { WeatherInlineAlert, WeatherSummary } from "./WeatherSummary";
 import { WeatherHourly } from "./WeatherHourly";
 import { WeatherDaily } from "./WeatherDaily";
 import { WeatherAstronomy } from "./WeatherAstronomy";
@@ -9,11 +9,20 @@ export function WeatherMedium(props: WeatherLayoutProps): React.ReactElement {
   const { snapshot, config, settings, policy } = props;
   const weather = (
     <div className="min-w-0 space-y-3">
-      <WeatherSummary snapshot={snapshot} config={config} settings={settings} />
-      <WeatherAlerts
-        {...props}
-        visible={policy.showAlerts}
-        detail={policy.alertDetail}
+      <WeatherSummary
+        snapshot={snapshot}
+        config={config}
+        settings={settings}
+        trailing={
+          policy.showAlerts && snapshot.alerts.length > 0 ? (
+            <WeatherInlineAlert
+              {...props}
+              visible={policy.showAlerts}
+              detail={policy.alertDetail}
+              presentation={policy.alertPresentation}
+            />
+          ) : undefined
+        }
       />
       {policy.showDaily && (
         <WeatherDaily

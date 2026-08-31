@@ -22,6 +22,40 @@ describe("Weather content policy", () => {
     });
   });
 
+  it("uses an icon alert when Small is narrow or not measured yet", () => {
+    expect(
+      getWeatherContentPolicy("small", DEFAULT_WEATHER_VIEW_CONFIG, false, true)
+        .alertPresentation,
+    ).toBe("icon");
+    expect(
+      getWeatherContentPolicy(
+        "small",
+        DEFAULT_WEATHER_VIEW_CONFIG,
+        false,
+        true,
+        500,
+      ).alertPresentation,
+    ).toBe("icon");
+    expect(
+      getWeatherContentPolicy(
+        "small",
+        DEFAULT_WEATHER_VIEW_CONFIG,
+        false,
+        true,
+        640,
+      ).alertPresentation,
+    ).toBe("icon");
+    expect(
+      getWeatherContentPolicy(
+        "small",
+        DEFAULT_WEATHER_VIEW_CONFIG,
+        false,
+        true,
+        641,
+      ).alertPresentation,
+    ).toBe("summary");
+  });
+
   it("preserves Medium settings while selecting the 24-hour forecast cap", () => {
     const config = {
       ...DEFAULT_WEATHER_VIEW_CONFIG,
@@ -69,6 +103,58 @@ describe("Weather content policy", () => {
 
     expect(policy.verticalOverflow).toBe("widget");
     expect(policy.showAstronomy).toBe(true);
+  });
+
+  it("uses icon-only alerts until Medium has enough room for alert text", () => {
+    expect(
+      getWeatherContentPolicy(
+        "medium",
+        DEFAULT_WEATHER_VIEW_CONFIG,
+        false,
+        true,
+        500,
+      ).alertPresentation,
+    ).toBe("icon");
+    expect(
+      getWeatherContentPolicy(
+        "medium",
+        DEFAULT_WEATHER_VIEW_CONFIG,
+        false,
+        true,
+        640,
+      ).alertPresentation,
+    ).toBe("icon");
+    expect(
+      getWeatherContentPolicy(
+        "medium",
+        DEFAULT_WEATHER_VIEW_CONFIG,
+        false,
+        true,
+        700,
+      ).alertPresentation,
+    ).toBe("summary");
+    expect(
+      getWeatherContentPolicy(
+        "medium",
+        DEFAULT_WEATHER_VIEW_CONFIG,
+        false,
+        true,
+        800,
+      ).alertPresentation,
+    ).toBe("detailed");
+  });
+
+  it("accounts for the Astronomy column when selecting Medium alert density", () => {
+    const policy = getWeatherContentPolicy(
+      "medium",
+      DEFAULT_WEATHER_VIEW_CONFIG,
+      true,
+      true,
+      800,
+    );
+
+    expect(policy.verticalOverflow).toBe("weather-column");
+    expect(policy.alertPresentation).toBe("icon");
   });
 
   it("uses the configured forecast mode and four-tab presentation for Large", () => {

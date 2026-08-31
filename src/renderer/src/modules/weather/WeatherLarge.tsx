@@ -1,6 +1,7 @@
 import React from "react";
 import type { WeatherLayoutProps } from "./WeatherSummary";
-import { WeatherAlerts, WeatherSummary } from "./WeatherSummary";
+import { WeatherSummary } from "./WeatherSummary";
+import { WeatherAlertCard } from "./WeatherAlertCard";
 import { WeatherHourly } from "./WeatherHourly";
 import { WeatherDaily } from "./WeatherDaily";
 import { WeatherAstronomy } from "./WeatherAstronomy";
@@ -9,11 +10,19 @@ export function WeatherLarge(props: WeatherLayoutProps): React.ReactElement {
   const { snapshot, config, settings, policy } = props;
   return (
     <div className="min-w-0 space-y-3 overflow-y-auto">
-      <WeatherSummary snapshot={snapshot} config={config} settings={settings} />
-      <WeatherAlerts
-        {...props}
-        visible={policy.showAlerts}
-        detail={policy.alertDetail}
+      <WeatherSummary
+        snapshot={snapshot}
+        config={config}
+        settings={settings}
+        trailing={
+          policy.showAlerts ? (
+            <WeatherAlertCard
+              snapshot={snapshot}
+              visible={policy.showAlerts}
+              detail={policy.alertDetail}
+            />
+          ) : undefined
+        }
       />
       {policy.showAstronomy && snapshot.location.timezone && (
         <WeatherAstronomy
