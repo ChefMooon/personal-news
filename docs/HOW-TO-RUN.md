@@ -40,6 +40,10 @@ npm run build:win -- --publish=never
 
 Artifacts are written to `dist/` as an NSIS setup executable (x64).
 
+The Windows build embeds `resources/icon.ico` into the packaged executable and
+shortcuts. Code signing is separate: an unsigned build can show the correct
+icon, but may produce SmartScreen or reputation warnings.
+
 This is the local packaging command. The automated GitHub release workflow uses `npm run build:win -- --publish always` after you push a matching tag.
 
 ## Quick Release Checklist
@@ -82,6 +86,14 @@ npm run verify:production:win
 ```
 
 This confirms the app builds, packages, and boots in smoke-test mode with the expected migrations and native binaries.
+It also checks that generated icon assets are current and that the packaged ICO
+contains the expected Windows sizes.
+
+After installing a new build, test from a clean install location. Remove old
+desktop or Start Menu shortcuts and unpin the previous taskbar shortcut before
+checking the executable, shortcuts, and running taskbar button. Windows can
+cache icon associations, so an old pinned shortcut is not evidence that the new
+installer contains the wrong artwork.
 
 ### Step 3: Create the release tag
 

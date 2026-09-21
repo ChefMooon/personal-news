@@ -48,6 +48,12 @@ npm install
 npm run verify:production:win
 ```
 
+This verification also fails if generated icon assets are stale and checks the
+multi-resolution ICO copied into the unpacked application. After installation,
+remove old shortcuts and unpin the previous taskbar shortcut before checking
+the new executable and taskbar icon. Signing affects SmartScreen trust, not
+whether the icon resource is embedded.
+
 6. Commit the release prep changes:
 
 ```bash

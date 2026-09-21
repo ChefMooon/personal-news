@@ -15,6 +15,7 @@ const DIST_DIR = path.join(ROOT, "dist");
 const WIN_UNPACKED_DIR = path.join(DIST_DIR, "win-unpacked");
 const EXE_PATH = path.join(WIN_UNPACKED_DIR, "Personal News.exe");
 const RESOURCES_DIR = path.join(WIN_UNPACKED_DIR, "resources");
+const PACKAGED_ICON_DIR = path.join(RESOURCES_DIR, "resources");
 const APP_ASAR_PATH = path.join(RESOURCES_DIR, "app.asar");
 const BETTER_SQLITE_NATIVE_PATH = path.join(
   RESOURCES_DIR,
@@ -93,6 +94,34 @@ function findInstallerPath() {
     );
   }
   return path.join(DIST_DIR, setupFile);
+}
+
+function verifyIcoDimensions(iconPath) {
+  const icon = readFileSync(iconPath);
+  if (
+    icon.length < 6 ||
+    icon.readUInt16LE(0) !== 0 ||
+    icon.readUInt16LE(2) !== 1
+  ) {
+    throw new Error(`Invalid ICO header: ${iconPath}`);
+  }
+
+  const imageCount = icon.readUInt16LE(4);
+  const dimensions = new Set();
+  for (let index = 0; index < imageCount; index += 1) {
+    const entryOffset = 6 + index * 16;
+    if (entryOffset + 16 > icon.length) {
+      throw new Error(`Truncated ICO directory: ${iconPath}`);
+    }
+    dimensions.add(icon[entryOffset] || 256);
+  }
+
+  const expectedDimensions = [16, 24, 32, 48, 64, 128, 256];
+  if (expectedDimensions.some((dimension) => !dimensions.has(dimension))) {
+    throw new Error(
+      `ICO is missing expected dimensions. Found: ${[...dimensions].join(", ")}`,
+    );
+  }
 }
 
 function verifySmokeReport() {
@@ -209,6 +238,11 @@ function verifyBuildOutputs() {
 
   assertPathExists(WIN_UNPACKED_DIR, "win-unpacked/ directory missing.");
   assertPathExists(EXE_PATH, "Packed app executable missing.");
+  const packagedIconPath = path.join(PACKAGED_ICON_DIR, "icon.ico");
+  const packagedPngPath = path.join(PACKAGED_ICON_DIR, "icon.png");
+  assertPathExists(packagedIconPath, "Packaged Windows ICO missing.");
+  assertPathExists(packagedPngPath, "Packaged PNG icon missing.");
+  verifyIcoDimensions(packagedIconPath);
   assertPathExists(APP_ASAR_PATH, "app.asar missing from packed resources.");
   assertPathExists(MIGRATIONS_DIR, "Bundled migrations directory missing.");
   const expectedMigrationFiles = getExpectedMigrationFiles();
@@ -237,6 +271,7 @@ function main() {
 
   mkdirSync(DIST_DIR, { recursive: true });
 
+  run("npm", ["run", "generate:icons", "--", "--check"]);
   run("npm", ["run", "build"]);
   run("npm", ["run", "build:win", "--", "--publish=never"]);
 

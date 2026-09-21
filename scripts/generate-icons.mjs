@@ -26,6 +26,8 @@ const icoTargets = [
   { file: "icon.ico", sizes: [16, 24, 32, 48, 64, 128, 256] },
 ];
 
+const checkOnly = process.argv.includes("--check");
+
 async function renderPng(svg, size) {
   const renderer = new Resvg(svg, {
     fitTo: {
@@ -38,14 +40,14 @@ async function renderPng(svg, size) {
 }
 
 async function main() {
-  await mkdir(resourcesDir, { recursive: true });
-
   const svg = await readFile(sourceSvgPath, "utf8");
-  await writeFile(path.join(resourcesDir, "favicon.svg"), svg, "utf8");
+  const generatedAssets = new Map([
+    ["favicon.svg", Buffer.from(svg, "utf8")],
+  ]);
 
   for (const target of rasterTargets) {
     const png = await renderPng(svg, target.size);
-    await writeFile(path.join(resourcesDir, target.file), png);
+    generatedAssets.set(target.file, png);
   }
 
   for (const target of icoTargets) {
@@ -53,11 +55,35 @@ async function main() {
       target.sizes.map((size) => renderPng(svg, size)),
     );
     const ico = await pngToIco(pngs);
-    await writeFile(path.join(resourcesDir, target.file), ico);
+    generatedAssets.set(target.file, ico);
+  }
+
+  const mismatches = [];
+  for (const [file, expected] of generatedAssets) {
+    const targetPath = path.join(resourcesDir, file);
+    if (checkOnly) {
+      try {
+        const actual = await readFile(targetPath);
+        if (!actual.equals(expected)) {
+          mismatches.push(file);
+        }
+      } catch {
+        mismatches.push(file);
+      }
+    } else {
+      await mkdir(resourcesDir, { recursive: true });
+      await writeFile(targetPath, expected);
+    }
+  }
+
+  if (mismatches.length > 0) {
+    throw new Error(
+      `Generated icon assets are stale or missing: ${mismatches.join(", ")}. Run npm run generate:icons.`,
+    );
   }
 
   process.stdout.write(
-    `Generated ${rasterTargets.length + icoTargets.length + 1} non-tray icon assets from ${path.relative(workspaceRoot, sourceSvgPath)}.\n`,
+    `${checkOnly ? "Verified" : "Generated"} ${rasterTargets.length + icoTargets.length + 1} non-tray icon assets from ${path.relative(workspaceRoot, sourceSvgPath)}.\n`,
   );
 }
 
