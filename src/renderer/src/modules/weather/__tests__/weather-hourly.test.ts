@@ -58,13 +58,26 @@ describe("hourly chart helpers", () => {
     ]);
 
     expect(colors[0]?.line).toContain("hsl(38 92% 62% / 0.9)");
-      expect(colors[1]?.line).toBe("hsl(199 89% 55% / 0.78)");
-    expect(colors[2]).toEqual({
+    expect(colors[1]?.line).toBe("hsl(199 89% 55% / 0.78)");
+    expect(colors[2]).toEqual(colors[1]);
+    expect(colors[3]?.line).toBe("hsl(199 89% 55% / 0.90)");
+    expect(colors[4]).toBeNull();
+  });
+
+  it("uses the previous segment color for flat temperatures", () => {
+    const colors = hourlyTemperatureTrendColors([
+      point({ temperature: 10 }),
+      point({ temperature: 10 }),
+      point({ temperature: 12 }),
+      point({ temperature: 12 }),
+    ]);
+
+    expect(colors[0]).toEqual({
       line: "hsl(38 72% 58% / 0.9)",
       fill: "hsl(38 72% 58% / 0.38)",
     });
-    expect(colors[3]?.line).toBe("hsl(199 89% 55% / 0.90)");
-    expect(colors[4]).toBeNull();
+    expect(colors[1]?.line).toContain("hsl(38 92% 62% / 0.9)");
+    expect(colors[2]).toEqual(colors[1]);
   });
 
   it("does not bridge unavailable temperatures and handles single points", () => {

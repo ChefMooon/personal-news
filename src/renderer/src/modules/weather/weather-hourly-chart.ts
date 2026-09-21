@@ -38,6 +38,8 @@ export function hourlyTemperatureTrendColors(
     }),
   );
 
+  let previousTrendColor: HourlyTemperatureTrendColor | null = null;
+
   return temperatures.map((temperature, index) => {
     const nextTemperature = temperatures[index + 1];
     if (
@@ -46,26 +48,32 @@ export function hourlyTemperatureTrendColors(
       nextTemperature == null ||
       !Number.isFinite(nextTemperature)
     ) {
+      previousTrendColor = null;
       return null;
     }
 
     const delta = nextTemperature - temperature;
     if (delta >= 0) {
-      return delta === 0
-        ? neutralTemperatureTrendColor
-        : {
-            line: "hsl(38 92% 62% / 0.9)",
-            fill: "hsl(38 92% 60% / 0.46)",
-          };
+      const trendColor =
+        delta === 0
+          ? (previousTrendColor ?? neutralTemperatureTrendColor)
+          : {
+              line: "hsl(38 92% 62% / 0.9)",
+              fill: "hsl(38 92% 60% / 0.46)",
+            };
+      previousTrendColor = trendColor;
+      return trendColor;
     }
 
     const blueStrength = Math.min(1, Math.abs(delta) / coolingRange);
     const lineOpacity = 0.72 + blueStrength * 0.18;
     const fillOpacity = 0.24 + blueStrength * 0.18;
-    return {
+    const trendColor = {
       line: `hsl(199 89% 55% / ${lineOpacity.toFixed(2)})`,
       fill: `hsl(199 89% 55% / ${fillOpacity.toFixed(2)})`,
     };
+    previousTrendColor = trendColor;
+    return trendColor;
   });
 }
 
