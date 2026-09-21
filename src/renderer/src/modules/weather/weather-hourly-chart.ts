@@ -20,6 +20,26 @@ const neutralTemperatureTrendColor: HourlyTemperatureTrendColor = {
   fill: "hsl(38 72% 58% / 0.38)",
 };
 
+function temperatureTrendColor(
+  delta: number,
+  coolingRange: number,
+): HourlyTemperatureTrendColor {
+  if (delta >= 0) {
+    return {
+      line: "hsl(38 92% 62% / 0.9)",
+      fill: "hsl(38 92% 60% / 0.46)",
+    };
+  }
+
+  const blueStrength = Math.min(1, Math.abs(delta) / coolingRange);
+  const lineOpacity = 0.72 + blueStrength * 0.18;
+  const fillOpacity = 0.24 + blueStrength * 0.18;
+  return {
+    line: `hsl(199 89% 55% / ${lineOpacity.toFixed(2)})`,
+    fill: `hsl(199 89% 55% / ${fillOpacity.toFixed(2)})`,
+  };
+}
+
 export function hourlyTemperatureTrendColors(
   points: WeatherHourlyPoint[],
 ): Array<HourlyTemperatureTrendColor | null> {
@@ -53,25 +73,32 @@ export function hourlyTemperatureTrendColors(
     }
 
     const delta = nextTemperature - temperature;
-    if (delta >= 0) {
-      const trendColor =
-        delta === 0
-          ? (previousTrendColor ?? neutralTemperatureTrendColor)
-          : {
-              line: "hsl(38 92% 62% / 0.9)",
-              fill: "hsl(38 92% 60% / 0.46)",
-            };
-      previousTrendColor = trendColor;
-      return trendColor;
+    if (delta === 0) {
+      let trendColor = previousTrendColor;
+      if (!trendColor) {
+        let nextIndex = index + 1;
+        while (
+          nextIndex < temperatures.length &&
+          temperatures[nextIndex] === temperature
+        ) {
+          nextIndex += 1;
+        }
+        const followingTemperature = temperatures[nextIndex];
+        if (
+          followingTemperature != null &&
+          Number.isFinite(followingTemperature)
+        ) {
+          trendColor = temperatureTrendColor(
+            followingTemperature - temperature,
+            coolingRange,
+          );
+        }
+      }
+      previousTrendColor = trendColor ?? neutralTemperatureTrendColor;
+      return previousTrendColor;
     }
 
-    const blueStrength = Math.min(1, Math.abs(delta) / coolingRange);
-    const lineOpacity = 0.72 + blueStrength * 0.18;
-    const fillOpacity = 0.24 + blueStrength * 0.18;
-    const trendColor = {
-      line: `hsl(199 89% 55% / ${lineOpacity.toFixed(2)})`,
-      fill: `hsl(199 89% 55% / ${fillOpacity.toFixed(2)})`,
-    };
+    const trendColor = temperatureTrendColor(delta, coolingRange);
     previousTrendColor = trendColor;
     return trendColor;
   });
