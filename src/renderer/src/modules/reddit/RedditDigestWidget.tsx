@@ -58,7 +58,14 @@ function RedditDigestWidget(): React.ReactElement {
   const [smallGroupIndex, setSmallGroupIndex] = useState(0);
   const [contentWidth, setContentWidth] = useState(0);
   const cardContentRef = useRef<HTMLDivElement | null>(null);
+  const previousSizeRef = useRef(size);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (previousSizeRef.current === size) return;
+    previousSizeRef.current = size;
+    if (isEditing) setEditContentHeight(null);
+  }, [isEditing, size]);
 
   useEffect(() => {
     const element = cardContentRef.current;

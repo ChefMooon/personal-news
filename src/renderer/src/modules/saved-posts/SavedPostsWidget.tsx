@@ -205,6 +205,15 @@ function SavedPostsWidget(): React.ReactElement {
   const cardContentRef = useRef<HTMLDivElement | null>(null);
   const measurementRef = useRef<HTMLDivElement | null>(null);
   const measuredRowCountRef = useRef<number | null>(null);
+  const previousSizeRef = useRef(instance.size);
+  useEffect(() => {
+    if (previousSizeRef.current === instance.size) return;
+    previousSizeRef.current = instance.size;
+    if (isEditing) {
+      setEditContentHeight(null);
+      measuredRowCountRef.current = null;
+    }
+  }, [instance.size, isEditing]);
 
   // Fetch posts with the widget's configured filters
   const { posts, total, loading, error, refetch } = useSavedPosts({

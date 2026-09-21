@@ -1167,6 +1167,12 @@ function AstronomyWidget(): React.ReactElement {
   const lastManualRefreshAt = useRef<number | null>(null);
   const cardContentRef = useRef<HTMLDivElement | null>(null);
   const contentViewportRef = useRef<HTMLDivElement | null>(null);
+  const previousSizeRef = useRef(size);
+  useEffect(() => {
+    if (previousSizeRef.current === size) return;
+    previousSizeRef.current = size;
+    if (isEditing) setEditContentHeight(null);
+  }, [isEditing, size]);
 
   const contentPolicy = getAstronomyContentPolicy({
     size,

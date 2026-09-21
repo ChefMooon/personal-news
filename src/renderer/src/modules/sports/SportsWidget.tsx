@@ -153,7 +153,14 @@ function SportsWidget(): React.ReactElement {
   const hasLoadedDataRef = useRef(false);
   const latestLoadIdRef = useRef(0);
   const cardContentRef = useRef<HTMLDivElement | null>(null);
+  const previousSizeRef = useRef(size);
   const defaultMockSport = selectedSports[0] ?? "Baseball";
+
+  useEffect(() => {
+    if (previousSizeRef.current === size) return;
+    previousSizeRef.current = size;
+    if (isEditing) setEditContentHeight(null);
+  }, [isEditing, size]);
 
   const loadTeamEvents = useCallback(
     async (teams: TrackedTeam[]): Promise<Record<string, SportTeamEvents>> => {

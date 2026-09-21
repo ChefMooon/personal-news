@@ -70,6 +70,12 @@ function WeatherWidget(): React.ReactElement {
   const [contentWidth, setContentWidth] = useState<number | undefined>();
   const lastManualRefreshAt = useRef<number | null>(null);
   const cardContentRef = useRef<HTMLDivElement | null>(null);
+  const previousSizeRef = useRef(size);
+  useEffect(() => {
+    if (previousSizeRef.current === size) return;
+    previousSizeRef.current = size;
+    if (isEditing) setEditContentHeight(null);
+  }, [isEditing, size]);
   useEffect(() => {
     const element = cardContentRef.current;
     if (!element) return;

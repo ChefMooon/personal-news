@@ -96,6 +96,12 @@ function YouTubeWidget(): React.ReactElement {
   >({});
   const [expandedChannels, setExpandedChannels] = useState(false);
   const cardContentRef = useRef<HTMLDivElement | null>(null);
+  const previousSizeRef = useRef(size);
+  useEffect(() => {
+    if (previousSizeRef.current === size) return;
+    previousSizeRef.current = size;
+    if (isEditing) setEditContentHeight(null);
+  }, [isEditing, size]);
 
   // Reset per-channel collapse state when the default changes
   useEffect(() => {
