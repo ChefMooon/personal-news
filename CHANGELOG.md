@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file.
 
 The format follows Keep a Changelog, and this project uses Semantic Versioning.
 
+## [1.4.2] - 2026-09-21
+
+### Fixed
+
+- Fixed Weather hourly forecast colors so flat temperatures retain the correct color and temperature trends transition more smoothly.
+- Fixed widget editors being clipped when dashboard widget sizes change.
+
 ## [1.4.1] - 2026-08-31
 
 ### Fixed
