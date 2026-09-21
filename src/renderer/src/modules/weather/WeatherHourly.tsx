@@ -18,6 +18,7 @@ import {
   clampRainProbability,
   formatRainProbability,
   hourlyChartCoordinates,
+  hourlyTemperatureTrendColors,
   type HourlyChartCoordinate,
   type HourlyChartMetric,
 } from "./weather-hourly-chart";
@@ -141,21 +142,24 @@ function TemperatureAreaChart({
         }
       : null,
   );
-  const segments: HourlyChartCoordinate[][] = [];
+  const segments: Array<{
+    coordinates: HourlyChartCoordinate[];
+    startIndex: number;
+  }> = [];
   let currentSegment: HourlyChartCoordinate[] = [];
-  coordinates.forEach((coordinate) => {
+  coordinates.forEach((coordinate, index) => {
     if (!coordinate) {
       currentSegment = [];
       return;
     }
     if (!currentSegment.length) {
       currentSegment = [coordinate];
-      segments.push(currentSegment);
+      segments.push({ coordinates: currentSegment, startIndex: index });
     } else {
       currentSegment.push(coordinate);
     }
   });
-  const linePaths = segments.map((segment) =>
+  const linePaths = segments.map(({ coordinates: segment }) =>
     segment
       .map(
         (coordinate, index) =>
@@ -164,9 +168,25 @@ function TemperatureAreaChart({
       .join(" "),
   );
   const areaPaths = segments.map(
-    (segment, index) =>
+    ({ coordinates: segment }, index) =>
       `${linePaths[index]} L ${segment[segment.length - 1].x.toFixed(2)} ${chartBottom} L ${segment[0].x.toFixed(2)} ${chartBottom} Z`,
   );
+  const temperatureTrendColors =
+    metric === "overview" ? hourlyTemperatureTrendColors(points) : [];
+  const trendStops = segments.flatMap(({ coordinates: segment, startIndex }) =>
+    segment.slice(0, -1).map((coordinate, index) => ({
+      offset: ((coordinate.x + segment[index + 1].x) / 2 / width) * 100,
+      color: temperatureTrendColors[startIndex + index],
+    })),
+  );
+  const overviewGradientStops = [
+    { offset: 0, color: temperatureTrendColors[0] },
+    ...trendStops,
+    {
+      offset: 100,
+      color: temperatureTrendColors[temperatureTrendColors.length - 1],
+    },
+  ];
 
   return (
     <svg
@@ -177,13 +197,50 @@ function TemperatureAreaChart({
       role="img"
       aria-label={`Hourly ${chartMetricLabel(metric)} trend`}
     >
-      <defs>
-        <linearGradient id={gradientId} x1="0" x2="1" y1="0" y2="0">
-          <stop offset="0%" stopColor={colors.start} />
-          <stop offset="52%" stopColor={colors.middle} />
-          <stop offset="100%" stopColor={colors.end} />
-        </linearGradient>
-      </defs>
+      {metric !== "overview" ? (
+        <defs>
+          <linearGradient id={gradientId} x1="0" x2="1" y1="0" y2="0">
+            <stop offset="0%" stopColor={colors.start} />
+            <stop offset="52%" stopColor={colors.middle} />
+            <stop offset="100%" stopColor={colors.end} />
+          </linearGradient>
+        </defs>
+      ) : (
+        <defs>
+          <linearGradient
+            id={`${gradientId}-line`}
+            gradientUnits="userSpaceOnUse"
+            x1={chartLeft}
+            x2={chartRight}
+            y1="0"
+            y2="0"
+          >
+            {overviewGradientStops.map(({ offset, color }, index) => (
+              <stop
+                key={`line-stop-${index}`}
+                offset={`${offset}%`}
+                stopColor={color?.line ?? colors.line}
+              />
+            ))}
+          </linearGradient>
+          <linearGradient
+            id={`${gradientId}-fill`}
+            gradientUnits="userSpaceOnUse"
+            x1={chartLeft}
+            x2={chartRight}
+            y1="0"
+            y2="0"
+          >
+            {overviewGradientStops.map(({ offset, color }, index) => (
+              <stop
+                key={`fill-stop-${index}`}
+                offset={`${offset}%`}
+                stopColor={color?.fill ?? colors.middle}
+              />
+            ))}
+          </linearGradient>
+        </defs>
+      )}
       {[
         chart.min,
         chart.min != null && chart.max != null
@@ -220,14 +277,20 @@ function TemperatureAreaChart({
         );
       })}
       {areaPaths.map((path, index) => (
-        <path key={`area-${index}`} d={path} fill={`url(#${gradientId})`} />
+        <path
+          key={`area-${index}`}
+          d={path}
+          fill={`url(#${metric === "overview" ? `${gradientId}-fill` : gradientId})`}
+        />
       ))}
       {linePaths.map((path, index) => (
         <path
           key={`line-${index}`}
           d={path}
           fill="none"
-          stroke={colors.line}
+          stroke={
+            metric === "overview" ? `url(#${gradientId}-line)` : colors.line
+          }
           strokeWidth="1.5"
         />
       ))}

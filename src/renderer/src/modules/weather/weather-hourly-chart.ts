@@ -10,6 +10,65 @@ export interface HourlyChartCoordinate {
   y: number;
 }
 
+export interface HourlyTemperatureTrendColor {
+  line: string;
+  fill: string;
+}
+
+const neutralTemperatureTrendColor: HourlyTemperatureTrendColor = {
+  line: "hsl(38 72% 58% / 0.9)",
+  fill: "hsl(38 72% 58% / 0.38)",
+};
+
+export function hourlyTemperatureTrendColors(
+  points: WeatherHourlyPoint[],
+): Array<HourlyTemperatureTrendColor | null> {
+  const temperatures = points.map((point) => point.temperature);
+  const coolingRange = Math.max(
+    1,
+    ...temperatures.flatMap((temperature, index) => {
+      const nextTemperature = temperatures[index + 1];
+      return temperature != null &&
+        Number.isFinite(temperature) &&
+        nextTemperature != null &&
+        Number.isFinite(nextTemperature) &&
+        nextTemperature < temperature
+        ? [temperature - nextTemperature]
+        : [];
+    }),
+  );
+
+  return temperatures.map((temperature, index) => {
+    const nextTemperature = temperatures[index + 1];
+    if (
+      temperature == null ||
+      !Number.isFinite(temperature) ||
+      nextTemperature == null ||
+      !Number.isFinite(nextTemperature)
+    ) {
+      return null;
+    }
+
+    const delta = nextTemperature - temperature;
+    if (delta >= 0) {
+      return delta === 0
+        ? neutralTemperatureTrendColor
+        : {
+            line: "hsl(38 92% 62% / 0.9)",
+            fill: "hsl(38 92% 60% / 0.46)",
+          };
+    }
+
+    const blueStrength = Math.min(1, Math.abs(delta) / coolingRange);
+    const lineOpacity = 0.72 + blueStrength * 0.18;
+    const fillOpacity = 0.24 + blueStrength * 0.18;
+    return {
+      line: `hsl(199 89% 55% / ${lineOpacity.toFixed(2)})`,
+      fill: `hsl(199 89% 55% / ${fillOpacity.toFixed(2)})`,
+    };
+  });
+}
+
 export function hourlyMetricValue(
   point: WeatherHourlyPoint,
   metric: HourlyChartMetric,

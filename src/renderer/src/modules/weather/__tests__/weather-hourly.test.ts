@@ -5,6 +5,7 @@ import {
   formatRainProbability,
   hourlyChartCoordinates,
   hourlyMetricValue,
+  hourlyTemperatureTrendColors,
 } from "../weather-hourly-chart";
 
 const point = (values: Partial<WeatherHourlyPoint>): WeatherHourlyPoint => ({
@@ -45,6 +46,38 @@ describe("hourly chart helpers", () => {
     expect(hourlyMetricValue(weatherPoint, "precipitation")).toBe(2);
     expect(hourlyMetricValue(weatherPoint, "wind")).toBe(14);
     expect(hourlyMetricValue(weatherPoint, "humidity")).toBe(71);
+  });
+
+  it("colors rising, falling, and flat temperature segments by trend", () => {
+    const colors = hourlyTemperatureTrendColors([
+      point({ temperature: 10 }),
+      point({ temperature: 12 }),
+      point({ temperature: 11 }),
+      point({ temperature: 11 }),
+      point({ temperature: 8 }),
+    ]);
+
+    expect(colors[0]?.line).toContain("hsl(38 92% 62% / 0.9)");
+      expect(colors[1]?.line).toBe("hsl(199 89% 55% / 0.78)");
+    expect(colors[2]).toEqual({
+      line: "hsl(38 72% 58% / 0.9)",
+      fill: "hsl(38 72% 58% / 0.38)",
+    });
+    expect(colors[3]?.line).toBe("hsl(199 89% 55% / 0.90)");
+    expect(colors[4]).toBeNull();
+  });
+
+  it("does not bridge unavailable temperatures and handles single points", () => {
+    const colors = hourlyTemperatureTrendColors([
+      point({ temperature: 8 }),
+      point({ temperature: null }),
+      point({ temperature: 14 }),
+    ]);
+
+    expect(colors).toEqual([null, null, null]);
+    expect(hourlyTemperatureTrendColors([point({ temperature: 8 })])).toEqual([
+      null,
+    ]);
   });
 
   it("keeps null values as gaps and produces finite coordinates", () => {
