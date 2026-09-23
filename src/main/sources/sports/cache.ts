@@ -122,6 +122,21 @@ function eventSortValue(event: SportEvent): number {
   return Number.isNaN(value) ? 0 : value;
 }
 
+export function getLastTeamEvents(
+  events: SportEvent[],
+  today: string,
+): SportEvent[] {
+  return events
+    .filter((event) => {
+      const eventLocalDate =
+        getSportEventLocalDateKey(event.eventDate, event.eventTime) ??
+        event.eventDate;
+      return eventLocalDate <= today && isFinalSportEvent(event);
+    })
+    .sort((a, b) => eventSortValue(b) - eventSortValue(a))
+    .slice(0, 5);
+}
+
 export function normalizeTeamLookupKey(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "");
 }
@@ -604,16 +619,7 @@ export function getTeamEvents(
     );
   };
 
-  const last = events
-    .filter((event) => {
-      const eventLocalDate = getEventLocalDate(event);
-      return (
-        eventLocalDate < today ||
-        (eventLocalDate === today && isFinalSportEvent(event))
-      );
-    })
-    .sort((a, b) => eventSortValue(b) - eventSortValue(a))
-    .slice(0, 5);
+  const last = getLastTeamEvents(events, today);
   const next = events
     .filter((event) => {
       const eventLocalDate = getEventLocalDate(event);
