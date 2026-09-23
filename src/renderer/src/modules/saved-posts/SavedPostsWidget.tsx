@@ -316,6 +316,8 @@ function SavedPostsWidget(): React.ReactElement {
     return () => window.cancelAnimationFrame(frame);
   }, [isEditing, loading, renderedRowCount]);
 
+  const handleAfterMutation = useCallback(async (): Promise<void> => {}, []);
+
   if (!staleness.loading && !staleness.topicConfigured) {
     return (
       <Card>
@@ -383,8 +385,6 @@ function SavedPostsWidget(): React.ReactElement {
         );
       });
   };
-
-  const handleAfterMutation = useCallback(async (): Promise<void> => {}, []);
 
   function handleOpenEdit(): void {
     const currentHeight =
