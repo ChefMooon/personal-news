@@ -1,93 +1,110 @@
-import { mkdir, writeFile } from "node:fs/promises";
 import { setTimeout as delay } from "node:timers/promises";
-import { spawn } from "node:child_process";
-import { chromium } from "playwright";
+import { runElectronHarness } from "./electron-playwright-harness.mjs";
 
-const DEBUG_PORT = 9222;
-const DEBUG_URL = `http://127.0.0.1:${DEBUG_PORT}`;
-const ARTIFACT_DIR = "artifacts/dashboard-drag";
-const DEV_COMMAND = process.platform === "win32" ? "npm.cmd" : "npm";
+function createLayout(prefix, count) {
+  const moduleIds = ["youtube", "reddit_digest", "saved_posts"];
+  const widgetOrder = Array.from(
+    { length: count },
+    (_, index) => `${prefix}_${index + 1}`,
+  );
+  const widgetInstances = Object.fromEntries(
+    widgetOrder.map((instanceId, index) => [
+      instanceId,
+      {
+        instanceId,
+        moduleId: moduleIds[index % moduleIds.length],
+        label: null,
+        size: "large",
+      },
+    ]),
+  );
+  const widgetVisibility = Object.fromEntries(
+    widgetOrder.map((instanceId) => [instanceId, true]),
+  );
+  const widgetGeometry = Object.fromEntries(
+    widgetOrder.map((instanceId, index) => [
+      instanceId,
+      { x: 0, y: index * 12, w: 12, h: 12 },
+    ]),
+  );
 
-const logs = [];
-let devProcess;
-let browser;
-let initialDashboardState;
-
-function record(type, message) {
-  logs.push({ type, message, timestamp: new Date().toISOString() });
-  console.log(`[${type}] ${message}`);
+  return {
+    layout_version: 2,
+    widget_order: widgetOrder,
+    widget_visibility: widgetVisibility,
+    widget_instances: widgetInstances,
+    widget_geometry: widgetGeometry,
+  };
 }
 
-async function connectToDevTools(timeoutMs = 30000) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    try {
-      return await chromium.connectOverCDP(DEBUG_URL);
-    } catch {
-      await delay(250);
-    }
-  }
-  throw new Error(`Electron remote debugging did not open on ${DEBUG_URL}`);
-}
-
-async function stopDevProcess() {
-  if (!devProcess?.pid) {
-    return;
-  }
-
-  if (process.platform === "win32") {
-    spawn("taskkill", ["/pid", String(devProcess.pid), "/t", "/f"], {
-      stdio: "ignore",
-    });
-    return;
-  }
-
-  devProcess.kill("SIGTERM");
-}
-
-async function main() {
-  await mkdir(ARTIFACT_DIR, { recursive: true });
-
-  devProcess = spawn(DEV_COMMAND, ["run", "dev"], {
-    env: {
-      ...process.env,
-      ELECTRON_REMOTE_DEBUGGING_PORT: String(DEBUG_PORT),
+function createDashboardFixture() {
+  const sourceId = "dashboard_harness_source";
+  const targetId = "dashboard_harness_target";
+  return {
+    view_order: [sourceId, targetId],
+    views: {
+      [sourceId]: {
+        id: sourceId,
+        name: "Harness Source",
+        icon: "layout",
+        layout: createLayout("harness_source_widget", 8),
+      },
+      [targetId]: {
+        id: targetId,
+        name: "Harness Target",
+        icon: "star",
+        layout: createLayout("harness_target_widget", 4),
+      },
     },
-    stdio: ["ignore", "pipe", "pipe"],
-    shell: process.platform === "win32",
-    windowsHide: true,
+  };
+}
+
+async function seedDashboardFixture(page, addCleanup) {
+  const originalState = await page.evaluate(() =>
+    window.api.invoke("settings:getDashboardViews"),
+  );
+  addCleanup(async () => {
+    await page.evaluate(
+      async (state) =>
+        window.api.invoke("settings:setDashboardViews", { state }),
+      originalState,
+    );
   });
 
-  devProcess.stdout.on("data", (chunk) => {
-    record("electron", chunk.toString().trim());
-  });
-  devProcess.stderr.on("data", (chunk) => {
-    record("electron-error", chunk.toString().trim());
-  });
-
-  browser = await connectToDevTools();
-  const context = browser.contexts()[0];
-  const page = context.pages()[0];
-  if (!page) {
-    throw new Error("Electron opened without a renderer page");
+  const fixture = createDashboardFixture();
+  await page.evaluate(
+    async (state) => window.api.invoke("settings:setDashboardViews", { state }),
+    fixture,
+  );
+  const seededState = await page.evaluate(() =>
+    window.api.invoke("settings:getDashboardViews"),
+  );
+  if (
+    seededState.view_order.length < 2 ||
+    seededState.views[seededState.view_order[0]]?.layout.widget_order.length <
+      6 ||
+    seededState.views[seededState.view_order[1]]?.layout.widget_order.length < 2
+  ) {
+    throw new Error(
+      "Dashboard fixture setup did not persist two populated views",
+    );
   }
+  await page.reload();
+  await page.locator("[data-dashboard-tab-id]").nth(1).waitFor({
+    state: "visible",
+    timeout: 10_000,
+  });
+}
 
-  page.on("console", (message) => {
-    record(`page-console:${message.type()}`, message.text());
-  });
-  page.on("pageerror", (error) => {
-    record("page-error", error.stack ?? error.message);
-  });
-
-  initialDashboardState = await page.evaluate(async () => {
-    return window.api.invoke("settings:getDashboardViews");
-  });
+async function runDashboardDragScenario({ page, addCleanup, record }) {
+  await seedDashboardFixture(page, addCleanup);
 
   const dashboardTabs = page.locator("[data-dashboard-tab-id]");
   let selectedDashboardTabIndex = 0;
   let selectedDashboardViewId = await dashboardTabs
     .first()
     .getAttribute("data-dashboard-tab-id");
+
   for (
     let tabIndex = 0;
     tabIndex < (await dashboardTabs.count());
@@ -95,12 +112,13 @@ async function main() {
   ) {
     const tab = dashboardTabs.nth(tabIndex);
     await tab.click();
+    const expectedId = await tab.getAttribute("data-dashboard-tab-id");
     await page.waitForFunction(
-      (expectedId) =>
+      (viewId) =>
         document
-          .querySelector(`[data-dashboard-tab-id="${expectedId}"]`)
+          .querySelector(`[data-dashboard-tab-id="${viewId}"]`)
           ?.getAttribute("data-state") === "active",
-      await tab.getAttribute("data-dashboard-tab-id"),
+      expectedId,
     );
     const metrics = await page.locator("main").evaluate((element) => ({
       clientHeight: element.clientHeight,
@@ -108,7 +126,7 @@ async function main() {
     }));
     if (metrics.scrollHeight > metrics.clientHeight) {
       selectedDashboardTabIndex = tabIndex;
-      selectedDashboardViewId = await tab.getAttribute("data-dashboard-tab-id");
+      selectedDashboardViewId = expectedId;
       break;
     }
   }
@@ -118,16 +136,15 @@ async function main() {
   }
   await page.getByRole("button", { name: "Edit Layout" }).click();
   const grip = page.getByRole("button", { name: "Drag widget" }).first();
-  await grip.waitFor({ state: "visible", timeout: 10000 });
+  await grip.waitFor({ state: "visible", timeout: 10_000 });
   const activeTab = page.locator(
     '[data-dashboard-tab-id][data-state="active"]',
   );
   await activeTab.focus();
   await page.keyboard.press("Tab");
-  const firstWidgetFocus = await page.evaluate(() => {
-    const active = document.activeElement;
-    return active?.getAttribute("data-widget-instance-id");
-  });
+  const firstWidgetFocus = await page.evaluate(() =>
+    document.activeElement?.getAttribute("data-widget-instance-id"),
+  );
   const firstWidgetId = await page
     .locator("[data-widget-instance-id]")
     .first()
@@ -180,14 +197,11 @@ async function main() {
       "The RGL container does not have a measurable bounding box",
     );
   }
-  const selectedGrip = grip;
+  const selectedIndex = 0;
   const selectedGridItem = grip.locator(
     "xpath=ancestor::*[contains(@class, 'react-grid-item')][1]",
   );
-  const selectedIndex = 0;
-  await selectedGrip.waitFor({ state: "visible", timeout: 5000 });
-  const gridItem = selectedGridItem;
-  await gridItem.scrollIntoViewIfNeeded();
+  await selectedGridItem.scrollIntoViewIfNeeded();
   const main = page.locator("main");
   const scrollMetrics = await main.evaluate((element) => ({
     clientHeight: element.clientHeight,
@@ -201,23 +215,19 @@ async function main() {
       (element.scrollHeight - element.clientHeight) / 2,
     );
   });
-  await gridItem.scrollIntoViewIfNeeded();
-  const before = await gridItem.boundingBox();
+  await selectedGridItem.scrollIntoViewIfNeeded();
+  const before = await selectedGridItem.boundingBox();
   if (!before) {
-    throw new Error(
-      "The first widget does not have a measurable RGL grid item bounding box",
-    );
+    throw new Error("The first widget does not have a measurable bounding box");
   }
 
-  const start = await selectedGrip.boundingBox();
+  const start = await grip.boundingBox();
   if (!start) {
-    throw new Error(
-      "The first widget drag grip does not have a measurable bounding box",
-    );
+    throw new Error("The first widget drag grip does not have a bounding box");
   }
-  const stateBefore = await page.evaluate(async () => {
-    return window.api.invoke("settings:getDashboardViews");
-  });
+  const stateBefore = await page.evaluate(() =>
+    window.api.invoke("settings:getDashboardViews"),
+  );
   const activeViewBefore = stateBefore.views[selectedDashboardViewId];
   const instanceId = activeViewBefore.layout.widget_order[selectedIndex];
   const canonicalYBefore =
@@ -225,12 +235,12 @@ async function main() {
 
   const targetX = start.x + start.width / 2;
   const targetY = start.y + start.height / 2 + 200;
-  await selectedGrip.hover();
+  await grip.hover();
   await page.mouse.down();
   record(
     "drag-probe-after-down",
     JSON.stringify(
-      await selectedGrip.evaluate((element) => ({
+      await grip.evaluate((element) => ({
         pointerId: window.__dashboardDragPointerId ?? null,
         hasPointerCapture:
           window.__dashboardDragPointerId == null
@@ -256,19 +266,19 @@ async function main() {
   await delay(500);
   const scrollAfterTop = await main.evaluate((element) => element.scrollTop);
   await page.mouse.move(targetX, mainBox.y + mainBox.height - 10, { steps: 4 });
-  await delay(500);
   const scrollBeforeFinalBottom = await main.evaluate(
     (element) => element.scrollTop,
   );
   await page.mouse.wheel(0, 180);
   await delay(200);
-  const pointerCaptureDuring = await selectedGrip.evaluate((element) =>
+  const pointerCaptureDuring = await grip.evaluate((element) =>
     element.hasPointerCapture(window.__dashboardDragPointerId),
   );
+  const during = await selectedGridItem.boundingBox();
   record(
     "drag-probe-during",
     JSON.stringify(
-      await selectedGrip.evaluate((element) => ({
+      await grip.evaluate((element) => ({
         pointerId: window.__dashboardDragPointerId ?? null,
         hasPointerCapture:
           window.__dashboardDragPointerId == null
@@ -276,16 +286,6 @@ async function main() {
             : element.hasPointerCapture(window.__dashboardDragPointerId),
         events: window.__dashboardDragEvents,
       })),
-    ),
-  );
-  const during = await gridItem.boundingBox();
-  record(
-    "dom-state-during",
-    await gridItem.evaluate((element) =>
-      JSON.stringify({
-        className: element.className,
-        style: element.getAttribute("style"),
-      }),
     ),
   );
   record(
@@ -300,53 +300,43 @@ async function main() {
   );
   await page.mouse.up();
   await delay(1500);
-  const after = await gridItem.boundingBox();
-  const persistedState = await page.evaluate(async () => {
-    const result = await window.api.invoke("settings:getDashboardViews");
-    return result;
-  });
+  const after = await selectedGridItem.boundingBox();
+  const persistedState = await page.evaluate(() =>
+    window.api.invoke("settings:getDashboardViews"),
+  );
   record("persisted-state", JSON.stringify(persistedState));
-  const movedAfterReload = await (async () => {
-    await page.reload();
-    const reloadedSourceTab = page.locator(
-      `[data-dashboard-tab-id="${selectedDashboardViewId}"]`,
-    );
-    await reloadedSourceTab.click();
-    await page.waitForFunction(
-      (expectedId) =>
-        document
-          .querySelector(`[data-dashboard-tab-id="${expectedId}"]`)
-          ?.getAttribute("data-state") === "active",
-      selectedDashboardViewId,
-    );
-    await page.getByRole("button", { name: "Edit Layout" }).click();
-    const reloadedGrip = page
-      .getByRole("button", { name: "Drag widget" })
-      .nth(selectedIndex);
-    await reloadedGrip.waitFor({ state: "visible", timeout: 10000 });
-    const reloadedItem = reloadedGrip.locator(
-      "xpath=ancestor::*[contains(@class, 'react-grid-item')][1]",
-    );
-    const reloaded = await reloadedItem.boundingBox();
-    const reloadedDocumentY = reloaded
-      ? reloaded.y + (await page.evaluate(() => window.scrollY))
-      : null;
-    record(
-      "reload-measurement",
-      JSON.stringify({ reloaded, reloadedDocumentY }),
-    );
-    const stateAfter = await page.evaluate(async () => {
-      return window.api.invoke("settings:getDashboardViews");
-    });
-    const activeViewAfter = stateAfter.views[selectedDashboardViewId];
-    const canonicalYAfter =
-      activeViewAfter.layout.widget_geometry[instanceId].y;
-    record(
-      "canonical-measurement",
-      JSON.stringify({ canonicalYBefore, canonicalYAfter }),
-    );
-    return canonicalYAfter !== canonicalYBefore;
-  })();
+  await page.reload();
+  const reloadedSourceTab = page.locator(
+    `[data-dashboard-tab-id="${selectedDashboardViewId}"]`,
+  );
+  await reloadedSourceTab.click();
+  await page.waitForFunction(
+    (expectedId) =>
+      document
+        .querySelector(`[data-dashboard-tab-id="${expectedId}"]`)
+        ?.getAttribute("data-state") === "active",
+    selectedDashboardViewId,
+  );
+  await page.getByRole("button", { name: "Edit Layout" }).click();
+  const reloadedGrip = page
+    .getByRole("button", { name: "Drag widget" })
+    .nth(selectedIndex);
+  await reloadedGrip.waitFor({ state: "visible", timeout: 10_000 });
+  const reloadedItem = reloadedGrip.locator(
+    "xpath=ancestor::*[contains(@class, 'react-grid-item')][1]",
+  );
+  const reloaded = await reloadedItem.boundingBox();
+  const reloadedDocumentY = reloaded
+    ? reloaded.y + (await page.evaluate(() => window.scrollY))
+    : null;
+  record("reload-measurement", JSON.stringify({ reloaded, reloadedDocumentY }));
+  const stateAfter = await page.evaluate(() =>
+    window.api.invoke("settings:getDashboardViews"),
+  );
+  const canonicalYAfter =
+    stateAfter.views[selectedDashboardViewId].layout.widget_geometry[instanceId]
+      .y;
+  const movedAfterReload = canonicalYAfter !== canonicalYBefore;
 
   const movedDuringDrag =
     during && (during.x !== before.x || during.y !== before.y);
@@ -370,9 +360,9 @@ async function main() {
   );
   await page.mouse.up();
   await delay(1000);
-  const transferState = await page.evaluate(async () => {
-    return window.api.invoke("settings:getDashboardViews");
-  });
+  const transferState = await page.evaluate(() =>
+    window.api.invoke("settings:getDashboardViews"),
+  );
   const sourceView = transferState.views[selectedDashboardViewId];
   const targetViewId = await dashboardTabs
     .nth(targetDashboardTabIndex)
@@ -403,13 +393,6 @@ async function main() {
     }),
   );
 
-  const pageErrors = logs.filter((entry) => entry.type === "page-error");
-  if (pageErrors.length > 0) {
-    throw new Error(
-      `Renderer errors occurred during drag: ${JSON.stringify(pageErrors)}`,
-    );
-  }
-
   if (
     !movedDuringDrag ||
     !movedAfterReload ||
@@ -422,51 +405,17 @@ async function main() {
       "Dashboard drag, persistence, wheel handling, and transfer did not all pass",
     );
   }
-
-  console.log("Dashboard drag harness passed");
 }
 
 try {
-  await main();
+  const result = await runElectronHarness({
+    name: "dashboard-drag",
+    scenario: runDashboardDragScenario,
+  });
+  console.log(`Dashboard drag harness passed; artifacts: ${result.artifacts}`);
 } catch (error) {
-  record(
-    "failure",
-    error instanceof Error ? (error.stack ?? error.message) : String(error),
+  console.error(
+    error instanceof Error ? (error.stack ?? error.message) : error,
   );
-  const page = browser?.contexts()[0]?.pages()[0];
-  if (page) {
-    try {
-      await page.screenshot({
-        path: `${ARTIFACT_DIR}/failure.png`,
-        fullPage: true,
-      });
-    } catch (screenshotError) {
-      record(
-        "screenshot-error",
-        screenshotError instanceof Error
-          ? screenshotError.message
-          : String(screenshotError),
-      );
-    }
-  }
-  await writeFile(`${ARTIFACT_DIR}/run.json`, JSON.stringify(logs, null, 2));
   process.exitCode = 1;
-} finally {
-  const page = browser?.contexts()[0]?.pages()[0];
-  if (page && initialDashboardState) {
-    try {
-      await page.evaluate(async (state) => {
-        await window.api.invoke("settings:setDashboardViews", { state });
-      }, initialDashboardState);
-    } catch (restoreError) {
-      record(
-        "restore-error",
-        restoreError instanceof Error
-          ? restoreError.message
-          : String(restoreError),
-      );
-    }
-  }
-  await browser?.close();
-  await stopDevProcess();
 }

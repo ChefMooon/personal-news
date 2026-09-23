@@ -21,6 +21,7 @@ import {
   type ScriptStartupWarning,
 } from "./scheduler";
 import { deleteSetting, getSetting, setSetting } from "../../settings/store";
+import { isElectronHarnessRun } from "../../harness-mode";
 import {
   notifyRedditDigest,
   notifyScriptAutoRun,
@@ -757,6 +758,12 @@ export const ScriptManagerModule: DataSourceModule = {
   id: "scripts",
   displayName: "Script Manager",
   initialize(db: Database.Database): void {
+    if (isElectronHarnessRun()) {
+      console.log(
+        "[Scripts] User script loading disabled in the Electron harness",
+      );
+      return;
+    }
     ensureBundledRedditDigestScript(db);
     syncScriptsFromHomeDir(db);
     scheduler.initialize(

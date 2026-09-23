@@ -194,17 +194,19 @@ All renderer-to-main communication uses `invoke` (request/response). All main-to
 
 ## 6. Storage Locations
 
-| Data | Location | Notes |
+| Mode/data | Location | Notes |
 |------|----------|-------|
-| SQLite database | `{userData}/data.db` | All structured app data |
+| Packaged production SQLite database | Existing Electron `{userData}/data.db` (Windows: `%APPDATA%\Personal News\data.db`) | Production's existing profile and database path are unchanged |
+| Development and preview SQLite database | `{appData}/<appName> Development/data.db` | Shared persistently by `npm run dev` and `npm run start`; only one may hold the shared single-instance lock at a time |
+| Harness profile and database | Unique OS temporary root containing `user-data/` and `harness.db` | Disposable per Playwright run |
+| Harness diagnostics | `artifacts/electron-harness/<scenario>-<uuid>/` | Outside the disposable profile; retains run logs and available failure screenshots |
 | YouTube API key | `safeStorage` encrypted blob, stored alongside app config | Never in SQLite |
 | Migration files | `src/main/db/migrations/*.sql` | Bundled with app |
 | Bundled scripts | `resources/scripts/` | Reddit digest default script |
 
-`{userData}` resolves to:
-- Windows: `%APPDATA%\personal-news\`
-- macOS: `~/Library/Application Support/personal-news/`
-- Linux: `~/.config/personal-news/`
+`PERSONAL_NEWS_DB_PATH` overrides the database file, not the selected profile. Packaged smoke verification sets it to a disposable database. Unpackaged development and harness startup reject a database path that resolves to the protected production file before opening SQLite; harness paths must also remain within that run's temporary root and outside the persistent development profile. Do not use production data for tests.
+
+The harness enables CDP only for an explicit unpackaged harness launch and binds it to `127.0.0.1` with a run-specific port and ownership token. Harness mode suppresses automatic source polling and user-script startup; normal development and packaged behavior are unchanged. See [the harness authoring guide](../../scripts/PLAYWRIGHT-HARNESS.md).
 
 ---
 

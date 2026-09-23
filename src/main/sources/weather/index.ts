@@ -15,6 +15,7 @@ import type {
   WeatherStatus,
 } from "../../../shared/ipc-types";
 import { getSetting, setSetting } from "../../settings/store";
+import { isElectronHarnessRun } from "../../harness-mode";
 import { notifyWeatherAlerts } from "../../notifications/notification-service";
 import type { DataSourceModule } from "../registry";
 import {
@@ -893,10 +894,16 @@ export const WeatherModule: DataSourceModule = {
   displayName: "Weather",
   initialize(db: Database.Database): void {
     dbRef = db;
-    schedulePolling();
+    if (!isElectronHarnessRun()) {
+      schedulePolling();
+    }
   },
   start(): void {
-    if (isWeatherEnabled() && listLocations().length > 0) {
+    if (
+      !isElectronHarnessRun() &&
+      isWeatherEnabled() &&
+      listLocations().length > 0
+    ) {
       void triggerWeatherRefresh().catch((error) => {
         console.error("[Weather] Initial refresh failed:", error);
       });

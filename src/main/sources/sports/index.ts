@@ -25,6 +25,7 @@ import {
   type SupportedSport,
 } from "../../../shared/sports";
 import { getSetting, setSetting } from "../../settings/store";
+import { isElectronHarnessRun } from "../../harness-mode";
 import type { DataSourceModule } from "../registry";
 import {
   fetchEventById,
@@ -1109,6 +1110,11 @@ export const SportsModule: DataSourceModule = {
   displayName: "Sports",
   initialize(db: Database.Database): void {
     dbRef = db;
+
+    if (isElectronHarnessRun()) {
+      console.log("[Sports] Startup polling disabled in the Electron harness");
+      return;
+    }
 
     if (!isSportsEnabled()) {
       return;

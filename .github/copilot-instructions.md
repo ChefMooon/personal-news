@@ -86,6 +86,15 @@ Do not bypass these boundaries:
 - Persist app settings using key/value JSON strings in settings table and parse/stringify at IPC boundary.
 - Follow migration style in src/main/db/database.ts: schema version check and transactional migration execution.
 
+### App Profiles and Interactive UI Tests
+
+- Packaged production keeps its existing Electron `userData` profile and `{userData}/data.db`. Do not point tests or development at production data.
+- `npm run dev` and `npm run start` share the persistent `{appData}/<appName> Development` profile and its `data.db`; they are mutually exclusive because they share Electron's single-instance lock. Either can run alongside packaged production.
+- Use `npm run test:dashboard-drag` for the existing interactive dashboard scenario. For task-specific real-UI scenarios, follow [scripts/PLAYWRIGHT-HARNESS.md](../scripts/PLAYWRIGHT-HARNESS.md): use semantic Playwright locators for user interactions and IPC only for deterministic setup or state observation.
+- The harness creates a unique temporary profile/database for each run and stores diagnostics under `artifacts/electron-harness/<scenario>-<uuid>/`; failure screenshots are captured when a renderer page is available. The runner removes the temporary profile only after confirming the Electron process tree exited; on termination failure it reports and preserves the profile.
+- The harness alone enables CDP on `127.0.0.1` and suppresses automatic source polling and user-script startup. Do not add remote debugging or harness suppression to normal launches.
+- `PERSONAL_NEWS_DB_PATH` is an explicit database override. Packaged smoke verification sets it to a disposable database; dev/harness reject a path that resolves to the protected production database before SQLite opens. Do not use the live production database for tests or writes; harness scripts should use the runner-provided profile and database.
+
 ### Renderer Composition Pattern
 
 - Route composition is in App.tsx with React Router routes.

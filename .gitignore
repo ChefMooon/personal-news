@@ -17,6 +17,9 @@ out/
 # electron-builder artifacts
 release/
 
+# electron playwright harness
+artifacts/
+
 # Environment / secrets
 .env
 .env.*

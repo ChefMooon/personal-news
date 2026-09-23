@@ -4,6 +4,7 @@ import cron, { type ScheduledTask } from "node-cron";
 import { IPC, type NtfyIngestCompleteEvent } from "../../../shared/ipc-types";
 import type { DataSourceModule } from "../registry";
 import { getSetting } from "../../settings/store";
+import { isElectronHarnessRun } from "../../harness-mode";
 import { pollNtfy } from "./ntfy";
 import { notifySavedPostsSync } from "../../notifications/notification-service";
 
@@ -109,6 +110,10 @@ export const RedditModule: DataSourceModule = {
   initialize(db: Database.Database): void {
     dbRef = db;
     console.log("[Reddit] Module initialized");
+    if (isElectronHarnessRun()) {
+      console.log("[Reddit] Startup polling disabled in the Electron harness");
+      return;
+    }
 
     // Check if Saved Posts feature is enabled
     const savedPostsEnabled = getSetting("saved_posts_enabled") !== "false";

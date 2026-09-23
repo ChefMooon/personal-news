@@ -32,6 +32,45 @@ If you cloned this repo fresh and just run `npm install` and it succeeds without
 npm run dev
 ```
 
+## App Data Profiles and UI Harness
+
+The installed, packaged app continues to use its existing Electron `userData`
+profile and `{userData}/data.db` (on Windows,
+`%APPDATA%\Personal News\data.db`). `npm run dev` and `npm run start` use the
+same persistent development profile at
+`{appData}/<appName> Development/data.db` (on Windows,
+`%APPDATA%\Personal News Development\data.db`). They are mutually exclusive:
+starting one while the other holds the shared single-instance lock focuses that
+instance. Either development mode can run alongside packaged production.
+
+Use the isolated interactive scenario with:
+
+```bash
+npm run test:dashboard-drag
+```
+
+Each harness run gets a unique OS temporary root containing its own Electron
+`user-data/` profile and `harness.db`; it does not reuse development or
+production data. Run logs and available failure screenshots are kept outside
+that temporary profile under
+`artifacts/electron-harness/<scenario>-<uuid>/`. The runner removes the profile
+only after confirming the Electron process tree has exited. If termination
+cannot be confirmed, it fails and preserves the profile. To author another
+scenario, use the Playwright pattern in
+[`scripts/PLAYWRIGHT-HARNESS.md`](../scripts/PLAYWRIGHT-HARNESS.md).
+
+`PERSONAL_NEWS_DB_PATH` explicitly overrides the database file. Packaged mode
+supports this override for isolated smoke tests; dev and harness reject a
+resolved path that aliases the protected production database before SQLite
+opens. Harness mode also requires the selected profile and database to be
+inside its unique temporary root. Do not point tests at the live production
+database or use it for test writes.
+
+Harness-only CDP is bound to `127.0.0.1`; packaged production ignores the
+harness debugging configuration. Harness mode suppresses automatic source
+polling and user-script startup so scenarios do not rely on live credentials or
+uncontrolled polling. Normal dev/preview and packaged startup are unchanged.
+
 ## Build Windows Installer
 
 ```bash

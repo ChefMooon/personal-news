@@ -109,12 +109,17 @@ Video IDs are the primary key in `yt_videos`. An upsert on video ID prevents dup
 
 ### 4.1 Database
 
-**better-sqlite3** with a single SQLite file stored in the Electron user data directory:
-```
-Windows:  %APPDATA%\personal-news\data.db
-macOS:    ~/Library/Application Support/personal-news/data.db
-Linux:    ~/.config/personal-news/data.db
-```
+**better-sqlite3** stores one SQLite file per app profile. Packaged production retains its existing Electron `userData` path; development and preview use a separate persistent profile; interactive harness runs use a disposable profile and database.
+
+| Mode | Profile and database | Lifetime |
+|------|----------------------|----------|
+| Packaged production | Existing Electron `{userData}/data.db` (Windows: `%APPDATA%\Personal News\data.db`) | Persistent; its path is unchanged |
+| `npm run dev` and `npm run start` | `{appData}/<appName> Development/data.db` (Windows: `%APPDATA%\Personal News Development\data.db`) | Persistent and shared by both commands; run only one at a time because they share the profile and single-instance lock |
+| Playwright harness | Unique OS temporary root, with `user-data/` and `harness.db` beneath it | Disposable per run; diagnostics are retained separately under `artifacts/electron-harness/<scenario>-<uuid>/` |
+
+The `PERSONAL_NEWS_DB_PATH` environment variable explicitly overrides the database file without changing the selected profile. Packaged startup permits an explicit override (the Windows smoke test supplies a disposable path and temporary `APPDATA`). Unpackaged development and harness startup fail before SQLite opens if the resolved file aliases the protected production database; the harness additionally requires its profile and database to be contained in that run's temporary root and rejects development-profile paths. Do not use the production database for test writes.
+
+Harness cleanup waits for confirmed Electron process-tree exit before removing its temporary profile. If termination cannot be confirmed, the runner reports the error and preserves the profile; run logs and available failure screenshots remain in the run's artifact directory. See [the harness authoring guide](../scripts/PLAYWRIGHT-HARNESS.md).
 
 The v1.0.0 baseline schema is defined in `src/main/db/migrations/001_initial.sql`. On startup, the app applies that baseline if needed and records schema version `1` in `meta`.
 

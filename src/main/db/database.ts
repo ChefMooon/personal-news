@@ -3,16 +3,22 @@ import { app } from "electron";
 import { join } from "path";
 import { existsSync, mkdirSync, readFileSync } from "fs";
 import { ensureRequiredSchemaMigrations } from "./schema";
+import { resolveDatabaseProfile } from "./database-profile";
 
 let db: Database.Database;
 
 export function resolveDatabasePath(): string {
-  const overridePath = process.env.PERSONAL_NEWS_DB_PATH?.trim();
-  if (overridePath) {
-    return overridePath;
-  }
-
-  return join(app.getPath("userData"), "data.db");
+  return resolveDatabaseProfile({
+    isPackaged: app.isPackaged,
+    currentUserDataPath: app.getPath("userData"),
+    appDataPath: app.getPath("appData"),
+    appName: app.getName(),
+    databasePathOverride: process.env.PERSONAL_NEWS_DB_PATH,
+    harnessMode:
+      !app.isPackaged && process.env.PERSONAL_NEWS_ELECTRON_HARNESS === "1",
+    harnessRootPath: process.env.PERSONAL_NEWS_HARNESS_ROOT,
+    harnessUserDataPath: process.env.PERSONAL_NEWS_HARNESS_USER_DATA,
+  }).databasePath;
 }
 
 export function getDb(): Database.Database {

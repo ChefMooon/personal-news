@@ -9,6 +9,7 @@ import {
   type AstronomyStatus,
 } from "../../../shared/ipc-types";
 import { getSetting, setSetting } from "../../settings/store";
+import { isElectronHarnessRun } from "../../harness-mode";
 import type { DataSourceModule } from "../registry";
 import { listWeatherLocationsWithDb } from "../weather/locations";
 export { localDayIntervalUtc } from "./time";
@@ -264,6 +265,9 @@ export const AstronomyModule: DataSourceModule = {
     shuttingDown = false;
   },
   start(): void {
+    if (isElectronHarnessRun()) {
+      return;
+    }
     schedulePolling();
     if (isAstronomyEnabled() && listWeatherLocations().length > 0) {
       void triggerAstronomyRefresh().catch((error) => {

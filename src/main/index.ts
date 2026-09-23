@@ -26,6 +26,10 @@ import { SportsModule } from "./sources/sports/index";
 import { attachWindowListeners } from "./notifications/notification-service";
 import { getSetting, setSetting } from "./settings/store";
 import { initializeAutoUpdates } from "./updates/service";
+import {
+  DatabaseProfileError,
+  resolveDatabaseProfile,
+} from "./db/database-profile";
 
 let tray: Tray | null = null;
 let mainWindowRef: BrowserWindow | null = null;
@@ -35,7 +39,61 @@ let persistWindowBoundsTimer: ReturnType<typeof setTimeout> | null = null;
 
 const SMOKE_TEST_FLAG = "--smoke-test";
 const SMOKE_TEST_OUTPUT_FLAG = "--smoke-output";
-const REMOTE_DEBUGGING_PORT_ENV = "ELECTRON_REMOTE_DEBUGGING_PORT";
+const HARNESS_MODE_ENV = "PERSONAL_NEWS_ELECTRON_HARNESS";
+const HARNESS_ROOT_ENV = "PERSONAL_NEWS_HARNESS_ROOT";
+const HARNESS_USER_DATA_ENV = "PERSONAL_NEWS_HARNESS_USER_DATA";
+const HARNESS_SESSION_ENV = "PERSONAL_NEWS_HARNESS_SESSION";
+const HARNESS_CDP_PORT_ENV = "PERSONAL_NEWS_HARNESS_CDP_PORT";
+
+let profileSelectionError: string | null = null;
+try {
+  const harnessMode = !app.isPackaged && process.env[HARNESS_MODE_ENV] === "1";
+  const profile = resolveDatabaseProfile({
+    isPackaged: app.isPackaged,
+    currentUserDataPath: app.getPath("userData"),
+    appDataPath: app.getPath("appData"),
+    appName: app.getName(),
+    databasePathOverride: process.env.PERSONAL_NEWS_DB_PATH,
+    harnessMode,
+    harnessRootPath: process.env[HARNESS_ROOT_ENV],
+    harnessUserDataPath: process.env[HARNESS_USER_DATA_ENV],
+  });
+  if (!app.isPackaged) {
+    app.setPath("userData", profile.userDataPath);
+  }
+  if (harnessMode) {
+    const sessionToken = process.env[HARNESS_SESSION_ENV]?.trim();
+    const harnessPort = Number.parseInt(
+      process.env[HARNESS_CDP_PORT_ENV] ?? "",
+      10,
+    );
+    if (
+      !sessionToken ||
+      !Number.isInteger(harnessPort) ||
+      harnessPort < 1 ||
+      harnessPort > 65535
+    ) {
+      throw new DatabaseProfileError(
+        "The isolated Electron harness requires a session token and loopback CDP port.",
+      );
+    }
+    writeFileSync(
+      join(process.env[HARNESS_ROOT_ENV]!, ".harness-session.json"),
+      JSON.stringify({
+        sessionToken,
+        processId: process.pid,
+        userDataPath: app.getPath("userData"),
+        databasePath: profile.databasePath,
+      }),
+      "utf-8",
+    );
+  }
+} catch (error) {
+  profileSelectionError =
+    error instanceof DatabaseProfileError
+      ? error.message
+      : "Unable to safely select the application data profile.";
+}
 
 type SmokeReportPayload = {
   ok: boolean;
@@ -70,8 +128,13 @@ function getDesktopPlatform(): "darwin" | "win32" | "linux" {
 }
 
 function configureRemoteDebugging(): void {
-  const rawPort = process.env[REMOTE_DEBUGGING_PORT_ENV];
-  if (!rawPort) {
+  if (app.isPackaged || process.env[HARNESS_MODE_ENV] !== "1") {
+    return;
+  }
+
+  const rawPort = process.env[HARNESS_CDP_PORT_ENV];
+  const sessionToken = process.env[HARNESS_SESSION_ENV]?.trim();
+  if (!rawPort || !sessionToken || profileSelectionError) {
     return;
   }
 
@@ -82,8 +145,14 @@ function configureRemoteDebugging(): void {
   }
 
   app.commandLine.appendSwitch("remote-debugging-port", String(port));
-  app.commandLine.appendSwitch("remote-allow-origins", "*");
-  console.log(`[Debug] Remote debugging enabled on port ${port}`);
+  app.commandLine.appendSwitch("remote-debugging-address", "127.0.0.1");
+  app.commandLine.appendSwitch(
+    "remote-allow-origins",
+    `http://127.0.0.1:${port}`,
+  );
+  console.log(
+    `[Debug] Harness remote debugging enabled on loopback port ${port}`,
+  );
 }
 
 function isSmokeTestRun(): boolean {
@@ -563,9 +632,24 @@ function createWindow(): BrowserWindow {
   });
 
   if (is.dev && process.env["ELECTRON_RENDERER_URL"]) {
-    mainWindow.loadURL(process.env["ELECTRON_RENDERER_URL"]);
+    const rendererUrl = new URL(process.env["ELECTRON_RENDERER_URL"]);
+    if (!app.isPackaged && process.env[HARNESS_MODE_ENV] === "1") {
+      rendererUrl.searchParams.set(
+        "electronHarnessSession",
+        process.env[HARNESS_SESSION_ENV] ?? "",
+      );
+    }
+    mainWindow.loadURL(rendererUrl.toString());
   } else {
-    mainWindow.loadFile(join(__dirname, "../renderer/index.html"));
+    const harnessSession =
+      !app.isPackaged && process.env[HARNESS_MODE_ENV] === "1"
+        ? process.env[HARNESS_SESSION_ENV]
+        : undefined;
+    mainWindow.loadFile(join(__dirname, "../renderer/index.html"), {
+      query: harnessSession
+        ? { electronHarnessSession: harnessSession }
+        : undefined,
+    });
   }
 
   if (initialWindowOptions.shouldMaximize) {
@@ -579,6 +663,10 @@ configureRemoteDebugging();
 
 app.whenReady().then(() => {
   try {
+    if (profileSelectionError) {
+      throw new Error(profileSelectionError);
+    }
+
     const smokeTestRun = isSmokeTestRun();
     const lockAcquired = app.requestSingleInstanceLock();
     if (!lockAcquired) {

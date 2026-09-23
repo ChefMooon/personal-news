@@ -10,6 +10,7 @@ import {
 } from "../../../shared/ipc-types";
 import type { DataSourceModule } from "../registry";
 import { getSetting, setSetting } from "../../settings/store";
+import { isElectronHarnessRun } from "../../harness-mode";
 import {
   notifyYoutubeNewVideos,
   notifyYoutubeLiveStart,
@@ -1435,6 +1436,10 @@ export const YouTubeModule: DataSourceModule = {
   displayName: "YouTube",
   initialize(db: Database.Database): void {
     dbRef = db;
+    if (isElectronHarnessRun()) {
+      console.log("[YouTube] Startup polling disabled in the Electron harness");
+      return;
+    }
 
     const configuredInterval = getSetting("rss_poll_interval_minutes");
     const parsedInterval = configuredInterval
