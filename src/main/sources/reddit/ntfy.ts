@@ -1,5 +1,5 @@
 import type Database from "better-sqlite3";
-import { getSetting, setSetting } from "../../settings/store";
+import { getSetting } from "../../settings/store";
 import type {
   NtfySyncFailureEntry,
   NtfySyncSummary,
@@ -7,6 +7,7 @@ import type {
 import { fetchMetadataForUrl } from "../link-sources";
 import { processNtfyMessage } from "./ntfy-message.mjs";
 import { createNtfyDedupeTracker } from "./dedupe";
+import { isDevTestDataActive } from "../../dev-test-data";
 
 export { processNtfyMessage };
 
@@ -62,7 +63,27 @@ export function buildNtfySyncSummary(input: {
 
 export async function pollNtfy(
   db: Database.Database,
+  trigger: "automatic" | "manual" = "manual",
 ): Promise<{ postsIngested: number; messagesReceived: number }> {
+  const isPaused = () => trigger === "automatic" && isDevTestDataActive(db);
+  if (isPaused()) {
+    return { postsIngested: 0, messagesReceived: 0 };
+  }
+
+  const writeSyncSettings = (settings: Record<string, string>): boolean =>
+    db.transaction(() => {
+      if (isPaused()) {
+        return false;
+      }
+      const write = db.prepare(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+      );
+      for (const [key, value] of Object.entries(settings)) {
+        write.run(key, value);
+      }
+      return true;
+    })();
+
   const topic = getSetting("ntfy_topic");
   if (!topic) {
     const summary = buildNtfySyncSummary({
@@ -72,7 +93,9 @@ export async function pollNtfy(
       error: "No ntfy topic configured.",
       lastPolledAt: null,
     });
-    setSetting("ntfy_last_sync_summary", JSON.stringify(summary));
+    writeSyncSettings({
+      ntfy_last_sync_summary: JSON.stringify(summary),
+    });
     return { postsIngested: 0, messagesReceived: 0 };
   }
 
@@ -106,7 +129,9 @@ export async function pollNtfy(
       error: `ntfy unreachable: ${error instanceof Error ? error.message : String(error)}`,
       lastPolledAt: null,
     });
-    setSetting("ntfy_last_sync_summary", JSON.stringify(summary));
+    writeSyncSettings({
+      ntfy_last_sync_summary: JSON.stringify(summary),
+    });
     // Rethrow so callers can distinguish network failures from 0-ingest
     throw new Error(
       `ntfy unreachable: ${error instanceof Error ? error.message : String(error)}`,
@@ -120,6 +145,9 @@ export async function pollNtfy(
   }
 
   const text = await response.text();
+  if (isPaused()) {
+    return { postsIngested: 0, messagesReceived: 0 };
+  }
   const lines = text.split("\n").filter((line) => line.trim().length > 0);
   console.log(`[ntfy] Response OK — ${lines.length} line(s) received`);
 
@@ -129,8 +157,10 @@ export async function pollNtfy(
   let lastProcessedId: string | null = null;
   const failedEntries: NtfySyncFailureEntry[] = [];
   const duplicateUrls: string[] = [];
-  const dedupeTracker = createNtfyDedupeTracker(db);
-  const backfilledCount = dedupeTracker.backfillExistingSavedPosts();
+  const dedupeTracker = createNtfyDedupeTracker(db, "reddit", isPaused);
+  const backfilledCount = isPaused()
+    ? 0
+    : dedupeTracker.backfillExistingSavedPosts();
   if (backfilledCount > 0) {
     console.log(
       `[ntfy] Backfilled ${backfilledCount} existing saved-post URLs into dedupe tracker`,
@@ -188,28 +218,39 @@ export async function pollNtfy(
   await processItemsWithDelay(
     pendingUrls,
     async ({ url, note }) => {
+      if (isPaused()) {
+        return;
+      }
       try {
         console.log(`[ntfy] Fetching metadata for: ${url}`);
         const post = await fetchMetadataForUrl(url, note);
         console.log(
           `[ntfy] Fetched post: id=${post.postId}, source=${post.source}, title="${post.title}"`,
         );
-        upsert.run(
-          post.postId,
-          post.title,
-          post.url,
-          post.permalink,
-          post.subreddit,
-          post.author,
-          post.score,
-          post.body,
-          post.savedAt,
-          post.tags ? JSON.stringify(post.tags) : null,
-          post.note,
-          post.source,
-        );
-        postsIngested++;
-        console.log(`[ntfy] Post ingested: ${post.postId}`);
+        const inserted = db.transaction(() => {
+          if (isPaused()) {
+            return false;
+          }
+          upsert.run(
+            post.postId,
+            post.title,
+            post.url,
+            post.permalink,
+            post.subreddit,
+            post.author,
+            post.score,
+            post.body,
+            post.savedAt,
+            post.tags ? JSON.stringify(post.tags) : null,
+            post.note,
+            post.source,
+          );
+          return true;
+        })();
+        if (inserted) {
+          postsIngested++;
+          console.log(`[ntfy] Post ingested: ${post.postId}`);
+        }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         failedEntries.push({ url, error: message });
@@ -224,12 +265,11 @@ export async function pollNtfy(
     },
   );
 
-  const lastPolledAt = Math.floor(Date.now() / 1000);
-  if (lastProcessedId) {
-    setSetting("ntfy_last_message_id", lastProcessedId);
+  if (isPaused()) {
+    return { postsIngested, messagesReceived };
   }
-  setSetting("ntfy_last_polled_at", String(lastPolledAt));
 
+  const lastPolledAt = Math.floor(Date.now() / 1000);
   const summary = buildNtfySyncSummary({
     messagesReceived,
     postsIngested,
@@ -242,7 +282,14 @@ export async function pollNtfy(
     duplicateCount,
     duplicateUrls,
   });
-  setSetting("ntfy_last_sync_summary", JSON.stringify(summary));
+  const syncSettings: Record<string, string> = {
+    ntfy_last_polled_at: String(lastPolledAt),
+    ntfy_last_sync_summary: JSON.stringify(summary),
+  };
+  if (lastProcessedId) {
+    syncSettings.ntfy_last_message_id = lastProcessedId;
+  }
+  writeSyncSettings(syncSettings);
 
   console.log(
     `[ntfy] Poll complete: ${messagesReceived} messages, ${postsIngested} posts ingested`,

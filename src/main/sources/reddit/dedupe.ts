@@ -38,6 +38,7 @@ export function normalizeUrlForDedupe(rawUrl: string): string | null {
 export function createNtfyDedupeTracker(
   db: Database.Database,
   source = "reddit",
+  canPersist: () => boolean = () => true,
 ): NtfyDedupeTracker {
   const seenInRun = new Set<string>();
 
@@ -73,44 +74,52 @@ export function createNtfyDedupeTracker(
       return false;
     }
 
+    if (!canPersist()) {
+      return false;
+    }
     insertStmt.run(normalizedUrl, normalizedUrl, now, now, source);
     seenInRun.add(normalizedUrl);
     return true;
   }
 
   function backfillExistingSavedPosts(): number {
-    const rows = db
-      .prepare(
-        "SELECT url, saved_at FROM saved_posts WHERE url IS NOT NULL AND trim(url) <> ''",
-      )
-      .all() as Array<{ url: string; saved_at: number | null }>;
+    return db.transaction(() => {
+      if (!canPersist()) {
+        return 0;
+      }
+      const rows = db
+        .prepare(
+          "SELECT url, saved_at FROM saved_posts WHERE url IS NOT NULL AND trim(url) <> ''",
+        )
+        .all() as Array<{ url: string; saved_at: number | null }>;
 
-    let inserted = 0;
-    const now = Math.floor(Date.now() / 1000);
+      let inserted = 0;
+      const now = Math.floor(Date.now() / 1000);
 
-    for (const row of rows) {
-      const normalizedUrl = normalizeUrlForDedupe(row.url);
-      if (!normalizedUrl) {
-        continue;
+      for (const row of rows) {
+        const normalizedUrl = normalizeUrlForDedupe(row.url);
+        if (!normalizedUrl) {
+          continue;
+        }
+
+        const existing = existingStmt.get(normalizedUrl) as
+          { "1"?: number } | undefined;
+        if (existing) {
+          continue;
+        }
+
+        insertStmt.run(
+          normalizedUrl,
+          normalizedUrl,
+          row.saved_at ?? now,
+          row.saved_at ?? now,
+          source,
+        );
+        inserted += 1;
       }
 
-      const existing = existingStmt.get(normalizedUrl) as
-        { "1"?: number } | undefined;
-      if (existing) {
-        continue;
-      }
-
-      insertStmt.run(
-        normalizedUrl,
-        normalizedUrl,
-        row.saved_at ?? now,
-        row.saved_at ?? now,
-        source,
-      );
-      inserted += 1;
-    }
-
-    return inserted;
+      return inserted;
+    })();
   }
 
   function removeUrls(rawUrls: string[]): number {

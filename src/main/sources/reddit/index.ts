@@ -5,6 +5,7 @@ import { IPC, type NtfyIngestCompleteEvent } from "../../../shared/ipc-types";
 import type { DataSourceModule } from "../registry";
 import { getSetting } from "../../settings/store";
 import { isElectronHarnessRun } from "../../harness-mode";
+import { isDevTestDataActive } from "../../dev-test-data";
 import { pollNtfy } from "./ntfy";
 import { notifySavedPostsSync } from "../../notifications/notification-service";
 
@@ -35,7 +36,7 @@ export async function triggerNtfyPoll(): Promise<{
   postsIngested: number;
   messagesReceived: number;
 }> {
-  return runNtfyPoll({ throwOnError: true });
+  return runNtfyPoll({ throwOnError: true, trigger: "manual" });
 }
 
 function getCronExpression(minutes: number): string {
@@ -62,7 +63,7 @@ function startPollScheduler(): void {
 
   stopPollScheduler();
   pollTask = cron.schedule(getCronExpression(activePollIntervalMinutes), () => {
-    void runNtfyPoll({ throwOnError: false });
+    void runNtfyPoll({ throwOnError: false, trigger: "automatic" });
   });
 }
 
@@ -73,6 +74,7 @@ export function applyNtfyPollInterval(minutes: number): void {
 
 async function runNtfyPoll(options: {
   throwOnError: boolean;
+  trigger: "automatic" | "manual";
 }): Promise<{ postsIngested: number; messagesReceived: number }> {
   if (!dbRef) {
     throw new Error("Reddit module not initialized");
@@ -83,7 +85,10 @@ async function runNtfyPoll(options: {
 
   pollingInProgress = true;
   try {
-    const result = await pollNtfy(dbRef);
+    if (options.trigger === "automatic" && isDevTestDataActive(dbRef)) {
+      return { postsIngested: 0, messagesReceived: 0 };
+    }
+    const result = await pollNtfy(dbRef, options.trigger);
     const summary = getSetting("ntfy_last_sync_summary");
     const parsedSummary = summary
       ? (JSON.parse(summary) as NtfyIngestCompleteEvent["summary"])
@@ -153,7 +158,7 @@ export const RedditModule: DataSourceModule = {
 
 async function pollNtfyStartup(): Promise<void> {
   try {
-    await runNtfyPoll({ throwOnError: false });
+    await runNtfyPoll({ throwOnError: false, trigger: "automatic" });
   } catch {
     // runNtfyPoll only throws when throwOnError is true.
   }

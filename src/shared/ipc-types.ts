@@ -129,6 +129,9 @@ export const IPC = {
   SETTINGS_SET_YOUTUBE_VIEW_CONFIG: "settings:setYouTubeViewConfig",
   SETTINGS_GET: "settings:get",
   SETTINGS_SET: "settings:set",
+  DEV_TEST_DATA_GET_STATUS: "devTestData:getStatus",
+  DEV_TEST_DATA_SEED: "devTestData:seed",
+  DEV_TEST_DATA_CLEAR: "devTestData:clear",
   SETTINGS_GET_NOTIFICATION_PREFS: "settings:getNotificationPrefs",
   SETTINGS_SET_NOTIFICATION_PREFS: "settings:setNotificationPrefs",
   SHELL_OPEN_EXTERNAL: "shell:openExternal",
@@ -790,6 +793,11 @@ export interface YouTubeViewConfig {
 export interface IpcMutationResult {
   ok: boolean;
   error: string | null;
+}
+
+export interface DevTestDataStatus {
+  available: boolean;
+  active: boolean;
 }
 
 export type UpdateStatusState =

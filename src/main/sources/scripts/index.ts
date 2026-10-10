@@ -22,6 +22,7 @@ import {
 } from "./scheduler";
 import { deleteSetting, getSetting, setSetting } from "../../settings/store";
 import { isElectronHarnessRun } from "../../harness-mode";
+import { isDevTestDataActive } from "../../dev-test-data";
 import {
   notifyRedditDigest,
   notifyScriptAutoRun,
@@ -382,9 +383,13 @@ function parseRedditDigestPayload(stdout: string): DigestPost[] {
 function upsertRedditDigestPosts(
   db: Database.Database,
   posts: DigestPost[],
-): number {
+  shouldPersist: () => boolean = () => true,
+): number | null {
   if (posts.length === 0) {
     return 0;
+  }
+  if (!shouldPersist()) {
+    return null;
   }
 
   const upsert = db.prepare(
@@ -404,6 +409,9 @@ function upsertRedditDigestPosts(
   );
 
   const transact = db.transaction((rows: DigestPost[]) => {
+    if (!shouldPersist()) {
+      return false;
+    }
     for (const post of rows) {
       upsert.run(
         post.post_id,
@@ -419,10 +427,10 @@ function upsertRedditDigestPosts(
         post.fetched_at,
       );
     }
+    return true;
   });
 
-  transact(posts);
-  return posts.length;
+  return transact(posts) ? posts.length : null;
 }
 
 function markCompletionFailed(
@@ -449,9 +457,22 @@ function postProcessCompletion(
   db: Database.Database,
   script: ScriptWithLastRun,
   completion: ScriptRunCompletion,
+  trigger: ScriptRunTrigger,
 ): ScriptRunCompletion {
   if (!isBundledRedditDigestScript(script) || completion.exitCode !== 0) {
     return completion;
+  }
+
+  if (
+    trigger !== "manual" &&
+    trigger !== "reddit_add_sync" &&
+    isDevTestDataActive(db)
+  ) {
+    return markCompletionFailed(
+      db,
+      completion,
+      "Automatic Reddit Digest ingestion is paused while development fixtures are active.",
+    );
   }
 
   if (completion.stdoutTruncated) {
@@ -464,7 +485,20 @@ function postProcessCompletion(
 
   try {
     const posts = parseRedditDigestPayload(completion.stdout);
-    const ingestedCount = upsertRedditDigestPosts(db, posts);
+    const ingestedCount = upsertRedditDigestPosts(db, posts, () => {
+      return (
+        trigger === "manual" ||
+        trigger === "reddit_add_sync" ||
+        !isDevTestDataActive(db)
+      );
+    });
+    if (ingestedCount == null) {
+      return markCompletionFailed(
+        db,
+        completion,
+        "Automatic Reddit Digest ingestion is paused while development fixtures are active.",
+      );
+    }
     emitRedditUpdated?.();
     return {
       ...completion,
@@ -688,6 +722,14 @@ export function runScriptById(
   },
 ): Promise<void> {
   const trigger = options?.trigger ?? "manual";
+  if (
+    isBundledRedditDigestScript(script) &&
+    trigger !== "manual" &&
+    trigger !== "reddit_add_sync" &&
+    isDevTestDataActive(db)
+  ) {
+    return Promise.resolve();
+  }
 
   return runScript(
     db,
@@ -699,7 +741,12 @@ export function runScriptById(
     (chunk) => emitOutput?.(chunk),
     activeRuns,
   ).then((completion) => {
-    const finalizedCompletion = postProcessCompletion(db, script, completion);
+    const finalizedCompletion = postProcessCompletion(
+      db,
+      script,
+      completion,
+      trigger,
+    );
     const event = buildRunCompleteEvent(script, finalizedCompletion, trigger);
     try {
       persistRunNotification(db, event);

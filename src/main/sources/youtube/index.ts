@@ -11,6 +11,7 @@ import {
 import type { DataSourceModule } from "../registry";
 import { getSetting, setSetting } from "../../settings/store";
 import { isElectronHarnessRun } from "../../harness-mode";
+import { isDevTestDataActive } from "../../dev-test-data";
 import {
   notifyYoutubeNewVideos,
   notifyYoutubeLiveStart,
@@ -19,6 +20,7 @@ import {
 let activePollIntervalMinutes = 15;
 let dbRef: Database.Database | null = null;
 let pollTask: ScheduledTask | null = null;
+type YouTubePollTrigger = "automatic" | "manual";
 
 const YOUTUBE_API_KEY_SETTING = "youtube_api_key_encrypted";
 const YOUTUBE_SYNC_MANUAL_CONFIRMATION_SETTING =
@@ -380,6 +382,7 @@ async function refreshChannelThumbnailsFromApi(
   database: Database.Database,
   apiKey: string,
   channels: Array<{ channel_id: string; thumbnail_url: string | null }>,
+  trigger: YouTubePollTrigger,
 ): Promise<ChannelThumbnailRefreshStats> {
   const candidateIds = channels
     .filter((channel) => needsChannelThumbnailRefresh(channel.thumbnail_url))
@@ -403,6 +406,9 @@ async function refreshChannelThumbnailsFromApi(
   );
 
   for (const ids of channelIdBatches) {
+    if (trigger === "automatic" && isDevTestDataActive(database)) {
+      break;
+    }
     stats.apiRequested += ids.length;
 
     let response: Response;
@@ -438,6 +444,9 @@ async function refreshChannelThumbnailsFromApi(
 
     const applyBatchUpdates = database.transaction(
       (batchItems: ApiChannelItem[]) => {
+        if (trigger === "automatic" && isDevTestDataActive(database)) {
+          return 0;
+        }
         let changedRows = 0;
         for (const item of batchItems) {
           const channelId = item.id?.trim();
@@ -649,8 +658,13 @@ async function fetchRssCandidatesForChannel(channel: {
   }
 }
 
-async function pollAllEnabledChannels(): Promise<void> {
+async function pollAllEnabledChannels(
+  trigger: YouTubePollTrigger,
+): Promise<void> {
   if (!dbRef) {
+    return;
+  }
+  if (trigger === "automatic" && isDevTestDataActive(dbRef)) {
     return;
   }
 
@@ -695,6 +709,9 @@ async function pollAllEnabledChannels(): Promise<void> {
   const channelErrors: Array<{ channelId: string; error: string }> = [];
 
   for (const channel of channels) {
+    if (trigger === "automatic" && isDevTestDataActive(dbRef)) {
+      break;
+    }
     const rssResult = await fetchRssCandidatesForChannel(channel);
     if (rssResult.error) {
       failedChannelIds.push(channel.channel_id);
@@ -781,6 +798,7 @@ async function pollAllEnabledChannels(): Promise<void> {
       dbRef,
       apiKey,
       channels,
+      trigger,
     );
     channelThumbApiRequested = refreshStats.apiRequested;
     channelThumbUpdated = refreshStats.updatedCount;
@@ -862,6 +880,9 @@ async function pollAllEnabledChannels(): Promise<void> {
   }> = [];
 
   for (let batchIndex = 0; batchIndex < batches.length; batchIndex += 1) {
+    if (trigger === "automatic" && isDevTestDataActive(dbRef)) {
+      break;
+    }
     const ids = batches[batchIndex];
     const sourceChannelIds = Array.from(
       new Set(
@@ -1130,6 +1151,14 @@ async function pollAllEnabledChannels(): Promise<void> {
     normalizedPreviewEntries.push(...normalizedBatch);
 
     const ingestTx = dbRef.transaction(() => {
+      if (trigger === "automatic" && isDevTestDataActive(dbRef!)) {
+        return {
+          batchInserted: 0,
+          batchUpdated: 0,
+          newVideoEntries: [],
+          liveStartEntries: [],
+        };
+      }
       const existsStmt = dbRef!.prepare(
         `SELECT
            video_id,
@@ -1412,7 +1441,7 @@ function startPollScheduler(): void {
   }
 
   pollTask = cron.schedule(getCronExpression(activePollIntervalMinutes), () => {
-    void pollAllEnabledChannels();
+    void pollAllEnabledChannels("automatic");
   });
 }
 
@@ -1422,7 +1451,7 @@ export function applyYouTubePollInterval(minutes: number): void {
 }
 
 export async function triggerYouTubePollNow(): Promise<void> {
-  await pollAllEnabledChannels();
+  await pollAllEnabledChannels("manual");
 }
 
 export function getYouTubePollDebug(): Array<Record<string, unknown>> {
@@ -1440,7 +1469,6 @@ export const YouTubeModule: DataSourceModule = {
       console.log("[YouTube] Startup polling disabled in the Electron harness");
       return;
     }
-
     const configuredInterval = getSetting("rss_poll_interval_minutes");
     const parsedInterval = configuredInterval
       ? parseInt(configuredInterval, 10)
@@ -1454,8 +1482,11 @@ export const YouTubeModule: DataSourceModule = {
     }
 
     startPollScheduler();
+    if (isDevTestDataActive(db)) {
+      return;
+    }
     // Run one immediate poll on startup so users can quickly verify channel setup.
-    void pollAllEnabledChannels();
+    void pollAllEnabledChannels("automatic");
   },
   shutdown(): void {
     if (pollTask) {

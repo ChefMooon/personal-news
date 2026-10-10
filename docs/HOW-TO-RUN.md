@@ -71,6 +71,47 @@ harness debugging configuration. Harness mode suppresses automatic source
 polling and user-script startup so scenarios do not rely on live credentials or
 uncontrolled polling. Normal dev/preview and packaged startup are unchanged.
 
+### Developer Test Data
+
+In unpackaged `dev` and `start` sessions, Settings > General provides Seed and
+Clear actions for synthetic test data. The actions use the database selected
+for that session: the shared persistent Development database in normal
+development, or the unique temporary database when a scenario runs through the
+Playwright harness. They do not seed or clear the packaged production profile.
+Packaged builds do not expose the controls, and the main-process mutation
+handlers reject fixture changes when the app is packaged.
+
+Seeding and clearing run transactionally. Seed uses reserved fixture IDs and
+can be repeated; Clear removes only fixture-owned rows and the active marker,
+not whole tables or unrelated user data. The active marker is stored in the
+selected database, so fixture mode remains active across app restarts. While
+active, automatic polling and startup refreshes for Weather, Sports, YouTube,
+Saved Posts ntfy ingestion, and the bundled Reddit Digest script are paused;
+unrelated user scripts are not. Clearing fixtures removes the marker and allows
+those jobs to resume under the existing source settings. Explicit manual
+refresh remains available and may replace fixture-backed content with live
+source data.
+
+### Adding fixtures for a new feature
+
+When a new feature needs local fixture data:
+
+1. Add a feature-specific contributor module and register it with the shared
+   fixture coordinator; keep transaction ownership and the active marker in
+   the coordinator.
+2. Inspect the feature's read path, required related rows and settings, and
+   display defaults so seeded records are visible through the existing UI.
+3. Use reserved, stable fixture IDs that cannot be confused with user data.
+4. Implement idempotent seeding and fixture-only cleanup through the
+   coordinator's transaction. Preserve unrelated rows and user settings.
+5. Gate every automatic refresh or ingestion path while fixtures are active,
+   including writes from work already in flight; retain explicit manual
+   refreshes.
+6. Add contributor tests for read visibility, repeat seed and clear,
+   transaction rollback, and preservation of non-fixture data.
+7. Extend the isolated UI harness to verify the feature using its real visible
+   surface and confirm teardown leaves no fixture state behind.
+
 ## Build Windows Installer
 
 ```bash

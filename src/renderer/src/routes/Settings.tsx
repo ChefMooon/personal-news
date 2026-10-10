@@ -71,6 +71,7 @@ import {
   type ThemeRow,
   type UpdateStatusEvent,
   type NtfySyncSummary,
+  type DevTestDataStatus,
 } from "../../../shared/ipc-types";
 import {
   Select,
@@ -1442,6 +1443,68 @@ function GeneralTab(): React.ReactElement {
   const [lastUpdateCheckAt, setLastUpdateCheckAt] = useState<number | null>(
     null,
   );
+  const [devTestDataStatus, setDevTestDataStatus] =
+    useState<DevTestDataStatus | null>(null);
+  const [devTestDataLoading, setDevTestDataLoading] = useState(false);
+  const [devTestDataError, setDevTestDataError] = useState<string | null>(null);
+  const [confirmClearDevTestData, setConfirmClearDevTestData] = useState(false);
+  const devTestDataActionInFlight = useRef(false);
+
+  const refreshDevTestDataStatus = async (): Promise<void> => {
+    try {
+      const status = (await window.api.invoke(
+        IPC.DEV_TEST_DATA_GET_STATUS,
+      )) as DevTestDataStatus;
+      setDevTestDataStatus(status);
+      setDevTestDataError(null);
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Failed to load developer data status.";
+      setDevTestDataError(message);
+      toast.error(message);
+    }
+  };
+
+  const runDevTestDataAction = async (
+    action: "seed" | "clear",
+  ): Promise<void> => {
+    if (devTestDataActionInFlight.current) {
+      return;
+    }
+    devTestDataActionInFlight.current = true;
+    setDevTestDataLoading(true);
+    setDevTestDataError(null);
+    try {
+      const result = (await window.api.invoke(
+        action === "seed" ? IPC.DEV_TEST_DATA_SEED : IPC.DEV_TEST_DATA_CLEAR,
+      )) as IpcMutationResult;
+      if (!result.ok) {
+        throw new Error(result.error ?? `Failed to ${action} developer data.`);
+      }
+      await refreshDevTestDataStatus();
+      toast.success(
+        action === "seed"
+          ? "Synthetic developer data seeded."
+          : "Synthetic developer data cleared.",
+      );
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : `Failed to ${action} developer data.`;
+      setDevTestDataError(message);
+      toast.error(message);
+    } finally {
+      devTestDataActionInFlight.current = false;
+      setDevTestDataLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void refreshDevTestDataStatus();
+  }, []);
 
   const getUpdateOutcomeLabel = (status: UpdateStatusEvent): string | null => {
     if (status.state === "not-available") {
@@ -1707,6 +1770,80 @@ function GeneralTab(): React.ReactElement {
           </div>
         </div>
       </div>
+
+      {devTestDataStatus?.available ? (
+        <div className="rounded-md border px-3 py-3 max-w-lg">
+          <h3 className="text-sm font-medium mb-1">Developer Test Data</h3>
+          <p className="text-xs text-muted-foreground mb-3">
+            Seed synthetic records for Reddit Digest, Saved Posts, Weather,
+            Sports, and YouTube in this Development profile. Automatic polling
+            pauses while fixtures are active. Manual refresh remains available
+            and may fetch live source data.
+          </p>
+          <p
+            className="text-sm mb-3"
+            data-testid="dev-test-data-status"
+            aria-live="polite"
+          >
+            Status:{" "}
+            {devTestDataStatus.active ? "Synthetic data active" : "Inactive"}
+          </p>
+          {devTestDataError ? (
+            <p className="text-sm text-destructive mb-3" role="alert">
+              {devTestDataError}
+            </p>
+          ) : null}
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => void runDevTestDataAction("seed")}
+              disabled={devTestDataLoading || !devTestDataStatus}
+            >
+              {devTestDataLoading ? "Working..." : "Seed test data"}
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => setConfirmClearDevTestData(true)}
+              disabled={
+                devTestDataLoading ||
+                !devTestDataStatus.active ||
+                confirmClearDevTestData
+              }
+            >
+              Clear test data
+            </Button>
+          </div>
+          <AlertDialog
+            open={confirmClearDevTestData}
+            onOpenChange={setConfirmClearDevTestData}
+          >
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Clear synthetic test data?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Only records owned by the developer fixtures will be removed.
+                  Other saved content and settings will be preserved.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={devTestDataLoading}>
+                  Cancel
+                </AlertDialogCancel>
+                <AlertDialogAction
+                  disabled={devTestDataLoading}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    setConfirmClearDevTestData(false);
+                    void runDevTestDataAction("clear");
+                  }}
+                >
+                  Clear test data
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
+      ) : null}
 
       <div>
         <h3 className="text-sm font-medium mb-1">App Behavior</h3>

@@ -22,6 +22,38 @@ before attaching. Harness mode also suppresses automatic source polling and
 user-script startup. Scenarios should not rely on production credentials or
 uncontrolled network services.
 
+## Fixture UI scenario
+
+Run the developer test-data scenario with:
+
+```powershell
+npm run test:local-test-data
+```
+
+It opens Settings > General, checks the initial inactive state, seeds through
+the visible Seed test data action, and verifies the Reddit Digest, Saved Posts,
+Weather, Sports, and YouTube read surfaces. It then clears through the visible
+Clear test data action and its confirmation dialog, verifies fixture-only
+removal, and confirms an unrelated setting is preserved. The harness database
+is isolated for the run; no persistent Development or production database is
+used.
+
+Use semantic Playwright locators for user-visible navigation and actions, such
+as buttons, links, headings, status text, and confirmation dialogs. Use IPC
+only for deterministic setup or state observation that has no suitable visible
+interaction, such as reading fixture-backed source results or checking the
+persisted status. Do not use IPC as a substitute for exercising the user-facing
+Seed or Clear flow, and do not access SQLite or Node APIs from the renderer.
+
+The fixture active marker and seeded records belong to the selected database:
+for harness scenarios that is the per-run temporary database, not the shared
+Development profile. Use `addCleanup` for scenario state that must be restored
+before Electron exits. After the scenario and cleanup callbacks, the runner
+confirms the Electron process tree has exited before deleting the isolated
+profile. If it cannot confirm termination, it fails and preserves that profile
+for diagnosis; run logs and failure screenshots remain in
+`artifacts/electron-harness/<scenario>-<uuid>/` outside the profile.
+
 ## Add a scenario
 
 Create a Node ESM script under `scripts/` and call `runElectronHarness`. Use

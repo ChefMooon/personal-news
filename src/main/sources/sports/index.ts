@@ -26,6 +26,7 @@ import {
 } from "../../../shared/sports";
 import { getSetting, setSetting } from "../../settings/store";
 import { isElectronHarnessRun } from "../../harness-mode";
+import { isDevTestDataActive } from "../../dev-test-data";
 import type { DataSourceModule } from "../registry";
 import {
   fetchEventById,
@@ -104,6 +105,7 @@ const STALENESS_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
 const ESPN_RETRY_MAX_ATTEMPTS = 4;
 const ESPN_FAILURE_NOTIFICATION_THRESHOLD = 3;
 const SPORTS_WITH_ESPN = new Set(["Baseball", "Basketball", "Ice Hockey"]);
+type SportsRefreshTrigger = "automatic" | "manual";
 
 function ensureDb(): Database.Database {
   if (!dbRef) {
@@ -170,8 +172,11 @@ function startPollTimer(): void {
 
   pollTimer = setInterval(
     () => {
+      if (!dbRef || isDevTestDataActive(dbRef)) {
+        return;
+      }
       for (const sport of SUPPORTED_SPORTS) {
-        void refreshSportInternal(sport, true).catch((error) => {
+        void refreshSportInternal(sport, true, "automatic").catch((error) => {
           console.error(
             `[Sports] Scheduled refresh failed for ${sport}:`,
             error,
@@ -186,9 +191,13 @@ function startPollTimer(): void {
 async function prefetchLeagueTeamBadges(
   db: Database.Database,
   leagueName: string,
+  trigger: SportsRefreshTrigger = "manual",
 ): Promise<void> {
   try {
     const teams = await fetchTeamBadgesForLeague(leagueName);
+    if (trigger === "automatic" && isDevTestDataActive(db)) {
+      return;
+    }
     for (const team of teams) {
       if (getTrackedTeam(db, team.teamId)?.badgeUrl) {
         continue;
@@ -289,6 +298,7 @@ async function backfillEventTeamBadges(
   events: SportEvent[],
   sport: string,
   leagueName?: string,
+  trigger: SportsRefreshTrigger = "manual",
 ): Promise<void> {
   const teamCandidates = new Map<string, string>();
   let leagueBadgeCatalogByName: Map<
@@ -330,6 +340,9 @@ async function backfillEventTeamBadges(
   }
 
   for (const [teamId, fallbackName] of teamCandidates) {
+    if (trigger === "automatic" && isDevTestDataActive(db)) {
+      return;
+    }
     const trackedTeam = getTrackedTeam(db, teamId);
     const opponentBadge = getOpponentBadge(db, teamId);
     if (trackedTeam?.badgeUrl || opponentBadge) {
@@ -361,6 +374,9 @@ async function backfillEventTeamBadges(
       fallbackMatch?.badgeUrl ??
       searchMatch?.badgeUrl ??
       null;
+    if (trigger === "automatic" && isDevTestDataActive(db)) {
+      return;
+    }
     const resolvedName =
       details?.name ?? fallbackMatch?.name ?? searchMatch?.name ?? fallbackName;
 
@@ -396,6 +412,7 @@ function isBadgeRefreshStale(
 async function syncLeagueCatalog(
   sport: string,
   forceRefresh = false,
+  trigger: SportsRefreshTrigger = "manual",
 ): Promise<SportLeague[]> {
   const db = ensureDb();
   const existing = listLeagues(db, sport);
@@ -404,6 +421,9 @@ async function syncLeagueCatalog(
   }
 
   const leagues = await fetchLeaguesForSport(sport, forceRefresh);
+  if (trigger === "automatic" && isDevTestDataActive(db)) {
+    return listLeagues(db, sport);
+  }
   for (const league of leagues) {
     upsertLeague(db, {
       leagueId: league.leagueId,
@@ -421,6 +441,7 @@ async function syncLeagueCatalog(
 async function refreshEnabledLeagueBadges(
   sport: string,
   force: boolean,
+  trigger: SportsRefreshTrigger = "manual",
 ): Promise<void> {
   const db = ensureDb();
   const nowSeconds = Math.floor(Date.now() / 1000);
@@ -428,7 +449,7 @@ async function refreshEnabledLeagueBadges(
 
   if (existingEnabledLeagues.length === 0) {
     if (force) {
-      await syncLeagueCatalog(sport, true);
+      await syncLeagueCatalog(sport, true, trigger);
     }
     return;
   }
@@ -444,16 +465,19 @@ async function refreshEnabledLeagueBadges(
     return;
   }
 
-  await syncLeagueCatalog(sport, true);
+  await syncLeagueCatalog(sport, true, trigger);
   const enabledLeagues = listEnabledLeagues(db, sport);
   const today = getLocalDateString();
   for (const league of enabledLeagues) {
+    if (trigger === "automatic" && isDevTestDataActive(db)) {
+      return;
+    }
     const meta = getBadgeCacheMeta(db, league.sport, league.leagueId);
     if (!force && !isBadgeRefreshStale(meta?.fetchedAt, nowSeconds)) {
       continue;
     }
 
-    await prefetchLeagueTeamBadges(db, league.name);
+    await prefetchLeagueTeamBadges(db, league.name, trigger);
     const cachedLeagueEvents = readTodayEvents(db, league.sport, today).filter(
       (event) => event.leagueId === league.leagueId,
     );
@@ -465,6 +489,9 @@ async function refreshEnabledLeagueBadges(
         league.name,
       );
     }
+    if (trigger === "automatic" && isDevTestDataActive(db)) {
+      return;
+    }
     upsertBadgeCacheMeta(db, league.sport, league.leagueId, nowSeconds);
   }
 }
@@ -472,13 +499,15 @@ async function refreshEnabledLeagueBadges(
 async function refreshSportsBadgesInternal(
   sport: string,
   force: boolean,
+  trigger: SportsRefreshTrigger = "manual",
 ): Promise<void> {
-  const existing = badgeRefreshPromises.get(sport);
+  const promiseKey = `${trigger}:${sport}`;
+  const existing = badgeRefreshPromises.get(promiseKey);
   if (existing) {
     return existing;
   }
 
-  const task = refreshEnabledLeagueBadges(sport, force)
+  const task = refreshEnabledLeagueBadges(sport, force, trigger)
     .then(() => {
       emitSportsUpdated({ sport, ok: true, error: null });
     })
@@ -491,10 +520,10 @@ async function refreshSportsBadgesInternal(
       throw error;
     })
     .finally(() => {
-      badgeRefreshPromises.delete(sport);
+      badgeRefreshPromises.delete(promiseKey);
     });
 
-  badgeRefreshPromises.set(sport, task);
+  badgeRefreshPromises.set(promiseKey, task);
   return task;
 }
 
@@ -595,8 +624,12 @@ function defaultLeagueEnabled(sport: string, league: SportLeague): boolean {
 async function refreshTrackedTeam(
   team: TrackedTeam,
   fetchedDate: string,
+  trigger: SportsRefreshTrigger = "manual",
 ): Promise<void> {
   const db = ensureDb();
+  if (trigger === "automatic" && isDevTestDataActive(db)) {
+    return;
+  }
   const [lastResult, nextResult] = await Promise.allSettled([
     fetchLastEventsForTeam(team.teamId),
     fetchNextEventsForTeam(team.teamId),
@@ -633,13 +666,25 @@ async function refreshTrackedTeam(
     return;
   }
 
+  if (trigger === "automatic" && isDevTestDataActive(db)) {
+    return;
+  }
   const leagueName = getLeagueById(db, team.leagueId)?.name;
-  await backfillEventTeamBadges(db, events, team.sport, leagueName);
-  upsertEvents(db, events, fetchedDate);
+  await backfillEventTeamBadges(db, events, team.sport, leagueName, trigger);
+  if (trigger === "automatic" && isDevTestDataActive(db)) {
+    return;
+  }
+  upsertEvents(db, events, fetchedDate, () => {
+    return trigger !== "automatic" || !isDevTestDataActive(db);
+  });
 }
 
 function scheduleLiveRefreshIfNeeded(sport: string): void {
   const db = ensureDb();
+  if (isDevTestDataActive(db)) {
+    clearLiveRefreshTimer(sport);
+    return;
+  }
   const today = getLocalDateString();
   const todayEvents = readTodayEvents(db, sport, today);
   const liveEvents = todayEvents.filter((event) => isLiveSportEvent(event));
@@ -655,14 +700,22 @@ function scheduleLiveRefreshIfNeeded(sport: string): void {
 
   const timer = setTimeout(() => {
     liveRefreshTimers.delete(sport);
-    void doLiveRefresh(sport);
+    if (!isDevTestDataActive(db)) {
+      void doLiveRefresh(sport, "automatic");
+    }
   }, LIVE_REFRESH_INTERVAL_MS);
 
   liveRefreshTimers.set(sport, timer);
 }
 
-async function doLiveRefresh(sport: string): Promise<void> {
+async function doLiveRefresh(
+  sport: string,
+  trigger: SportsRefreshTrigger,
+): Promise<void> {
   const db = ensureDb();
+  if (trigger === "automatic" && isDevTestDataActive(db)) {
+    return;
+  }
   const fetchDate = getLocalDateString();
   const liveEvents = readTodayEvents(db, sport, fetchDate).filter((event) =>
     isLiveSportEvent(event),
@@ -699,7 +752,6 @@ async function doLiveRefresh(sport: string): Promise<void> {
         const fallbackMatch = pickBestLiveRefreshCandidate(event, mergedEvents);
         if (fallbackMatch) {
           refreshedEvents.push(fallbackMatch);
-          updateLiveEventState(fallbackMatch);
           continue;
         }
       } catch (error) {
@@ -728,11 +780,13 @@ async function doLiveRefresh(sport: string): Promise<void> {
 
     if (refreshedEvent) {
       refreshedEvents.push(refreshedEvent);
-      updateLiveEventState(refreshedEvent);
     }
   }
 
   if (refreshedEvents.length > 0) {
+    if (trigger === "automatic" && isDevTestDataActive(db)) {
+      return;
+    }
     const eventsByLeague = new Map<string, SportEvent[]>();
     for (const item of refreshedEvents) {
       const existing = eventsByLeague.get(item.leagueId);
@@ -748,30 +802,55 @@ async function doLiveRefresh(sport: string): Promise<void> {
         leagueEvents,
         sport,
         leagueNamesById.get(leagueId),
+        trigger,
       );
     }
-    upsertEvents(db, refreshedEvents, fetchDate);
+    if (trigger === "automatic" && isDevTestDataActive(db)) {
+      return;
+    }
+    upsertEvents(db, refreshedEvents, fetchDate, () => {
+      return trigger !== "automatic" || !isDevTestDataActive(db);
+    });
+    for (const event of refreshedEvents) {
+      updateLiveEventState(event);
+    }
   }
 
+  if (trigger === "automatic" && isDevTestDataActive(db)) {
+    return;
+  }
   upsertCacheMeta(db, sport, fetchDate, Math.floor(Date.now() / 1000));
   emitSportsUpdated({ sport, ok: true, error: null });
   scheduleLiveRefreshIfNeeded(sport);
 }
 
-async function doRefreshSport(sport: string, force: boolean): Promise<void> {
+async function doRefreshSport(
+  sport: string,
+  force: boolean,
+  trigger: SportsRefreshTrigger,
+): Promise<void> {
   const db = ensureDb();
+  if (trigger === "automatic" && isDevTestDataActive(db)) {
+    return;
+  }
   const fetchDate = getLocalDateString();
 
   if (!force && getCacheMeta(db, sport, fetchDate)) {
     return;
   }
 
-  await ensureLeagueCatalogLoaded(sport);
-  await refreshEnabledLeagueBadges(sport, false);
+  await syncLeagueCatalog(sport, false, trigger);
+  if (trigger === "automatic" && isDevTestDataActive(db)) {
+    return;
+  }
+  await refreshEnabledLeagueBadges(sport, false, trigger);
 
   const enabledLeagues = listEnabledLeagues(db, sport);
   const fetchDates = getAdjacentLocalDateKeys(fetchDate);
   for (const league of enabledLeagues) {
+    if (trigger === "automatic" && isDevTestDataActive(db)) {
+      return;
+    }
     const eventsById = new Map<string, SportEvent>();
     for (const eventDate of fetchDates) {
       const eventsForDate = await fetchLeagueEventsForDateWithFallback(
@@ -803,15 +882,26 @@ async function doRefreshSport(sport: string, force: boolean): Promise<void> {
     }
 
     const events = Array.from(dedupedByMatch.values());
-    await backfillEventTeamBadges(db, events, sport, league.name);
-    upsertEvents(db, events, fetchDate);
+    await backfillEventTeamBadges(db, events, sport, league.name, trigger);
+    if (trigger === "automatic" && isDevTestDataActive(db)) {
+      return;
+    }
+    upsertEvents(db, events, fetchDate, () => {
+      return trigger !== "automatic" || !isDevTestDataActive(db);
+    });
   }
 
   const trackedTeams = listTrackedTeams(db, sport);
   for (const team of trackedTeams) {
-    await refreshTrackedTeam(team, fetchDate);
+    if (trigger === "automatic" && isDevTestDataActive(db)) {
+      return;
+    }
+    await refreshTrackedTeam(team, fetchDate, trigger);
   }
 
+  if (trigger === "automatic" && isDevTestDataActive(db)) {
+    return;
+  }
   upsertCacheMeta(db, sport, fetchDate, Math.floor(Date.now() / 1000));
   scheduleLiveRefreshIfNeeded(sport);
 }
@@ -819,13 +909,18 @@ async function doRefreshSport(sport: string, force: boolean): Promise<void> {
 async function refreshSportInternal(
   sport: string,
   force: boolean,
+  trigger: SportsRefreshTrigger = "manual",
 ): Promise<void> {
-  const existing = refreshPromises.get(sport);
+  if (trigger === "automatic" && dbRef && isDevTestDataActive(dbRef)) {
+    return;
+  }
+  const promiseKey = `${trigger}:${sport}`;
+  const existing = refreshPromises.get(promiseKey);
   if (existing) {
     return existing;
   }
 
-  const task = doRefreshSport(sport, force)
+  const task = doRefreshSport(sport, force, trigger)
     .then(() => {
       emitSportsUpdated({ sport, ok: true, error: null });
     })
@@ -838,10 +933,10 @@ async function refreshSportInternal(
       throw error;
     })
     .finally(() => {
-      refreshPromises.delete(sport);
+      refreshPromises.delete(promiseKey);
     });
 
-  refreshPromises.set(sport, task);
+  refreshPromises.set(promiseKey, task);
   return task;
 }
 
@@ -1090,14 +1185,14 @@ export async function refreshSportsData(
   sport: string,
   force = true,
 ): Promise<void> {
-  await refreshSportInternal(sport, force);
+  await refreshSportInternal(sport, force, "manual");
 }
 
 export async function refreshSportsBadges(
   sport: string,
   force = true,
 ): Promise<void> {
-  await refreshSportsBadgesInternal(sport, force);
+  await refreshSportsBadgesInternal(sport, force, "manual");
 }
 
 export function getSportsStatus(): SportSyncStatus[] {
@@ -1115,13 +1210,17 @@ export const SportsModule: DataSourceModule = {
       console.log("[Sports] Startup polling disabled in the Electron harness");
       return;
     }
+    if (isDevTestDataActive(db)) {
+      startPollTimer();
+      return;
+    }
 
     if (!isSportsEnabled()) {
       return;
     }
 
     for (const sport of SUPPORTED_SPORTS) {
-      void refreshSportInternal(sport, false).catch((error) => {
+      void refreshSportInternal(sport, false, "automatic").catch((error) => {
         console.error(`[Sports] Initial refresh failed for ${sport}:`, error);
       });
     }

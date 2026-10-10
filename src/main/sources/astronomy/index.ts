@@ -9,6 +9,7 @@ import {
   type AstronomyStatus,
 } from "../../../shared/ipc-types";
 import { getSetting, setSetting } from "../../settings/store";
+import { isDevTestDataActive } from "../../dev-test-data";
 import { isElectronHarnessRun } from "../../harness-mode";
 import type { DataSourceModule } from "../registry";
 import { listWeatherLocationsWithDb } from "../weather/locations";
@@ -29,6 +30,7 @@ let dbRef: Database.Database | null = null;
 let pollTimer: NodeJS.Timeout | null = null;
 let shuttingDown = false;
 const inFlight = new Map<string, Promise<void>>();
+type AstronomyRefreshTrigger = "automatic" | "manual";
 
 function ensureDb(): Database.Database {
   if (!dbRef) {
@@ -92,11 +94,15 @@ export function localDateString(unixSeconds: number, timeZone: string): string {
 async function refreshLocationInternal(
   locationId: string,
   weatherTimestamp?: number,
+  trigger: AstronomyRefreshTrigger = "manual",
 ): Promise<void> {
   if (shuttingDown) {
     return;
   }
   const db = ensureDb();
+  if (trigger === "automatic" && isDevTestDataActive(db)) {
+    return;
+  }
   const location = listWeatherLocations().find(
     (candidate) => candidate.id === locationId,
   );
@@ -124,10 +130,16 @@ async function refreshLocationInternal(
     })();
   try {
     const groups = calculateGroupsForLocation(location, forTimestamp);
+    if (trigger === "automatic" && isDevTestDataActive(db)) {
+      return;
+    }
     upsertAstronomySnapshot(db, locationId, forTimestamp, forTimestamp, groups);
     emitAstronomyUpdated([locationId]);
   } catch (error) {
     console.error(`[Astronomy] Calculation failed for ${locationId}:`, error);
+    if (trigger === "automatic" && isDevTestDataActive(db)) {
+      return;
+    }
     // Leave prior data intact; only mark stale.
     markStale(db, locationId);
   }
@@ -137,6 +149,7 @@ async function refreshLocationInternal(
 export async function triggerAstronomyRefresh(
   locationId?: string,
   weatherTimestamp?: number,
+  trigger: AstronomyRefreshTrigger = "manual",
 ): Promise<AstronomyRefreshResult> {
   if (!isAstronomyEnabled()) {
     return { ok: false, error: "Astronomy is disabled.", refreshedCount: 0 };
@@ -155,17 +168,20 @@ export async function triggerAstronomyRefresh(
   let refreshedCount = 0;
   const pending: Array<Promise<void>> = [];
   for (const target of targets) {
-    const existing = inFlight.get(target.id);
+    const flightKey = `${trigger}:${target.id}`;
+    const existing = inFlight.get(flightKey);
     if (existing) {
       pending.push(existing);
       continue;
     }
-    const task = refreshLocationInternal(target.id, weatherTimestamp).finally(
-      () => {
-        inFlight.delete(target.id);
-      },
-    );
-    inFlight.set(target.id, task);
+    const task = refreshLocationInternal(
+      target.id,
+      weatherTimestamp,
+      trigger,
+    ).finally(() => {
+      inFlight.delete(flightKey);
+    });
+    inFlight.set(flightKey, task);
     pending.push(task);
     refreshedCount += 1;
   }
@@ -221,9 +237,11 @@ function schedulePolling(): void {
   }
   pollTimer = setInterval(
     () => {
-      void triggerAstronomyRefresh().catch((error) => {
-        console.error("[Astronomy] Scheduled refresh failed:", error);
-      });
+      void triggerAstronomyRefresh(undefined, undefined, "automatic").catch(
+        (error) => {
+          console.error("[Astronomy] Scheduled refresh failed:", error);
+        },
+      );
     },
     settings.pollIntervalMinutes * 60 * 1000,
   );
@@ -270,9 +288,11 @@ export const AstronomyModule: DataSourceModule = {
     }
     schedulePolling();
     if (isAstronomyEnabled() && listWeatherLocations().length > 0) {
-      void triggerAstronomyRefresh().catch((error) => {
-        console.error("[Astronomy] Startup refresh failed:", error);
-      });
+      void triggerAstronomyRefresh(undefined, undefined, "automatic").catch(
+        (error) => {
+          console.error("[Astronomy] Startup refresh failed:", error);
+        },
+      );
     }
   },
   shutdown(): void {

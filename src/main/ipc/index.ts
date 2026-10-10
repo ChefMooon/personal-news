@@ -9,6 +9,12 @@ import {
 import { readFile, writeFile } from "node:fs/promises";
 import { XMLParser } from "fast-xml-parser";
 import { getDb } from "../db/database";
+import {
+  clearDevTestData,
+  createDevTestDataMutationHandler,
+  isDevTestDataActive,
+  seedDevTestData,
+} from "../dev-test-data";
 import { deleteSetting, getSetting, setSetting } from "../settings/store";
 import {
   IPC,
@@ -74,6 +80,7 @@ import type {
   DigestViewedChangedEvent,
   YoutubeVideoWatchedChangedEvent,
   UpdateStatusEvent,
+  DevTestDataStatus,
   WindowState,
 } from "../../shared/ipc-types";
 import {
@@ -1413,6 +1420,46 @@ export function registerIpcHandlers(): void {
     }
     return window;
   }
+
+  const emitDevTestDataUpdated = (): void => {
+    for (const win of BrowserWindow.getAllWindows()) {
+      win.webContents.send(IPC.REDDIT_UPDATED);
+      win.webContents.send(IPC.WEATHER_UPDATED);
+      win.webContents.send(IPC.SPORTS_DATA_UPDATED, {
+        sport: "dev-test-data",
+        ok: true,
+        error: null,
+      });
+      win.webContents.send(IPC.YOUTUBE_UPDATED);
+    }
+  };
+
+  ipcMain.handle(IPC.DEV_TEST_DATA_GET_STATUS, (): DevTestDataStatus => ({
+    available: !app.isPackaged,
+    active: !app.isPackaged && isDevTestDataActive(),
+  }));
+
+  ipcMain.handle(
+    IPC.DEV_TEST_DATA_SEED,
+    createDevTestDataMutationHandler(
+      () => app.isPackaged,
+      () => {
+        seedDevTestData();
+        emitDevTestDataUpdated();
+      },
+    ),
+  );
+
+  ipcMain.handle(
+    IPC.DEV_TEST_DATA_CLEAR,
+    createDevTestDataMutationHandler(
+      () => app.isPackaged,
+      () => {
+        clearDevTestData();
+        emitDevTestDataUpdated();
+      },
+    ),
+  );
 
   ipcMain.on(IPC.SETTINGS_GET_THEME_SYNC, (event): void => {
     event.returnValue = getCurrentThemeInfo();

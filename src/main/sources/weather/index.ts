@@ -16,6 +16,7 @@ import type {
 } from "../../../shared/ipc-types";
 import { getSetting, setSetting } from "../../settings/store";
 import { isElectronHarnessRun } from "../../harness-mode";
+import { isDevTestDataActive } from "../../dev-test-data";
 import { notifyWeatherAlerts } from "../../notifications/notification-service";
 import type { DataSourceModule } from "../registry";
 import {
@@ -61,7 +62,9 @@ const DEFAULT_WEATHER_SETTINGS: WeatherSettings = {
 
 let dbRef: Database.Database | null = null;
 let pollTimer: NodeJS.Timeout | null = null;
-let refreshPromise: Promise<number> | null = null;
+const refreshPromises = new Map<WeatherRefreshTrigger, Promise<number>>();
+
+type WeatherRefreshTrigger = "automatic" | "manual";
 
 function emitWeatherUpdated(): void {
   for (const win of BrowserWindow.getAllWindows()) {
@@ -698,53 +701,84 @@ async function fetchAirQuality(
 async function refreshLocation(
   location: WeatherLocation,
   settings: WeatherSettings,
+  trigger: WeatherRefreshTrigger,
 ): Promise<void> {
   const db = ensureDb();
+  if (trigger === "automatic" && isDevTestDataActive(db)) {
+    return;
+  }
+
   const result = await fetchForecast(location, settings);
   const fetchedAt = Math.floor(Date.now() / 1000);
 
-  db.prepare(
-    `INSERT INTO weather_cache (location_id, current_json, hourly_json, daily_json, alerts_json, fetched_at)
-     VALUES (?, ?, ?, ?, ?, ?)
-     ON CONFLICT(location_id) DO UPDATE SET
-       current_json = excluded.current_json,
-       hourly_json = excluded.hourly_json,
-       daily_json = excluded.daily_json,
-       alerts_json = excluded.alerts_json,
-       fetched_at = excluded.fetched_at`,
-  ).run(
-    location.id,
-    JSON.stringify({ ...result.current, yesterday: result.yesterday }),
-    JSON.stringify(result.hourly),
-    JSON.stringify(result.daily),
-    JSON.stringify(result.alerts),
-    fetchedAt,
-  );
+  const shouldNotify = db.transaction(() => {
+    if (trigger === "automatic" && isDevTestDataActive(db)) {
+      return null;
+    }
 
-  const alertHash = buildAlertHash(result.alerts);
-  const prior = db
-    .prepare("SELECT alert_hash FROM weather_alert_state WHERE location_id = ?")
-    .get(location.id) as { alert_hash: string | null } | undefined;
-
-  db.prepare(
-    `INSERT INTO weather_alert_state (location_id, alert_hash, last_notified_at)
-     VALUES (?, ?, ?)
-     ON CONFLICT(location_id) DO UPDATE SET
-       alert_hash = excluded.alert_hash,
-       last_notified_at = CASE WHEN excluded.last_notified_at IS NULL THEN weather_alert_state.last_notified_at ELSE excluded.last_notified_at END`,
-  ).run(location.id, alertHash, null);
-
-  if (result.alerts.length > 0 && alertHash !== (prior?.alert_hash ?? "")) {
-    notifyWeatherAlerts(location.name, result.alerts);
     db.prepare(
-      "UPDATE weather_alert_state SET last_notified_at = ? WHERE location_id = ?",
-    ).run(fetchedAt, location.id);
+      `INSERT INTO weather_cache (location_id, current_json, hourly_json, daily_json, alerts_json, fetched_at)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(location_id) DO UPDATE SET
+         current_json = excluded.current_json,
+         hourly_json = excluded.hourly_json,
+         daily_json = excluded.daily_json,
+         alerts_json = excluded.alerts_json,
+         fetched_at = excluded.fetched_at`,
+    ).run(
+      location.id,
+      JSON.stringify({ ...result.current, yesterday: result.yesterday }),
+      JSON.stringify(result.hourly),
+      JSON.stringify(result.daily),
+      JSON.stringify(result.alerts),
+      fetchedAt,
+    );
+
+    const alertHash = buildAlertHash(result.alerts);
+    const prior = db
+      .prepare(
+        "SELECT alert_hash FROM weather_alert_state WHERE location_id = ?",
+      )
+      .get(location.id) as { alert_hash: string | null } | undefined;
+
+    db.prepare(
+      `INSERT INTO weather_alert_state (location_id, alert_hash, last_notified_at)
+       VALUES (?, ?, ?)
+       ON CONFLICT(location_id) DO UPDATE SET
+         alert_hash = excluded.alert_hash,
+         last_notified_at = CASE WHEN excluded.last_notified_at IS NULL THEN weather_alert_state.last_notified_at ELSE excluded.last_notified_at END`,
+    ).run(location.id, alertHash, null);
+
+    const changed =
+      result.alerts.length > 0 && alertHash !== (prior?.alert_hash ?? "");
+    if (changed) {
+      db.prepare(
+        "UPDATE weather_alert_state SET last_notified_at = ? WHERE location_id = ?",
+      ).run(fetchedAt, location.id);
+    }
+    return changed;
+  })();
+
+  if (shouldNotify === null) {
+    return;
+  }
+
+  if (shouldNotify) {
+    notifyWeatherAlerts(location.name, result.alerts);
+  }
+
+  if (trigger === "automatic" && isDevTestDataActive(db)) {
+    return;
   }
 
   // Astronomy enrichment after successful Weather persistence. Astronomy
   // failure must never reject or roll back the Weather refresh.
   try {
-    await triggerAstronomyRefresh(location.id, result.current.time);
+    await triggerAstronomyRefresh(
+      location.id,
+      result.current.time,
+      trigger === "automatic" ? "automatic" : "manual",
+    );
   } catch (error) {
     console.error(
       `[Astronomy] Post-weather refresh failed for ${location.id}:`,
@@ -753,14 +787,20 @@ async function refreshLocation(
   }
 }
 
-async function doRefresh(locationId?: string): Promise<number> {
+async function doRefresh(
+  locationId: string | undefined,
+  trigger: WeatherRefreshTrigger,
+): Promise<number> {
   const settings = getSettings();
   const locations = locationId
     ? listLocations().filter((location) => location.id === locationId)
     : listLocations();
 
   for (const location of locations) {
-    await refreshLocation(location, settings);
+    if (trigger === "automatic" && isDevTestDataActive(ensureDb())) {
+      break;
+    }
+    await refreshLocation(location, settings, trigger);
   }
 
   emitWeatherUpdated();
@@ -784,7 +824,7 @@ function schedulePolling(): void {
 
   pollTimer = setInterval(
     () => {
-      void triggerWeatherRefresh().catch((error) => {
+      void triggerWeatherRefresh(undefined, "automatic").catch((error) => {
         console.error("[Weather] Scheduled refresh failed:", error);
       });
     },
@@ -854,15 +894,18 @@ export function getWeatherSnapshot(locationId: string): WeatherSnapshot | null {
 
 export async function triggerWeatherRefresh(
   locationId?: string,
+  trigger: WeatherRefreshTrigger = "manual",
 ): Promise<number> {
-  if (refreshPromise) {
-    return refreshPromise;
+  const existing = refreshPromises.get(trigger);
+  if (existing) {
+    return existing;
   }
 
-  refreshPromise = doRefresh(locationId).finally(() => {
-    refreshPromise = null;
+  const task = doRefresh(locationId, trigger).finally(() => {
+    refreshPromises.delete(trigger);
   });
-  return refreshPromise;
+  refreshPromises.set(trigger, task);
+  return task;
 }
 
 export function getWeatherStatus(): WeatherStatus {
@@ -904,7 +947,7 @@ export const WeatherModule: DataSourceModule = {
       isWeatherEnabled() &&
       listLocations().length > 0
     ) {
-      void triggerWeatherRefresh().catch((error) => {
+      void triggerWeatherRefresh(undefined, "automatic").catch((error) => {
         console.error("[Weather] Initial refresh failed:", error);
       });
     }

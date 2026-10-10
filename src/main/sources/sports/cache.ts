@@ -444,8 +444,9 @@ export function upsertEvents(
   db: Database.Database,
   events: SportEvent[],
   fetchedDate: string,
+  shouldPersist: () => boolean = () => true,
 ): void {
-  if (events.length === 0) {
+  if (events.length === 0 || !shouldPersist()) {
     return;
   }
 
@@ -478,6 +479,9 @@ export function upsertEvents(
   );
 
   const apply = db.transaction((items: SportEvent[]) => {
+    if (!shouldPersist()) {
+      return;
+    }
     for (const event of items) {
       const homeTeamNormalized = normalizeTeamLookupKey(event.homeTeam);
       const awayTeamNormalized = normalizeTeamLookupKey(event.awayTeam);
