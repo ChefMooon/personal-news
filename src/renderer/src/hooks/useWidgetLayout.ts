@@ -577,43 +577,47 @@ export function useWidgetLayout(): {
   };
 
   useEffect(() => {
-    window.api
-      .invoke(IPC.SETTINGS_GET_DASHBOARD_VIEWS)
-      .then((data) => {
-        const migrated = migrateDashboardViewsState(data);
-        const {
-          state: prunedState,
-          changed,
-          removedInstanceIds,
-        } = pruneDashboardViewsState(migrated.state);
-        stateRef.current = prunedState;
-        setState(prunedState);
-        setResolvedActiveViewId(prunedState, prunedState.view_order[0] ?? null);
-        if (changed || migrated.cloneInstanceConfigs.length > 0) {
-          window.api
-            .invoke(IPC.SETTINGS_SET_DASHBOARD_VIEWS, {
-              state: prunedState,
-              deleteInstanceIds: removedInstanceIds,
-              cloneInstanceConfigs: migrated.cloneInstanceConfigs,
-            } satisfies DashboardViewsMutation)
-            .catch((err) => {
-              toast.error(
-                err instanceof Error
-                  ? err.message
-                  : "Failed to persist cleaned dashboard views.",
-              );
-            });
-        }
-        setLoading(false);
-      })
-      .catch((err) => {
-        toast.error(
-          err instanceof Error
-            ? err.message
-            : "Failed to load dashboard views.",
-        );
-        setLoading(false);
-      });
+    const load = (): void => {
+      window.api
+        .invoke(IPC.SETTINGS_GET_DASHBOARD_VIEWS)
+        .then((data) => {
+          const migrated = migrateDashboardViewsState(data);
+          const {
+            state: prunedState,
+            changed,
+            removedInstanceIds,
+          } = pruneDashboardViewsState(migrated.state);
+          stateRef.current = prunedState;
+          setState(prunedState);
+          setResolvedActiveViewId(prunedState, activeViewIdRef.current);
+          if (changed || migrated.cloneInstanceConfigs.length > 0) {
+            window.api
+              .invoke(IPC.SETTINGS_SET_DASHBOARD_VIEWS, {
+                state: prunedState,
+                deleteInstanceIds: removedInstanceIds,
+                cloneInstanceConfigs: migrated.cloneInstanceConfigs,
+              } satisfies DashboardViewsMutation)
+              .catch((err) => {
+                toast.error(
+                  err instanceof Error
+                    ? err.message
+                    : "Failed to persist cleaned dashboard views.",
+                );
+              });
+          }
+          setLoading(false);
+        })
+        .catch((err) => {
+          toast.error(
+            err instanceof Error
+              ? err.message
+              : "Failed to load dashboard views.",
+          );
+          setLoading(false);
+        });
+    };
+    load();
+    return window.api.on(IPC.DEV_TEST_DATA_UPDATED, load);
   }, []);
 
   const setActiveViewId = (viewId: string): void => {

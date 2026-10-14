@@ -541,6 +541,25 @@ export function upsertOpponentBadge(
   ).run(teamId, name, badgeUrl, Math.floor(Date.now() / 1000));
 }
 
+export function getCachedEvent(
+  db: Database.Database,
+  eventId: string,
+): SportEvent | null {
+  const row = db
+    .prepare(
+      `SELECT se.event_id, se.league_id, se.sport, se.home_team_id, se.away_team_id,
+            se.home_team, se.away_team,
+            ht.badge_url AS home_team_badge_url, at.badge_url AS away_team_badge_url,
+            se.home_score, se.away_score, se.event_date, se.event_time, se.status, se.venue
+       FROM sports_events se
+       LEFT JOIN sports_teams ht ON ht.team_id = se.home_team_id
+       LEFT JOIN sports_teams at ON at.team_id = se.away_team_id
+      WHERE se.event_id = ?`,
+    )
+    .get(eventId) as EventRow | undefined;
+  return row ? mapEvent(row) : null;
+}
+
 export function getTodayEvents(
   db: Database.Database,
   sport: string,

@@ -26,6 +26,7 @@ import { SportsModule } from "./sources/sports/index";
 import { attachWindowListeners } from "./notifications/notification-service";
 import { getSetting, setSetting } from "./settings/store";
 import { initializeAutoUpdates } from "./updates/service";
+import { initializeDevTestDataForStartup } from "./dev-test-data";
 import {
   DatabaseProfileError,
   resolveDatabaseProfile,
@@ -716,6 +717,11 @@ app.whenReady().then(() => {
       app.exit(0);
       return;
     }
+
+    initializeDevTestDataForStartup(db, {
+      isPackaged: app.isPackaged,
+      harnessMode: process.env[HARNESS_MODE_ENV] === "1",
+    });
 
     ensureBooleanSetting("app_close_to_tray", true);
     ensureBooleanSetting("app_start_minimized", false);

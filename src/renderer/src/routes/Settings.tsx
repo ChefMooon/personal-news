@@ -1448,6 +1448,7 @@ function GeneralTab(): React.ReactElement {
   const [devTestDataLoading, setDevTestDataLoading] = useState(false);
   const [devTestDataError, setDevTestDataError] = useState<string | null>(null);
   const [confirmClearDevTestData, setConfirmClearDevTestData] = useState(false);
+  const [confirmResetDevTestData, setConfirmResetDevTestData] = useState(false);
   const devTestDataActionInFlight = useRef(false);
 
   const refreshDevTestDataStatus = async (): Promise<void> => {
@@ -1468,7 +1469,7 @@ function GeneralTab(): React.ReactElement {
   };
 
   const runDevTestDataAction = async (
-    action: "seed" | "clear",
+    action: "seed" | "clear" | "update" | "reset",
   ): Promise<void> => {
     if (devTestDataActionInFlight.current) {
       return;
@@ -1478,16 +1479,24 @@ function GeneralTab(): React.ReactElement {
     setDevTestDataError(null);
     try {
       const result = (await window.api.invoke(
-        action === "seed" ? IPC.DEV_TEST_DATA_SEED : IPC.DEV_TEST_DATA_CLEAR,
+        {
+          seed: IPC.DEV_TEST_DATA_SEED,
+          clear: IPC.DEV_TEST_DATA_CLEAR,
+          update: IPC.DEV_TEST_DATA_UPDATE,
+          reset: IPC.DEV_TEST_DATA_RESET,
+        }[action],
       )) as IpcMutationResult;
       if (!result.ok) {
         throw new Error(result.error ?? `Failed to ${action} developer data.`);
       }
       await refreshDevTestDataStatus();
       toast.success(
-        action === "seed"
-          ? "Synthetic developer data seeded."
-          : "Synthetic developer data cleared.",
+        {
+          seed: "Synthetic developer data seeded.",
+          clear: "Synthetic developer data cleared.",
+          update: "Synthetic developer data updated.",
+          reset: "Synthetic developer data reset.",
+        }[action],
       );
     } catch (err) {
       const message =
@@ -1776,9 +1785,9 @@ function GeneralTab(): React.ReactElement {
           <h3 className="text-sm font-medium mb-1">Developer Test Data</h3>
           <p className="text-xs text-muted-foreground mb-3">
             Seed synthetic records for Reddit Digest, Saved Posts, Weather,
-            Sports, and YouTube in this Development profile. Automatic polling
-            pauses while fixtures are active. Manual refresh remains available
-            and may fetch live source data.
+            Astronomy, Sports, and YouTube in this Development profile.
+            Automatic polling pauses while fixtures are active. Manual refresh
+            remains available and may fetch live source data.
           </p>
           <p
             className="text-sm mb-3"
@@ -1787,19 +1796,48 @@ function GeneralTab(): React.ReactElement {
           >
             Status:{" "}
             {devTestDataStatus.active ? "Synthetic data active" : "Inactive"}
+            {devTestDataStatus.active
+              ? ` · Applied version ${devTestDataStatus.appliedVersion ?? "unknown (legacy)"}`
+              : ""}
+            {` · Latest version ${devTestDataStatus.latestVersion}`}
+            {devTestDataStatus.updateAvailable ? " · Update available" : ""}
+          </p>
+          <p className="text-xs text-muted-foreground mb-3">
+            Changes persist across restarts. Update re-applies current
+            definitions, restores missing examples, and keeps existing notes,
+            tags, read states, and widget settings. Reset restores the original
+            example records.
           </p>
           {devTestDataError ? (
             <p className="text-sm text-destructive mb-3" role="alert">
               {devTestDataError}
             </p>
           ) : null}
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button
               variant="outline"
               onClick={() => void runDevTestDataAction("seed")}
-              disabled={devTestDataLoading || !devTestDataStatus}
+              disabled={devTestDataLoading || devTestDataStatus.active}
             >
               {devTestDataLoading ? "Working..." : "Seed test data"}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => void runDevTestDataAction("update")}
+              disabled={devTestDataLoading || !devTestDataStatus.active}
+            >
+              Update test data
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setConfirmResetDevTestData(true)}
+              disabled={
+                devTestDataLoading ||
+                !devTestDataStatus.active ||
+                confirmResetDevTestData
+              }
+            >
+              Reset test data
             </Button>
             <Button
               variant="destructive"
@@ -1813,6 +1851,37 @@ function GeneralTab(): React.ReactElement {
               Clear test data
             </Button>
           </div>
+          <AlertDialog
+            open={confirmResetDevTestData}
+            onOpenChange={setConfirmResetDevTestData}
+          >
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Reset synthetic test data?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Fixture notes, tags, read states, and other example edits will
+                  be replaced with defaults, including fixture dashboards and
+                  widget settings. Other saved content and unrelated dashboards
+                  will be preserved.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={devTestDataLoading}>
+                  Cancel
+                </AlertDialogCancel>
+                <AlertDialogAction
+                  disabled={devTestDataLoading}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    setConfirmResetDevTestData(false);
+                    void runDevTestDataAction("reset");
+                  }}
+                >
+                  Reset test data
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
           <AlertDialog
             open={confirmClearDevTestData}
             onOpenChange={setConfirmClearDevTestData}

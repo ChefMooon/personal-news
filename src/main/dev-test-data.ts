@@ -1,14 +1,38 @@
 import type Database from "better-sqlite3";
-import type { IpcMutationResult } from "../shared/ipc-types";
+import type { DevTestDataStatus, IpcMutationResult } from "../shared/ipc-types";
 import { getDb } from "./db/database";
+import { astronomyFixtureContributor } from "./dev-test-data/astronomy";
 import { redditDigestFixtureContributor } from "./dev-test-data/reddit-digest";
 import { savedPostsFixtureContributor } from "./dev-test-data/saved-posts";
 import { sportsFixtureContributor } from "./dev-test-data/sports";
 import { weatherFixtureContributor } from "./dev-test-data/weather";
 import { youtubeFixtureContributor } from "./dev-test-data/youtube";
 import type { DevTestDataContributor } from "./dev-test-data/types";
+import {
+  createFixtureContext,
+  type FixtureContext,
+} from "./dev-test-data/fixtures";
+import {
+  captureFixtureInteractions,
+  clearOwnedFixtureRows,
+} from "./dev-test-data/ownership";
+import {
+  enableFixtureFeaturePreferences,
+  restoreFixtureFeaturePreferences,
+} from "./dev-test-data/preferences";
+import {
+  clearFixtureDashboardPresets,
+  mergeFixtureDashboardPresets,
+  resetFixtureDashboardPresets,
+} from "./dev-test-data/dashboard-presets";
 
 export const DEV_TEST_DATA_ACTIVE_SETTING_KEY = "dev_test_data_active";
+export const DEV_TEST_DATA_BOOTSTRAP_SETTING_KEY =
+  "dev_test_data_bootstrap_complete";
+export const DEV_TEST_DATA_VERSION_SETTING_KEY =
+  "dev_test_data_applied_version";
+// Bump when the shipped fixture definitions change.
+export const DEV_TEST_DATA_VERSION = 4;
 
 export function assertDevTestDataMutationAllowed(isPackaged: boolean): void {
   if (isPackaged) {
@@ -31,6 +55,7 @@ export const DEV_TEST_DATA_CONTRIBUTORS: readonly DevTestDataContributor[] = [
   redditDigestFixtureContributor,
   savedPostsFixtureContributor,
   weatherFixtureContributor,
+  astronomyFixtureContributor,
   sportsFixtureContributor,
   youtubeFixtureContributor,
 ];
@@ -80,7 +105,10 @@ function updateWeatherFixtureDefault(
   }
 
   if (clear) {
-    if (settings.defaultLocationId !== WEATHER_FIXTURE_LOCATION_ID) {
+    if (
+      typeof settings.defaultLocationId !== "string" ||
+      !settings.defaultLocationId.startsWith("pn_dev_fixture_")
+    ) {
       return;
     }
     settings.defaultLocationId = null;
@@ -103,26 +131,117 @@ export function isDevTestDataActive(
   return readSetting(database, DEV_TEST_DATA_ACTIVE_SETTING_KEY) === "true";
 }
 
-export function seedDevTestData(database: Database.Database = getDb()): void {
-  const seedTransaction = database.transaction(() => {
-    for (const contributor of DEV_TEST_DATA_CONTRIBUTORS) {
-      contributor.seed(database);
-    }
+export function getDevTestDataStatus(
+  database: Database.Database = getDb(),
+  available = true,
+): DevTestDataStatus {
+  const active = available && isDevTestDataActive(database);
+  const rawVersion = readSetting(database, DEV_TEST_DATA_VERSION_SETTING_KEY);
+  const appliedVersion =
+    active && rawVersion != null && /^\d+$/.test(rawVersion)
+      ? Number(rawVersion)
+      : null;
+  return {
+    available,
+    active,
+    latestVersion: DEV_TEST_DATA_VERSION,
+    appliedVersion,
+    updateAvailable: active && appliedVersion !== DEV_TEST_DATA_VERSION,
+  };
+}
+
+function applyFixtureDefinitions(
+  database: Database.Database,
+  context: FixtureContext,
+): void {
+  clearOwnedFixtureRows(database, true);
+  for (const contributor of DEV_TEST_DATA_CONTRIBUTORS)
+    contributor.seed(database, context);
+  writeSetting(database, DEV_TEST_DATA_ACTIVE_SETTING_KEY, "true");
+  writeSetting(database, DEV_TEST_DATA_BOOTSTRAP_SETTING_KEY, "true");
+  writeSetting(
+    database,
+    DEV_TEST_DATA_VERSION_SETTING_KEY,
+    String(DEV_TEST_DATA_VERSION),
+  );
+}
+
+export function seedDevTestData(
+  database: Database.Database = getDb(),
+  context: FixtureContext = createFixtureContext(),
+): void {
+  if (isDevTestDataActive(database)) return;
+  database.transaction(() => {
+    applyFixtureDefinitions(database, context);
     updateWeatherFixtureDefault(database, false);
-    writeSetting(database, DEV_TEST_DATA_ACTIVE_SETTING_KEY, "true");
-  });
-  seedTransaction();
+    enableFixtureFeaturePreferences(database);
+    mergeFixtureDashboardPresets(database);
+  })();
+}
+
+export function updateDevTestData(
+  database: Database.Database = getDb(),
+  context: FixtureContext = createFixtureContext(),
+): void {
+  if (!isDevTestDataActive(database))
+    throw new Error("Seed developer test data before updating it.");
+  database.transaction(() => {
+    const restoreInteractions = captureFixtureInteractions(database);
+    applyFixtureDefinitions(database, context);
+    restoreInteractions();
+    enableFixtureFeaturePreferences(database, true);
+    mergeFixtureDashboardPresets(database);
+  })();
+}
+
+export function resetDevTestData(
+  database: Database.Database = getDb(),
+  context: FixtureContext = createFixtureContext(),
+): void {
+  if (!isDevTestDataActive(database))
+    throw new Error("Seed developer test data before resetting it.");
+  database.transaction(() => {
+    // Retain original preference snapshots until the final Clear.
+    clearOwnedFixtureRows(database);
+    applyFixtureDefinitions(database, context);
+    updateWeatherFixtureDefault(database, false);
+    enableFixtureFeaturePreferences(database);
+    resetFixtureDashboardPresets(database);
+  })();
+}
+
+export function initializeDevTestDataForStartup(
+  database: Database.Database,
+  options: { isPackaged: boolean; harnessMode: boolean },
+): void {
+  if (options.isPackaged || options.harnessMode) {
+    return;
+  }
+
+  if (readSetting(database, DEV_TEST_DATA_BOOTSTRAP_SETTING_KEY) === "true") {
+    return;
+  }
+  // Legacy active profiles also remain intact until an explicit Update/Reset.
+  if (isDevTestDataActive(database)) {
+    writeSetting(database, DEV_TEST_DATA_BOOTSTRAP_SETTING_KEY, "true");
+    return;
+  }
+  seedDevTestData(database, createFixtureContext());
 }
 
 export function clearDevTestData(database: Database.Database = getDb()): void {
   const clearTransaction = database.transaction(() => {
     updateWeatherFixtureDefault(database, true);
-    for (const contributor of [...DEV_TEST_DATA_CONTRIBUTORS].reverse()) {
-      contributor.clear(database);
-    }
+    restoreFixtureFeaturePreferences(database);
+    clearOwnedFixtureRows(database);
+    clearFixtureDashboardPresets(database);
     database
       .prepare("DELETE FROM settings WHERE key = ?")
       .run(DEV_TEST_DATA_ACTIVE_SETTING_KEY);
+    database
+      .prepare("DELETE FROM settings WHERE key = ?")
+      .run(DEV_TEST_DATA_VERSION_SETTING_KEY);
+    writeSetting(database, DEV_TEST_DATA_BOOTSTRAP_SETTING_KEY, "true");
   });
   clearTransaction();
 }

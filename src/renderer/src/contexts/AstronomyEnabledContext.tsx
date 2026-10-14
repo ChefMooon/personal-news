@@ -33,21 +33,25 @@ export function AstronomyEnabledProvider({
   );
 
   useEffect(() => {
-    window.api
-      .invoke(IPC.ASTRONOMY_GET_SETTINGS)
-      .then((data) => {
-        const settings = data as Partial<AstronomySettings> | null;
-        if (settings && typeof settings.enabled === "boolean") {
-          setEnabledState(settings.enabled);
-        }
-      })
-      .catch((err) => {
-        toast.error(
-          err instanceof Error
-            ? err.message
-            : "Failed to load Astronomy setting.",
-        );
-      });
+    const load = (): void => {
+      window.api
+        .invoke(IPC.ASTRONOMY_GET_SETTINGS)
+        .then((data) => {
+          const settings = data as Partial<AstronomySettings> | null;
+          if (settings && typeof settings.enabled === "boolean") {
+            setEnabledState(settings.enabled);
+          }
+        })
+        .catch((err) => {
+          toast.error(
+            err instanceof Error
+              ? err.message
+              : "Failed to load Astronomy setting.",
+          );
+        });
+    };
+    load();
+    return window.api.on(IPC.DEV_TEST_DATA_UPDATED, load);
   }, []);
 
   const setEnabled = (value: boolean): void => {

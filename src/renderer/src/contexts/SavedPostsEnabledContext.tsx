@@ -20,20 +20,22 @@ export function SavedPostsEnabledProvider({
   const [enabled, setEnabledState] = useState(true);
 
   useEffect(() => {
-    window.api
-      .invoke(IPC.SETTINGS_GET, "saved_posts_enabled")
-      .then((raw) => {
-        if (raw === "false") {
-          setEnabledState(false);
-        }
-      })
-      .catch((err) => {
-        toast.error(
-          err instanceof Error
-            ? err.message
-            : "Failed to load Saved Posts feature flag.",
-        );
-      });
+    const load = (): void => {
+      window.api
+        .invoke(IPC.SETTINGS_GET, "saved_posts_enabled")
+        .then((raw) => {
+          setEnabledState(raw !== "false");
+        })
+        .catch((err) => {
+          toast.error(
+            err instanceof Error
+              ? err.message
+              : "Failed to load Saved Posts feature flag.",
+          );
+        });
+    };
+    load();
+    return window.api.on(IPC.DEV_TEST_DATA_UPDATED, load);
   }, []);
 
   const setEnabled = (value: boolean): void => {

@@ -27,6 +27,7 @@ import {
 import { getSetting, setSetting } from "../../settings/store";
 import { isElectronHarnessRun } from "../../harness-mode";
 import { isDevTestDataActive } from "../../dev-test-data";
+import { getSportsFixtureEventDetail } from "../../dev-test-data/definitions/sports";
 import type { DataSourceModule } from "../registry";
 import {
   fetchEventById,
@@ -45,6 +46,7 @@ import {
   getAdjacentLocalDateKeys,
   getBadgeCacheMeta,
   getCacheMeta,
+  getCachedEvent,
   getLeagueById,
   getLocalDateString,
   getOpponentBadge,
@@ -960,12 +962,21 @@ export async function getSportsStandings(
   sport: string,
   leagueName?: string,
 ): Promise<SportStandingRow[]> {
+  if (leagueId.startsWith("pn_dev_fixture_") && isDevTestDataActive(ensureDb()))
+    return [];
   return fetchLeagueStandings(leagueId, season, sport, leagueName);
 }
 
 export async function getSportsEventDetails(
   eventId: string,
 ): Promise<SportEventDetail | null> {
+  if (
+    eventId.startsWith("pn_dev_fixture_") &&
+    isDevTestDataActive(ensureDb())
+  ) {
+    const event = getCachedEvent(ensureDb(), eventId);
+    return event ? { ...event, ...getSportsFixtureEventDetail(event) } : null;
+  }
   return fetchEventDetails(eventId);
 }
 

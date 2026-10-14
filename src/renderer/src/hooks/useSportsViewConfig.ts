@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import type { SportsViewConfig } from "../../../shared/ipc-types";
+import { IPC, type SportsViewConfig } from "../../../shared/ipc-types";
 import { DEFAULT_SPORT, isWidgetSport } from "../../../shared/sports";
 
 const VALID_VIEW_MODES: SportsViewConfig["viewMode"][] = [
@@ -54,26 +54,40 @@ export function useSportsViewConfig(instanceId: string): {
   const storageKey = `sports_view_config:${instanceId}`;
 
   useEffect(() => {
-    window.api
-      .invoke("settings:get", storageKey)
-      .then((raw) => {
-        if (raw) {
-          try {
-            setConfigState(
-              normalizeSportsViewConfig(
-                JSON.parse(raw as string) as Partial<SportsViewConfig>,
-              ),
-            );
-          } catch {}
-        }
-      })
-      .catch((err) => {
-        toast.error(
-          err instanceof Error
-            ? err.message
-            : "Failed to load Sports widget settings.",
-        );
-      });
+    let active = true;
+    let request = 0;
+    const load = (): void => {
+      const currentRequest = ++request;
+      window.api
+        .invoke("settings:get", storageKey)
+        .then((raw) => {
+          if (!active || currentRequest !== request) return;
+          if (raw) {
+            try {
+              setConfigState(
+                normalizeSportsViewConfig(
+                  JSON.parse(raw as string) as Partial<SportsViewConfig>,
+                ),
+              );
+            } catch {}
+          } else {
+            setConfigState(DEFAULT_SPORTS_VIEW_CONFIG);
+          }
+        })
+        .catch((err) => {
+          toast.error(
+            err instanceof Error
+              ? err.message
+              : "Failed to load Sports widget settings.",
+          );
+        });
+    };
+    load();
+    const unsubscribe = window.api.on(IPC.DEV_TEST_DATA_UPDATED, load);
+    return () => {
+      active = false;
+      unsubscribe();
+    };
   }, [storageKey]);
 
   const setConfig = (newConfig: SportsViewConfig): void => {

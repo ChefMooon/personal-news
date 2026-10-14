@@ -21,20 +21,22 @@ export function RedditDigestEnabledProvider({
   const [enabled, setEnabledState] = useState(true);
 
   useEffect(() => {
-    window.api
-      .invoke(IPC.SETTINGS_GET, "reddit_digest_enabled")
-      .then((raw) => {
-        if (raw === "false") {
-          setEnabledState(false);
-        }
-      })
-      .catch((err) => {
-        toast.error(
-          err instanceof Error
-            ? err.message
-            : "Failed to load Reddit Digest feature flag.",
-        );
-      });
+    const load = (): void => {
+      window.api
+        .invoke(IPC.SETTINGS_GET, "reddit_digest_enabled")
+        .then((raw) => {
+          setEnabledState(raw !== "false");
+        })
+        .catch((err) => {
+          toast.error(
+            err instanceof Error
+              ? err.message
+              : "Failed to load Reddit Digest feature flag.",
+          );
+        });
+    };
+    load();
+    return window.api.on(IPC.DEV_TEST_DATA_UPDATED, load);
   }, []);
 
   const setEnabled = (value: boolean): void => {

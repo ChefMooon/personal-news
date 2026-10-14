@@ -132,6 +132,9 @@ export const IPC = {
   DEV_TEST_DATA_GET_STATUS: "devTestData:getStatus",
   DEV_TEST_DATA_SEED: "devTestData:seed",
   DEV_TEST_DATA_CLEAR: "devTestData:clear",
+  DEV_TEST_DATA_UPDATE: "devTestData:update",
+  DEV_TEST_DATA_RESET: "devTestData:reset",
+  DEV_TEST_DATA_UPDATED: "devTestData:updated",
   SETTINGS_GET_NOTIFICATION_PREFS: "settings:getNotificationPrefs",
   SETTINGS_SET_NOTIFICATION_PREFS: "settings:setNotificationPrefs",
   SHELL_OPEN_EXTERNAL: "shell:openExternal",
@@ -798,6 +801,9 @@ export interface IpcMutationResult {
 export interface DevTestDataStatus {
   available: boolean;
   active: boolean;
+  latestVersion: number;
+  appliedVersion: number | null;
+  updateAvailable: boolean;
 }
 
 export type UpdateStatusState =

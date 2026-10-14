@@ -12,9 +12,13 @@ import { getDb } from "../db/database";
 import {
   clearDevTestData,
   createDevTestDataMutationHandler,
-  isDevTestDataActive,
+  getDevTestDataStatus,
+  resetDevTestData,
+  updateDevTestData,
   seedDevTestData,
 } from "../dev-test-data";
+import { SPORTS_FIXTURE_SPORTS } from "../dev-test-data/definitions/sports";
+import { WEATHER_FIXTURE_LOCATION_ID } from "../dev-test-data/weather";
 import { deleteSetting, getSetting, setSetting } from "../settings/store";
 import {
   IPC,
@@ -1423,21 +1427,47 @@ export function registerIpcHandlers(): void {
 
   const emitDevTestDataUpdated = (): void => {
     for (const win of BrowserWindow.getAllWindows()) {
+      win.webContents.send(IPC.DEV_TEST_DATA_UPDATED);
       win.webContents.send(IPC.REDDIT_UPDATED);
       win.webContents.send(IPC.WEATHER_UPDATED);
-      win.webContents.send(IPC.SPORTS_DATA_UPDATED, {
-        sport: "dev-test-data",
+      for (const sport of SPORTS_FIXTURE_SPORTS)
+        win.webContents.send(IPC.SPORTS_DATA_UPDATED, {
+          sport,
+          ok: true,
+          error: null,
+        });
+      win.webContents.send(IPC.ASTRONOMY_UPDATED, {
+        locationIds: [WEATHER_FIXTURE_LOCATION_ID],
         ok: true,
-        error: null,
       });
       win.webContents.send(IPC.YOUTUBE_UPDATED);
     }
   };
 
-  ipcMain.handle(IPC.DEV_TEST_DATA_GET_STATUS, (): DevTestDataStatus => ({
-    available: !app.isPackaged,
-    active: !app.isPackaged && isDevTestDataActive(),
-  }));
+  ipcMain.handle(IPC.DEV_TEST_DATA_GET_STATUS, (): DevTestDataStatus =>
+    getDevTestDataStatus(getDb(), !app.isPackaged),
+  );
+
+  ipcMain.handle(
+    IPC.DEV_TEST_DATA_UPDATE,
+    createDevTestDataMutationHandler(
+      () => app.isPackaged,
+      () => {
+        updateDevTestData();
+        emitDevTestDataUpdated();
+      },
+    ),
+  );
+  ipcMain.handle(
+    IPC.DEV_TEST_DATA_RESET,
+    createDevTestDataMutationHandler(
+      () => app.isPackaged,
+      () => {
+        resetDevTestData();
+        emitDevTestDataUpdated();
+      },
+    ),
+  );
 
   ipcMain.handle(
     IPC.DEV_TEST_DATA_SEED,
