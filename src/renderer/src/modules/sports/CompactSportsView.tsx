@@ -381,7 +381,9 @@ export function CompactSportsView({
 
   if (!selectedGame) {
     return (
-      <div className="grid min-w-0 grid-cols-[minmax(0,3fr)_minmax(7rem,1fr)] gap-2 overflow-hidden">
+      <div
+        className={`grid min-w-0 grid-cols-[minmax(0,3fr)_minmax(7rem,1fr)] gap-2 overflow-hidden ${pageCount > 1 ? "min-h-44" : ""}`}
+      >
         <div className="flex min-h-28 min-w-0 items-center justify-center rounded-lg border border-dashed px-3 text-center text-sm text-muted-foreground">
           No games today
         </div>
