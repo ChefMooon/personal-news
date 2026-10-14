@@ -80,6 +80,7 @@ function PostCard({
   allTags,
   config,
   onOpen,
+  onPeek,
   onToggleViewed,
   onAfterMutation,
 }: {
@@ -94,6 +95,7 @@ function PostCard({
     size: "small" | "medium" | "large";
   };
   onOpen: (post: SavedPost) => void;
+  onPeek: (post: SavedPost) => void;
   onToggleViewed: (post: SavedPost, viewed: boolean) => void;
   onAfterMutation: () => Promise<void> | void;
 }): React.ReactElement {
@@ -104,10 +106,11 @@ function PostCard({
       post={post}
       allTags={allTags}
       onOpenPost={onOpen}
+      onPeekPost={onPeek}
       onSetViewed={onToggleViewed}
       onAfterMutation={onAfterMutation}
     >
-      {({ onContextMenu, trigger, viewedToggle }) => (
+      {({ onContextMenu, trigger, peekButton, viewedToggle }) => (
         <div
           className={
             config.cardDensity === "compact"
@@ -180,6 +183,7 @@ function PostCard({
           </button>
           <div className="mt-0.5 flex items-center gap-1 shrink-0">
             {viewedToggle}
+            {peekButton}
             {trigger}
           </div>
         </div>
@@ -368,7 +372,17 @@ function SavedPostsWidget(): React.ReactElement {
     }
     const url =
       post.source === "reddit" ? toRedditPostUrl(post.permalink) : post.url;
-    window.api.invoke("shell:openExternal", url).catch((err) => {
+    window.api.invoke(IPC.SHELL_OPEN_EXTERNAL, url).catch((err) => {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to open saved post link.",
+      );
+    });
+  };
+
+  const handlePeekExternal = (post: SavedPost): void => {
+    const url =
+      post.source === "reddit" ? toRedditPostUrl(post.permalink) : post.url;
+    window.api.invoke(IPC.SHELL_OPEN_EXTERNAL, url).catch((err) => {
       toast.error(
         err instanceof Error ? err.message : "Failed to open saved post link.",
       );
@@ -464,6 +478,7 @@ function SavedPostsWidget(): React.ReactElement {
               allTags={allTags}
               config={effectiveCardConfig}
               onOpen={handleOpenExternal}
+              onPeek={handlePeekExternal}
               onToggleViewed={handleToggleViewed}
               onAfterMutation={handleAfterMutation}
             />

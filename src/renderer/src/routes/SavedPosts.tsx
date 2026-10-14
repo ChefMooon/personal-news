@@ -834,6 +834,21 @@ function SavedPostsContent(): React.ReactElement {
                 key={post.post_id}
                 post={post}
                 allTags={allTags}
+                onPeekPost={(currentPost) => {
+                  const url =
+                    currentPost.source === "reddit"
+                      ? toRedditPostUrl(currentPost.permalink)
+                      : currentPost.url;
+                  window.api
+                    .invoke(IPC.SHELL_OPEN_EXTERNAL, url)
+                    .catch((err) => {
+                      toast.error(
+                        err instanceof Error
+                          ? err.message
+                          : "Failed to open link.",
+                      );
+                    });
+                }}
                 onOpenPost={(currentPost) => {
                   if (currentPost.viewed_at === null) {
                     setPostViewed(currentPost.post_id, true);
@@ -857,7 +872,7 @@ function SavedPostsContent(): React.ReactElement {
                 }
                 onAfterMutation={handleSavedPostMutation}
               >
-                {({ onContextMenu, trigger, viewedToggle }) => (
+                {({ onContextMenu, trigger, peekButton, viewedToggle }) => (
                   <div
                     className={`flex items-start gap-3 py-3 px-3 rounded-md border-b last:border-0 ${selectedPostIds.has(post.post_id) ? "bg-primary/10" : "hover:bg-muted/50"}`}
                     onContextMenu={onContextMenu}
@@ -952,6 +967,7 @@ function SavedPostsContent(): React.ReactElement {
                     </div>
                     <div className="mt-0.5 flex items-center gap-1 shrink-0">
                       {viewedToggle}
+                      {peekButton}
                       {trigger}
                     </div>
                   </div>

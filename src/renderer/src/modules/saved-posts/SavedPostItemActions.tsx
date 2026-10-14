@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import {
   MoreHorizontal,
   ExternalLink,
+  Eye,
   Circle,
   CircleCheck,
   PencilLine,
@@ -51,11 +52,13 @@ interface SavedPostItemActionsProps {
   post: SavedPost;
   allTags: string[];
   onOpenPost: (post: SavedPost) => void;
+  onPeekPost: (post: SavedPost) => void;
   onSetViewed: (post: SavedPost, viewed: boolean) => void;
   onAfterMutation: () => Promise<void> | void;
   children: (controls: {
     onContextMenu: (event: React.MouseEvent<HTMLElement>) => void;
     trigger: React.ReactElement;
+    peekButton: React.ReactElement;
     viewedToggle: React.ReactElement;
   }) => React.ReactNode;
 }
@@ -66,7 +69,7 @@ interface MenuPosition {
 }
 
 const MENU_WIDTH = 208;
-const MENU_HEIGHT = 176;
+const MENU_HEIGHT = 216;
 const VIEWPORT_PADDING = 12;
 
 function clampMenuPosition(x: number, y: number): MenuPosition {
@@ -89,6 +92,7 @@ export function SavedPostItemActions({
   post,
   allTags,
   onOpenPost,
+  onPeekPost,
   onSetViewed,
   onAfterMutation,
   children,
@@ -332,9 +336,29 @@ export function SavedPostItemActions({
     </button>
   );
 
+  const peekButton = (
+    <button
+      type="button"
+      onClick={(event) => {
+        event.stopPropagation();
+        onPeekPost(post);
+      }}
+      className="mt-0.5 inline-flex items-center justify-center rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+      aria-label={`Peek saved post: ${post.title}`}
+      title="Peek without marking viewed"
+    >
+      <Eye className="h-4 w-4" />
+    </button>
+  );
+
   return (
     <>
-      {children({ onContextMenu: handleContextMenu, trigger, viewedToggle })}
+      {children({
+        onContextMenu: handleContextMenu,
+        trigger,
+        peekButton,
+        viewedToggle,
+      })}
       {menuPosition
         ? createPortal(
             <div
@@ -355,6 +379,18 @@ export function SavedPostItemActions({
               >
                 <ExternalLink className="h-4 w-4" />
                 Open link
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                className="flex w-full items-center gap-2 px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground"
+                onClick={() => {
+                  onPeekPost(post);
+                  closeMenu();
+                }}
+              >
+                <Eye className="h-4 w-4" />
+                Peek link
               </button>
               <button
                 type="button"
