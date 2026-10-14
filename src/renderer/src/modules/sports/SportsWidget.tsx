@@ -108,19 +108,6 @@ function formatLastSynced(timestamp: number | null): string {
   });
 }
 
-function formatUtcDateKey(value: Date): string {
-  const year = value.getUTCFullYear();
-  const month = String(value.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(value.getUTCDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function formatUtcTimeKey(value: Date): string {
-  const hours = String(value.getUTCHours()).padStart(2, "0");
-  const minutes = String(value.getUTCMinutes()).padStart(2, "0");
-  return `${hours}:${minutes}`;
-}
-
 function SportsWidget(): React.ReactElement {
   const { instanceId, label, size, editMode, onSizeChange } =
     useWidgetInstance();
@@ -143,7 +130,6 @@ function SportsWidget(): React.ReactElement {
   >({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [showDevMockLiveGame, setShowDevMockLiveGame] = useState(false);
   const [selectedGameId, setSelectedGameId] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [snapshotConfig, setSnapshotConfig] = useState(config);
@@ -154,7 +140,6 @@ function SportsWidget(): React.ReactElement {
   const latestLoadIdRef = useRef(0);
   const cardContentRef = useRef<HTMLDivElement | null>(null);
   const previousSizeRef = useRef(size);
-  const defaultMockSport = selectedSports[0] ?? "Baseball";
 
   useEffect(() => {
     if (previousSizeRef.current === size) return;
@@ -289,131 +274,6 @@ function SportsWidget(): React.ReactElement {
     [leagues],
   );
 
-  const mockTrackedTeam = useMemo<TrackedTeam>(() => {
-    const existingEnabled = trackedTeams.find((team) => team.enabled);
-    if (existingEnabled) {
-      return existingEnabled;
-    }
-
-    return {
-      teamId: `dev-mock-team:${instanceId}`,
-      leagueId: "dev-mock-league",
-      sport: defaultMockSport,
-      name: "Toronto Blue Jays",
-      shortName: "Blue Jays",
-      badgeUrl: null,
-      enabled: true,
-      sortOrder: -1,
-    };
-  }, [defaultMockSport, instanceId, trackedTeams]);
-
-  const mockLiveEvent = useMemo<SportEvent>(() => {
-    const startedAt = new Date(Date.now() - 2 * 60 * 60 * 1000);
-    return {
-      eventId: `dev-mock-live:${instanceId}`,
-      leagueId: mockTrackedTeam.leagueId,
-      sport: mockTrackedTeam.sport,
-      homeTeamId: null,
-      awayTeamId: mockTrackedTeam.teamId,
-      homeTeam: "Los Angeles Angels",
-      awayTeam: mockTrackedTeam.name,
-      homeTeamBadgeUrl: null,
-      awayTeamBadgeUrl: mockTrackedTeam.badgeUrl,
-      homeScore: "3",
-      awayScore: "3",
-      eventDate: formatUtcDateKey(startedAt),
-      eventTime: formatUtcTimeKey(startedAt),
-      status: "Live · Bot 7th",
-      venue: "Angel Stadium",
-    };
-  }, [instanceId, mockTrackedTeam]);
-
-  const mockPreviousEvent = useMemo<SportEvent>(() => {
-    const playedAt = new Date(Date.now() - 26 * 60 * 60 * 1000);
-    return {
-      ...mockLiveEvent,
-      eventId: `dev-mock-previous:${instanceId}`,
-      homeTeam: "Seattle Mariners",
-      homeTeamId: "dev-mock-mariners",
-      homeScore: "2",
-      awayScore: "5",
-      eventDate: formatUtcDateKey(playedAt),
-      eventTime: formatUtcTimeKey(playedAt),
-      status: "Final",
-      venue: "T-Mobile Park",
-    };
-  }, [instanceId, mockLiveEvent]);
-
-  const mockSecondaryTrackedTeam = useMemo<TrackedTeam>(
-    () => ({
-      teamId: `dev-mock-secondary-team:${instanceId}`,
-      leagueId: mockTrackedTeam.leagueId,
-      sport: mockTrackedTeam.sport,
-      name: "New York Yankees",
-      shortName: "Yankees",
-      badgeUrl: null,
-      enabled: true,
-      sortOrder: -2,
-    }),
-    [instanceId, mockTrackedTeam.leagueId, mockTrackedTeam.sport],
-  );
-
-  const mockSecondaryLiveEvent = useMemo<SportEvent>(() => {
-    const startedAt = new Date(Date.now() - 90 * 60 * 1000);
-    return {
-      eventId: `dev-mock-live-secondary:${instanceId}`,
-      leagueId: mockSecondaryTrackedTeam.leagueId,
-      sport: mockSecondaryTrackedTeam.sport,
-      homeTeamId: "dev-mock-red-sox",
-      awayTeamId: mockSecondaryTrackedTeam.teamId,
-      homeTeam: "Boston Red Sox",
-      awayTeam: mockSecondaryTrackedTeam.name,
-      homeTeamBadgeUrl: null,
-      awayTeamBadgeUrl: mockSecondaryTrackedTeam.badgeUrl,
-      homeScore: "5",
-      awayScore: "2",
-      eventDate: formatUtcDateKey(startedAt),
-      eventTime: formatUtcTimeKey(startedAt),
-      status: "Live · Bot 5th",
-      venue: "Fenway Park",
-    };
-  }, [instanceId, mockSecondaryTrackedTeam]);
-
-  const displayTodayEvents = useMemo(() => {
-    if (!import.meta.env.DEV || !showDevMockLiveGame) {
-      return todayEvents;
-    }
-
-    const sanitized = todayEvents.filter(
-      (event) => !event.eventId.startsWith("dev-mock-live:"),
-    );
-    return [mockLiveEvent, mockSecondaryLiveEvent, ...sanitized];
-  }, [mockLiveEvent, mockSecondaryLiveEvent, showDevMockLiveGame, todayEvents]);
-
-  const displayLeaguesById = useMemo(() => {
-    if (!import.meta.env.DEV || !showDevMockLiveGame) {
-      return leaguesById;
-    }
-
-    const leagueKey = getLeagueKey(mockLiveEvent.sport, mockLiveEvent.leagueId);
-    if (leaguesById[leagueKey]) {
-      return leaguesById;
-    }
-
-    return {
-      ...leaguesById,
-      [leagueKey]: {
-        leagueId: mockLiveEvent.leagueId,
-        sport: mockLiveEvent.sport,
-        name: "MLB (Dev Mock)",
-        country: null,
-        logoUrl: null,
-        enabled: true,
-        sortOrder: -1,
-      },
-    };
-  }, [leaguesById, mockLiveEvent, showDevMockLiveGame]);
-
   const enabledTeams = useMemo(
     () =>
       trackedTeams
@@ -421,62 +281,6 @@ function SportsWidget(): React.ReactElement {
         .sort((a, b) => a.sortOrder - b.sortOrder),
     [trackedTeams],
   );
-
-  const displayEnabledTeams = useMemo(() => {
-    if (
-      !import.meta.env.DEV ||
-      !showDevMockLiveGame ||
-      enabledTeams.length > 0
-    ) {
-      return showDevMockLiveGame
-        ? [...enabledTeams, mockSecondaryTrackedTeam]
-        : enabledTeams;
-    }
-
-    return [mockTrackedTeam, mockSecondaryTrackedTeam];
-  }, [
-    enabledTeams,
-    mockSecondaryTrackedTeam,
-    mockTrackedTeam,
-    showDevMockLiveGame,
-  ]);
-
-  const displayTeamEventsById = useMemo(() => {
-    if (!import.meta.env.DEV || !showDevMockLiveGame) {
-      return teamEventsById;
-    }
-
-    const current = teamEventsById[mockTrackedTeam.teamId] ?? {
-      last: [],
-      next: [],
-    };
-    const sanitizedLast = current.last.filter(
-      (event) => !event.eventId.startsWith("dev-mock-live:"),
-    );
-    const sanitizedNext = current.next.filter(
-      (event) => !event.eventId.startsWith("dev-mock-live:"),
-    );
-
-    return {
-      ...teamEventsById,
-      [mockTrackedTeam.teamId]: {
-        last: [mockPreviousEvent, ...sanitizedLast],
-        next: [mockLiveEvent, ...sanitizedNext],
-      },
-      [mockSecondaryTrackedTeam.teamId]: {
-        last: [],
-        next: [mockSecondaryLiveEvent],
-      },
-    };
-  }, [
-    mockLiveEvent,
-    mockPreviousEvent,
-    mockSecondaryLiveEvent,
-    mockSecondaryTrackedTeam.teamId,
-    mockTrackedTeam.teamId,
-    showDevMockLiveGame,
-    teamEventsById,
-  ]);
 
   const fallbackEvents = useMemo(() => {
     const enabledLeagueIds = new Set(
@@ -514,14 +318,14 @@ function SportsWidget(): React.ReactElement {
 
   const compactEvents = useMemo(() => {
     const events = [
-      ...displayEnabledTeams.flatMap((team) => [
-        ...(displayTeamEventsById[team.teamId]?.next ?? []),
-        ...(displayTeamEventsById[team.teamId]?.last ?? []),
+      ...enabledTeams.flatMap((team) => [
+        ...(teamEventsById[team.teamId]?.next ?? []),
+        ...(teamEventsById[team.teamId]?.last ?? []),
       ]),
-      ...displayTodayEvents,
+      ...todayEvents,
     ];
     const trackedEvents = events.filter((event) =>
-      displayEnabledTeams.some(
+      enabledTeams.some(
         (team) =>
           resolveTrackedTeamSide(event, team.teamId, team.name) !== null,
       ),
@@ -532,7 +336,7 @@ function SportsWidget(): React.ReactElement {
       seen.add(event.eventId);
       return true;
     });
-  }, [displayEnabledTeams, displayTodayEvents, displayTeamEventsById]);
+  }, [enabledTeams, todayEvents, teamEventsById]);
 
   const localToday = getLocalDateKey(new Date());
   const eligibleTodayEvents = getEligibleTodayGames(compactEvents, localToday);
@@ -544,7 +348,7 @@ function SportsWidget(): React.ReactElement {
     size,
     viewMode: config.viewMode,
     liveGameCount: liveTodayCount,
-    teamCount: displayEnabledTeams.length,
+    teamCount: enabledTeams.length,
     eventCount: eligibleTodayEvents.length,
   });
 
@@ -624,17 +428,6 @@ function SportsWidget(): React.ReactElement {
             <p className="text-[11px] text-muted-foreground">
               Updated: {lastUpdatedLabel}
             </p>
-            {import.meta.env.DEV ? (
-              <button
-                type="button"
-                className="rounded border px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                onClick={() => setShowDevMockLiveGame((value) => !value)}
-                aria-label="Toggle mock live game"
-                title="Toggle mock live game"
-              >
-                {showDevMockLiveGame ? "Mock On" : "Mock Off"}
-              </button>
-            ) : null}
             <button
               type="button"
               className="p-1 rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors disabled:opacity-50"
@@ -726,8 +519,8 @@ function SportsWidget(): React.ReactElement {
               ) : size === "small" ? (
                 <CompactSportsView
                   events={compactEvents}
-                  teams={displayEnabledTeams}
-                  teamEventsById={displayTeamEventsById}
+                  teams={enabledTeams}
+                  teamEventsById={teamEventsById}
                   selectedGameId={selectedGameId}
                   onSelectGame={setSelectedGameId}
                 />
@@ -735,18 +528,15 @@ function SportsWidget(): React.ReactElement {
                 <div className="space-y-3">
                   <MediumLiveGameView
                     events={eligibleTodayEvents}
-                    teams={displayEnabledTeams}
-                    teamEventsById={displayTeamEventsById}
+                    teams={enabledTeams}
+                    teamEventsById={teamEventsById}
                     selectedGameId={selectedGameId}
                     onSelectGame={setSelectedGameId}
                   />
                   {config.viewMode === "all_games" ? (
                     <AllGamesView
-                      events={displayTodayEvents.slice(
-                        0,
-                        sportsPolicy.eventLimit,
-                      )}
-                      leaguesById={displayLeaguesById}
+                      events={todayEvents.slice(0, sportsPolicy.eventLimit)}
+                      leaguesById={leaguesById}
                       showTime={config.showTime}
                       showVenue={config.showVenue}
                       showLiveStartTime={config.showLiveStartTime}
@@ -755,12 +545,9 @@ function SportsWidget(): React.ReactElement {
                     />
                   ) : (
                     <MyTeamsView
-                      teams={displayEnabledTeams.slice(
-                        0,
-                        sportsPolicy.teamLimit,
-                      )}
-                      teamEventsById={displayTeamEventsById}
-                      leaguesById={displayLeaguesById}
+                      teams={enabledTeams.slice(0, sportsPolicy.teamLimit)}
+                      teamEventsById={teamEventsById}
+                      leaguesById={leaguesById}
                       showVenue={config.showVenue}
                       showTime={config.showTime}
                       showLiveStartTime={config.showLiveStartTime}
@@ -772,8 +559,8 @@ function SportsWidget(): React.ReactElement {
                 </div>
               ) : config.viewMode === "all_games" ? (
                 <AllGamesView
-                  events={displayTodayEvents.slice(0, sportsPolicy.eventLimit)}
-                  leaguesById={displayLeaguesById}
+                  events={todayEvents.slice(0, sportsPolicy.eventLimit)}
+                  leaguesById={leaguesById}
                   showTime={config.showTime}
                   showVenue={config.showVenue}
                   showLiveStartTime={config.showLiveStartTime}
@@ -782,9 +569,9 @@ function SportsWidget(): React.ReactElement {
                 />
               ) : (
                 <MyTeamsView
-                  teams={displayEnabledTeams.slice(0, sportsPolicy.teamLimit)}
-                  teamEventsById={displayTeamEventsById}
-                  leaguesById={displayLeaguesById}
+                  teams={enabledTeams.slice(0, sportsPolicy.teamLimit)}
+                  teamEventsById={teamEventsById}
+                  leaguesById={leaguesById}
                   showVenue={config.showVenue}
                   showTime={config.showTime}
                   showLiveStartTime={config.showLiveStartTime}
@@ -815,8 +602,8 @@ function SportsWidget(): React.ReactElement {
         ) : size === "small" ? (
           <CompactSportsView
             events={compactEvents}
-            teams={displayEnabledTeams}
-            teamEventsById={displayTeamEventsById}
+            teams={enabledTeams}
+            teamEventsById={teamEventsById}
             selectedGameId={selectedGameId}
             onSelectGame={setSelectedGameId}
           />
@@ -824,15 +611,15 @@ function SportsWidget(): React.ReactElement {
           <div className="space-y-3">
             <MediumLiveGameView
               events={eligibleTodayEvents}
-              teams={displayEnabledTeams}
-              teamEventsById={displayTeamEventsById}
+              teams={enabledTeams}
+              teamEventsById={teamEventsById}
               selectedGameId={selectedGameId}
               onSelectGame={setSelectedGameId}
             />
             {config.viewMode === "all_games" ? (
               <AllGamesView
-                events={displayTodayEvents.slice(0, sportsPolicy.eventLimit)}
-                leaguesById={displayLeaguesById}
+                events={todayEvents.slice(0, sportsPolicy.eventLimit)}
+                leaguesById={leaguesById}
                 showTime={config.showTime}
                 showVenue={config.showVenue}
                 showLiveStartTime={config.showLiveStartTime}
@@ -841,9 +628,9 @@ function SportsWidget(): React.ReactElement {
               />
             ) : (
               <MyTeamsView
-                teams={displayEnabledTeams.slice(0, sportsPolicy.teamLimit)}
-                teamEventsById={displayTeamEventsById}
-                leaguesById={displayLeaguesById}
+                teams={enabledTeams.slice(0, sportsPolicy.teamLimit)}
+                teamEventsById={teamEventsById}
+                leaguesById={leaguesById}
                 showVenue={config.showVenue}
                 showTime={config.showTime}
                 showLiveStartTime={config.showLiveStartTime}
@@ -858,15 +645,15 @@ function SportsWidget(): React.ReactElement {
           <div className="space-y-3">
             <MediumLiveGameView
               events={eligibleTodayEvents}
-              teams={displayEnabledTeams}
-              teamEventsById={displayTeamEventsById}
+              teams={enabledTeams}
+              teamEventsById={teamEventsById}
               selectedGameId={selectedGameId}
               onSelectGame={setSelectedGameId}
             />
             {config.viewMode === "all_games" ? (
               <AllGamesView
-                events={displayTodayEvents.slice(0, sportsPolicy.eventLimit)}
-                leaguesById={displayLeaguesById}
+                events={todayEvents.slice(0, sportsPolicy.eventLimit)}
+                leaguesById={leaguesById}
                 showTime={config.showTime}
                 showVenue={config.showVenue}
                 showLiveStartTime={config.showLiveStartTime}
@@ -875,9 +662,9 @@ function SportsWidget(): React.ReactElement {
               />
             ) : (
               <MyTeamsView
-                teams={displayEnabledTeams.slice(0, sportsPolicy.teamLimit)}
-                teamEventsById={displayTeamEventsById}
-                leaguesById={displayLeaguesById}
+                teams={enabledTeams.slice(0, sportsPolicy.teamLimit)}
+                teamEventsById={teamEventsById}
+                leaguesById={leaguesById}
                 showVenue={config.showVenue}
                 showTime={config.showTime}
                 showLiveStartTime={config.showLiveStartTime}
@@ -890,8 +677,8 @@ function SportsWidget(): React.ReactElement {
           </div>
         ) : config.viewMode === "all_games" ? (
           <AllGamesView
-            events={displayTodayEvents.slice(0, sportsPolicy.eventLimit)}
-            leaguesById={displayLeaguesById}
+            events={todayEvents.slice(0, sportsPolicy.eventLimit)}
+            leaguesById={leaguesById}
             showTime={config.showTime}
             showVenue={config.showVenue}
             showLiveStartTime={config.showLiveStartTime}
@@ -900,9 +687,9 @@ function SportsWidget(): React.ReactElement {
           />
         ) : (
           <MyTeamsView
-            teams={displayEnabledTeams.slice(0, sportsPolicy.teamLimit)}
-            teamEventsById={displayTeamEventsById}
-            leaguesById={displayLeaguesById}
+            teams={enabledTeams.slice(0, sportsPolicy.teamLimit)}
+            teamEventsById={teamEventsById}
+            leaguesById={leaguesById}
             showVenue={config.showVenue}
             showTime={config.showTime}
             showLiveStartTime={config.showLiveStartTime}
