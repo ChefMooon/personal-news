@@ -89,11 +89,10 @@ const MIGRATIONS = [
   "010_astronomy_cache.sql",
 ];
 const PREVIOUS_HARNESS_VALUE = process.env.PERSONAL_NEWS_ELECTRON_HARNESS;
-const previousResourcesPath = (
-  process as NodeJS.Process & {
-    resourcesPath?: string;
-  }
-).resourcesPath;
+const previousResourcesPathDescriptor = Object.getOwnPropertyDescriptor(
+  process,
+  "resourcesPath",
+);
 
 let database: Database.Database;
 let fetchMock: ReturnType<typeof vi.fn>;
@@ -194,8 +193,14 @@ beforeEach(() => {
     },
   );
   process.env.PERSONAL_NEWS_ELECTRON_HARNESS = "0";
-  (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath =
-    process.cwd();
+  // Electron exposes a read-only, configurable property; preserve its original
+  // descriptor while replacing the resource root for this isolated test.
+  Object.defineProperty(process, "resourcesPath", {
+    value: process.cwd(),
+    configurable: true,
+    writable: true,
+    enumerable: true,
+  });
 
   database = new Database(":memory:");
   database.pragma("foreign_keys = ON");
@@ -254,11 +259,14 @@ afterEach(() => {
   } else {
     process.env.PERSONAL_NEWS_ELECTRON_HARNESS = PREVIOUS_HARNESS_VALUE;
   }
-  if (previousResourcesPath == null) {
+  if (previousResourcesPathDescriptor == null) {
     Reflect.deleteProperty(process, "resourcesPath");
   } else {
-    (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath =
-      previousResourcesPath;
+    Object.defineProperty(
+      process,
+      "resourcesPath",
+      previousResourcesPathDescriptor,
+    );
   }
 });
 

@@ -32,6 +32,29 @@ If you cloned this repo fresh and just run `npm install` and it succeeds without
 npm run dev
 ```
 
+## Unit Tests
+
+```bash
+npm test
+npm run test:watch
+# Forward Vitest arguments, for example a file filter:
+npm test -- src/main/__tests__/dev-test-data.test.ts
+```
+
+These commands launch Vitest using the installed development Electron binary
+with `ELECTRON_RUN_AS_NODE=1`. Vitest and its workers use Electron's embedded
+Node runtime, so they can load the same Electron-built `better-sqlite3` binary
+as the app. The launcher sets this environment variable only for the test
+process; it does not change your shell or normal app startup. Existing Electron
+mocks still apply: this mode runs Node tests without launching an app window.
+
+Complete the Setup steps before running tests. If the driver was rebuilt for
+standalone Node, run `npx electron-rebuild -f -w better-sqlite3` to restore the
+Electron binary. You no longer need to alternate native rebuilds between unit
+tests and app runs. Use the npm test commands above instead of invoking Vitest
+directly through standalone Node. When upgrading Electron or Vitest, verify
+that Electron's embedded Node version satisfies Vitest's runtime requirements.
+
 ## App Data Profiles and UI Harness
 
 The installed, packaged app continues to use its existing Electron `userData`

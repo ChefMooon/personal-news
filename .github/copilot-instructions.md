@@ -150,7 +150,7 @@ Current state observed:
 Guidance:
 
 - Do not invent a new project-wide testing framework in routine edits.
-- When tests are requested or the touched logic is easy to isolate, prefer narrow Vitest coverage aligned with vitest.config.ts and the existing src/**/__tests__ pattern.
+- When tests are requested or the touched logic is easy to isolate, prefer narrow Vitest coverage aligned with vitest.config.mts and the existing src/**/__tests__ pattern.
 - Keep Electron/browser integration assumptions out of tests unless the task explicitly requires them.
 
 ## Versioning and Release Guidance
