@@ -381,18 +381,21 @@ function DashboardInsertionDropTarget({
 function DashboardToolbarIconButton({
   label,
   disabled = false,
+  variant = "outline",
   onClick,
   children,
 }: {
   label: string;
   disabled?: boolean;
+  variant?: "default" | "outline";
   onClick: () => void;
   children: React.ReactNode;
 }): React.ReactElement {
   const button = (
     <Button
-      variant="outline"
+      variant={variant}
       size="icon"
+      className="h-10 w-10"
       aria-label={label}
       disabled={disabled}
       onClick={onClick}
@@ -930,92 +933,16 @@ export default function Dashboard(): React.ReactElement {
       >
         <div className="min-h-full flex flex-col">
           <div className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-            <div className="flex flex-col gap-2 px-6 py-1">
-              <div className="flex min-w-0 items-center gap-3">
-                <div className="shrink-0">
-                  <h1 className="text-xl font-semibold">Dashboard</h1>
-                </div>
+            <div className="flex min-w-0 items-center gap-2 px-6 py-1">
+              <h1 className="sr-only">Dashboard</h1>
 
-                <div className="min-w-0 flex-1 overflow-x-auto">
-                  <div className="flex w-max min-w-full shrink-0 items-center justify-end gap-2">
-                    <DashboardToolbarIconButton
-                      label="New Dashboard"
-                      onClick={() => setDashboardDialogMode("create")}
-                    >
-                      <LayoutDashboard />
-                    </DashboardToolbarIconButton>
-                    {editMode && (
-                      <>
-                        <DashboardToolbarIconButton
-                          label="Add Widget"
-                          onClick={() => setShowAddModal(true)}
-                        >
-                          <SquarePlus />
-                        </DashboardToolbarIconButton>
-                        <DashboardToolbarIconButton
-                          label="Edit Tab"
-                          onClick={() => setDashboardDialogMode("edit")}
-                        >
-                          <Pencil />
-                        </DashboardToolbarIconButton>
-                        <DashboardToolbarIconButton
-                          label="Duplicate"
-                          onClick={() => duplicateDashboardView(activeView.id)}
-                        >
-                          <Copy />
-                        </DashboardToolbarIconButton>
-                        <DashboardToolbarIconButton
-                          label="Move Left"
-                          onClick={() =>
-                            moveDashboardView(activeView.id, "left")
-                          }
-                          disabled={!canMoveViewLeft}
-                        >
-                          <ArrowLeft />
-                        </DashboardToolbarIconButton>
-                        <DashboardToolbarIconButton
-                          label="Move Right"
-                          onClick={() =>
-                            moveDashboardView(activeView.id, "right")
-                          }
-                          disabled={!canMoveViewRight}
-                        >
-                          <ArrowRight />
-                        </DashboardToolbarIconButton>
-                        <DashboardToolbarIconButton
-                          label="Delete Dashboard"
-                          onClick={() => setDeleteDialogOpen(true)}
-                          disabled={!canDeleteView}
-                        >
-                          <Trash2 />
-                        </DashboardToolbarIconButton>
-                      </>
-                    )}
-                    <Button
-                      variant={editMode ? "default" : "outline"}
-                      size="sm"
-                      className="h-8"
-                      onClick={() => setEditMode((value) => !value)}
-                    >
-                      {editMode ? (
-                        <>
-                          <Check className="mr-1 h-4 w-4" />
-                          Done
-                        </>
-                      ) : (
-                        <>
-                          <Settings2 className="mr-1 h-4 w-4" />
-                          Edit Layout
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </div>
-              </div>
-
-              <Tabs value={activeViewId} onValueChange={setActiveViewId}>
-                <div className="overflow-x-auto pb-1">
-                  <TabsList className="h-auto min-w-full justify-start gap-2 rounded-lg bg-muted/70 p-1">
+              <Tabs
+                value={activeViewId}
+                onValueChange={setActiveViewId}
+                className="min-w-0 flex-1"
+              >
+                <div className="overflow-x-auto">
+                  <TabsList className="h-10 w-max min-w-full justify-start gap-2 rounded-lg bg-muted/70 p-1">
                     {dashboardViews.map((view) => (
                       <DashboardTabDropTarget
                         key={view.id}
@@ -1050,6 +977,67 @@ export default function Dashboard(): React.ReactElement {
                   </TabsList>
                 </div>
               </Tabs>
+
+              <div className="flex shrink-0 items-center gap-2">
+                <DashboardToolbarIconButton
+                  label="New Dashboard"
+                  onClick={() => setDashboardDialogMode("create")}
+                >
+                  <LayoutDashboard />
+                </DashboardToolbarIconButton>
+                {editMode && (
+                  <>
+                    <DashboardToolbarIconButton
+                      label="Add Widget"
+                      onClick={() => setShowAddModal(true)}
+                    >
+                      <SquarePlus />
+                    </DashboardToolbarIconButton>
+                    <DashboardToolbarIconButton
+                      label="Edit Tab"
+                      onClick={() => setDashboardDialogMode("edit")}
+                    >
+                      <Pencil />
+                    </DashboardToolbarIconButton>
+                    <DashboardToolbarIconButton
+                      label="Duplicate"
+                      onClick={() => duplicateDashboardView(activeView.id)}
+                    >
+                      <Copy />
+                    </DashboardToolbarIconButton>
+                    <DashboardToolbarIconButton
+                      label="Move Left"
+                      onClick={() => moveDashboardView(activeView.id, "left")}
+                      disabled={!canMoveViewLeft}
+                    >
+                      <ArrowLeft />
+                    </DashboardToolbarIconButton>
+                    <DashboardToolbarIconButton
+                      label="Move Right"
+                      onClick={() =>
+                        moveDashboardView(activeView.id, "right")
+                      }
+                      disabled={!canMoveViewRight}
+                    >
+                      <ArrowRight />
+                    </DashboardToolbarIconButton>
+                    <DashboardToolbarIconButton
+                      label="Delete Dashboard"
+                      onClick={() => setDeleteDialogOpen(true)}
+                      disabled={!canDeleteView}
+                    >
+                      <Trash2 />
+                    </DashboardToolbarIconButton>
+                  </>
+                )}
+                <DashboardToolbarIconButton
+                  label={editMode ? "Done" : "Edit Layout"}
+                  variant={editMode ? "default" : "outline"}
+                  onClick={() => setEditMode((value) => !value)}
+                >
+                  {editMode ? <Check /> : <Settings2 />}
+                </DashboardToolbarIconButton>
+              </div>
             </div>
           </div>
 
