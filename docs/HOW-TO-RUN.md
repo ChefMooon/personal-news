@@ -96,43 +96,110 @@ uncontrolled polling. Normal dev/preview and packaged startup are unchanged.
 
 ### Developer Test Data
 
-In unpackaged `dev` and `start` sessions, Settings > General provides Seed and
-Clear actions for synthetic test data. The actions use the database selected
-for that session: the shared persistent Development database in normal
-development, or the unique temporary database when a scenario runs through the
-Playwright harness. They do not seed or clear the packaged production profile.
-Packaged builds do not expose the controls, and the main-process mutation
+The first normal unpackaged `dev` or `start` session automatically seeds
+synthetic test data into the shared persistent Development database; no
+Settings setup is required. Later startups preserve the data exactly as you
+left it, including edits, read/watched states, and deleted examples. Clear is
+respected across restarts and does not trigger another automatic seed.
+Settings > General > Developer Test Data provides these actions:
+
+- **Seed test data:** initialize an inactive fixture set.
+- **Update test data:** apply current definitions and dates, including new
+  examples, while keeping existing notes, tags, read/watched states, and
+  ordering. Missing examples are restored by this explicit action.
+- **Reset test data:** confirm and restore the original fixture examples.
+- **Clear test data:** confirm and remove fixture-owned data, including
+  retired fixture IDs, and restore the preferences saved before seeding.
+
+The status shows the applied fixture version and whether an update is
+available. Updates are explicit; restarting does not apply a new version.
+The Playwright harness is excluded from automatic seeding and starts with a
+blank database so its UI scenario can exercise the Seed action. Packaged builds
+do not seed fixtures or expose the controls, and the main-process mutation
 handlers reject fixture changes when the app is packaged.
 
 Seeding and clearing run transactionally. Seed uses reserved fixture IDs and
 can be repeated; Clear removes only fixture-owned rows and the active marker,
 not whole tables or unrelated user data. The active marker is stored in the
-selected database, so fixture mode remains active across app restarts. While
-active, automatic polling and startup refreshes for Weather, Sports, YouTube,
-Saved Posts ntfy ingestion, and the bundled Reddit Digest script are paused;
-unrelated user scripts are not. Clearing fixtures removes the marker and allows
-those jobs to resume under the existing source settings. Explicit manual
-refresh remains available and may replace fixture-backed content with live
-source data.
+selected database, so fixture mode remains active across app restarts. Saved
+Posts, Reddit Digest, Sports, Weather, and Astronomy are enabled when the
+fixture set is initialized or reset so their examples are visible. Clear
+restores their previous enabled flags, including an originally unset flag.
+Astronomy restores only its enabled flag and keeps unrelated JSON settings
+edits. Update initializes newly introduced flags without overriding flags
+already captured for this fixture session. While active,
+automatic polling and startup refreshes for Weather, Sports, YouTube, Saved
+Posts ntfy ingestion, and the bundled Reddit Digest script are paused;
+unrelated user scripts are not. Clearing fixtures removes the active marker
+and allows those jobs to resume under the existing source settings. Explicit
+manual refresh remains available and may replace fixture-backed content with
+live source data.
+
+The dashboard Saved Posts widget displays locally saved records even before
+mobile ntfy is configured. It shows the mobile-saving setup prompt only when
+there are no local posts to display. The fixture set contains six synthetic
+Saved Posts, each with a note, ten Reddit Digest posts, and four synthetic
+YouTube channels: one with fifteen videos and three with five videos each.
+Sports examples use synthetic Baseball and Basketball leagues and teams. The
+live Basketball game shares the live Baseball game's generated date and time,
+with a synthetic 62–58 score. Fixture game details are read locally, including
+sport-specific live progress; fixture standings are empty and do not call the
+live provider. The Sports preset selects All Sports so both fixtures appear on
+Seed and Reset. The first explicit Seed/Update also upgrades the three preset
+configs that exactly match the former factory Baseball defaults to All Sports.
+Changed fields and custom widgets are preserved, and a per-profile migration
+marker preserves later intentional Baseball selections on future Updates.
+Restarting does not run this upgrade. Astronomy has a cached synthetic
+snapshot with Moon, horizon, planet, and event groups for Fixture City.
+
+### Widget preset dashboards
+
+Seeding adds six dashboard pages: YouTube, Reddit Digest, Saved Posts, Sports,
+Weather, and Astronomy. Each contains labeled Small, Medium, and Large
+instances with explicit fixture filters. Existing dashboard pages remain in
+place. Edit `src/main/dev-test-data/definitions/dashboard-presets.ts` to change
+the example pages or widget configurations; grid dimensions come from the
+shared dashboard footprint helpers.
+
+Update preserves existing preset layout and configuration edits and adds
+missing presets. Reset restores fixture page layouts and widget configurations
+to their defaults. Clear removes fixture instances even if you moved them to
+another page, plus their configuration keys. Custom widgets added to a fixture
+page are moved to a surviving dashboard page when the fixture page is removed.
+Other widgets and their configuration remain intact.
+
+Run `npm run test:local-test-data` to exercise the controls and inspect all
+three sizes on each preset at the 12-, 8-, 4-, and 1-column grid projections.
+Screenshots and run diagnostics are saved under
+`artifacts/electron-harness/local-test-data-<uuid>/`.
 
 ### Adding fixtures for a new feature
 
 When a new feature needs local fixture data:
 
-1. Add a feature-specific contributor module and register it with the shared
-   fixture coordinator; keep transaction ownership and the active marker in
-   the coordinator.
-2. Inspect the feature's read path, required related rows and settings, and
+1. Edit or add a typed builder in `src/main/dev-test-data/definitions/`.
+   Define stable IDs and named cases there; keep SQL and JSON storage encoding
+   in the contributor modules. Builders receive one `FixtureContext` captured
+   by the coordinator; use its timestamp/date/week helpers instead of reading
+   the clock separately for each record.
+2. For a new feature, add its contributor and register it with the shared
+   coordinator. Register its owned tables and mutable interaction fields in
+   `src/main/dev-test-data/ownership.ts`; keep transactions in the coordinator.
+3. Inspect the feature's read path, required related rows and settings, and
    display defaults so seeded records are visible through the existing UI.
-3. Use reserved, stable fixture IDs that cannot be confused with user data.
-4. Implement idempotent seeding and fixture-only cleanup through the
+4. Use the reserved `pn_dev_fixture_` ID namespace exclusively for fixtures.
+   Bump `DEV_TEST_DATA_VERSION` in `src/main/dev-test-data.ts` when changing
+   definitions. Use Update in an
+   existing development profile to apply the new set.
+5. Implement repeatable seeding and fixture-only cleanup through the
    coordinator's transaction. Preserve unrelated rows and user settings.
-5. Gate every automatic refresh or ingestion path while fixtures are active,
+6. Gate every automatic refresh or ingestion path while fixtures are active,
    including writes from work already in flight; retain explicit manual
    refreshes.
-6. Add contributor tests for read visibility, repeat seed and clear,
-   transaction rollback, and preservation of non-fixture data.
-7. Extend the isolated UI harness to verify the feature using its real visible
+7. Add contributor tests for read visibility, rollover, update/reset behavior,
+   retired-ID cleanup, rollback, and preservation of non-fixture data. Use a
+   fixed `FixtureContext` for deterministic builder assertions.
+8. Extend the isolated UI harness to verify the feature using its real visible
    surface and confirm teardown leaves no fixture state behind.
 
 ## Build Windows Installer

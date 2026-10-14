@@ -30,13 +30,22 @@ Run the developer test-data scenario with:
 npm run test:local-test-data
 ```
 
-It opens Settings > General, checks the initial inactive state, seeds through
-the visible Seed test data action, and verifies the Reddit Digest, Saved Posts,
-Weather, Sports, and YouTube read surfaces. It then clears through the visible
-Clear test data action and its confirmation dialog, verifies fixture-only
-removal, and confirms an unrelated setting is preserved. The harness database
-is isolated for the run; no persistent Development or production database is
-used.
+It opens Settings > General, checks the initial inactive state, and seeds
+through the visible Seed test data action. It verifies Reddit Digest, Saved
+Posts, Weather, Sports, YouTube, and Astronomy, then visits the six preset
+dashboard pages with Small, Medium, and Large widget instances. It exercises
+the visible Update, confirmed Reset, and confirmed Clear actions and checks
+that unrelated dashboard state, configuration, and settings survive.
+It also reproduces version 3 factory Sports settings, upgrades them through
+the visible Update action, and selects Fixture Pilots at Fixture Foxes to verify
+the Basketball LIVE 62/58 scores in all three sizes. A subsequent Update checks
+that a later intentional Baseball selection survives the one-time upgrade.
+
+The visual matrix covers the 12-, 8-, 4-, and 1-column grid projections.
+Screenshots remain with the run diagnostics under
+`artifacts/electron-harness/local-test-data-<uuid>/`; inspect these when changing
+widget content, size policies, or preset definitions. The harness database is
+isolated for the run; no persistent Development or production database is used.
 
 Use semantic Playwright locators for user-visible navigation and actions, such
 as buttons, links, headings, status text, and confirmation dialogs. Use IPC

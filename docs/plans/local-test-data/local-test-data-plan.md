@@ -8,10 +8,10 @@ last_updated: 2026-10-10
 
 # Overall Plan Completion Status
 
-* **Final State:** COMPLETED
-* **Total Phases Completed:** 4 / 4
-* **Summary of Outcome:** All four phases and their acceptance criteria are complete. Typed feature fixtures and transactional seed/clear, automatic-polling guards, unpackaged developer controls, isolated UI coverage, database lifecycle guidance, and the contributor checklist are implemented and validated. No material unresolved risks or manual-validation attestations remain outstanding.
-* **Final Validation Evidence:**
+- **Final State:** COMPLETED
+- **Total Phases Completed:** 4 / 4
+- **Summary of Outcome:** All four phases and their acceptance criteria are complete. Typed feature fixtures and transactional seed/clear, automatic-polling guards, unpackaged developer controls, isolated UI coverage, database lifecycle guidance, and the contributor checklist are implemented and validated. No material unresolved risks or manual-validation attestations remain outstanding.
+- **Final Validation Evidence:**
   - Phase 1: `npm test -- src/main/__tests__/dev-test-data.test.ts` passed (1 file, 5 tests); `npm run typecheck:node` and Prettier passed.
   - Phase 2: The exact five-file polling-focused test command passed (5 files, 22 tests); `npm run typecheck:node` and Prettier passed.
   - Phase 3: The required main test command passed (2 files, 11 tests); `npm run test:local-test-data` passed across Reddit Digest, Saved Posts, Weather, Sports, and YouTube, including fixture-only clear and isolated teardown; typecheck, Prettier, and `git diff --check` passed.
@@ -22,12 +22,14 @@ last_updated: 2026-10-10
 # Specification & Overview
 
 ### 1. Scope & Objective
+
 - **Goal:** Provide deterministic synthetic data for local development of Reddit Digest, Saved Posts, Weather, Sports, and YouTube, with an explicit way to seed and clear it from the unpackaged app.
 - **In-Scope:** A shared fixture set; transactional, repeatable seed and fixture-only clear operations; a persistent fixture-active state; pausing automatic polling for fixture-backed sources while the state is active; an opt-in Settings action; isolated harness coverage; updates to the existing temporary-database documentation; and a documented, feature-owned path for adding fixtures when new features are added.
 - **Out-of-Scope:** Seeding packaged production, automatic seeding at startup, using real Reddit/weather/sports/YouTube content, clearing non-fixture user data, disabling unrelated user scripts, blocking manually triggered refreshes, and adding schema migrations unless discovery proves existing storage insufficient.
 - **User Decisions:** Automatic polling for fixture-backed sources pauses until fixtures are cleared. Manual Refresh actions remain available.
 
 ### 2. Technical Constraints & Architecture
+
 - Database writes stay in the main process. The renderer uses the existing preload `window.api.invoke` bridge and shared IPC contracts; it must not access SQLite or Node APIs.
 - Keep fixture records identifiable by stable, reserved IDs. Seed is idempotent; clear deletes only fixture-owned rows and never truncates whole application tables.
 - Keep feature-specific fixture data and seed/clear logic behind a small typed contributor contract. A shared coordinator owns the active marker and transaction so adding a feature does not duplicate seed/clear safety behavior.
@@ -38,6 +40,7 @@ last_updated: 2026-10-10
 - Pause automatic/startup refreshes for Weather, Sports, YouTube, Saved Posts ntfy ingestion, and the bundled Reddit Digest script. Do not pause other user scripts or explicit manual refresh actions. Prevent an already-running automatic refresh from overwriting fixture rows after fixture mode is activated.
 
 ### 3. Repository Evidence, Risks & Assumptions
+
 - The earlier [Reddit-only assessment](../reddit-test-data/reddit-test-data-spec.md) established that Reddit Digest and Saved Posts already have storage tables and read IPC handlers. This plan expands that scope to the other requested sources and incorporates the user's decisions about seed/clear and polling.
 - [001_initial.sql](../../../src/main/db/migrations/001_initial.sql) defines `reddit_digest_posts`, `saved_posts`, `yt_channels`, and `yt_videos`. Saved Posts FTS triggers track inserts, updates, and deletes; YouTube videos reference channels with cascade deletion.
 - [002_weather.sql](../../../src/main/db/migrations/002_weather.sql) defines `weather_locations`, `weather_cache`, and `weather_alert_state`; [010_astronomy_cache.sql](../../../src/main/db/migrations/010_astronomy_cache.sql) adds location-linked cache data that must be considered when fixture locations are cleared.
@@ -56,11 +59,13 @@ last_updated: 2026-10-10
 # Execution Plan & Handoffs
 
 ## Phase 1: Build the fixture dataset and safe seed/clear service
+
 - **Status:** COMPLETED
 - **Objective:** Define representative, synthetic data and implement atomic, repeatable fixture seeding and fixture-only cleanup in the main process.
 - **Dependencies:** None.
 
 ### Tasks
+
 - [x] Inspect the latest migrations and data-read paths for all five feature areas. Confirm required rows, foreign keys, cascades, filters, and serialized Weather JSON shape before writing fixtures.
 - [x] Define stable fixture-only IDs and typed sample records covering multiple Reddit weeks/subreddits and read states; Saved Posts tags/notes/body; Weather current/hourly/daily/alert states; Sports tracked teams and current/upcoming/completed events; and YouTube channels/videos with representative media and watch states.
 - [x] Add the main-process fixture coordinator at `src/main/dev-test-data.ts` using the existing database connection. Define a small typed contributor contract and keep the Reddit Digest, Saved Posts, Weather, Sports, and YouTube fixture records and seed/clear logic in feature-specific modules under `src/main/dev-test-data/`. Register those contributors with the coordinator, which owns the shared transaction and active marker. Reuse existing Sports cache helpers where appropriate, preserve Saved Posts FTS triggers, and avoid touching shared cache metadata or unrelated user rows.
@@ -69,20 +74,25 @@ last_updated: 2026-10-10
 - [x] Add focused Vitest coverage at `src/main/__tests__/dev-test-data.test.ts` for repeated seed/clear, preservation of non-fixture sentinel rows, transaction rollback, foreign-key cleanup, Weather snapshot parsing, and Saved Posts FTS consistency.
 
 ### Verification & Acceptance Criteria
-*All criteria must pass before advancing to the handoff report.*
+
+_All criteria must pass before advancing to the handoff report._
+
 - [x] **Automated Checks:** Run `npm test -- src/main/__tests__/dev-test-data.test.ts`.
 - [x] **Functional Assertions:** Seeding twice produces the same fixture set with no duplicate rows; clearing twice is safe; a non-fixture row in each affected table survives clear; all fixture records are readable through existing module query paths.
 - [x] **Functional Assertions:** Saved Posts search reflects seeded rows and no longer returns cleared rows; foreign-key-linked fixture rows are removed without deleting unrelated cache or application data.
 - [x] **Functional Assertions:** A failed seed transaction leaves neither partial fixture rows nor an active-fixture marker.
 
 ### Plan Compliance Checklist
-*Verify each item against the actual diff before claiming this phase complete. Do not mark the phase COMPLETED if any item fails.*
+
+_Verify each item against the actual diff before claiming this phase complete. Do not mark the phase COMPLETED if any item fails._
+
 - [x] **Required Files:** `src/main/dev-test-data.ts`; feature-specific fixture contributor modules under `src/main/dev-test-data/`; `src/main/__tests__/dev-test-data.test.ts`; existing feature schemas and cache helpers inspected and reused.
 - [x] **Boundaries:** No renderer-side database access, no whole-table deletes, no production seed data, no new dependency, and no migration unless the existing schema is proven insufficient and the scope is re-approved.
 - [x] **Legacy Code Removed:** None. Existing feature read paths, ingest paths, FTS triggers, and user data remain in place.
 - [x] **Acceptance Checks:** Confirm the focused tests and all functional assertions above were run.
 
 ### Phase 1 Handoff & Verification Report
+
 - **Compliance Check:** PASSED
 - **Verification Result:** PASSED
 - **Execution Proof / Logs:**
@@ -113,11 +123,13 @@ last_updated: 2026-10-10
 ---
 
 ## Phase 2: Pause automatic polling while fixtures are active
+
 - **Status:** COMPLETED
 - **Objective:** Keep the persistent Development dataset stable across app startup and scheduled refreshes, without disrupting manual refreshes or unrelated user scripts.
 - **Dependencies:** Phase 1 provides the persistent active-fixture marker and fixture-owned record IDs.
 
 ### Tasks
+
 - [x] Inventory automatic, implicit, and explicit triggers for each affected feature. Include startup and interval/cron work, Sports live-refresh timers, and the bundled Reddit Digest script's startup, catch-up, and scheduled triggers; distinguish these from explicit user refreshes and manual script runs.
 - [x] Check the active-fixture marker before automatic startup/scheduled work in Weather, Sports, YouTube, and Saved Posts ntfy polling. Gate only automatic execution of the bundled Reddit Digest script while fixtures are active; preserve unrelated user scripts and explicit manual runs.
 - [x] Propagate trigger origin through source functions shared by automatic and manual paths. Immediately before each automatic persistence transaction that can change fixture-backed application data, re-check the active marker and discard the result if fixture mode became active while the request was in flight. Stopping a timer alone is not sufficient.
@@ -125,7 +137,9 @@ last_updated: 2026-10-10
 - [x] Add focused tests at `src/main/__tests__/dev-test-data-polling.test.ts` for active-mode startup and scheduled work, app restart, clearing/resume behavior, and isolation of unrelated scripts. Prove that an automatic request already in flight cannot persist fixture-backed results after activation, and that explicit manual refreshes remain available.
 
 ### Verification & Acceptance Criteria
-*All criteria must pass before advancing to the handoff report.*
+
+_All criteria must pass before advancing to the handoff report._
+
 - [x] **Automated Checks:** Run `npm test -- src/main/__tests__/dev-test-data.test.ts src/main/__tests__/dev-test-data-polling.test.ts src/main/sources/weather/__tests__/forecast-utils.test.ts src/main/sources/sports/__tests__/cache.foreign-key.test.ts src/main/sources/reddit/__tests__/ntfy.test.ts`.
 - [x] **Functional Assertions:** With the marker active, automatic/startup polling performs no network fetch or fixture-overwriting write for the fixture-backed sources.
 - [x] **Functional Assertions:** An automatic request already in flight when fixture mode activates cannot persist fixture-backed results afterward; explicit manual refreshes remain available.
@@ -133,13 +147,16 @@ last_updated: 2026-10-10
 - [x] **Functional Assertions:** Manual Refresh actions remain available, and user-authored scripts other than the bundled Reddit Digest script continue to run normally.
 
 ### Plan Compliance Checklist
-*Verify each item against the actual diff before claiming this phase complete. Do not mark the phase COMPLETED if any item fails.*
+
+_Verify each item against the actual diff before claiming this phase complete. Do not mark the phase COMPLETED if any item fails._
+
 - [x] **Required Files:** Updated Weather, Sports, YouTube, Saved Posts ntfy, and bundled Reddit Digest paths; Sports cache transaction guard; `src/main/__tests__/dev-test-data-polling.test.ts`. Astronomy's automatic refresh was also guarded because Weather chains into its fixture-location cache.
 - [x] **Boundaries:** Pause only automatic work for fixture-backed sources. Do not disable all scripts, alter user poll settings, block manual refresh, or change normal polling when the marker is absent.
 - [x] **Legacy Code Removed:** No automatic path, including Sports live-refresh timers or bundled Reddit Digest catch-up, bypasses the active-fixture check; ordinary refresh behavior remains unchanged when fixtures are inactive.
 - [x] **Acceptance Checks:** Confirm polling, restart, clear/resume, manual-refresh, in-flight-write, live-timer, and unrelated-script assertions were actually run.
 
 ### Phase 2 Handoff & Verification Report
+
 - **Compliance Check:** PASSED
 - **Verification Result:** PASSED
 - **Execution Proof / Logs:**
@@ -168,11 +185,13 @@ last_updated: 2026-10-10
 ---
 
 ## Phase 3: Add guarded developer controls and end-to-end coverage
+
 - **Status:** COMPLETED
 - **Objective:** Let developers opt in to seeding or clearing fixtures from the unpackaged app while keeping the operation inaccessible in packaged production.
 - **Dependencies:** Phases 1 and 2.
 
 ### Tasks
+
 - [x] Add shared IPC channel constants and typed responses in `src/shared/ipc-types.ts`; register main-process seed, clear, and status handlers in `src/main/ipc/index.ts`.
 - [x] Enforce the unpackaged-runtime check in the main process for every mutation. Preserve `resolveDatabaseProfile` production protections; reject attempts to seed or clear packaged production data.
 - [x] Add a developer-only test-data section to the General tab in `src/renderer/src/routes/Settings.tsx`. Show whether fixtures are active, provide explicit Seed and Clear actions, confirm before clearing, and explain that automatic polling pauses while fixtures are active but manual refresh remains available and may fetch live source data.
@@ -181,20 +200,25 @@ last_updated: 2026-10-10
 - [x] In the harness scenario, seed and verify Reddit Digest, Saved Posts, Weather, Sports, and YouTube data; clear through the UI; confirm fixture-only removal and clean scenario teardown.
 
 ### Verification & Acceptance Criteria
-*All criteria must pass before advancing to the handoff report.*
+
+_All criteria must pass before advancing to the handoff report._
+
 - [x] **Automated Checks:** Run `npm test -- src/main/__tests__/dev-test-data.test.ts src/main/__tests__/dev-test-data-polling.test.ts` and `npm run test:local-test-data`.
 - [x] **Functional Assertions:** Controls are available in unpackaged `dev` and `start` Development modes and hidden in packaged mode; direct packaged IPC mutation attempts are rejected by the main process.
 - [x] **Functional Assertions:** Seed and clear produce clear success/error feedback, update visible source data, and leave non-fixture rows and unrelated settings unchanged.
 - [x] **Functional Assertions:** The harness demonstrates all five seeded feature surfaces without using live credentials or changing either persistent Development or production databases.
 
 ### Plan Compliance Checklist
-*Verify each item against the actual diff before claiming this phase complete. Do not mark the phase COMPLETED if any item fails.*
+
+_Verify each item against the actual diff before claiming this phase complete. Do not mark the phase COMPLETED if any item fails._
+
 - [x] **Required Files:** `src/shared/ipc-types.ts`, `src/main/ipc/index.ts`, `src/renderer/src/routes/Settings.tsx`, `scripts/test-local-test-data.mjs`, and its npm script in `package.json`.
 - [x] **Boundaries:** Renderer actions use IPC only; main-process guards remain authoritative; packaged production cannot mutate fixtures; Clear never calls existing whole-cache delete operations.
 - [x] **Legacy Code Removed:** Keep `YOUTUBE_CLEAR_VIDEOS_CACHE` and other existing user data-clear actions distinct; do not repurpose them for fixture cleanup.
 - [x] **Acceptance Checks:** Confirm the controls, production guard, all five data surfaces, error feedback, and cleanup behavior were exercised.
 
 ### Phase 3 Handoff & Verification Report
+
 - **Compliance Check:** PASSED
 - **Verification Result:** PASSED
 - **Execution Proof / Logs:**
@@ -233,11 +257,13 @@ last_updated: 2026-10-10
 ---
 
 ## Phase 4: Document database lifecycles and complete validation
+
 - **Status:** COMPLETED
 - **Objective:** Make the persistent Development database, isolated temporary harness database, fixture controls, and polling behavior easy to understand and verify.
 - **Dependencies:** Phases 1-3.
 
 ### Tasks
+
 - [x] Update the existing App Data Profiles and UI Harness section in `docs/HOW-TO-RUN.md` to distinguish packaged production, the shared persistent `dev`/`start` Development profile, and each isolated harness run.
 - [x] Document how the developer Seed and Clear actions work, which database they target, the fixture-only cleanup guarantee, the persisted active-fixture state, automatic-poll pause/resume behavior, and the continued availability of manual refresh.
 - [x] Add an "Adding fixtures for a new feature" checklist to `docs/HOW-TO-RUN.md`: create a feature-specific contributor module and register it with the coordinator; inspect the feature's read path, required related rows/settings, and display defaults; use reserved fixture IDs; implement idempotent seed and fixture-only clear within the coordinator's transaction; preserve user settings and unrelated rows; gate every automatic refresh path while retaining explicit manual refresh; add contributor tests for visibility, repeat seed/clear, rollback, and non-fixture preservation; and extend the isolated UI harness to verify the new feature.
@@ -246,19 +272,24 @@ last_updated: 2026-10-10
 - [x] Build the application and verify the packaged UI does not expose working seed/clear mutations; verify docs refer to current commands and database paths.
 
 ### Verification & Acceptance Criteria
-*All criteria must pass before advancing to the handoff report.*
+
+_All criteria must pass before advancing to the handoff report._
+
 - [x] **Automated Checks:** `npm test`, `npm run typecheck`, `npm run test:local-test-data`, `npm run test:dashboard-drag`, and `npm run build` all pass.
 - [x] **Functional Assertions:** Documentation accurately describes the shared Development profile, per-run temporary harness profile, production separation, cleanup guarantees, active-fixture behavior, safe seed/clear workflow, and the complete procedure for adding a feature's fixtures.
 - [x] **Functional Assertions:** The test-data flow is repeatable and self-contained; no test writes to the live production database; a failed harness run preserves its profile only under the existing runner's documented termination-failure behavior.
 
 ### Plan Compliance Checklist
-*Verify each item against the actual diff before claiming this phase complete. Do not mark the phase COMPLETED if any item fails.*
+
+_Verify each item against the actual diff before claiming this phase complete. Do not mark the phase COMPLETED if any item fails._
+
 - [x] **Required Files:** Update `docs/HOW-TO-RUN.md` with the fixture extension checklist and `scripts/PLAYWRIGHT-HARNESS.md`; update feature code/tests only where earlier phases require it.
 - [x] **Boundaries:** Prefer extending the existing profile/harness guidance; do not add a parallel guide or duplicate the full database-profile documentation.
 - [x] **Legacy Code Removed:** Remove no existing user data or documentation sections; retain production-profile and temporary-profile safety instructions.
 - [x] **Acceptance Checks:** Confirm all commands passed and review documentation statements against current implementation behavior.
 
 ### Phase 4 Handoff & Verification Report
+
 - **Compliance Check:** PASSED
 - **Verification Result:** PASSED
 - **Execution Proof / Logs:**
@@ -299,3 +330,100 @@ last_updated: 2026-10-10
   - `docs/plans/local-test-data/local-test-data-plan.md` - Recorded Phase 4 completion and exact validation evidence.
 - **Decisions & Deviations:** No feature-code changes or extra database guide were needed. Confirmed the current paths against `src/main/index.ts` and `src/main/db/database-profile.ts`: normal `dev`/`start` share `{appData}/<appName> Development/data.db`, packaged mode uses `{userData}/data.db`, and each harness gets a temporary-root `harness.db` selected by `PERSONAL_NEWS_DB_PATH`. Packaged Settings exposure is disabled by the main-process status (`available: !app.isPackaged`); both mutation handlers independently reject packaged mutations, covered by the handler unit assertion that the mutation callback is not called. The Windows production verification confirms the packaged app starts with a disposable database; it does not itself exercise the Settings UI. The first fixture-harness attempt failed because `better-sqlite3` was built for Node rather than Electron and the runner could not confirm process-tree termination; the runner preserved that isolated profile as designed. After `npx electron-rebuild -f -w better-sqlite3`, the fixture harness passed and removed its profile. `npm rebuild better-sqlite3` restored the Node ABI for the focused tests. The preserved failure profile was not manually touched. No persistent Development or production database was selected or written.
 - **Next Phase Context:** All four implementation phases are complete; the final-validation handoff is ready. Review this completion evidence and the documentation diff. Any preserved temp profile from the failed initial harness run remains subject to the runner's termination-failure behavior and is not an app data profile.
+
+## Confirmed Post-completion Behavior Update
+
+The owner subsequently confirmed a local-development behavior change that
+intentionally departs from the original out-of-scope decision above: on the
+first normal unpackaged `dev`/`start` startup, synthetic fixtures are seeded
+automatically. A persistent one-time bootstrap marker prevents reseeding after
+an explicit Clear. Packaged startup remains excluded, and Playwright harness
+startup remains blank so its UI scenario continues to exercise the Seed action.
+
+Saved Posts is enabled while fixtures are active so its examples are visible.
+The coordinator stores and restores the prior `saved_posts_enabled` value on
+Clear, including restoring an unset value; unrelated feature flags and settings
+remain untouched. The original phase reports and their validation evidence
+above describe the implementation at phase completion and have not been
+rewritten.
+
+### Dashboard Saved Posts widget visibility follow-up
+
+The dashboard widget previously replaced its content with the mobile-saving
+setup prompt whenever ntfy was not configured, even when local Saved Posts
+records were available. It now shows fetched local records first and presents
+the setup prompt only when the list is empty, loading is complete, and there is
+no query error. The isolated `test:local-test-data` harness now opens the
+Dashboard after seeding and confirms all six synthetic Saved Posts titles
+render in the existing widget before clearing fixtures. Every fixture record
+has a non-empty note, verified in both the fixture service test and harness.
+
+The YouTube fixture thumbnails were changed to data URLs so this expanded
+dashboard scenario does not request synthetic resources from `example.invalid`
+or produce renderer network errors.
+
+The Saved Posts fixture set now contains six stable IDs, and each fixture
+includes a non-empty note. On subsequent normal startups, the coordinator
+refreshes the fixture set only while fixture mode is active, so an already
+bootstrapped Development profile receives the new records. Explicit Clear
+continues to be respected across restarts.
+
+The Reddit Digest fixture set now contains ten records spread across three
+synthetic weeks. YouTube now seeds four channels with fifteen videos on the
+original channel and five videos on each of three additional channels. The
+expanded fixture harness verifies all ten digest rows, each channel's video
+count, and fixture-only removal.
+
+**Verification:** `npm run test:local-test-data` passed with exact assertions
+for ten digest records, thirty YouTube videos distributed 15/5/5/5 across four
+channels, six Saved Posts visible in the widget with notes, and successful
+fixture cleanup plus isolated-profile teardown. `npm run typecheck:node`,
+`npm run typecheck:web`, Prettier checks for changed source/docs, and
+`git diff --check` passed. The focused Vitest suite was not rerun because
+`better-sqlite3` was locked by a running development Electron process; no
+running app was stopped.
+
+## Fixture Maintenance and Widget Presets - 2026-10-14
+
+This follow-up supersedes the startup-refresh behavior described above. The
+original phase reports remain historical verification records.
+
+Implemented the requested sequence:
+
+1. Reconcile Reddit fixture weeks before inserting the current definitions;
+   a fixed-clock rollover regression preserves ten records and user rows.
+2. Separate typed content builders under `src/main/dev-test-data/definitions/`
+   from SQL contributors. One injectable `FixtureContext` supplies all times.
+3. Preserve active data across restarts. Seed initializes inactive data;
+   explicit Update refreshes definitions while preserving interactions; Reset
+   restores defaults. Version status and reserved-namespace cleanup support
+   upgrades and retired IDs, with transactional rollback and original feature
+   preference backups retained until Clear.
+4. Use supported Baseball fixtures and local fixture game details, and add a
+   complete cached synthetic Astronomy snapshot. Feature flags are restored
+   without replacing unrelated Astronomy settings edits.
+5. Add six editable preset pages, each with Small, Medium, and Large instances.
+   Update preserves edits; Reset restores fixture layouts/configs; Clear removes
+   moved fixture instances and rescues custom widgets while preserving existing
+   user geometry. Renderer providers and dashboard layout reload after fixture
+   mutations. Saved Posts Large now uses a constrained scrolling content area.
+
+Final verification:
+
+- `npm test`: 37 files and 259 tests passed.
+- `npm run build`: both TypeScript checks and all production bundles passed.
+- `npm run test:local-test-data`: all lifecycle actions, preference restoration,
+  ownership preservation, real empty state, and 24 populated projections passed;
+  the runner confirmed process exit and removed its isolated profile.
+- `npm run test:dashboard-drag`: passed with confirmed isolated-profile cleanup.
+- Visual artifacts: 24 page overviews, 72 individual widget captures, four
+  Saved Posts scroll captures, and one empty-state screenshot, plus measured
+  `preset-projections.json`, under
+  `artifacts/electron-harness/local-test-data-6afd7d5f-9574-4ac6-877c-8572c6c89232/`.
+
+Representative wide/narrow screenshots were inspected, including the last
+Saved Posts row with the header retained. Compact widgets keep their existing
+content caps and truncation; controlled loading/error injection is deferred.
+Use Settings > General > Developer Test Data > Update test data to upgrade an
+existing active Development profile to version 3. See `docs/HOW-TO-RUN.md` and
+`scripts/PLAYWRIGHT-HARNESS.md` for maintenance and visual verification guidance.

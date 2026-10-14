@@ -1,4 +1,6 @@
 import { runElectronHarness } from "./electron-playwright-harness.mjs";
+import path from "node:path";
+import { writeFile } from "node:fs/promises";
 
 const IPC = {
   devTestDataStatus: "devTestData:getStatus",
@@ -8,26 +10,53 @@ const IPC = {
   weatherSnapshot: "weather:getSnapshot",
   sportsTeams: "sports:getTrackedTeams",
   sportsTeamEvents: "sports:getTeamEvents",
+  sportsTodayEvents: "sports:getTodayEvents",
+  sportsEventDetails: "sports:getEventDetails",
+  youtubeChannels: "youtube:getChannels",
   youtubeVideos: "youtube:getVideos",
   settingsGet: "settings:get",
   settingsSet: "settings:set",
+  dashboardGet: "settings:getDashboardViews",
+  dashboardSet: "settings:setDashboardViews",
 };
+
+const youtubeChannelIds = [
+  "pn_dev_fixture_youtube_channel",
+  "pn_dev_fixture_youtube_channel_2",
+  "pn_dev_fixture_youtube_channel_3",
+  "pn_dev_fixture_youtube_channel_4",
+];
 
 const fixtures = {
   digest: [
-    "pn_dev_fixture_digest_current",
-    "pn_dev_fixture_digest_previous",
-    "pn_dev_fixture_digest_older",
+    ...Array.from(
+      { length: 10 },
+      (_, index) =>
+        `pn_dev_fixture_digest_${String(index + 1).padStart(2, "0")}`,
+    ),
   ],
-  savedPosts: ["pn_dev_fixture_saved_read", "pn_dev_fixture_saved_unread"],
+  savedPosts: [
+    "pn_dev_fixture_saved_read",
+    "pn_dev_fixture_saved_unread",
+    "pn_dev_fixture_saved_research",
+    "pn_dev_fixture_saved_discussion",
+    "pn_dev_fixture_saved_inspiration",
+    "pn_dev_fixture_saved_reference",
+  ],
   weather: "pn_dev_fixture_weather_location",
-  sportsTeams: ["pn_dev_fixture_sports_home", "pn_dev_fixture_sports_away"],
-  youtubeChannel: "pn_dev_fixture_youtube_channel",
-  youtubeVideos: [
-    "pn_dev_fixture_youtube_unwatched",
-    "pn_dev_fixture_youtube_watched",
-    "pn_dev_fixture_youtube_upcoming",
+  sportsTeams: [
+    "pn_dev_fixture_sports_home",
+    "pn_dev_fixture_sports_away",
+    "pn_dev_fixture_sports_basketball_home",
+    "pn_dev_fixture_sports_basketball_away",
   ],
+  basketballEvent: "pn_dev_fixture_sports_basketball_live",
+  youtubeChannels: youtubeChannelIds,
+  youtubeVideos: Array.from(
+    { length: 30 },
+    (_, index) =>
+      `${youtubeChannelIds[index < 15 ? 0 : 1 + Math.floor((index - 15) / 5)]}_video_${String(index < 15 ? index + 1 : ((index - 15) % 5) + 1).padStart(2, "0")}`,
+  ),
 };
 
 async function invoke(page, channel, ...args) {
@@ -44,14 +73,20 @@ function assert(condition, message) {
 }
 
 async function readSurfaces(page) {
-  const [digest, savedPosts, locations, teams, youtubeVideos] =
+  const [digest, savedPosts, locations, teams, channels, youtubeChannels] =
     await Promise.all([
       invoke(page, IPC.redditDigest),
       invoke(page, IPC.savedPosts),
       invoke(page, IPC.weatherLocations),
       invoke(page, IPC.sportsTeams),
-      invoke(page, IPC.youtubeVideos, fixtures.youtubeChannel),
+      invoke(page, IPC.youtubeChannels),
+      Promise.all(
+        fixtures.youtubeChannels.map((channelId) =>
+          invoke(page, IPC.youtubeVideos, channelId),
+        ),
+      ),
     ]);
+  const youtubeVideos = youtubeChannels.flat();
   const fixtureLocation = locations.find(
     (location) => location.id === fixtures.weather,
   );
@@ -61,22 +96,42 @@ async function readSurfaces(page) {
   const sportsEvents = await invoke(page, IPC.sportsTeamEvents, {
     teamId: fixtures.sportsTeams[0],
   });
+  const basketballEvents = await invoke(page, IPC.sportsTeamEvents, {
+    teamId: fixtures.sportsTeams[2],
+  });
+  const basketballToday = await invoke(page, IPC.sportsTodayEvents, {
+    sport: "Basketball",
+  });
+  const basketballDetails = await invoke(page, IPC.sportsEventDetails, {
+    eventId: fixtures.basketballEvent,
+  });
+  const astronomy = fixtureLocation
+    ? await invoke(page, "astronomy:getSnapshot", fixtures.weather)
+    : null;
   return {
     digest,
     savedPosts,
     locations,
     weather,
     teams,
+    channels,
     sportsEvents,
+    basketballEvents,
+    basketballToday,
+    basketballDetails,
     youtubeVideos,
+    youtubeChannels,
+    astronomy,
   };
 }
 
 function assertSeededSurfaces(surfaces) {
   assert(
-    fixtures.digest.every((id) =>
-      surfaces.digest.some((post) => post.post_id === id),
-    ),
+    surfaces.digest.filter((post) => fixtures.digest.includes(post.post_id))
+      .length === 10 &&
+      fixtures.digest.every((id) =>
+        surfaces.digest.some((post) => post.post_id === id),
+      ),
     "Reddit Digest fixture posts were not readable",
   );
   assert(
@@ -84,6 +139,12 @@ function assertSeededSurfaces(surfaces) {
       surfaces.savedPosts.posts.some((post) => post.post_id === id),
     ),
     "Saved Posts fixture records were not readable",
+  );
+  assert(
+    surfaces.savedPosts.posts
+      .filter((post) => fixtures.savedPosts.includes(post.post_id))
+      .every((post) => typeof post.note === "string" && post.note.trim()),
+    "A Saved Posts fixture record is missing its note",
   );
   assert(
     surfaces.weather?.location?.id === fixtures.weather,
@@ -97,10 +158,33 @@ function assertSeededSurfaces(surfaces) {
     "Sports fixture teams and events were not readable",
   );
   assert(
-    fixtures.youtubeVideos.every((id) =>
-      surfaces.youtubeVideos.some((video) => video.video_id === id),
+    surfaces.basketballToday.some(
+      (event) =>
+        event.eventId === fixtures.basketballEvent &&
+        event.sport === "Basketball" &&
+        event.status === "LIVE" &&
+        event.homeScore === "62" &&
+        event.awayScore === "58",
+    ) &&
+      surfaces.basketballDetails?.progress === "End of 3rd quarter" &&
+      surfaces.basketballDetails?.descriptionEN.includes("Basketball"),
+    "Basketball fixture game and quarter detail were not readable",
+  );
+  assert(
+    surfaces.youtubeVideos.length === 30 &&
+      fixtures.youtubeVideos.every((id) =>
+        surfaces.youtubeVideos.some((video) => video.video_id === id),
+      ) &&
+      surfaces.youtubeChannels.every(
+        (videos, index) => videos.length === (index === 0 ? 15 : 5),
+      ),
+    "YouTube fixture set did not contain 15 videos and three additional 5-video channels",
+  );
+  assert(
+    fixtures.youtubeChannels.every((channelId) =>
+      surfaces.channels.some((channel) => channel.channel_id === channelId),
     ),
-    "YouTube fixture videos were not readable",
+    "YouTube fixture channels were not readable",
   );
 }
 
@@ -124,16 +208,377 @@ function assertFixturesCleared(surfaces) {
     "Sports fixture teams remained after clear",
   );
   assert(
+    !surfaces.basketballToday.some(
+      (event) => event.eventId === fixtures.basketballEvent,
+    ) && !surfaces.basketballDetails,
+    "Basketball fixture game remained after clear",
+  );
+  assert(
     !surfaces.youtubeVideos.some((video) =>
       fixtures.youtubeVideos.includes(video.video_id),
     ),
     "YouTube fixture videos remained after clear",
   );
+  assert(
+    !surfaces.channels.some((channel) =>
+      fixtures.youtubeChannels.includes(channel.channel_id),
+    ),
+    "YouTube fixture channels remained after clear",
+  );
+}
+
+const presetModules = [
+  "youtube",
+  "reddit_digest",
+  "saved_posts",
+  "sports",
+  "weather",
+  "astronomy",
+];
+const sizes = ["small", "medium", "large"];
+const isFixture = (id) => id.startsWith("pn_dev_fixture_");
+const viewId = (moduleId) => `pn_dev_fixture_dashboard_${moduleId}`;
+const instanceId = (moduleId, size) =>
+  `pn_dev_fixture_widget_${moduleId}_${size}`;
+const configKey = (moduleId, size) =>
+  `${moduleId}_view_config:${instanceId(moduleId, size)}`;
+const legacySportsConfig = {
+  sport: "Baseball",
+  viewMode: "detailed",
+  showVenue: true,
+  showTime: true,
+  showLiveStartTime: true,
+};
+const sportsDefaultsMigrationKey =
+  "dev_test_data_sports_defaults_migration_version";
+
+async function assertBasketballWidgets(page) {
+  await page.getByRole("link", { name: "Dashboard", exact: true }).click();
+  await page.getByRole("tab", { name: "Sports", exact: true }).click();
+  for (const size of sizes) {
+    const label = `Sports ${size[0].toUpperCase()}${size.slice(1)}`;
+    const widget = page
+      .getByText(label, { exact: true })
+      .locator("xpath=ancestor::*[@data-widget-instance-id]");
+    assert(
+      (await widget
+        .getByRole("button", { name: "Toggle mock live game" })
+        .count()) === 0,
+      `${label} still exposes the mock live game toggle`,
+    );
+    assert(
+      (await widget.getByText(/mock/i).count()) === 0,
+      `${label} still exposes mock data information`,
+    );
+    await widget
+      .getByRole("button", {
+        name: "Show Fixture Pilots at Fixture Foxes",
+        exact: true,
+      })
+      .click();
+    for (const text of ["Fixture Pilots", "Fixture Foxes", "LIVE", "62", "58"])
+      await widget.getByText(text, { exact: true }).first().waitFor();
+    for (const score of ["62", "58"])
+      assert(
+        await widget.getByText(score, { exact: true }).first().isVisible(),
+        `${label} did not visibly render the Basketball live score ${score}`,
+      );
+  }
+}
+
+async function openSettings(page) {
+  await page.getByRole("link", { name: "Settings", exact: true }).click();
+  await page
+    .getByRole("heading", { name: "Developer Test Data", exact: true })
+    .waitFor();
+}
+
+async function waitForIdleAction(page, name) {
+  await page.getByRole("button", { name, exact: true }).waitFor();
+  await page.waitForFunction(
+    (buttonName) =>
+      [...document.querySelectorAll("button")].some(
+        (button) =>
+          button.textContent.trim() === buttonName && !button.disabled,
+      ),
+    name,
+  );
+}
+
+function assertPresetState(state) {
+  const ids = [];
+  for (const moduleId of presetModules) {
+    const view = state.views[viewId(moduleId)];
+    assert(
+      view && state.view_order.includes(view.id),
+      `Missing fixture dashboard: ${moduleId}`,
+    );
+    assert(
+      view.layout.widget_order.length === 3,
+      `${moduleId} did not have all three sizes`,
+    );
+    for (const size of sizes) {
+      const id = instanceId(moduleId, size);
+      const instance = view.layout.widget_instances[id];
+      assert(
+        instance?.size === size && instance.moduleId === moduleId,
+        `Invalid fixture instance: ${id}`,
+      );
+      assert(
+        instance.label.endsWith(` ${size[0].toUpperCase()}${size.slice(1)}`),
+        `Missing size label: ${id}`,
+      );
+      ids.push(id);
+    }
+  }
+  assert(
+    new Set(ids).size === 18,
+    "Fixture widget IDs were not globally unique",
+  );
+}
+
+async function inspectPresetMatrix(page, artifacts, record, state, surfaces) {
+  await page.setViewportSize({ width: 1600, height: 1100 });
+  const anyTitle = (posts) =>
+    new RegExp(
+      `^(?:${posts.map((post) => post.title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})$`,
+    );
+  const values = {
+    youtube: surfaces.channels.find(
+      (channel) => channel.channel_id === fixtures.youtubeChannels[0],
+    ).name,
+    reddit_digest: anyTitle(
+      surfaces.digest.filter((post) => fixtures.digest.includes(post.post_id)),
+    ),
+    saved_posts: surfaces.savedPosts.posts.find(
+      (post) => post.post_id === fixtures.savedPosts[0],
+    ).title,
+    sports: surfaces.teams.find(
+      (team) => team.teamId === fixtures.sportsTeams[0],
+    ).name,
+    weather: [
+      surfaces.weather.location.name,
+      surfaces.weather.location.admin1,
+      surfaces.weather.location.country,
+    ]
+      .filter(Boolean)
+      .join(", "),
+    astronomy: new RegExp(
+      `${Math.round(surfaces.astronomy.groups.moon.data.illuminationPercent)}%`,
+    ),
+  };
+  const measurements = [];
+  for (const projection of [
+    { columns: 12, width: 1240 },
+    { columns: 8, width: 1040 },
+    { columns: 4, width: 840 },
+    { columns: 1, width: 620 },
+  ]) {
+    for (const moduleId of presetModules) {
+      const view = state.views[viewId(moduleId)];
+      await page.getByRole("tab", { name: view.name, exact: true }).click();
+      await page
+        .getByText(
+          view.layout.widget_instances[instanceId(moduleId, "small")].label,
+          { exact: true },
+        )
+        .waitFor();
+      const initialWidth = await page
+        .locator(".dashboard-grid")
+        .evaluate((grid) => grid.getBoundingClientRect().width);
+      const viewport = page.viewportSize() ?? { width: 1600, height: 1100 };
+      await page.setViewportSize({
+        width: Math.round(viewport.width + projection.width - initialWidth),
+        height: 1100,
+      });
+      // Inner-main scrollbars can change available width after its height changes.
+      await page.waitForFunction(
+        (targetWidth) =>
+          Math.abs(
+            document.querySelector(".dashboard-grid")?.getBoundingClientRect()
+              .width - targetWidth,
+          ) < 20,
+        projection.width,
+      );
+      await page.waitForFunction(() => {
+        const grid = document.querySelector(".dashboard-grid");
+        const rect = grid?.getBoundingClientRect();
+        return (
+          rect &&
+          [...grid.querySelectorAll("[data-widget-instance-id]")].every(
+            (widget) => {
+              const box = widget.getBoundingClientRect();
+              return box.x >= rect.x - 2 && box.right <= rect.right + 2;
+            },
+          )
+        );
+      });
+      for (const size of sizes) {
+        const label =
+          view.layout.widget_instances[instanceId(moduleId, size)].label;
+        const widget = page
+          .getByText(label, { exact: true })
+          .locator("xpath=ancestor::*[@data-widget-instance-id]");
+        await widget
+          .getByText(values[moduleId], {
+            exact: typeof values[moduleId] === "string",
+          })
+          .first()
+          .waitFor();
+        assert(
+          await widget
+            .getByText(values[moduleId], {
+              exact: typeof values[moduleId] === "string",
+            })
+            .first()
+            .isVisible(),
+          `${label} did not visibly render fixture content`,
+        );
+        assert(
+          (await widget
+            .getByText(
+              /Loading (astronomy|weather)|Something went wrong|No cached astronomy data|No weather data cached/,
+            )
+            .count()) === 0,
+          `${label} remained empty/loading/error`,
+        );
+      }
+      if (moduleId === "saved_posts") {
+        const large = page
+          .getByText(
+            view.layout.widget_instances[instanceId(moduleId, "large")].label,
+            { exact: true },
+          )
+          .locator("xpath=ancestor::*[@data-widget-instance-id]");
+        for (const post of surfaces.savedPosts.posts.filter((post) =>
+          fixtures.savedPosts.includes(post.post_id),
+        )) {
+          await large.getByText(post.title, { exact: true }).waitFor();
+          await large.getByText(post.note, { exact: true }).waitFor();
+          await large
+            .getByText(post.note, { exact: true })
+            .scrollIntoViewIfNeeded();
+          const containment = await large
+            .getByText(post.note, { exact: true })
+            .evaluate((note) => {
+              const root = note.closest("[data-widget-instance-id]");
+              const widget = root.getBoundingClientRect();
+              const heading = root.querySelector("h3").getBoundingClientRect();
+              const rect = note.getBoundingClientRect();
+              return (
+                rect.top >= widget.top &&
+                rect.bottom <= widget.bottom &&
+                heading.top >= widget.top &&
+                heading.bottom <= widget.bottom
+              );
+            });
+          assert(
+            containment,
+            `Saved Posts Large note could not scroll into its viewport: ${post.post_id}`,
+          );
+        }
+        await large.screenshot({
+          path: path.join(
+            artifacts,
+            `saved_posts-${projection.columns}-columns-large-scrolled.png`,
+          ),
+        });
+        await large.evaluate((widget) => {
+          for (const element of widget.querySelectorAll("*"))
+            if (element.scrollTop) element.scrollTop = 0;
+        });
+      }
+      const dimensions = await page
+        .locator(".dashboard-grid")
+        .evaluate((grid) => {
+          const rect = grid.getBoundingClientRect();
+          const widgets = [
+            ...grid.querySelectorAll("[data-widget-instance-id]"),
+          ].map((widget) => {
+            const box = widget.getBoundingClientRect();
+            return {
+              id: widget.dataset.widgetInstanceId,
+              x: box.x,
+              right: box.right,
+              width: box.width,
+              clientWidth: widget.clientWidth,
+              scrollWidth: widget.scrollWidth,
+            };
+          });
+          return { width: rect.width, x: rect.x, right: rect.right, widgets };
+        });
+      const actualColumns =
+        dimensions.width >= 1200
+          ? 12
+          : dimensions.width >= 996
+            ? 8
+            : dimensions.width >= 768
+              ? 4
+              : 1;
+      assert(
+        actualColumns === projection.columns,
+        `Expected ${projection.columns} columns, measured ${actualColumns} at ${dimensions.width}px`,
+      );
+      for (const widget of dimensions.widgets) {
+        assert(
+          widget.x >= dimensions.x - 2 && widget.right <= dimensions.right + 2,
+          `${widget.id} escaped the dashboard horizontally`,
+        );
+        assert(
+          widget.scrollWidth <= widget.clientWidth + 2,
+          `${widget.id} overflowed horizontally (${widget.scrollWidth}/${widget.clientWidth})`,
+        );
+      }
+      const screenshot = path.join(
+        artifacts,
+        `${moduleId}-${projection.columns}-columns.png`,
+      );
+      // Dashboard scrolls inside <main>; grow the viewport so all three sizes
+      // appear in the overview, then also retain complete per-widget captures.
+      const gridHeight = await page
+        .locator(".dashboard-grid")
+        .evaluate((grid) => grid.getBoundingClientRect().height);
+      await page.setViewportSize({
+        width: page.viewportSize().width,
+        height: Math.ceil(gridHeight + 240),
+      });
+      await page.locator("main").evaluate((main) => main.scrollTo(0, 0));
+      await page.screenshot({ path: screenshot, fullPage: true });
+      for (const size of sizes) {
+        const label =
+          view.layout.widget_instances[instanceId(moduleId, size)].label;
+        await page
+          .getByText(label, { exact: true })
+          .locator("xpath=ancestor::*[@data-widget-instance-id]")
+          .screenshot({
+            path: path.join(
+              artifacts,
+              `${moduleId}-${projection.columns}-columns-${size}.png`,
+            ),
+          });
+      }
+      measurements.push({
+        moduleId,
+        columns: actualColumns,
+        viewport: page.viewportSize(),
+        screenshot,
+        ...dimensions,
+      });
+      record(
+        "preset-projection",
+        `${view.name}: three populated sizes, ${actualColumns} columns at ${dimensions.width}px; ${screenshot}`,
+      );
+    }
+  }
+  await writeFile(
+    path.join(artifacts, "preset-projections.json"),
+    JSON.stringify(measurements, null, 2),
+  );
 }
 
 await runElectronHarness({
   name: "local-test-data",
-  scenario: async ({ page, record }) => {
+  scenario: async ({ page, record, artifacts }) => {
     await page.getByRole("link", { name: "Settings" }).click();
     await page.getByRole("heading", { name: "Settings" }).waitFor();
     await page.getByRole("heading", { name: "Developer Test Data" }).waitFor();
@@ -150,9 +595,57 @@ await runElectronHarness({
       .waitFor();
     record("status", "Settings reports synthetic test data as inactive");
 
-    const sentinelKey = "phase3_local_test_data_sentinel";
-    const previousSentinel = await invoke(page, IPC.settingsGet, sentinelKey);
+    const sentinelKey = "local_test_data_sentinel";
     await invoke(page, IPC.settingsSet, sentinelKey, "preserve-me");
+    const sentinelConfigKey = "youtube_view_config:sentinel_widget";
+    const sentinelConfig = JSON.stringify({
+      hideWatched: true,
+      channelMode: "selected",
+      selectedChannelIds: [],
+    });
+    await invoke(page, IPC.settingsSet, sentinelConfigKey, sentinelConfig);
+    const initialViews = await invoke(page, IPC.dashboardGet);
+    const sentinelView = {
+      id: "sentinel_view",
+      name: "Sentinel",
+      icon: null,
+      layout: {
+        layout_version: 2,
+        widget_order: ["sentinel_widget"],
+        widget_instances: {
+          sentinel_widget: {
+            instanceId: "sentinel_widget",
+            moduleId: "youtube",
+            size: "small",
+            label: "Sentinel widget",
+          },
+        },
+        widget_visibility: { sentinel_widget: true },
+        widget_geometry: { sentinel_widget: { x: 0, y: 0, w: 6, h: 6 } },
+      },
+    };
+    await invoke(page, IPC.dashboardSet, {
+      state: {
+        view_order: [...initialViews.view_order, sentinelView.id],
+        views: { ...initialViews.views, [sentinelView.id]: sentinelView },
+      },
+    });
+    // Start with disabled persisted gates to prove Seed rehydrates mounted providers.
+    for (const gate of [
+      "saved_posts_enabled",
+      "reddit_digest_enabled",
+      "weather_enabled",
+      "sports_enabled",
+    ])
+      await invoke(page, IPC.settingsSet, gate, "false");
+    await invoke(
+      page,
+      IPC.settingsSet,
+      "astronomy_settings_json",
+      JSON.stringify({ enabled: false }),
+    );
+    await page.reload();
+    await openSettings(page);
 
     await page.getByRole("button", { name: "Seed test data" }).click();
     await page
@@ -160,14 +653,299 @@ await runElectronHarness({
       .getByText("Synthetic data active")
       .waitFor();
     const seededStatus = await invoke(page, IPC.devTestDataStatus);
-    assert(seededStatus.active, "Seed action did not persist active status");
+    const latestVersion = seededStatus.latestVersion;
+    assert(
+      seededStatus.active &&
+        seededStatus.appliedVersion === latestVersion &&
+        latestVersion > 0 &&
+        !seededStatus.updateAvailable,
+      "Seed action did not persist the latest fixture version",
+    );
     const seededSurfaces = await readSurfaces(page);
     assertSeededSurfaces(seededSurfaces);
+    assert(
+      seededSurfaces.astronomy?.groups.moon.data,
+      "Astronomy fixture snapshot was not readable",
+    );
+    const seededViews = await invoke(page, IPC.dashboardGet);
+    assertPresetState(seededViews);
+    assert(
+      JSON.stringify(seededViews.views.sentinel_view) ===
+        JSON.stringify(sentinelView),
+      "Seed changed the sentinel dashboard",
+    );
     record(
       "surfaces-seeded",
-      "Reddit Digest, Saved Posts, Weather, Sports, and YouTube fixture records were readable",
+      `All six fixture surfaces, including Basketball, and eighteen preset widget instances were readable at fixture version ${latestVersion}`,
     );
 
+    await page.getByRole("link", { name: "Dashboard" }).click();
+    await inspectPresetMatrix(
+      page,
+      artifacts,
+      record,
+      seededViews,
+      seededSurfaces,
+    );
+
+    // Reproduce an existing v3 profile whose factory Baseball configs survived v4.
+    for (const size of sizes)
+      await invoke(
+        page,
+        IPC.settingsSet,
+        configKey("sports", size),
+        JSON.stringify(legacySportsConfig),
+      );
+    await invoke(page, IPC.settingsSet, sportsDefaultsMigrationKey, "0");
+    await invoke(page, IPC.settingsSet, "dev_test_data_applied_version", "3");
+    await page.reload();
+    await openSettings(page);
+    await page
+      .getByRole("button", { name: "Update test data", exact: true })
+      .click();
+    await waitForIdleAction(page, "Update test data");
+    for (const size of sizes)
+      assert(
+        JSON.parse(
+          await invoke(page, IPC.settingsGet, configKey("sports", size)),
+        ).sport === "all",
+        `Update did not upgrade the legacy Sports ${size} factory default`,
+      );
+    await assertBasketballWidgets(page);
+    record(
+      "legacy-sports-defaults-upgraded",
+      "Visible Update upgraded the old factory defaults; selecting Fixture Pilots at Fixture Foxes rendered LIVE 62/58 in all three Sports sizes",
+    );
+
+    await openSettings(page);
+    const editedPost = seededSurfaces.savedPosts.posts.find(
+      (post) => post.post_id === fixtures.savedPosts[0],
+    );
+    await invoke(
+      page,
+      "reddit:updateSavedPostNote",
+      editedPost.post_id,
+      "Harness edited note",
+    );
+    await invoke(page, "reddit:setSavedPostViewed", editedPost.post_id, false);
+    const editedDigest = seededSurfaces.digest.find(
+      (post) => post.post_id === fixtures.digest[0],
+    );
+    await invoke(
+      page,
+      "reddit:setDigestPostViewed",
+      editedDigest.post_id,
+      editedDigest.week_start_date,
+      true,
+    );
+    const editedVideo = seededSurfaces.youtubeVideos[0];
+    await invoke(page, "youtube:setVideoWatched", editedVideo.video_id, true);
+    const editedViews = structuredClone(seededViews);
+    editedViews.views[viewId("youtube")].name = "Edited fixture dashboard";
+    editedViews.views[viewId("youtube")].layout.widget_visibility[
+      instanceId("youtube", "small")
+    ] = false;
+    editedViews.views[viewId("youtube")].layout.widget_instances[
+      instanceId("youtube", "small")
+    ].label = "My edited fixture";
+    await invoke(page, IPC.dashboardSet, { state: editedViews });
+    const editedConfig = JSON.stringify({
+      hideWatched: true,
+      maxVideosPerChannel: 2,
+    });
+    const sportsEditedConfig = JSON.stringify({ sport: "Baseball" });
+    const sportsIntentionalConfig = JSON.stringify(legacySportsConfig);
+    await invoke(
+      page,
+      IPC.settingsSet,
+      configKey("youtube", "small"),
+      editedConfig,
+    );
+    await invoke(
+      page,
+      IPC.settingsSet,
+      configKey("sports", "small"),
+      sportsEditedConfig,
+    );
+    await invoke(
+      page,
+      IPC.settingsSet,
+      configKey("sports", "medium"),
+      sportsIntentionalConfig,
+    );
+    // Deterministically emulate an older installed fixture version before the visible Update.
+    await invoke(
+      page,
+      IPC.settingsSet,
+      "dev_test_data_applied_version",
+      String(latestVersion - 1),
+    );
+    await page.reload();
+    await openSettings(page);
+    await page
+      .getByTestId("dev-test-data-status")
+      .getByText(/Update available/)
+      .waitFor();
+    await page
+      .getByRole("button", { name: "Update test data", exact: true })
+      .click();
+    await waitForIdleAction(page, "Update test data");
+    const updatedStatus = await invoke(page, IPC.devTestDataStatus);
+    assert(
+      updatedStatus.appliedVersion === latestVersion &&
+        !updatedStatus.updateAvailable,
+      "Update did not apply the latest fixture version",
+    );
+    const updatedSurfaces = await readSurfaces(page);
+    assertSeededSurfaces(updatedSurfaces);
+    assert(
+      updatedSurfaces.savedPosts.posts.find(
+        (post) => post.post_id === editedPost.post_id,
+      ).note === "Harness edited note",
+      "Update discarded a saved-post note",
+    );
+    assert(
+      updatedSurfaces.digest.find(
+        (post) => post.post_id === editedDigest.post_id,
+      ).viewed_at !== null,
+      "Update discarded Digest read state",
+    );
+    assert(
+      updatedSurfaces.youtubeVideos.find(
+        (video) => video.video_id === editedVideo.video_id,
+      ).watched_at !== null,
+      "Update discarded video watched state",
+    );
+    assert(
+      JSON.stringify(
+        (await invoke(page, IPC.dashboardGet)).views[viewId("youtube")],
+      ) === JSON.stringify(editedViews.views[viewId("youtube")]),
+      "Update discarded preset page/layout edits",
+    );
+    assert(
+      (await invoke(page, IPC.settingsGet, configKey("youtube", "small"))) ===
+        editedConfig,
+      "Update discarded fixture config edits",
+    );
+    assert(
+      (await invoke(page, IPC.settingsGet, configKey("sports", "small"))) ===
+        sportsEditedConfig,
+      "Update discarded the Sports preset selection",
+    );
+    assert(
+      (await invoke(page, IPC.settingsGet, configKey("sports", "medium"))) ===
+        sportsIntentionalConfig,
+      "Update repeated the migration and discarded a later intentional Baseball selection",
+    );
+    record(
+      "fixtures-updated",
+      `Visible Update upgraded fixtures to version ${latestVersion} and preserved notes/read/watched state, fixture layout edits, and config edits`,
+    );
+
+    await page
+      .getByRole("button", { name: "Reset test data", exact: true })
+      .click();
+    const resetConfirmation = page.getByRole("alertdialog");
+    await resetConfirmation
+      .getByRole("heading", { name: "Reset synthetic test data?" })
+      .waitFor();
+    await resetConfirmation
+      .getByRole("button", { name: "Cancel", exact: true })
+      .click();
+    assert(
+      (await invoke(page, IPC.settingsGet, configKey("youtube", "small"))) ===
+        editedConfig,
+      "Cancel reset changed fixture config",
+    );
+    await page
+      .getByRole("button", { name: "Reset test data", exact: true })
+      .click();
+    await page
+      .getByRole("alertdialog")
+      .getByRole("button", { name: "Reset test data", exact: true })
+      .click();
+    await waitForIdleAction(page, "Reset test data");
+    const resetViews = await invoke(page, IPC.dashboardGet);
+    assertPresetState(resetViews);
+    assert(
+      JSON.stringify(resetViews.views[viewId("youtube")]) ===
+        JSON.stringify(seededViews.views[viewId("youtube")]),
+      "Reset did not restore fixture layout defaults",
+    );
+    assert(
+      JSON.stringify(resetViews.views.sentinel_view) ===
+        JSON.stringify(sentinelView),
+      "Reset changed the sentinel dashboard",
+    );
+    assert(
+      JSON.parse(
+        await invoke(page, IPC.settingsGet, configKey("sports", "small")),
+      ).sport === "all",
+      "Reset did not restore the Sports All Sports default",
+    );
+    const resetSurfaces = await readSurfaces(page);
+    assert(
+      resetSurfaces.savedPosts.posts.find(
+        (post) => post.post_id === editedPost.post_id,
+      ).note === editedPost.note,
+      "Reset did not restore the fixture note",
+    );
+    assert(
+      resetSurfaces.digest.find((post) => post.post_id === editedDigest.post_id)
+        .viewed_at === editedDigest.viewed_at,
+      "Reset did not restore Digest read defaults",
+    );
+    assert(
+      resetSurfaces.youtubeVideos.find(
+        (video) => video.video_id === editedVideo.video_id,
+      ).watched_at === null,
+      "Reset did not restore video watched defaults",
+    );
+    assert(
+      JSON.parse(
+        await invoke(page, IPC.settingsGet, configKey("youtube", "small")),
+      ).hideWatched === false,
+      "Reset did not restore fixture config defaults",
+    );
+    record(
+      "fixtures-reset",
+      "Cancelled Reset was inert; confirmed Reset restored fixture notes/read/watched states and preset/config defaults, preserving the sentinel dashboard",
+    );
+
+    // Set up moved fixture and foreign user widgets to exercise ownership in the UI Clear action.
+    const movedId = instanceId("youtube", "small");
+    const movedInstance =
+      resetViews.views[viewId("youtube")].layout.widget_instances[movedId];
+    resetViews.views.sentinel_view.layout.widget_order.push(movedId);
+    resetViews.views.sentinel_view.layout.widget_instances[movedId] =
+      movedInstance;
+    resetViews.views.sentinel_view.layout.widget_visibility[movedId] = true;
+    resetViews.views.sentinel_view.layout.widget_geometry[movedId] = {
+      x: 0,
+      y: 6,
+      w: 6,
+      h: 6,
+    };
+    const source = resetViews.views[viewId("youtube")].layout;
+    source.widget_order = source.widget_order.filter((id) => id !== movedId);
+    delete source.widget_instances[movedId];
+    delete source.widget_visibility[movedId];
+    delete source.widget_geometry[movedId];
+    const foreignId = "sentinel_foreign_widget";
+    const foreignInstance = {
+      instanceId: foreignId,
+      moduleId: "saved_posts",
+      label: "Preserved user widget",
+      size: "small",
+    };
+    source.widget_order.push(foreignId);
+    source.widget_instances[foreignId] = foreignInstance;
+    source.widget_visibility[foreignId] = true;
+    source.widget_geometry[foreignId] = { x: 0, y: 21, w: 6, h: 6 };
+    const foreignConfigKey = `saved_posts_view_config:${foreignId}`;
+    const foreignConfig = JSON.stringify({ hideViewed: false });
+    await invoke(page, IPC.settingsSet, foreignConfigKey, foreignConfig);
+    await invoke(page, IPC.dashboardSet, { state: resetViews });
     await page.getByRole("button", { name: "Clear test data" }).click();
     const confirmation = page.getByRole("alertdialog");
     await confirmation.waitFor();
@@ -184,13 +962,101 @@ await runElectronHarness({
       (await invoke(page, IPC.settingsGet, sentinelKey)) === "preserve-me",
       "Fixture clear changed an unrelated setting",
     );
-    record(
-      "fixtures-cleared",
-      "All five fixture surfaces were cleared while the unrelated setting remained unchanged",
+    const clearedViews = await invoke(page, IPC.dashboardGet);
+    assert(
+      !Object.keys(clearedViews.views).some(isFixture),
+      "Clear left fixture dashboard pages",
+    );
+    assert(
+      !Object.values(clearedViews.views).some((view) =>
+        Object.keys(view.layout.widget_instances).some(isFixture),
+      ),
+      "Clear left fixture widgets moved into user dashboards",
+    );
+    assert(
+      JSON.stringify(clearedViews.views.sentinel_view) ===
+        JSON.stringify(sentinelView),
+      "Clear changed the unrelated sentinel view",
+    );
+    assert(
+      Object.values(clearedViews.views).some(
+        (view) =>
+          view.layout.widget_instances[foreignId]?.label ===
+          foreignInstance.label,
+      ),
+      "Clear lost a foreign user widget added to a fixture page",
+    );
+    assert(
+      (await invoke(page, IPC.settingsGet, sentinelConfigKey)) ===
+        sentinelConfig,
+      "Clear changed the sentinel config",
+    );
+    assert(
+      (await invoke(page, IPC.settingsGet, foreignConfigKey)) === foreignConfig,
+      "Clear changed the rescued user widget config",
+    );
+    for (const moduleId of presetModules)
+      for (const size of sizes)
+        assert(
+          (await invoke(page, IPC.settingsGet, configKey(moduleId, size))) ===
+            null,
+          "Clear left fixture config keys",
+        );
+    for (const gate of [
+      "saved_posts_enabled",
+      "reddit_digest_enabled",
+      "weather_enabled",
+      "sports_enabled",
+    ])
+      assert(
+        (await invoke(page, IPC.settingsGet, gate)) === "false",
+        `Clear did not restore ${gate}`,
+      );
+    assert(
+      JSON.parse(await invoke(page, IPC.settingsGet, "astronomy_settings_json"))
+        .enabled === false,
+      "Clear did not restore Astronomy feature gate",
     );
 
-    if (previousSentinel !== null) {
-      await invoke(page, IPC.settingsSet, sentinelKey, previousSentinel);
+    await page.getByRole("link", { name: "Dashboard" }).click();
+    for (const title of seededSurfaces.savedPosts.posts
+      .filter((post) => fixtures.savedPosts.includes(post.post_id))
+      .map((post) => post.title)) {
+      assert(
+        (await page.getByText(title, { exact: true }).count()) === 0,
+        `Cleared Saved Posts title remained visible: ${title}`,
+      );
     }
+    for (const note of seededSurfaces.savedPosts.posts
+      .filter((post) => fixtures.savedPosts.includes(post.post_id))
+      .map((post) => post.note)) {
+      assert(
+        (await page.getByText(note, { exact: true }).count()) === 0,
+        `Cleared Saved Posts note remained visible: ${note}`,
+      );
+    }
+    record(
+      "fixtures-cleared",
+      "All six fixture surfaces/pages/configs and moved fixture widgets cleared; foreign widgets rescued; user dashboard/config and disabled gate preferences preserved",
+    );
+
+    // Re-enable the real Saved Posts surface after Clear to inspect its honest empty state.
+    await openSettings(page);
+    await invoke(page, IPC.settingsSet, "saved_posts_enabled", "true");
+    await page.reload();
+    await page.getByRole("link", { name: "Dashboard", exact: true }).click();
+    await page.getByRole("tab", { name: "Home", exact: true }).click();
+    await page
+      .getByText(/No saved posts yet\.|Set up mobile saving to get started\./)
+      .first()
+      .waitFor();
+    await page.screenshot({
+      path: path.join(artifacts, "cleared-empty-dashboard.png"),
+      fullPage: true,
+    });
+    record(
+      "empty-state",
+      "Clear left the real Saved Posts empty prompt with no synthetic empty/error/loading database records",
+    );
   },
 });
