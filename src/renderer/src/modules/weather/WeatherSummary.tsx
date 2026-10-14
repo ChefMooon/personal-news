@@ -119,12 +119,14 @@ export function WeatherSummary({
   config,
   settings,
   compact = false,
+  denseSpacing = false,
   trailing,
 }: {
   snapshot: WeatherSnapshot;
   config: WeatherViewConfig;
   settings: WeatherSettings;
   compact?: boolean;
+  denseSpacing?: boolean;
   trailing?: React.ReactNode;
 }): React.ReactElement {
   const current = snapshot.current;
@@ -184,7 +186,7 @@ export function WeatherSummary({
     <section
       className={cn(
         "min-w-0 rounded-md border bg-muted/5",
-        compact ? "p-2" : "p-3",
+        compact || denseSpacing ? "p-2" : "p-3",
       )}
       aria-label="Current weather"
     >

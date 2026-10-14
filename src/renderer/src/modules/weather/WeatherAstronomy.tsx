@@ -14,7 +14,7 @@ export function WeatherAstronomy({
   astronomy: AstronomySnapshot | null;
   timezone: string;
   settings: WeatherSettings;
-  variant?: "strip" | "stacked" | "row";
+  variant?: "strip" | "medium-compact" | "stacked" | "row";
 }): React.ReactElement {
   return (
     <div className={variant === "stacked" ? "h-full min-w-0" : "min-w-0"}>
@@ -24,7 +24,8 @@ export function WeatherAstronomy({
         settings={settings}
         contentWidth={variant === "stacked" ? 240 : 720}
         stacked={variant === "stacked"}
-        compact={variant === "strip"}
+        compact={variant === "strip" || variant === "medium-compact"}
+        includeMoonTimes={variant === "medium-compact"}
       />
     </div>
   );

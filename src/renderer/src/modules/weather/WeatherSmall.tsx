@@ -8,38 +8,43 @@ import { WeatherAstronomy } from "./WeatherAstronomy";
 export function WeatherSmall(props: WeatherLayoutProps): React.ReactElement {
   const { snapshot, config, settings, policy } = props;
   return (
-    <div className="min-w-0 space-y-1.5">
-      <WeatherSummary
-        snapshot={snapshot}
-        config={config}
-        settings={settings}
-        compact
-        trailing={
-          policy.showAlerts ? (
-            policy.alertPresentation === "icon" ? (
-              <WeatherInlineAlert
-                {...props}
-                visible={policy.showAlerts}
-                detail={policy.alertDetail}
-                presentation={policy.alertPresentation}
-              />
-            ) : (
-              <WeatherAlertCard
-                snapshot={snapshot}
-                visible={policy.showAlerts}
-                detail={policy.alertDetail}
-              />
-            )
-          ) : undefined
-        }
-      />
-      {policy.showAstronomy && snapshot.location.timezone && (
-        <WeatherAstronomy
-          astronomy={snapshot.astronomy}
-          timezone={snapshot.location.timezone}
+    <div className="flex h-full min-h-0 min-w-0 flex-col gap-1">
+      <div className="shrink-0">
+        <WeatherSummary
+          snapshot={snapshot}
+          config={config}
           settings={settings}
-          variant="strip"
+          compact
+          denseSpacing
+          trailing={
+            policy.showAlerts ? (
+              policy.alertPresentation === "icon" ? (
+                <WeatherInlineAlert
+                  {...props}
+                  visible={policy.showAlerts}
+                  detail={policy.alertDetail}
+                  presentation={policy.alertPresentation}
+                />
+              ) : (
+                <WeatherAlertCard
+                  snapshot={snapshot}
+                  visible={policy.showAlerts}
+                  detail={policy.alertDetail}
+                />
+              )
+            ) : undefined
+          }
         />
+      </div>
+      {policy.showAstronomy && snapshot.location.timezone && (
+        <div className="shrink-0">
+          <WeatherAstronomy
+            astronomy={snapshot.astronomy}
+            timezone={snapshot.location.timezone}
+            settings={settings}
+            variant="strip"
+          />
+        </div>
       )}
       {policy.showHourly && (
         <WeatherHourly
@@ -48,6 +53,8 @@ export function WeatherSmall(props: WeatherLayoutProps): React.ReactElement {
           settings={settings}
           cap={policy.hourlyCap}
           presentation="compact"
+          denseSpacing
+          fillAvailable
           onMetricChange={props.onMetricChange}
         />
       )}

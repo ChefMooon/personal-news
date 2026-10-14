@@ -305,6 +305,8 @@ export function WeatherHourly({
   cap,
   presentation = "standard",
   chartHeight = 85,
+  denseSpacing = false,
+  fillAvailable = false,
   onMetricChange,
 }: {
   points: WeatherHourlyPoint[];
@@ -313,9 +315,26 @@ export function WeatherHourly({
   cap: number;
   presentation?: "compact" | "standard" | "tabbed";
   chartHeight?: number;
+  denseSpacing?: boolean;
+  fillAvailable?: boolean;
   onMetricChange: (metric: WeatherViewConfig["hourlyMetric"]) => void;
 }): React.ReactElement {
   const gradientId = React.useId();
+  const chartHostRef = React.useRef<HTMLDivElement>(null);
+  const [measuredChartHeight, setMeasuredChartHeight] =
+    React.useState(chartHeight);
+  React.useEffect(() => {
+    const host = chartHostRef.current;
+    if (!fillAvailable || presentation === "compact" || !host) return;
+    const observer = new ResizeObserver(() => {
+      const nextHeight = Math.max(chartHeight, Math.floor(host.clientHeight));
+      setMeasuredChartHeight((current) =>
+        current === nextHeight ? current : nextHeight,
+      );
+    });
+    observer.observe(host);
+    return () => observer.disconnect();
+  }, [chartHeight, fillAvailable, presentation]);
   const visible = points.slice(0, cap);
   if (!visible.length)
     return (
@@ -343,7 +362,11 @@ export function WeatherHourly({
           : formatCompactNumber(point.relativeHumidity, "%");
   return (
     <section
-      className="min-w-0 rounded-md border bg-muted/5 p-2.5"
+      className={cn(
+        "min-w-0 rounded-md border bg-muted/5",
+        fillAvailable && "flex min-h-0 flex-1 flex-col",
+        denseSpacing ? "p-1.5" : "p-2.5",
+      )}
       aria-label="Hourly forecast"
     >
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
@@ -369,9 +392,20 @@ export function WeatherHourly({
           </div>
         )}
       </div>
-      <div className="weather-timeline-scroll mt-2 min-w-0 overflow-x-auto">
+      <div
+        className={cn(
+          "weather-timeline-scroll min-w-0 overflow-x-auto",
+          fillAvailable && "flex min-h-0 flex-1 flex-col",
+          denseSpacing ? "mt-1" : "mt-2",
+        )}
+      >
         <div
-          className="grid gap-0.5"
+          className={cn(
+            "grid gap-0.5",
+            fillAvailable &&
+              presentation === "compact" &&
+              "flex-1 items-stretch",
+          )}
           style={{
             minWidth: presentation === "compact" ? 0 : minWidth,
             gridTemplateColumns: `repeat(${visible.length}, minmax(0, 1fr))`,
@@ -382,7 +416,13 @@ export function WeatherHourly({
               key={point.time}
               aria-current={index === 0 ? "time" : undefined}
               className={cn(
-                "flex min-w-0 flex-col items-center gap-0.5 rounded-md px-1 py-1 text-center",
+                cn(
+                  "flex min-w-0 flex-col items-center rounded-md px-1 text-center",
+                  fillAvailable &&
+                    presentation === "compact" &&
+                    "h-full justify-evenly",
+                  denseSpacing ? "gap-0 py-0.5" : "gap-0.5 py-1",
+                ),
                 index === 0
                   ? "border border-primary/40 bg-primary/10"
                   : "bg-transparent",
@@ -405,13 +445,19 @@ export function WeatherHourly({
           ))}
         </div>
         {presentation !== "compact" && (
-          <TemperatureAreaChart
-            points={visible}
-            metric={config.hourlyMetric}
-            settings={settings}
-            gradientId={`weather-hourly-${gradientId}`}
-            height={chartHeight}
-          />
+          <div
+            ref={chartHostRef}
+            className={cn(fillAvailable && "flex-1")}
+            style={fillAvailable ? { minHeight: chartHeight } : undefined}
+          >
+            <TemperatureAreaChart
+              points={visible}
+              metric={config.hourlyMetric}
+              settings={settings}
+              gradientId={`weather-hourly-${gradientId}`}
+              height={fillAvailable ? measuredChartHeight : chartHeight}
+            />
+          </div>
         )}
         {presentation !== "compact" && (
           <div
@@ -421,7 +467,7 @@ export function WeatherHourly({
               gridTemplateColumns: `repeat(${visible.length}, minmax(0, 1fr))`,
             }}
           >
-            {visible.map((point) => (
+            {visible.map((point) =>
               config.hourlyMetric === "overview" ? (
                 <RainProbabilityPill
                   key={point.time}
@@ -434,8 +480,8 @@ export function WeatherHourly({
                 >
                   {metricValue(point)}
                 </div>
-              )
-            ))}
+              ),
+            )}
           </div>
         )}
       </div>

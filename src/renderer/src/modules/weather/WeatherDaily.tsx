@@ -12,12 +12,14 @@ export function WeatherDaily({
   config,
   settings,
   cap,
+  denseSpacing = false,
 }: {
   points: WeatherDailyPoint[];
   yesterday: WeatherDailyPoint | null;
   config: WeatherViewConfig;
   settings: WeatherSettings;
   cap: number;
+  denseSpacing?: boolean;
 }): React.ReactElement {
   const visible = [
     ...(config.showYesterday && yesterday
@@ -44,15 +46,23 @@ export function WeatherDaily({
   return (
     <section
       aria-label="Daily forecast"
-      className="min-w-0 rounded-md border bg-muted/5 p-2.5"
+      className={cn(
+        "min-w-0 rounded-md border bg-muted/5",
+        denseSpacing ? "p-1.5" : "p-2.5",
+      )}
     >
       <div className="weather-timeline-scroll min-w-0 overflow-x-auto">
-        <div className="flex w-full gap-2 pb-0.5">
+        <div
+          className={cn("flex w-full pb-0.5", denseSpacing ? "gap-1" : "gap-2")}
+        >
           {visible.map(({ point, label, muted, isToday }) => (
             <div
               key={`${point.date}:${label}`}
               className={cn(
-                "flex min-w-[92px] flex-1 flex-col gap-2 rounded-md px-3 py-2",
+                cn(
+                  "flex min-w-[92px] flex-1 flex-col rounded-md px-3",
+                  denseSpacing ? "gap-1 py-1" : "gap-2 py-2",
+                ),
                 isToday
                   ? "border border-primary/40 bg-primary/10"
                   : "bg-muted/20",

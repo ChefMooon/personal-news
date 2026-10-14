@@ -438,11 +438,13 @@ function CompactAstronomyRow({
   horizon,
   timezone,
   settings,
+  includeMoonTimes = false,
 }: {
   astronomy: AstronomySnapshot | null;
   horizon: AstronomySnapshot["groups"]["horizon"]["data"] | null;
   timezone: string;
   settings: WeatherSettings;
+  includeMoonTimes?: boolean;
 }): React.ReactElement {
   const moon = astronomy?.groups.moon.data ?? null;
   const milestone = nextPrimaryPhaseMilestone(astronomy);
@@ -482,6 +484,30 @@ function CompactAstronomyRow({
         <div className="min-w-0">
           <p className="truncate text-muted-foreground">Moon</p>
           <p className="break-words font-semibold leading-tight">{moonLabel}</p>
+          {includeMoonTimes && (
+            <div className="mt-0.5 space-y-px text-[8px] leading-tight text-muted-foreground">
+              <p className="flex min-w-0 justify-between gap-0.5 whitespace-nowrap">
+                <span>Moonrise</span>
+                <span className="font-medium text-foreground">
+                  {formatHorizonTime(
+                    horizon?.moon.riseTime,
+                    timezone,
+                    settings.timeFormat,
+                  ) ?? "Unavailable"}
+                </span>
+              </p>
+              <p className="flex min-w-0 justify-between gap-0.5 whitespace-nowrap">
+                <span>Moonset</span>
+                <span className="font-medium text-foreground">
+                  {formatHorizonTime(
+                    horizon?.moon.setTime,
+                    timezone,
+                    settings.timeFormat,
+                  ) ?? "Unavailable"}
+                </span>
+              </p>
+            </div>
+          )}
         </div>
       </div>
       <div className="min-w-0 px-2">
@@ -524,6 +550,7 @@ export function AstronomyStrip({
   contentWidth,
   stacked = false,
   compact = false,
+  includeMoonTimes = false,
 }: {
   astronomy: AstronomySnapshot | null;
   timezone: string;
@@ -531,6 +558,7 @@ export function AstronomyStrip({
   contentWidth: number;
   stacked?: boolean;
   compact?: boolean;
+  includeMoonTimes?: boolean;
 }): React.ReactElement {
   const horizon =
     astronomy?.groups.horizon.status === "unavailable"
@@ -544,7 +572,11 @@ export function AstronomyStrip({
         "relative w-full max-w-full rounded-md border",
         stacked && "flex h-full min-h-0 flex-col",
         !stacked && !compact && "pb-7",
-        compact ? "px-2.5 py-1.5" : "px-3 py-2.5",
+        compact
+          ? includeMoonTimes
+            ? "px-2.5 py-0.5"
+            : "px-2.5 py-1"
+          : "px-3 py-2.5",
       )}
     >
       <div
@@ -572,6 +604,7 @@ export function AstronomyStrip({
             horizon={horizon}
             timezone={timezone}
             settings={settings}
+            includeMoonTimes={includeMoonTimes}
           />
         ) : (
           <div

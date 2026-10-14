@@ -442,6 +442,145 @@ async function inspectPresetMatrix(page, artifacts, record, state, surfaces) {
             .count()) === 0,
           `${label} remained empty/loading/error`,
         );
+        if (moduleId === "weather") {
+          const initialGeometry = await widget.evaluate((root) => {
+            const preview = root.querySelector(".weather-card-preview");
+            const content = preview?.parentElement?.parentElement;
+            const finalSection = [...root.querySelectorAll("section")].at(-1);
+            const previewRect = preview?.getBoundingClientRect();
+            const contentRect = content?.getBoundingClientRect();
+            const paddingBottom = content
+              ? Number.parseFloat(getComputedStyle(content).paddingBottom)
+              : 0;
+            const viewports = [
+              ...root.querySelectorAll("[data-weather-vertical-viewport]"),
+            ].map((element) => ({
+              className: element.className,
+              clientHeight: element.clientHeight,
+              scrollHeight: element.scrollHeight,
+              scrollTop: element.scrollTop,
+            }));
+            const previewTop = preview?.getBoundingClientRect().top;
+            const previewBottom = preview?.getBoundingClientRect().bottom;
+            const sections = [...root.querySelectorAll("section")].map(
+              (section) => {
+                const rect = section.getBoundingClientRect();
+                return {
+                  label: section.getAttribute("aria-label"),
+                  top: rect.top,
+                  bottom: rect.bottom,
+                };
+              },
+            );
+            const finalRect = finalSection?.getBoundingClientRect();
+            const hourlyRect = root
+              .querySelector('[aria-label="Hourly forecast"]')
+              ?.getBoundingClientRect();
+            const astronomyRect = root
+              .querySelector('[aria-label="Astronomy"]')
+              ?.getBoundingClientRect();
+            return {
+              viewports,
+              sections,
+              previewTop,
+              previewBottom,
+              finalSection: finalSection?.getAttribute("aria-label"),
+              finalBottom: finalRect?.bottom,
+              previewBottom: previewRect?.bottom,
+              contentBottom: contentRect?.bottom,
+              paddingBottom,
+              hourlyBottom: hourlyRect?.bottom,
+              astronomyBottom: astronomyRect?.bottom,
+            };
+          });
+          assert(
+            initialGeometry.viewports.length > 0 &&
+              initialGeometry.viewports.every(
+                (viewport) =>
+                  viewport.scrollHeight <= viewport.clientHeight + 1 &&
+                  viewport.scrollTop === 0,
+              ),
+            `${label} vertically overflows at its initial scroll position: ${JSON.stringify(initialGeometry)}`,
+          );
+          assert(
+            initialGeometry.finalBottom <= initialGeometry.previewBottom + 1 &&
+              initialGeometry.sections.every(
+                (section) =>
+                  section.top >= initialGeometry.previewTop - 1 &&
+                  section.bottom <= initialGeometry.previewBottom + 1,
+              ) &&
+              initialGeometry.previewBottom <=
+                initialGeometry.contentBottom -
+                  initialGeometry.paddingBottom +
+                  1,
+            `${label} final section is outside the padded card at its initial position: ${JSON.stringify(initialGeometry)}`,
+          );
+          if (size === "small" || size === "large") {
+            assert(
+              initialGeometry.hourlyBottom != null &&
+                Math.abs(
+                  initialGeometry.hourlyBottom - initialGeometry.previewBottom,
+                ) <= 2,
+              `${label} hourly section did not fill the preview height: ${JSON.stringify(initialGeometry)}`,
+            );
+          }
+          if (size === "medium") {
+            const layoutMode = await widget
+              .locator(".weather-card-preview > div.grid")
+              .evaluate((grid) => ({
+                width: grid.parentElement.clientWidth,
+                stacked: grid.classList.contains("grid-cols-1"),
+              }));
+            assert(
+              layoutMode.stacked === layoutMode.width < 640,
+              `${label} selected the wrong layout around the 640px content breakpoint: ${JSON.stringify(layoutMode)}`,
+            );
+            if (!layoutMode.stacked) {
+              assert(
+                initialGeometry.hourlyBottom != null &&
+                  initialGeometry.astronomyBottom != null &&
+                  Math.abs(
+                    initialGeometry.hourlyBottom -
+                      initialGeometry.astronomyBottom,
+                  ) <= 2,
+                `${label} wide medium hourly and astronomy sections do not align: ${JSON.stringify(initialGeometry)}`,
+              );
+            }
+            await widget.getByText("Moonrise", { exact: true }).waitFor();
+            await widget.getByText("Moonset", { exact: true }).waitFor();
+          }
+          if (size !== "small") {
+            const precipitationTab = widget.getByRole("button", {
+              name: "Precipitation",
+              exact: true,
+            });
+            await precipitationTab.click();
+            assert(
+              (await precipitationTab.getAttribute("aria-pressed")) === "true",
+              `${label} hourly precipitation tab did not activate`,
+            );
+            const overviewTab = widget.getByRole("button", {
+              name: "Overview",
+              exact: true,
+            });
+            await overviewTab.click();
+            assert(
+              (await overviewTab.getAttribute("aria-pressed")) === "true",
+              `${label} hourly overview tab did not reactivate`,
+            );
+            await widget
+              .getByRole("button", { name: "Weather widget settings" })
+              .click();
+            const closeSettings = widget.getByRole("button", {
+              name: "Close settings",
+            });
+            await closeSettings.waitFor();
+            await closeSettings.click();
+            await widget
+              .getByRole("button", { name: "Weather widget settings" })
+              .waitFor();
+          }
+        }
       }
       if (moduleId === "saved_posts") {
         const large = page

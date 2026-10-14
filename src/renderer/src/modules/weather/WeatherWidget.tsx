@@ -185,8 +185,8 @@ function WeatherWidget(): React.ReactElement {
     <WeatherLarge {...layoutProps} />
   );
   return (
-    <Card>
-      <CardHeader className="pb-2">
+    <Card className="flex h-full min-h-0 flex-col overflow-hidden">
+      <CardHeader className="shrink-0 pb-2">
         <div className="flex min-w-0 items-start justify-between gap-2">
           <CardTitle className="flex min-w-0 items-center gap-2 text-base">
             <CloudSun className="h-5 w-5 shrink-0 text-sky-500" />
@@ -275,14 +275,22 @@ function WeatherWidget(): React.ReactElement {
       </CardHeader>
       <CardContent
         ref={cardContentRef}
+        className="min-h-0 flex-1 overflow-hidden"
         style={
           isEditing && editContentHeight
             ? { height: editContentHeight, overflow: "hidden" }
             : undefined
         }
       >
-        <div className={isEditing ? "weather-card-edit" : undefined}>
-          <div className={isEditing ? "weather-card-edit__preview" : undefined}>
+        <div className={isEditing ? "weather-card-edit" : "h-full min-h-0"}>
+          <div
+            data-weather-vertical-viewport={!isEditing ? "" : undefined}
+            className={
+              isEditing
+                ? "weather-card-edit__preview"
+                : "weather-card-preview h-full min-h-0 overflow-hidden"
+            }
+          >
             {preview}
           </div>
           {isEditing && (
