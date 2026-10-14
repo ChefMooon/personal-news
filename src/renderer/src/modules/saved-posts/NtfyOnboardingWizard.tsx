@@ -8,6 +8,7 @@ import {
   DialogTitle,
 } from "../../components/ui/dialog";
 import { Button } from "../../components/ui/button";
+import { ScrollArea } from "../../components/ui/scroll-area";
 import { Input } from "../../components/ui/input";
 
 interface NtfyOnboardingWizardProps {
@@ -213,11 +214,16 @@ export function NtfyOnboardingWizard({
               <p className="text-xs text-muted-foreground mb-2">
                 Send a test message from your terminal:
               </p>
-              <code className="text-xs block bg-background rounded p-2 overflow-x-auto select-all">
-                curl -d
-                &quot;https://reddit.com/r/test/comments/abc123/test&quot;{" "}
-                {topicUrl}
-              </code>
+              <ScrollArea
+                orientation="horizontal"
+                className="rounded-md bg-background"
+              >
+                <code className="block w-max min-w-full select-all whitespace-nowrap p-2 text-xs">
+                  curl -d
+                  &quot;https://reddit.com/r/test/comments/abc123/test&quot;{" "}
+                  {topicUrl}
+                </code>
+              </ScrollArea>
             </div>
             <div className="flex justify-between pt-2">
               <Button variant="ghost" onClick={() => setStep(2)}>

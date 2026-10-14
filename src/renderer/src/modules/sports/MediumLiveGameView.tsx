@@ -5,6 +5,7 @@ import type {
   TrackedTeam,
 } from "../../../../shared/ipc-types";
 import { Badge } from "../../components/ui/badge";
+import { ScrollArea } from "../../components/ui/scroll-area";
 import { TeamAvatar } from "./TeamAvatar";
 import { resolveTrackedTeamSide } from "./side-resolution";
 import {
@@ -128,40 +129,42 @@ export function MediumLiveGameView({
 
   return (
     <section className="min-w-0 space-y-2" aria-label="Today's live games">
-      <div className="flex min-w-0 gap-1 overflow-x-auto">
-        {events.map((event) => {
-          const selected = event.eventId === selectedGame.eventId;
-          return (
-            <button
-              key={event.eventId}
-              type="button"
-              className={`flex min-w-0 shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs ${selected ? "border-primary bg-primary/10 font-semibold" : "hover:bg-accent"}`}
-              onClick={() => onSelectGame(event.eventId)}
-              aria-pressed={selected}
-              aria-label={`Show ${event.awayTeam} at ${event.homeTeam}`}
-            >
-              <TeamAvatar
-                name={event.awayTeam}
-                src={
-                  getTeamForSide(event, teams, "away")?.badgeUrl ??
-                  event.awayTeamBadgeUrl
-                }
-                className="h-5 w-5 rounded-full"
-              />
-              <span className="max-w-40 truncate">
-                {event.awayTeam} at {event.homeTeam}
-              </span>
-              <span className="shrink-0 text-muted-foreground">
-                {getGamePhase(event) === "live"
-                  ? "Live"
-                  : getGamePhase(event) === "finished"
-                    ? "Final"
-                    : formatEventTime(event)}
-              </span>
-            </button>
-          );
-        })}
-      </div>
+      <ScrollArea orientation="horizontal" className="min-w-0">
+        <div className="flex w-max gap-1">
+          {events.map((event) => {
+            const selected = event.eventId === selectedGame.eventId;
+            return (
+              <button
+                key={event.eventId}
+                type="button"
+                className={`flex min-w-0 shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs ${selected ? "border-primary bg-primary/10 font-semibold" : "hover:bg-accent"}`}
+                onClick={() => onSelectGame(event.eventId)}
+                aria-pressed={selected}
+                aria-label={`Show ${event.awayTeam} at ${event.homeTeam}`}
+              >
+                <TeamAvatar
+                  name={event.awayTeam}
+                  src={
+                    getTeamForSide(event, teams, "away")?.badgeUrl ??
+                    event.awayTeamBadgeUrl
+                  }
+                  className="h-5 w-5 rounded-full"
+                />
+                <span className="max-w-40 truncate">
+                  {event.awayTeam} at {event.homeTeam}
+                </span>
+                <span className="shrink-0 text-muted-foreground">
+                  {getGamePhase(event) === "live"
+                    ? "Live"
+                    : getGamePhase(event) === "finished"
+                      ? "Final"
+                      : formatEventTime(event)}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </ScrollArea>
       <div className="min-w-0 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3">
         <div className="flex items-center justify-between gap-2">
           <Badge

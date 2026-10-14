@@ -9,6 +9,7 @@ import { useRedditDigestWeeks } from "../../hooks/useRedditDigestWeeks";
 import { useWidgetInstance } from "../../contexts/WidgetInstanceContext";
 import { RedditDigestSettingsPanel } from "./RedditDigestSettingsPanel";
 import { WidgetSizeControl } from "../../components/WidgetSizeControl";
+import { ScrollArea } from "../../components/ui/scroll-area";
 import { SubredditColumn } from "./SubredditColumn";
 import { getRedditDigestContentPolicy } from "./reddit-content-policy";
 import {
@@ -274,7 +275,7 @@ function RedditDigestWidget(): React.ReactElement {
   const hasSmallGroupNavigation = size === "small" && groupKeys.length > 0;
   const smallSubredditSelector = hasSmallGroupNavigation ? (
     <div className="mb-2 flex min-w-0 items-center gap-1 border-b pb-2">
-      <div className="min-w-0 flex-1 overflow-x-auto">
+      <ScrollArea orientation="horizontal" className="min-w-0 flex-1">
         <div className="flex w-max gap-1">
           {groupKeys.map((key, index) => (
             <button
@@ -292,7 +293,7 @@ function RedditDigestWidget(): React.ReactElement {
             </button>
           ))}
         </div>
-      </div>
+      </ScrollArea>
       <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
         {smallGroupIndex + 1}/{groupKeys.length}
       </span>

@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { SportEvent, TrackedTeam } from "../../../../shared/ipc-types";
 import { getLocalDateKey } from "../../../../shared/sports-event-utils";
 import { Badge } from "../../components/ui/badge";
+import { ScrollArea } from "../../components/ui/scroll-area";
 import { TeamAvatar } from "./TeamAvatar";
 import {
   getGameOutcome,
@@ -392,34 +393,37 @@ export function CompactSportsView({
   return (
     <div className="min-w-0 space-y-1 overflow-hidden">
       {liveOrToday.length > 0 ? (
-        <div
-          className="flex min-w-0 gap-1 overflow-x-auto"
+        <ScrollArea
+          orientation="horizontal"
+          className="min-w-0"
           aria-label="Today's games"
         >
-          {liveOrToday.map((game) => {
-            const selected = game.eventId === selectedGame.eventId;
-            return (
-              <button
-                key={game.eventId}
-                type="button"
-                className={`flex min-w-0 shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-[10px] ${selected ? "border-primary bg-primary/10 font-semibold" : "hover:bg-accent"}`}
-                onClick={() => onSelectGame(game.eventId)}
-                aria-pressed={selected}
-                aria-label={`Show ${game.awayTeam} at ${game.homeTeam}`}
-              >
-                <TeamAvatar
-                  name={game.awayTeam}
-                  src={game.awayTeamBadgeUrl}
-                  className="h-4 w-4 rounded-full"
-                />
-                <span className="max-w-20 truncate">
-                  {shortTeamName(game.awayTeam)} v{" "}
-                  {shortTeamName(game.homeTeam)}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+          <div className="flex w-max gap-1">
+            {liveOrToday.map((game) => {
+              const selected = game.eventId === selectedGame.eventId;
+              return (
+                <button
+                  key={game.eventId}
+                  type="button"
+                  className={`flex min-w-0 shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-[10px] ${selected ? "border-primary bg-primary/10 font-semibold" : "hover:bg-accent"}`}
+                  onClick={() => onSelectGame(game.eventId)}
+                  aria-pressed={selected}
+                  aria-label={`Show ${game.awayTeam} at ${game.homeTeam}`}
+                >
+                  <TeamAvatar
+                    name={game.awayTeam}
+                    src={game.awayTeamBadgeUrl}
+                    className="h-4 w-4 rounded-full"
+                  />
+                  <span className="max-w-20 truncate">
+                    {shortTeamName(game.awayTeam)} v{" "}
+                    {shortTeamName(game.homeTeam)}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </ScrollArea>
       ) : null}
       <div className="grid min-w-0 grid-cols-[minmax(0,3fr)_minmax(7rem,1fr)] gap-2">
         <CompactGameSummary
