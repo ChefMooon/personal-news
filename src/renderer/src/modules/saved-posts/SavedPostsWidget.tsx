@@ -318,7 +318,13 @@ function SavedPostsWidget(): React.ReactElement {
 
   const handleAfterMutation = useCallback(async (): Promise<void> => {}, []);
 
-  if (!staleness.loading && !staleness.topicConfigured) {
+  if (
+    !staleness.loading &&
+    !staleness.topicConfigured &&
+    !loading &&
+    posts.length === 0 &&
+    !error
+  ) {
     return (
       <Card>
         <CardHeader className="pb-2">
@@ -507,8 +513,8 @@ function SavedPostsWidget(): React.ReactElement {
   };
 
   return (
-    <Card>
-      <CardHeader className="pb-2">
+    <Card className="flex min-h-0 flex-col">
+      <CardHeader className="shrink-0 pb-2">
         <div className="flex items-center justify-between">
           <CardTitle className="text-base flex items-center gap-2">
             <Bookmark className="h-5 w-5" />

@@ -35,7 +35,7 @@ describe("getSavedPostsContentPolicy", () => {
     expect(policy.disclosureRequired).toBe(false);
   });
 
-  it("caps Large at six posts without scrolling or disclosure", () => {
+  it("caps Large at six posts and allows overflowed entries to scroll into view", () => {
     const policy = getSavedPostsContentPolicy({
       size: "large",
       configuredMaxPosts: 3,
@@ -46,7 +46,7 @@ describe("getSavedPostsContentPolicy", () => {
 
     expect(policy.visiblePostLimit).toBe(6);
     expect(policy.disclosureRequired).toBe(false);
-    expect(policy.viewportOverflow).toBe("hidden");
+    expect(policy.viewportOverflow).toBe("auto");
     expect(policy.showMetadata).toBe(true);
     expect(policy.showBodyPreview).toBe(true);
   });
@@ -62,7 +62,7 @@ describe("getSavedPostsContentPolicy", () => {
 
     expect(policy.visiblePostLimit).toBe(6);
     expect(policy.disclosureRequired).toBe(false);
-    expect(policy.viewportOverflow).toBe("hidden");
+    expect(policy.viewportOverflow).toBe("auto");
     expect(policy.columnCount).toBe(1);
   });
 

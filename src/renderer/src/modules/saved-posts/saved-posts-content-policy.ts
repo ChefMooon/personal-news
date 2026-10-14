@@ -45,7 +45,7 @@ export function getSavedPostsContentPolicy({
     showBodyPreview: size === "large",
     disclosureRequired,
     expanded,
-    viewportOverflow: "hidden",
+    viewportOverflow: size === "large" ? "auto" : "hidden",
     columnCount: size === "medium" ? 2 : 1,
   };
 }
