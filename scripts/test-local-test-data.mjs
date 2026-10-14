@@ -235,6 +235,42 @@ const presetModules = [
   "weather",
   "astronomy",
 ];
+const usage = `Usage: npm run test:local-test-data [-- --widget <moduleId>]
+
+Available widget IDs: ${presetModules.join(", ")}
+Use --help to show this message.`;
+
+function parseArguments(args) {
+  let widget = null;
+
+  for (let index = 0; index < args.length; index += 1) {
+    const argument = args[index];
+    if (argument === "--help" || argument === "-h") {
+      return { help: true, widget: null };
+    }
+    if (argument !== "--widget") {
+      return { error: `Unknown argument: ${argument}` };
+    }
+    if (widget !== null) {
+      return { error: "Pass --widget only once." };
+    }
+
+    const moduleId = args[index + 1];
+    if (!moduleId || moduleId.startsWith("--")) {
+      return { error: "--widget requires a module ID." };
+    }
+    if (!presetModules.includes(moduleId)) {
+      return {
+        error: `Unknown widget ID "${moduleId}". Available IDs: ${presetModules.join(", ")}.`,
+      };
+    }
+    widget = moduleId;
+    index += 1;
+  }
+
+  return { help: false, widget };
+}
+
 const sizes = ["small", "medium", "large"];
 const isFixture = (id) => id.startsWith("pn_dev_fixture_");
 const viewId = (moduleId) => `pn_dev_fixture_dashboard_${moduleId}`;
@@ -305,9 +341,9 @@ async function waitForIdleAction(page, name) {
   );
 }
 
-function assertPresetState(state) {
+function assertPresetState(state, moduleIds = presetModules) {
   const ids = [];
-  for (const moduleId of presetModules) {
+  for (const moduleId of moduleIds) {
     const view = state.views[viewId(moduleId)];
     assert(
       view && state.view_order.includes(view.id),
@@ -332,12 +368,19 @@ function assertPresetState(state) {
     }
   }
   assert(
-    new Set(ids).size === 18,
+    new Set(ids).size === moduleIds.length * sizes.length,
     "Fixture widget IDs were not globally unique",
   );
 }
 
-async function inspectPresetMatrix(page, artifacts, record, state, surfaces) {
+async function inspectPresetMatrix(
+  page,
+  artifacts,
+  record,
+  state,
+  surfaces,
+  moduleIds = presetModules,
+) {
   await page.setViewportSize({ width: 1600, height: 1100 });
   const anyTitle = (posts) =>
     new RegExp(
@@ -374,7 +417,7 @@ async function inspectPresetMatrix(page, artifacts, record, state, surfaces) {
     { columns: 4, width: 840 },
     { columns: 1, width: 620 },
   ]) {
-    for (const moduleId of presetModules) {
+    for (const moduleId of moduleIds) {
       const view = state.views[viewId(moduleId)];
       await page.getByRole("tab", { name: view.name, exact: true }).click();
       await page
@@ -967,6 +1010,16 @@ async function inspectPresetMatrix(page, artifacts, record, state, surfaces) {
   );
 }
 
+const cliOptions = parseArguments(process.argv.slice(2));
+if (cliOptions.error) {
+  console.error(`Error: ${cliOptions.error}\n\n${usage}`);
+  process.exit(1);
+}
+if (cliOptions.help) {
+  console.log(usage);
+  process.exit(0);
+}
+
 await runElectronHarness({
   name: "local-test-data",
   scenario: async ({ page, record, artifacts }) => {
@@ -985,6 +1038,43 @@ await runElectronHarness({
       .getByText("Inactive")
       .waitFor();
     record("status", "Settings reports synthetic test data as inactive");
+
+    if (cliOptions.widget) {
+      await page.getByRole("button", { name: "Seed test data" }).click();
+      await page
+        .getByTestId("dev-test-data-status")
+        .getByText("Synthetic data active")
+        .waitFor();
+      const seededStatus = await invoke(page, IPC.devTestDataStatus);
+      assert(
+        seededStatus.active &&
+          seededStatus.appliedVersion === seededStatus.latestVersion &&
+          seededStatus.latestVersion > 0 &&
+          !seededStatus.updateAvailable,
+        "Seed action did not persist the latest fixture version",
+      );
+
+      const seededSurfaces = await readSurfaces(page);
+      const seededViews = await invoke(page, IPC.dashboardGet);
+      assertPresetState(seededViews, [cliOptions.widget]);
+      await page.getByRole("link", { name: "Dashboard" }).click();
+      await inspectPresetMatrix(
+        page,
+        artifacts,
+        record,
+        seededViews,
+        seededSurfaces,
+        [cliOptions.widget],
+      );
+      if (cliOptions.widget === "sports") {
+        await assertBasketballWidgets(page);
+      }
+      record(
+        "widget-focused",
+        `Focused ${cliOptions.widget} widget checks passed across all sizes and responsive projections`,
+      );
+      return;
+    }
 
     const sentinelKey = "local_test_data_sentinel";
     await invoke(page, IPC.settingsSet, sentinelKey, "preserve-me");

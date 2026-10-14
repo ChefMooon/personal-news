@@ -47,6 +47,20 @@ Screenshots remain with the run diagnostics under
 widget content, size policies, or preset definitions. The harness database is
 isolated for the run; no persistent Development or production database is used.
 
+For a focused widget regression, pass one fixture module ID:
+
+```powershell
+npm run test:local-test-data -- --widget weather
+```
+
+Supported IDs are `youtube`, `reddit_digest`, `saved_posts`, `sports`,
+`weather`, and `astronomy`. Focused mode seeds the isolated profile through the
+visible Settings action, then checks only that widget page at all three sizes
+and the four responsive projections. It skips the broader Update, Reset, and
+Clear lifecycle; Sports also runs its Basketball fixture interaction check.
+With no `--widget` argument, the full scenario above remains the default. Use
+`--help` to print the command and supported IDs.
+
 Use semantic Playwright locators for user-visible navigation and actions, such
 as buttons, links, headings, status text, and confirmation dialogs. Use IPC
 only for deterministic setup or state observation that has no suitable visible
