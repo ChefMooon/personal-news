@@ -61,6 +61,7 @@
     "generate:icons": "node scripts/generate-icons.mjs",
     "test:ntfy-message": "node scripts/test-ntfy-message.mjs",
     "test:dashboard-drag": "node scripts/test-dashboard-drag.mjs",
+    "test:dashboard-edit": "node scripts/test-dashboard-edit.mjs",
     "test:local-test-data": "node scripts/test-local-test-data.mjs",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",

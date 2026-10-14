@@ -935,7 +935,10 @@ export default function Dashboard(): React.ReactElement {
                   canDelete={canDeleteView}
                   onToggleEditMode={() => setEditMode((value) => !value)}
                   onNewDashboard={() => setDashboardDialogMode("create")}
-                  onAddWidget={() => setShowAddModal(true)}
+                  onAddWidget={() => {
+                    setEditMode(true);
+                    setShowAddModal(true);
+                  }}
                   onEditDashboard={() => setDashboardDialogMode("edit")}
                   onDuplicateDashboard={() =>
                     duplicateDashboardView(activeView.id)
@@ -975,9 +978,16 @@ export default function Dashboard(): React.ReactElement {
                     Add First Widget
                   </Button>
                 ) : (
-                  <p className="mt-4 text-sm text-muted-foreground">
-                    Turn on Edit Layout to add widgets to this dashboard.
-                  </p>
+                  <Button
+                    className="mt-4 gap-2"
+                    onClick={() => {
+                      setEditMode(true);
+                      setShowAddModal(true);
+                    }}
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add first widget
+                  </Button>
                 )}
               </div>
             ) : (
