@@ -17,6 +17,37 @@ export interface SportsContentPolicy {
   overflow: "hidden" | "auto";
 }
 
+export function getMediumTeamItems<T>(
+  teams: T[],
+  viewMode: SportsViewMode,
+  expanded: boolean,
+): T[] {
+  return viewMode === "today" || expanded ? teams : teams.slice(0, 1);
+}
+
+export function shouldShowMediumTeamCarousel(
+  viewMode: SportsViewMode,
+  policyAllowsCarousel: boolean,
+): boolean {
+  return viewMode === "today" || policyAllowsCarousel;
+}
+
+export function getMediumItemCount({
+  viewMode,
+  todayEventCount,
+  fallbackEventCount,
+  teamCount,
+}: {
+  viewMode: SportsViewMode;
+  todayEventCount: number;
+  fallbackEventCount: number;
+  teamCount: number;
+}): number {
+  return viewMode === "all_games"
+    ? todayEventCount || fallbackEventCount
+    : teamCount;
+}
+
 export function getSportsContentPolicy({
   size,
   viewMode,

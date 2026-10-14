@@ -581,6 +581,258 @@ async function inspectPresetMatrix(page, artifacts, record, state, surfaces) {
               .waitFor();
           }
         }
+        if (moduleId === "sports") {
+          const initialGeometry = await widget.evaluate((root) => {
+            const card = root.firstElementChild;
+            const content = card?.querySelector(":scope > .p-6");
+            const viewport = root.querySelector(
+              "[data-sports-content-viewport]",
+            );
+            const layout =
+              root.querySelector("[data-sports-layout]") ?? viewport;
+            const rect = (element) => {
+              if (!element) return null;
+              const box = element.getBoundingClientRect();
+              return {
+                top: box.top,
+                bottom: box.bottom,
+                height: box.height,
+                clientHeight: element.clientHeight,
+                scrollHeight: element.scrollHeight,
+                scrollTop: element.scrollTop,
+              };
+            };
+            return {
+              card: rect(card),
+              content: rect(content),
+              layout: rect(layout),
+              viewport: rect(viewport),
+              layoutMode: layout?.getAttribute("data-sports-layout"),
+            };
+          });
+          assert(
+            initialGeometry.card &&
+              initialGeometry.content &&
+              initialGeometry.viewport &&
+              initialGeometry.content.bottom <= initialGeometry.card.bottom + 1,
+            `${label} Sports body did not stay within its assigned card: ${JSON.stringify(initialGeometry)}`,
+          );
+          if (size === "small" || size === "medium") {
+            assert(
+              initialGeometry.layout &&
+                initialGeometry.layout.scrollHeight <=
+                  initialGeometry.layout.clientHeight + 1 &&
+                initialGeometry.viewport.scrollHeight <=
+                  initialGeometry.viewport.clientHeight + 1 &&
+                initialGeometry.viewport.scrollTop === 0,
+              `${label} Sports summary overflows or clips at its initial position: ${JSON.stringify(initialGeometry)}`,
+            );
+          }
+          if (size === "medium") {
+            if (projection.columns === 12) {
+              const originalConfig = JSON.parse(
+                await invoke(
+                  page,
+                  IPC.settingsGet,
+                  configKey("sports", "medium"),
+                ),
+              );
+              const selectViewMode = async (mode) => {
+                await widget
+                  .getByRole("button", { name: "Sports widget settings" })
+                  .click();
+                await widget.getByRole("combobox").nth(1).click();
+                await page
+                  .getByRole("option", {
+                    name: {
+                      today: "Today",
+                      summarized: "Summarized",
+                      standard: "Standard",
+                      detailed: "Detailed",
+                      all_games: "All Games",
+                    }[mode],
+                  })
+                  .click();
+                await widget
+                  .getByRole("button", { name: "Close settings" })
+                  .click();
+              };
+              await selectViewMode("today");
+              const teamCarousel = widget.locator(
+                "[data-sports-team-carousel]",
+              );
+              assert(
+                Number(
+                  await widget
+                    .locator("[data-sports-today-team-count]")
+                    .getAttribute("data-sports-today-team-count"),
+                ) === surfaces.teams.filter((team) => team.enabled).length,
+                `${label} Today view dropped tracked teams before separating playing and resting teams`,
+              );
+              if ((await teamCarousel.count()) === 1) {
+                const teamPage = teamCarousel.getByText(/^\d+\/\d+$/);
+                const teamPageBefore = await teamPage.textContent();
+                const nextTeam = teamCarousel.getByRole("button", {
+                  name: "Next team",
+                });
+                assert(
+                  !(await nextTeam.isDisabled()),
+                  `${label} Today view reduced the tracked-team carousel to one item (${teamPageBefore})`,
+                );
+                await nextTeam.click();
+                assert(
+                  (await teamPage.textContent()) !== teamPageBefore,
+                  `${label} Today team carousel could not advance`,
+                );
+              }
+              await selectViewMode(originalConfig.viewMode);
+            }
+            const disclosure = widget.getByRole("button", {
+              name: /View all (games|teams)/,
+            });
+            if ((await disclosure.count()) > 0) {
+              await disclosure.click();
+              assert(
+                (await widget
+                  .getByRole("button", { name: "Show less" })
+                  .getAttribute("aria-expanded")) === "true",
+                `${label} Medium Sports disclosure did not expand`,
+              );
+              const expanded = await widget
+                .locator('[data-sports-content-viewport="medium"]')
+                .evaluate((viewport) => {
+                  viewport.scrollTop = viewport.scrollHeight;
+                  const last = viewport.lastElementChild;
+                  const viewportRect = viewport.getBoundingClientRect();
+                  const lastRect = last?.getBoundingClientRect();
+                  return {
+                    scrollHeight: viewport.scrollHeight,
+                    clientHeight: viewport.clientHeight,
+                    scrollTop: viewport.scrollTop,
+                    lastBottom: lastRect?.bottom,
+                    viewportBottom: viewportRect.bottom,
+                  };
+                });
+              assert(
+                expanded.scrollTop >= 0 &&
+                  expanded.lastBottom <= expanded.viewportBottom + 1,
+                `${label} expanded Medium Sports content could not reach its end: ${JSON.stringify(expanded)}`,
+              );
+              await widget.getByRole("button", { name: "Show less" }).click();
+            }
+          }
+          if (size === "large") {
+            const viewport = widget.locator(
+              '[data-sports-content-viewport="large"]',
+            );
+            const reachability = await viewport.evaluate((element) => {
+              element.scrollTop = element.scrollHeight;
+              const last = element.lastElementChild;
+              const viewportRect = element.getBoundingClientRect();
+              const lastRect = last?.getBoundingClientRect();
+              return {
+                scrollHeight: element.scrollHeight,
+                clientHeight: element.clientHeight,
+                scrollTop: element.scrollTop,
+                lastBottom: lastRect?.bottom,
+                viewportTop: viewportRect.top,
+                viewportBottom: viewportRect.bottom,
+              };
+            });
+            assert(
+              reachability.lastBottom == null ||
+                (reachability.lastBottom <= reachability.viewportBottom + 1 &&
+                  reachability.lastBottom >= reachability.viewportTop - 1),
+              `${label} Large Sports list end is unreachable in its viewport: ${JSON.stringify(reachability)}`,
+            );
+            if (projection.columns === 12) {
+              await widget.screenshot({
+                path: path.join(
+                  artifacts,
+                  `sports-${projection.columns}-columns-large-scrolled.png`,
+                ),
+              });
+            }
+            await viewport.evaluate((element) => {
+              element.scrollTop = 0;
+            });
+          }
+          if (size === "small") {
+            const nextPage = widget.getByRole("button", {
+              name: "Next sports teams and games",
+            });
+            if (
+              (await nextPage.count()) > 0 &&
+              !(await nextPage.isDisabled())
+            ) {
+              const pageLabel = widget.getByText(/^\d+\/\d+$/).first();
+              const before = await pageLabel.textContent();
+              await nextPage.click();
+              assert(
+                (await pageLabel.textContent()) !== before,
+                `${label} compact Sports secondary paging did not advance`,
+              );
+              await widget
+                .getByRole("button", {
+                  name: "Previous sports teams and games",
+                })
+                .click();
+            }
+          }
+          if (projection.columns === 12 && size === "small") {
+            const originalHeight = initialGeometry.card.height;
+            await page.getByRole("button", { name: "Edit Layout" }).click();
+            await widget
+              .getByRole("button", { name: "Sports widget settings" })
+              .click();
+            const sizeControl = widget.getByRole("group", {
+              name: "Widget size",
+            });
+            const mediumSize = sizeControl.getByRole("button", {
+              name: "Set widget size to Medium",
+            });
+            await mediumSize.click();
+            assert(
+              (await mediumSize.getAttribute("aria-pressed")) === "true",
+              "Sports size control did not select Medium",
+            );
+            await page.waitForFunction(
+              ({ widgetId, originalHeight }) => {
+                const widget = [
+                  ...document.querySelectorAll("[data-widget-instance-id]"),
+                ].find(
+                  (element) => element.dataset.widgetInstanceId === widgetId,
+                );
+                return (
+                  widget &&
+                  widget.getBoundingClientRect().height > originalHeight + 80
+                );
+              },
+              { widgetId: instanceId(moduleId, size), originalHeight },
+            );
+            const smallSize = sizeControl.getByRole("button", {
+              name: "Set widget size to Small",
+            });
+            await smallSize.click();
+            assert(
+              (await smallSize.getAttribute("aria-pressed")) === "true",
+              "Sports size control did not restore Small",
+            );
+            await page
+              .getByRole("button", { name: "Done editing layout" })
+              .click();
+            await widget
+              .getByRole("button", { name: "Close settings" })
+              .click();
+            const restoredHeight = await widget
+              .locator(":scope > .rounded-lg.border")
+              .evaluate((card) => card.getBoundingClientRect().height);
+            assert(
+              Math.abs(restoredHeight - originalHeight) <= 2,
+              `Sports Small height did not restore after size transition: ${restoredHeight}/${originalHeight}`,
+            );
+          }
+        }
       }
       if (moduleId === "saved_posts") {
         const large = page

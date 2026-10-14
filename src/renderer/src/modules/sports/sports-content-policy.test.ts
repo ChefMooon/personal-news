@@ -1,7 +1,40 @@
 import { describe, expect, it } from "vitest";
-import { getSportsContentPolicy } from "./sports-content-policy";
+import {
+  getMediumTeamItems,
+  getMediumItemCount,
+  getSportsContentPolicy,
+  shouldShowMediumTeamCarousel,
+} from "./sports-content-policy";
 
 describe("getSportsContentPolicy", () => {
+  it("keeps every team reachable in Medium Today mode", () => {
+    const teams = ["playing", "resting one", "resting two"];
+
+    expect(getMediumTeamItems(teams, "today", false)).toEqual(teams);
+    expect(shouldShowMediumTeamCarousel("today", false)).toBe(true);
+    expect(getMediumTeamItems(teams, "detailed", false)).toEqual(["playing"]);
+    expect(getMediumTeamItems(teams, "detailed", true)).toEqual(teams);
+  });
+
+  it("counts all_games fallback events when there is no game today", () => {
+    expect(
+      getMediumItemCount({
+        viewMode: "all_games",
+        todayEventCount: 0,
+        fallbackEventCount: 6,
+        teamCount: 4,
+      }),
+    ).toBe(6);
+    expect(
+      getMediumItemCount({
+        viewMode: "all_games",
+        todayEventCount: 2,
+        fallbackEventCount: 6,
+        teamCount: 4,
+      }),
+    ).toBe(2);
+  });
+
   it("keeps Small to one live game and two secondary items", () => {
     const policy = getSportsContentPolicy({
       size: "small",

@@ -20,6 +20,7 @@ import {
   getEligibleTodayGames,
   getSelectedTodayGame,
 } from "./sports-game-selection";
+import { cn } from "../../lib/utils";
 
 function formatEventTime(game: SportEvent): string {
   if (!game.eventTime) return "TBD";
@@ -90,11 +91,13 @@ function CompactGameSummary({
   trackedTeam,
   opponentTeam,
   previousGame,
+  fillAvailable,
 }: {
   game: SportEvent;
   trackedTeam: TrackedTeam | null;
   opponentTeam: TrackedTeam | null;
   previousGame: SportEvent | null;
+  fillAvailable: boolean;
 }): React.ReactElement {
   const live = getGamePhase(game) === "live";
   const finished = getGamePhase(game) === "finished";
@@ -167,7 +170,12 @@ function CompactGameSummary({
         score: game.homeScore,
       };
   return (
-    <div className="min-w-0 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-2">
+    <div
+      className={cn(
+        "min-w-0 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-2",
+        fillAvailable && "flex h-full min-h-0 flex-col",
+      )}
+    >
       <div className="flex items-center justify-between gap-2">
         <Badge variant="secondary" className={getCompactBadgeClasses(game)}>
           {live
@@ -180,7 +188,12 @@ function CompactGameSummary({
           {game.sport}
         </span>
       </div>
-      <div className="mt-2 grid grid-cols-[1fr_auto_1fr] items-center gap-2 text-center">
+      <div
+        className={cn(
+          "mt-2 grid grid-cols-[1fr_auto_1fr] items-center gap-2 text-center",
+          fillAvailable && "min-h-0 flex-1 content-center",
+        )}
+      >
         <div className="min-w-0">
           <TeamAvatar
             name={primaryTeam.name}
@@ -247,12 +260,14 @@ export function CompactSportsView({
   teamEventsById,
   selectedGameId,
   onSelectGame,
+  fillAvailable = false,
 }: {
   events: SportEvent[];
   teams: TrackedTeam[];
   teamEventsById: Record<string, { last: SportEvent[]; next: SportEvent[] }>;
   selectedGameId: string | null;
   onSelectGame: (eventId: string) => void;
+  fillAvailable?: boolean;
 }): React.ReactElement {
   const [secondaryPage, setSecondaryPage] = useState(0);
   const today = getLocalDateKey(new Date());
@@ -382,7 +397,12 @@ export function CompactSportsView({
   if (!selectedGame) {
     return (
       <div
-        className={`grid min-w-0 grid-cols-[minmax(0,3fr)_minmax(7rem,1fr)] gap-2 overflow-hidden ${pageCount > 1 ? "min-h-44" : ""}`}
+        data-sports-content-viewport={fillAvailable ? "small" : undefined}
+        className={cn(
+          "grid min-w-0 grid-cols-[minmax(0,3fr)_minmax(7rem,1fr)] gap-2 overflow-hidden",
+          fillAvailable && "h-full min-h-0 flex-1",
+          pageCount > 1 && !fillAvailable && "min-h-44",
+        )}
       >
         <div className="flex min-h-28 min-w-0 items-center justify-center rounded-lg border border-dashed px-3 text-center text-sm text-muted-foreground">
           No games today
@@ -393,7 +413,13 @@ export function CompactSportsView({
   }
 
   return (
-    <div className="min-w-0 space-y-1 overflow-hidden">
+    <div
+      data-sports-content-viewport={fillAvailable ? "small" : undefined}
+      className={cn(
+        "min-w-0 space-y-1 overflow-hidden",
+        fillAvailable && "flex h-full min-h-0 flex-1 flex-col",
+      )}
+    >
       {liveOrToday.length > 0 ? (
         <ScrollArea
           orientation="horizontal"
@@ -427,12 +453,18 @@ export function CompactSportsView({
           </div>
         </ScrollArea>
       ) : null}
-      <div className="grid min-w-0 grid-cols-[minmax(0,3fr)_minmax(7rem,1fr)] gap-2">
+      <div
+        className={cn(
+          "grid min-w-0 grid-cols-[minmax(0,3fr)_minmax(7rem,1fr)] gap-2",
+          fillAvailable && "min-h-0 flex-1",
+        )}
+      >
         <CompactGameSummary
           game={selectedGame}
           trackedTeam={selectedTeam}
           opponentTeam={opponentTeam}
           previousGame={previousGame}
+          fillAvailable={fillAvailable}
         />
         {secondaryColumn}
       </div>

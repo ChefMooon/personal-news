@@ -107,6 +107,7 @@ export function AllGamesView({
   showVenue,
   showLiveStartTime,
   fallbackEvents,
+  fallbackEventLimit = 5,
   showSportLabels = false,
 }: {
   events: SportEvent[];
@@ -115,6 +116,7 @@ export function AllGamesView({
   showVenue: boolean;
   showLiveStartTime: boolean;
   fallbackEvents: SportEvent[];
+  fallbackEventLimit?: number;
   showSportLabels?: boolean;
 }): React.ReactElement {
   const grouped = useMemo(() => {
@@ -142,7 +144,7 @@ export function AllGamesView({
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               Next up
             </p>
-            {fallbackEvents.slice(0, 5).map((game) => {
+            {fallbackEvents.slice(0, fallbackEventLimit).map((game) => {
               const isLive = getGamePhase(game) === "live";
               const showStartTime =
                 showLiveStartTime && isLive && !!game.eventTime;

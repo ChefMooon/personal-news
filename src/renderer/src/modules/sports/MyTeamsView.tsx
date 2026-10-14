@@ -431,6 +431,7 @@ function SummarizedTeamCard({
   showTime,
   showSportLabels,
   leaguesById,
+  fillAvailable,
 }: {
   team: TrackedTeam;
   lastGame: SportEvent | null;
@@ -439,6 +440,7 @@ function SummarizedTeamCard({
   showTime: boolean;
   showSportLabels: boolean;
   leaguesById: Record<string, SportLeague>;
+  fillAvailable: boolean;
 }): React.ReactElement {
   const displayGame = todayGame ?? lastGame;
   const displayPhase = getGamePhase(displayGame);
@@ -452,7 +454,14 @@ function SummarizedTeamCard({
       : null;
 
   return (
-    <div className="flex items-center gap-3 rounded-lg border px-3 py-2.5">
+    <div
+      className={cn(
+        "flex items-center gap-3 px-3 py-2.5",
+        fillAvailable
+          ? "min-h-0 flex-1 justify-center"
+          : "rounded-lg border",
+      )}
+    >
       <TeamBadge team={team} size="sm" />
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
@@ -516,6 +525,7 @@ function StandardTeamCard({
   showLiveStartTime,
   showSportLabels,
   leaguesById,
+  fillAvailable,
 }: {
   team: TrackedTeam;
   lastGame: SportEvent | null;
@@ -526,6 +536,7 @@ function StandardTeamCard({
   showLiveStartTime: boolean;
   showSportLabels: boolean;
   leaguesById: Record<string, SportLeague>;
+  fillAvailable: boolean;
 }): React.ReactElement {
   const displayGame =
     todayGame && hasResolvedScore(todayGame) ? todayGame : lastGame;
@@ -539,7 +550,14 @@ function StandardTeamCard({
   const footerSectionCount = Number(hasStartTime) + Number(hasVenue);
 
   return (
-    <div className="overflow-hidden rounded-lg border">
+    <div
+      className={cn(
+        "overflow-hidden",
+        fillAvailable
+          ? "flex min-h-0 flex-1 flex-col"
+          : "rounded-lg border",
+      )}
+    >
       <div className="flex items-center gap-3 border-b bg-muted/20 px-3 py-2.5">
         <TeamBadge team={team} size="md" />
         <div className="min-w-0 flex-1">
@@ -569,8 +587,13 @@ function StandardTeamCard({
           </div>
         ) : null}
       </div>
-      <div className="grid grid-cols-2 divide-x text-xs">
-        <div className="px-3 py-2">
+      <div
+        className={cn(
+          "grid grid-cols-2 divide-x text-xs",
+          fillAvailable ? "min-h-0 flex-1 items-stretch" : null,
+        )}
+      >
+        <div className={cn("px-3 py-2", fillAvailable ? "flex flex-col justify-center" : null)}>
           <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
             Last Game
           </p>
@@ -587,7 +610,7 @@ function StandardTeamCard({
             <p className="mt-1 text-muted-foreground">No recent games</p>
           )}
         </div>
-        <div className="px-3 py-2">
+        <div className={cn("px-3 py-2", fillAvailable ? "flex flex-col justify-center" : null)}>
           <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
             {todayGame ? "Today" : "Next Game"}
           </p>
@@ -661,6 +684,7 @@ function DetailedTeamCard({
   showLiveStartTime,
   showSportLabels,
   leaguesById,
+  fillAvailable,
 }: {
   team: TrackedTeam;
   lastGame: SportEvent | null;
@@ -672,6 +696,7 @@ function DetailedTeamCard({
   showLiveStartTime: boolean;
   showSportLabels: boolean;
   leaguesById: Record<string, SportLeague>;
+  fillAvailable: boolean;
 }): React.ReactElement {
   const featuredGame = todayGame ?? lastGame;
   const outcome = featuredGame
@@ -685,7 +710,14 @@ function DetailedTeamCard({
   const middleSectionCount = Number(hasStartTime) + Number(hasVenue);
 
   return (
-    <div className="overflow-hidden rounded-lg border">
+    <div
+      className={cn(
+        "overflow-hidden",
+        fillAvailable
+          ? "flex min-h-0 flex-1 flex-col"
+          : "rounded-lg border",
+      )}
+    >
       <div className="flex items-center gap-3 border-b px-3 py-3">
         <TeamBadge team={team} size="lg" />
         <div className="min-w-0 flex-1">
@@ -711,7 +743,7 @@ function DetailedTeamCard({
         ) : null}
       </div>
 
-      <div className="flex items-center gap-3 border-b px-3 py-2.5">
+      <div className={cn("flex items-center gap-3 border-b px-3 py-2.5", fillAvailable ? "flex-1 justify-center" : null)}>
         {outcome ? (
           <div
             className={cn(
@@ -781,12 +813,13 @@ function DetailedTeamCard({
         <div
           className={cn(
             "grid border-b bg-muted/10 text-xs",
+            fillAvailable ? "flex-1 items-stretch" : null,
             middleSectionCount >= 2 ? "divide-x" : null,
             middleSectionCount === 2 ? "grid-cols-2" : "grid-cols-1",
           )}
         >
           {hasStartTime ? (
-            <div className="px-3 py-2">
+            <div className={cn("px-3 py-2", fillAvailable ? "flex flex-col justify-center" : null)}>
               <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                 Start Time
               </p>
@@ -794,7 +827,7 @@ function DetailedTeamCard({
             </div>
           ) : null}
           {hasVenue ? (
-            <div className="px-3 py-2">
+            <div className={cn("px-3 py-2", fillAvailable ? "flex flex-col justify-center" : null)}>
               <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                 Venue
               </p>
@@ -804,7 +837,7 @@ function DetailedTeamCard({
         </div>
       ) : null}
 
-      <div className="flex items-center gap-3 bg-muted/10 px-3 py-2.5">
+      <div className={cn("flex items-center gap-3 bg-muted/10 px-3 py-2.5", fillAvailable ? "flex-1 justify-center" : null)}>
         <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-muted bg-muted/30 text-[11px] font-semibold text-muted-foreground">
           NEXT
         </div>
@@ -1099,7 +1132,10 @@ function NoGameTodayCarousel({
   if (!team) return <></>;
 
   return (
-    <div className="min-w-0 rounded-lg border bg-muted/10 p-2">
+    <div
+      data-sports-team-carousel
+      className="min-w-0 rounded-lg border bg-muted/10 p-2"
+    >
       <div className="flex items-center justify-between gap-2">
         <p className="truncate text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
           No game today
@@ -1177,7 +1213,7 @@ function TodayView({
 
   if (playing.length === 0) {
     return (
-      <div className="space-y-3">
+      <div className="space-y-3" data-sports-today-team-count={teams.length}>
         <div className="rounded-lg border border-dashed px-4 py-5 text-center text-sm text-muted-foreground">
           None of your teams are playing today.
         </div>
@@ -1211,7 +1247,7 @@ function TodayView({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" data-sports-today-team-count={teams.length}>
       {!hideTodayGameCards &&
         playing.map((team) => {
           const events = teamEventsById[team.teamId];
@@ -1280,6 +1316,7 @@ export function MyTeamsView({
   showSportLabels = false,
   showTeamCarousel = false,
   hideTodayGameCards = false,
+  fillAvailable = false,
 }: {
   teams: TrackedTeam[];
   teamEventsById: Record<string, SportTeamEvents>;
@@ -1291,6 +1328,7 @@ export function MyTeamsView({
   showSportLabels?: boolean;
   showTeamCarousel?: boolean;
   hideTodayGameCards?: boolean;
+  fillAvailable?: boolean;
 }): React.ReactElement {
   const today = getTodayString();
 
@@ -1320,7 +1358,7 @@ export function MyTeamsView({
   }
 
   return (
-    <div className="space-y-3">
+    <div className={cn(fillAvailable ? "flex min-h-0 flex-1 flex-col" : "space-y-3")}>
       {teams.map((team) => {
         const events = teamEventsById[team.teamId];
         const todayGame = getTodayGame(events, today);
@@ -1349,6 +1387,7 @@ export function MyTeamsView({
               showTime={showTime}
               showSportLabels={showSportLabels}
               leaguesById={leaguesById}
+              fillAvailable={fillAvailable}
             />
           );
         }
@@ -1366,6 +1405,7 @@ export function MyTeamsView({
               showLiveStartTime={showLiveStartTime}
               showSportLabels={showSportLabels}
               leaguesById={leaguesById}
+              fillAvailable={fillAvailable}
             />
           );
         }
@@ -1383,6 +1423,7 @@ export function MyTeamsView({
             showLiveStartTime={showLiveStartTime}
             showSportLabels={showSportLabels}
             leaguesById={leaguesById}
+            fillAvailable={fillAvailable}
           />
         );
       })}

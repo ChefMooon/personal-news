@@ -24,6 +24,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "../../components/ui/alert-dialog";
+import { Button } from "../../components/ui/button";
 import { useWidgetInstance } from "../../contexts/WidgetInstanceContext";
 import {
   DEFAULT_SPORTS_VIEW_CONFIG,
@@ -51,7 +52,12 @@ import { getLeagueKey } from "./league-display";
 import { MyTeamsView } from "./MyTeamsView";
 import { SportsSettingsPanel } from "./SportsSettingsPanel";
 import { WidgetSizeControl } from "../../components/WidgetSizeControl";
-import { getSportsContentPolicy } from "./sports-content-policy";
+import {
+  getMediumTeamItems,
+  getMediumItemCount,
+  getSportsContentPolicy,
+  shouldShowMediumTeamCarousel,
+} from "./sports-content-policy";
 import { getGamePhase } from "./utils";
 import { getLocalDateKey } from "../../../../shared/sports-event-utils";
 import { resolveTrackedTeamSide } from "./side-resolution";
@@ -131,6 +137,7 @@ function SportsWidget(): React.ReactElement {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedGameId, setSelectedGameId] = useState<string | null>(null);
+  const [mediumContentExpanded, setMediumContentExpanded] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [snapshotConfig, setSnapshotConfig] = useState(config);
   const [editContentHeight, setEditContentHeight] = useState<number | null>(
@@ -140,11 +147,26 @@ function SportsWidget(): React.ReactElement {
   const latestLoadIdRef = useRef(0);
   const cardContentRef = useRef<HTMLDivElement | null>(null);
   const previousSizeRef = useRef(size);
+  const [contentWidth, setContentWidth] = useState<number | undefined>();
+
+  useEffect(() => {
+    const element = cardContentRef.current;
+    if (!element) return;
+    const observer = new ResizeObserver(([entry]) => {
+      const nextWidth = Math.round(entry.contentRect.width);
+      setContentWidth((current) =>
+        current === nextWidth ? current : nextWidth,
+      );
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     if (previousSizeRef.current === size) return;
     previousSizeRef.current = size;
     if (isEditing) setEditContentHeight(null);
+    setMediumContentExpanded(false);
   }, [isEditing, size]);
 
   const loadTeamEvents = useCallback(
@@ -350,7 +372,26 @@ function SportsWidget(): React.ReactElement {
     liveGameCount: liveTodayCount,
     teamCount: enabledTeams.length,
     eventCount: eligibleTodayEvents.length,
+    contentWidth,
   });
+  const mediumItemCount = getMediumItemCount({
+    viewMode: config.viewMode,
+    todayEventCount: todayEvents.length,
+    fallbackEventCount: fallbackEvents.length,
+    teamCount: enabledTeams.length,
+  });
+  const mediumHasMore =
+    size === "medium" && config.viewMode !== "today" && mediumItemCount > 1;
+  const mediumTeamPanel =
+    size === "medium" &&
+    config.viewMode !== "today" &&
+    config.viewMode !== "all_games";
+  const mediumDisclosureLabel =
+    config.viewMode === "all_games" ? "View all games" : "View all teams";
+
+  useEffect(() => {
+    setMediumContentExpanded(false);
+  }, [config.viewMode]);
 
   useEffect(() => {
     if (
@@ -415,8 +456,8 @@ function SportsWidget(): React.ReactElement {
   }
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
+    <Card className="flex h-full min-h-0 flex-col overflow-hidden">
+      <CardHeader className="shrink-0 pb-3">
         <div className="flex items-start justify-between gap-3">
           <div>
             <CardTitle className="text-lg">{widgetTitle}</CardTitle>
@@ -502,11 +543,11 @@ function SportsWidget(): React.ReactElement {
       </CardHeader>
       <CardContent
         ref={cardContentRef}
-        className="pt-0"
+        className="!overflow-hidden flex min-h-0 flex-1 flex-col pt-0"
         style={
           isEditing && editContentHeight
             ? { height: editContentHeight, overflow: "hidden" }
-            : undefined
+            : { overflow: "hidden" }
         }
       >
         {isEditing ? (
@@ -606,74 +647,158 @@ function SportsWidget(): React.ReactElement {
             teamEventsById={teamEventsById}
             selectedGameId={selectedGameId}
             onSelectGame={setSelectedGameId}
+            fillAvailable
           />
         ) : size === "medium" ? (
-          <div className="space-y-3">
-            <MediumLiveGameView
-              events={eligibleTodayEvents}
-              teams={enabledTeams}
-              teamEventsById={teamEventsById}
-              selectedGameId={selectedGameId}
-              onSelectGame={setSelectedGameId}
-            />
-            {config.viewMode === "all_games" ? (
-              <AllGamesView
-                events={todayEvents.slice(0, sportsPolicy.eventLimit)}
-                leaguesById={leaguesById}
-                showTime={config.showTime}
-                showVenue={config.showVenue}
-                showLiveStartTime={config.showLiveStartTime}
-                fallbackEvents={fallbackEvents}
-                showSportLabels={showSportLabels}
-              />
-            ) : (
-              <MyTeamsView
-                teams={enabledTeams.slice(0, sportsPolicy.teamLimit)}
+          <div
+            data-sports-layout="medium"
+            className="grid min-h-0 flex-1 grid-cols-[minmax(0,3fr)_minmax(0,2fr)] grid-rows-[minmax(0,1fr)] gap-2"
+          >
+            <div className="min-h-0 min-w-0">
+              <MediumLiveGameView
+                events={eligibleTodayEvents}
+                teams={enabledTeams}
                 teamEventsById={teamEventsById}
-                leaguesById={leaguesById}
-                showVenue={config.showVenue}
-                showTime={config.showTime}
-                showLiveStartTime={config.showLiveStartTime}
-                viewMode={config.viewMode}
-                showSportLabels={showSportLabels}
-                showTeamCarousel={sportsPolicy.showTeamCarousel}
-                hideTodayGameCards
+                selectedGameId={selectedGameId}
+                onSelectGame={setSelectedGameId}
+                dense
               />
-            )}
+            </div>
+            <div
+              className={
+                mediumTeamPanel
+                  ? "flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border"
+                  : "flex min-h-0 flex-1 flex-col"
+              }
+            >
+              <div
+                data-sports-content-viewport="medium"
+                className={
+                  mediumTeamPanel && !mediumContentExpanded
+                    ? "flex min-h-0 flex-1 flex-col overflow-hidden"
+                    : mediumContentExpanded
+                      ? "min-h-0 flex-1 overflow-y-auto"
+                      : "shrink-0 overflow-hidden"
+                }
+              >
+                {config.viewMode === "all_games" ? (
+                  <AllGamesView
+                    events={
+                      mediumContentExpanded
+                        ? todayEvents
+                        : todayEvents.slice(0, 1)
+                    }
+                    leaguesById={leaguesById}
+                    showTime={config.showTime}
+                    showVenue={config.showVenue}
+                    showLiveStartTime={config.showLiveStartTime}
+                    fallbackEvents={
+                      mediumContentExpanded
+                        ? fallbackEvents
+                        : fallbackEvents.slice(0, 1)
+                    }
+                    fallbackEventLimit={
+                      mediumContentExpanded ? Number.POSITIVE_INFINITY : 1
+                    }
+                    showSportLabels={showSportLabels}
+                  />
+                ) : (
+                  <MyTeamsView
+                    teams={getMediumTeamItems(
+                      enabledTeams,
+                      config.viewMode,
+                      mediumContentExpanded,
+                    )}
+                    teamEventsById={teamEventsById}
+                    leaguesById={leaguesById}
+                    showVenue={config.showVenue}
+                    showTime={config.showTime}
+                    showLiveStartTime={config.showLiveStartTime}
+                    viewMode={config.viewMode}
+                    showSportLabels={showSportLabels}
+                    showTeamCarousel={shouldShowMediumTeamCarousel(
+                      config.viewMode,
+                      sportsPolicy.showTeamCarousel,
+                    )}
+                    hideTodayGameCards
+                    fillAvailable={
+                      !mediumContentExpanded && config.viewMode !== "today"
+                    }
+                  />
+                )}
+              </div>
+              {mediumHasMore && (
+                <div
+                  className={
+                    mediumTeamPanel
+                      ? "shrink-0 border-t bg-muted/10"
+                      : "mt-auto shrink-0 pt-2"
+                  }
+                >
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className={
+                      mediumTeamPanel
+                        ? "h-8 w-full rounded-none border-0 bg-transparent text-xs shadow-none hover:bg-muted/40"
+                        : "w-full text-xs"
+                    }
+                    aria-expanded={mediumContentExpanded}
+                    onClick={() =>
+                      setMediumContentExpanded((expanded) => !expanded)
+                    }
+                  >
+                    {mediumContentExpanded ? "Show less" : mediumDisclosureLabel}
+                  </Button>
+                </div>
+              )}
+            </div>
           </div>
         ) : size === "large" ? (
-          <div className="space-y-3">
-            <MediumLiveGameView
-              events={eligibleTodayEvents}
-              teams={enabledTeams}
-              teamEventsById={teamEventsById}
-              selectedGameId={selectedGameId}
-              onSelectGame={setSelectedGameId}
-            />
-            {config.viewMode === "all_games" ? (
-              <AllGamesView
-                events={todayEvents.slice(0, sportsPolicy.eventLimit)}
-                leaguesById={leaguesById}
-                showTime={config.showTime}
-                showVenue={config.showVenue}
-                showLiveStartTime={config.showLiveStartTime}
-                fallbackEvents={fallbackEvents}
-                showSportLabels={showSportLabels}
-              />
-            ) : (
-              <MyTeamsView
-                teams={enabledTeams.slice(0, sportsPolicy.teamLimit)}
+          <div
+            data-sports-layout="large"
+            className="flex min-h-0 flex-1 flex-col gap-3"
+          >
+            <div className="shrink-0">
+              <MediumLiveGameView
+                events={eligibleTodayEvents}
+                teams={enabledTeams}
                 teamEventsById={teamEventsById}
-                leaguesById={leaguesById}
-                showVenue={config.showVenue}
-                showTime={config.showTime}
-                showLiveStartTime={config.showLiveStartTime}
-                viewMode={config.viewMode}
-                showSportLabels={showSportLabels}
-                showTeamCarousel={sportsPolicy.showTeamCarousel}
-                hideTodayGameCards
+                selectedGameId={selectedGameId}
+                onSelectGame={setSelectedGameId}
               />
-            )}
+            </div>
+            <div
+              data-sports-content-viewport="large"
+              className="min-h-0 flex-1 overflow-y-auto"
+            >
+              {config.viewMode === "all_games" ? (
+                <AllGamesView
+                  events={todayEvents.slice(0, sportsPolicy.eventLimit)}
+                  leaguesById={leaguesById}
+                  showTime={config.showTime}
+                  showVenue={config.showVenue}
+                  showLiveStartTime={config.showLiveStartTime}
+                  fallbackEvents={fallbackEvents}
+                  fallbackEventLimit={Number.POSITIVE_INFINITY}
+                  showSportLabels={showSportLabels}
+                />
+              ) : (
+                <MyTeamsView
+                  teams={enabledTeams.slice(0, sportsPolicy.teamLimit)}
+                  teamEventsById={teamEventsById}
+                  leaguesById={leaguesById}
+                  showVenue={config.showVenue}
+                  showTime={config.showTime}
+                  showLiveStartTime={config.showLiveStartTime}
+                  viewMode={config.viewMode}
+                  showSportLabels={showSportLabels}
+                  showTeamCarousel={sportsPolicy.showTeamCarousel}
+                  hideTodayGameCards
+                />
+              )}
+            </div>
           </div>
         ) : config.viewMode === "all_games" ? (
           <AllGamesView
