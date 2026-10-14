@@ -24,26 +24,11 @@ import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { useWidgetLayout } from "../hooks/useWidgetLayout";
 import { WidgetWrapper } from "../components/WidgetWrapper";
 import { WidgetTransferDialog } from "../components/WidgetTransferDialog";
+import { DashboardToolbarActions } from "../components/DashboardToolbarActions";
+import { ScrollArea } from "../components/ui/scroll-area";
 import { getModule } from "../modules/registry";
 import { Button } from "../components/ui/button";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "../components/ui/tooltip";
-import {
-  ArrowLeft,
-  ArrowRightLeft,
-  ArrowRight,
-  Check,
-  Copy,
-  LayoutDashboard,
-  Pencil,
-  Plus,
-  Settings2,
-  SquarePlus,
-  Trash2,
-} from "lucide-react";
+import { Plus } from "lucide-react";
 import { WidgetInstanceContext } from "../contexts/WidgetInstanceContext";
 import { DashboardTransferContext } from "../contexts/DashboardTransferContext";
 import {
@@ -375,42 +360,6 @@ function DashboardInsertionDropTarget({
     >
       {label}
     </div>
-  );
-}
-
-function DashboardToolbarIconButton({
-  label,
-  disabled = false,
-  variant = "outline",
-  onClick,
-  children,
-}: {
-  label: string;
-  disabled?: boolean;
-  variant?: "default" | "outline";
-  onClick: () => void;
-  children: React.ReactNode;
-}): React.ReactElement {
-  const button = (
-    <Button
-      variant={variant}
-      size="icon"
-      className="h-10 w-10"
-      aria-label={label}
-      disabled={disabled}
-      onClick={onClick}
-    >
-      {children}
-    </Button>
-  );
-
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        {disabled ? <span className="shrink-0">{button}</span> : button}
-      </TooltipTrigger>
-      <TooltipContent>{label}</TooltipContent>
-    </Tooltip>
   );
 }
 
@@ -941,7 +890,10 @@ export default function Dashboard(): React.ReactElement {
                 onValueChange={setActiveViewId}
                 className="min-w-0 flex-1"
               >
-                <div className="overflow-x-auto">
+                <ScrollArea
+                  orientation="horizontal"
+                  className="h-10 min-w-0 flex-1"
+                >
                   <TabsList className="h-10 w-max min-w-full justify-start gap-2 rounded-lg bg-muted/70 p-1">
                     {dashboardViews.map((view) => (
                       <DashboardTabDropTarget
@@ -968,75 +920,34 @@ export default function Dashboard(): React.ReactElement {
                           <span className="max-w-[10rem] truncate">
                             {view.name}
                           </span>
-                          {editMode ? (
-                            <ArrowRightLeft className="h-3.5 w-3.5 text-muted-foreground/70" />
-                          ) : null}
                         </TabsTrigger>
                       </DashboardTabDropTarget>
                     ))}
                   </TabsList>
-                </div>
+                </ScrollArea>
               </Tabs>
 
               <div className="flex shrink-0 items-center gap-2">
-                <DashboardToolbarIconButton
-                  label="New Dashboard"
-                  onClick={() => setDashboardDialogMode("create")}
-                >
-                  <LayoutDashboard />
-                </DashboardToolbarIconButton>
-                {editMode && (
-                  <>
-                    <DashboardToolbarIconButton
-                      label="Add Widget"
-                      onClick={() => setShowAddModal(true)}
-                    >
-                      <SquarePlus />
-                    </DashboardToolbarIconButton>
-                    <DashboardToolbarIconButton
-                      label="Edit Tab"
-                      onClick={() => setDashboardDialogMode("edit")}
-                    >
-                      <Pencil />
-                    </DashboardToolbarIconButton>
-                    <DashboardToolbarIconButton
-                      label="Duplicate"
-                      onClick={() => duplicateDashboardView(activeView.id)}
-                    >
-                      <Copy />
-                    </DashboardToolbarIconButton>
-                    <DashboardToolbarIconButton
-                      label="Move Left"
-                      onClick={() => moveDashboardView(activeView.id, "left")}
-                      disabled={!canMoveViewLeft}
-                    >
-                      <ArrowLeft />
-                    </DashboardToolbarIconButton>
-                    <DashboardToolbarIconButton
-                      label="Move Right"
-                      onClick={() =>
-                        moveDashboardView(activeView.id, "right")
-                      }
-                      disabled={!canMoveViewRight}
-                    >
-                      <ArrowRight />
-                    </DashboardToolbarIconButton>
-                    <DashboardToolbarIconButton
-                      label="Delete Dashboard"
-                      onClick={() => setDeleteDialogOpen(true)}
-                      disabled={!canDeleteView}
-                    >
-                      <Trash2 />
-                    </DashboardToolbarIconButton>
-                  </>
-                )}
-                <DashboardToolbarIconButton
-                  label={editMode ? "Done" : "Edit Layout"}
-                  variant={editMode ? "default" : "outline"}
-                  onClick={() => setEditMode((value) => !value)}
-                >
-                  {editMode ? <Check /> : <Settings2 />}
-                </DashboardToolbarIconButton>
+                <DashboardToolbarActions
+                  editMode={editMode}
+                  canMoveLeft={canMoveViewLeft}
+                  canMoveRight={canMoveViewRight}
+                  canDelete={canDeleteView}
+                  onToggleEditMode={() => setEditMode((value) => !value)}
+                  onNewDashboard={() => setDashboardDialogMode("create")}
+                  onAddWidget={() => setShowAddModal(true)}
+                  onEditDashboard={() => setDashboardDialogMode("edit")}
+                  onDuplicateDashboard={() =>
+                    duplicateDashboardView(activeView.id)
+                  }
+                  onMoveDashboardLeft={() =>
+                    moveDashboardView(activeView.id, "left")
+                  }
+                  onMoveDashboardRight={() =>
+                    moveDashboardView(activeView.id, "right")
+                  }
+                  onDeleteDashboard={() => setDeleteDialogOpen(true)}
+                />
               </div>
             </div>
           </div>
