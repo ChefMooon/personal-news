@@ -101,6 +101,7 @@ function PostCard({
 }): React.ReactElement {
   const author = formatAuthor(post);
   const isViewed = post.viewed_at !== null;
+  const isSmall = config.size === "small";
   return (
     <SavedPostItemActions
       post={post}
@@ -122,9 +123,15 @@ function PostCard({
           <button
             type="button"
             onClick={() => onOpen(post)}
-            className="flex-1 text-left hover:opacity-80 transition-opacity"
+            className="min-w-0 flex-1 text-left hover:opacity-80 transition-opacity"
           >
-            <div className="flex items-center gap-1.5 flex-wrap">
+            <div
+              className={
+                isSmall
+                  ? "flex min-w-0 items-center gap-1.5"
+                  : "flex items-center gap-1.5 flex-wrap"
+              }
+            >
               {config.showSourceBadge && (
                 <Badge variant="outline" className="text-xs shrink-0">
                   {SOURCE_LABELS[post.source]}
@@ -140,20 +147,38 @@ function PostCard({
               {author && config.showMetadata && (
                 <span className="text-xs text-muted-foreground">{author}</span>
               )}
+              {isSmall && (
+                <span
+                  className={`min-w-0 flex-1 truncate text-sm font-medium ${isViewed ? "text-foreground/70" : ""}`}
+                >
+                  {post.title}
+                </span>
+              )}
             </div>
-            <div
-              className={
-                config.cardDensity === "compact"
-                  ? `text-sm font-medium line-clamp-2 flex-1 ${isViewed ? "text-foreground/70" : ""}`
-                  : `text-sm font-medium ${isViewed ? "text-foreground/70" : ""}`
-              }
-            >
-              {post.title}
-            </div>
-            {post.note && (
-              <p className="mt-1 text-xs text-muted-foreground italic line-clamp-2">
-                {post.note}
+            {!isSmall && (
+              <div
+                className={
+                  config.cardDensity === "compact"
+                    ? `text-sm font-medium line-clamp-2 flex-1 ${isViewed ? "text-foreground/70" : ""}`
+                    : `text-sm font-medium ${isViewed ? "text-foreground/70" : ""}`
+                }
+              >
+                {post.title}
+              </div>
+            )}
+            {isSmall ? (
+              <p
+                aria-hidden={!post.note}
+                className="mt-0.5 min-h-4 text-xs leading-4 text-muted-foreground italic line-clamp-1"
+              >
+                {post.note ?? ""}
               </p>
+            ) : (
+              post.note && (
+                <p className="mt-1 text-xs text-muted-foreground italic line-clamp-2">
+                  {post.note}
+                </p>
+              )
             )}
             {config.showUrl && (
               <p className="text-xs text-muted-foreground truncate max-w-full">
@@ -466,9 +491,11 @@ function SavedPostsWidget(): React.ReactElement {
           className={
             contentPolicy.columnCount === 2
               ? "grid h-full min-h-0 grid-cols-2 auto-rows-fr gap-x-4 gap-y-3"
-              : config.cardDensity === "compact"
-                ? "space-y-1"
-                : "grid h-full min-h-0 grid-cols-1 auto-rows-fr gap-y-3"
+              : instance.size === "small"
+                ? "grid h-full min-h-0 grid-cols-1 auto-rows-fr gap-y-1"
+                : config.cardDensity === "compact"
+                  ? "space-y-1"
+                  : "grid h-full min-h-0 grid-cols-1 auto-rows-fr gap-y-3"
           }
         >
           {postsToRender.map((post) => (
@@ -637,7 +664,13 @@ function SavedPostsWidget(): React.ReactElement {
             {renderPreviewContent()}
           </div>
         )}
-        <div className={isEditing ? "saved-posts-card-edit" : undefined}>
+        <div
+          className={
+            isEditing
+              ? "saved-posts-card-edit"
+              : "flex min-h-0 flex-1 flex-col"
+          }
+        >
           <div
             className={
               isEditing ? "saved-posts-card-edit__preview" : "min-h-0 flex-1"
