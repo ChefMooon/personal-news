@@ -52,7 +52,7 @@ function SidebarNavLink({
       end={to === "/"}
       className={({ isActive }) =>
         cn(
-          "mx-1 flex items-center rounded-md py-2 text-sm transition-colors",
+          "mx-1 flex items-center rounded-md py-2 text-sm transition-colors duration-150",
           collapsed
             ? "h-10 w-10 justify-center mx-auto pl-0.5"
             : "mx-1 gap-3 px-3 py-2",
@@ -60,7 +60,7 @@ function SidebarNavLink({
             ? "bg-primary text-primary-foreground"
             : attention
               ? "bg-amber-500/10 text-muted-foreground hover:bg-amber-500/20 hover:text-foreground"
-              : "text-muted-foreground hover:bg-accent hover:text-foreground",
+              : "text-muted-foreground hover:bg-foreground/10 hover:text-foreground",
         )
       }
     >

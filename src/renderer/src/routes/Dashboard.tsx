@@ -1025,7 +1025,7 @@ export default function Dashboard(): React.ReactElement {
                         <TabsTrigger
                           value={view.id}
                           data-dashboard-tab-id={view.id}
-                          className="shrink-0 gap-2 rounded-md border border-transparent px-4 py-1 data-[state=active]:border-border"
+                          className="shrink-0 gap-2 rounded-md border border-transparent px-4 py-1 text-muted-foreground transition-colors duration-150 hover:bg-foreground/10 hover:text-foreground data-[state=active]:border-border"
                           title={
                             editMode
                               ? "Drop a widget here to move it to this dashboard."
