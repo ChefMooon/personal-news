@@ -2,14 +2,17 @@
 
 **Project:** personal-news
 
-**Status:** Initial baseline (v0.1)
+**Status:** Shared baseline (v0.2)
 
-**Last Updated:** 2026-10-14
+**Last Updated:** 2026-10-15
 
-This guide records shared dashboard-widget expectations and a starting point
-for future consistency work. It is not an audit or a claim that every existing
-widget already follows these rules. Review widgets incrementally and record
-known differences before changing them.
+This guide defines the shared design and behavior baseline for new and updated
+dashboard widgets. The audit status section records the six reviewed modules
+and their known follow-ups; it does not claim that every existing widget
+complies or that all runtime states have been verified. Treat these rules as
+the default; record a content-specific exception and its reason when a widget
+cannot follow one. Review existing differences incrementally rather than
+assuming they are intentional.
 
 ## Sources of truth
 
@@ -17,14 +20,26 @@ known differences before changing them.
   canonical widget footprints, grid row height and gap, responsive column
   counts, and projected Small-width rule. Update this guide if those values
   change; do not introduce a separate widget-size table in code.
+- [`AGENTS.md`](../AGENTS.md) defines repository-wide renderer boundaries,
+  implementation patterns, and safe validation commands. This guide covers
+  widget presentation and behavior; it does not override those rules.
 - [`docs/widget-settings-spec.md`](./widget-settings-spec.md) is authoritative
   for the inline settings panel, size control, edit behavior, and allowed
   content scrolling. This guide summarizes those rules but does not replace
   them.
+- [`docs/widget-code-organization-guidelines.md`](./widget-code-organization-guidelines.md)
+  covers source-file responsibilities and when preset-specific components are
+  useful. Keep those organization decisions separate from design behavior.
 - [`src/renderer/src/components/ui/card.tsx`](../src/renderer/src/components/ui/card.tsx)
   and [`src/renderer/src/assets/main.css`](../src/renderer/src/assets/main.css)
   define shared Card primitives and dashboard card bounds. Follow their
   semantics and theme tokens rather than inventing per-widget card chrome.
+- [`src/renderer/src/contexts/WidgetInstanceContext.tsx`](../src/renderer/src/contexts/WidgetInstanceContext.tsx),
+  [`src/renderer/src/modules/registry.ts`](../src/renderer/src/modules/registry.ts),
+  [`src/renderer/src/components/WidgetWrapper.tsx`](../src/renderer/src/components/WidgetWrapper.tsx),
+  and [`src/renderer/src/routes/Dashboard.tsx`](../src/renderer/src/routes/Dashboard.tsx)
+  define how modules are registered, mounted, and given per-instance state.
+  The dashboard wrapper owns layout controls and the render-error boundary.
 
 ## Shared widget structure
 
@@ -49,6 +64,30 @@ controls keyboard-operable. Use headings and labels that identify content
 sections; use `aria-label` only where a visible label does not already provide
 an accessible name. Do not make a non-interactive container behave like a
 button.
+
+## Widget instance contract
+
+Each dashboard item is an instance of a registered module. Keep the module ID
+stable because saved dashboard layouts use it to identify the module. Read the
+instance ID, optional user label, selected size, dashboard edit state, and
+callbacks through `useWidgetInstance()`; do not add a parallel source of
+instance or size state to the widget. Use the instance ID for instance-scoped
+configuration and persistence so two copies of the same module can be
+configured independently. Show the user label when present and otherwise use
+the module's default display name.
+
+The surrounding `WidgetWrapper` owns dashboard-level actions such as moving,
+renaming, hiding, transferring, and removing a widget. Keep those actions out
+of the widget card. A widget may provide content-specific actions in its own
+header, but they must not duplicate the wrapper toolbar. The shared wrapper
+also catches rendering exceptions; handle expected data-loading and request
+failures in the widget's own content states instead of relying on that
+boundary.
+
+Use the runtime row callback only for content that truly cannot fit its
+selected footprint. Runtime expansion must be derived again as content changes
+and must not become saved user geometry; Astronomy is the current documented
+example in the settings specification.
 
 ## Canonical size and responsive width
 
@@ -104,6 +143,14 @@ responsive width. A compact responsive layout may combine fields or use another
 arrangement, but must not silently drop information that the active policy
 selected. Intentional size-based summaries or caps are allowed as described
 above, with a More/Details path where appropriate.
+
+Define an explicit content policy when size or available width changes what is
+shown, how it is arranged, or where it can scroll. Keep those decisions
+separate from JSX rendering so the size, width, saved content settings, data
+availability, and disclosure state produce one reviewable policy. Base
+responsive decisions on the card's available content width when it can differ
+from the window width. Keep saved detail, filters, view mode, density, and fetch
+limits separate from the selected widget size.
 
 Collapsed summaries should fit normally. Do not solve overflow by clipping
 sections, hiding the last row, shrinking text until it is hard to read, or
@@ -161,6 +208,77 @@ presentation only. It must preserve the instance's saved settings and data.
 When settings open or close, the card size remains stable. Test both transitions
 after changing size, as well as keyboard dismissal and focusable controls.
 
+## Data and interaction states
+
+Make the states that apply to the widget distinct and understandable:
+
+- **Loading:** distinguish the initial load from a background refresh. When
+  usable data is already visible, keep it available while refreshing and show
+  refresh progress without replacing the whole widget with a loading screen.
+- **Empty or not configured:** explain what is missing and offer the relevant
+  setup action when one is available. Do not present a valid empty result as an
+  error.
+- **Error:** explain the failure in plain language and provide a retry or
+  recovery action when supported. If older data is still usable, keep it
+  visible and identify that the refresh failed or the data may be stale.
+- **Partial, stale, or warning:** identify which information is unavailable or
+  out of date when that affects how the user should interpret the widget.
+
+Use text and semantic status/alert behavior for meaningful state changes;
+color and icons may reinforce a message but must not carry it alone. Use
+`role="status"` for non-urgent dynamic updates and reserve `role="alert"` for
+important errors that need immediate attention. Actions must use buttons or
+links with clear names, visible focus, and a clear disabled or in-progress
+state when an operation cannot be repeated. Use the shared button and dialog
+primitives for confirmations, and keep external destinations as links or the
+app's established external-link action.
+
+## Author and review checklist
+
+Use this short checklist when adding a widget or changing its design. The
+regression checklist below gives the detailed layout checks.
+
+- [ ] Register a stable module ID and use the shared instance context; keep
+  settings and other persisted configuration instance-scoped.
+- [ ] Use the shared Card shell, theme tokens, header hierarchy, and accessible
+  controls. Leave dashboard layout actions to `WidgetWrapper`.
+- [ ] Define what Small, Medium, and Large show, including any caps,
+  disclosure path, scrolling region, and width-dependent rearrangement.
+- [ ] Confirm size and width changes preserve saved content settings and do not
+  silently drop information selected by the active content policy.
+- [ ] Implement the applicable loading, empty, error, partial, and stale states
+  with a clear next step where one exists.
+- [ ] Check keyboard operation, focus visibility, accessible names, and
+  announcements for meaningful state changes.
+- [ ] Follow the settings specification and verify open/close and size changes
+  keep the card geometry stable.
+- [ ] Review the widget at each preset and supported responsive column count,
+  including both sides of any content-width breakpoint.
+- [ ] Validate in the isolated widget harness; for a new module, add fixture
+  coverage so its preset and responsive behavior can be checked there. Capture
+  screenshots for the visual states changed and record anything not checked.
+
+## Existing widget audit status
+
+Static audit completed on 2026-10-15 against this guide, the widget settings
+specification, and the current widget sources. This records known exceptions
+and follow-ups; it does not claim that runtime visual states were exercised.
+Refresh a row after a follow-up is completed, and add a row when a widget is
+introduced.
+
+| Module | Status | Deliberate behavior and known follow-up |
+| ------ | ------ | --------------------------------------- |
+| YouTube | Update needed | Small and Medium use channel caps with a Show more path; the local video carousel is appropriate. Push updates set loading and replace visible channels with a loading message, and fetch failures are only transient toasts. Preserve loaded channels during background refresh and make refresh failure discoverable. |
+| Reddit Digest | Update needed | Small uses one group at a time with a bounded horizontal group selector; Medium changes to tabs below 440 px of card content width. In column mode, only the first 3–5 groups are rendered when more groups exist, with no disclosure. Filter/week changes show a loading state while push updates use silent fetches; failures are only transient toasts. Keep every group discoverable and make relevant request failures discoverable in the widget. |
+| Saved Posts | Update needed | Medium's two-column arrangement and Large's local vertical scrolling are useful. Small (3), Medium (8), and Large (6) all cap the rendered list without a More/Details path; the optional View All action cannot guarantee access to omitted posts. Use the available counts in the content policy and disclose size-based caps. |
+| Sports | Follows baseline; policy cleanup | Small's paged summary, Medium's disclosure panel, and Large's fixed live-game area with a separate details viewport are good size-specific choices. The Medium disclosure and item limits are calculated separately from the content policy; consolidate those decisions or remove policy fields the renderer does not use. |
+| Weather | Update needed | The bounded horizontal forecast timeline and Medium's width-sensitive stacking are good content-specific choices. Push-triggered refreshes set `loading` even when a snapshot exists, replacing the forecast with a loading message; failures are only transient toasts. Keep the snapshot visible during refresh and expose refresh failures in the widget. |
+| Astronomy | Follows baseline; policy cleanup | Small/Medium Details navigation and Large's detailed view are appropriate. Runtime row growth is an intentional exception documented in the settings specification. The Medium policy says disclosed content uses a viewport, but the Details action navigates away and the card viewport remains visible; align the policy with the actual navigation behavior. |
+
+The Reddit group selector is a navigation control, not a media-content scroller;
+keep it bounded within the card and retain its current-group indicator. The
+settings specification documents this narrow horizontal-navigation exception.
+
 ## Regression checklist
 
 For a widget change, cover the relevant items and note anything that remains
@@ -187,10 +305,12 @@ untested:
   it asserts visible content and initial bounds rather than reproducing the
   implementation's CSS classes.
 
-## Planned follow-up
+## Maintaining this guide
 
-This is the initial shared baseline. Future passes can audit existing modules,
-document deliberate exceptions, and extract common tokens or helpers where
-several widgets demonstrate the same need. Avoid a shared abstraction until
-real widget implementations show that it improves reuse without hiding their
-content-specific fit decisions.
+The six shipped modules listed above have a static audit record. Recheck their
+rows as follow-ups land; add newly introduced modules as `Not yet audited` until
+their preset policies, data states, responsive behavior, settings, and
+accessibility have been reviewed. Record exceptions with the reason they help
+the user and the behavior that keeps them bounded. Avoid a shared abstraction
+until real widget implementations show that it improves reuse without hiding
+their content-specific fit decisions.

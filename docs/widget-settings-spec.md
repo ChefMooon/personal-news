@@ -2,8 +2,8 @@
 
 **Project:** personal-news
 **Status:** Active
-**Last Updated:** 2026-03-24
-**Related Docs:** [ui-ux.md](./ui-ux.md) | [architecture/frontend.md](./architecture/frontend.md)
+**Last Updated:** 2026-10-15
+**Related Docs:** [ui-ux.md](./ui-ux.md) | [architecture/frontend.md](./architecture/frontend.md) | [widget-design-guidelines.md](./widget-design-guidelines.md)
 
 ---
 
@@ -46,7 +46,11 @@ and Medium policies may cap content and expose a More or Details path; collapsed
 capped states do not scroll, while expanded or Large content may scroll only in
 the widget's designated content viewport. Text, settings, and cards wrap within
 the assigned width. Horizontal scrolling is reserved for intentional media or
-timeline content, and must not become page-level overflow.
+timeline content and compact, bounded navigation selectors when their choices
+cannot fit (for example, the Small Reddit Digest group selector). A navigation
+selector must keep focusable choices available, identify the current choice,
+and keep scrolling inside that selector; it must not become page-level
+overflow.
 
 ---
 
