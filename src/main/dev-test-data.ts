@@ -1,5 +1,6 @@
 import type Database from "better-sqlite3";
 import type { DevTestDataStatus, IpcMutationResult } from "../shared/ipc-types";
+import { DEV_TEST_DATA_VERSION } from "../shared/dev-test-data";
 import { getDb } from "./db/database";
 import { astronomyFixtureContributor } from "./dev-test-data/astronomy";
 import { redditDigestFixtureContributor } from "./dev-test-data/reddit-digest";
@@ -32,7 +33,7 @@ export const DEV_TEST_DATA_BOOTSTRAP_SETTING_KEY =
 export const DEV_TEST_DATA_VERSION_SETTING_KEY =
   "dev_test_data_applied_version";
 // Bump when the shipped fixture definitions change.
-export const DEV_TEST_DATA_VERSION = 4;
+export { DEV_TEST_DATA_VERSION };
 
 export function assertDevTestDataMutationAllowed(isPackaged: boolean): void {
   if (isPackaged) {

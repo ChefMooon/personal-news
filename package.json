@@ -63,6 +63,8 @@
     "test:dashboard-drag": "node scripts/test-dashboard-drag.mjs",
     "test:dashboard-edit": "node scripts/test-dashboard-edit.mjs",
     "test:local-test-data": "node scripts/test-local-test-data.mjs",
+    "test:renderer-browser": "node scripts/test-renderer-browser.mjs",
+    "dev:renderer-browser": "vite --config vite.renderer-browser.config.mts --host 127.0.0.1 --port 4175 --strictPort",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",

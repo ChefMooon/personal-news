@@ -31,6 +31,23 @@ Useful references include `src/main/index.ts`, `src/main/ipc/index.ts`, `src/sha
 
 ## Test and Validation Commands
 
+- For renderer-only changes, start with the standalone browser workflow. Run
+  `npm run dev:renderer-browser` for a persistent localhost preview with
+  synthetic fixtures and a mocked `window.api` at
+  `http://127.0.0.1:4175/`; it stays running for direct or Playwright
+  interaction and supports HMR. Stop it with Ctrl+C. The preview uses the same
+  fixture content as Electron and provides six feature-specific dashboard pages
+  with Small, Medium, and Large fixture widget instances. Run
+  `npm run test:renderer-browser` for the headless Playwright Chromium matrix:
+  it verifies all six dashboard pages at 12-, 8-, 4-, and 1-column projections,
+  smoke-checks the standalone YouTube, Reddit Digest, Saved Posts, Sports, and
+  Settings routes, all Settings tabs, and Astronomy details, and saves screenshots
+  and diagnostics. Neither
+  mode launches Electron or uses a database. Use the live preview to interact
+  with the UI; add or adapt a focused automated browser scenario for renderer-only
+  changes outside this matrix. Use Electron validation when the changed behavior
+  crosses an integration boundary (IPC, persistence, preload or security, main
+  process) or the change is materially broader/complex.
 - `npm test` runs the Vitest suite using Electron's embedded Node runtime. Use it instead of invoking Vitest directly through standalone Node; this lets tests load the Electron-built `better-sqlite3` binary.
 - `npm test -- <file-or-filter>` runs a focused unit-test selection. Prefer focused tests for localized logic and use the full suite for broader validation.
 - Keep tests within the existing Vitest configuration and patterns; do not introduce a new project-wide test framework for routine changes. Keep Electron/browser behavior in integration scenarios when the change requires it.
@@ -38,11 +55,14 @@ Useful references include `src/main/index.ts`, `src/main/ipc/index.ts`, `src/sha
 - `npm run test:local-test-data -- --widget <moduleId>` runs a focused widget regression. Supported IDs are `youtube`, `reddit_digest`, `saved_posts`, `sports`, `weather`, and `astronomy`. It seeds the isolated profile and checks the selected page at all three sizes across the 12-, 8-, 4-, and 1-column projections; it skips the broader Update, Reset, and Clear lifecycle. The focused Sports run also checks the Basketball fixture interaction.
 - `npm run test:dashboard-drag` and `npm run test:dashboard-edit` run the other interactive Electron scenarios.
 - `npm run typecheck` checks both Node and web TypeScript projects. `npm run build` runs typechecking and the Electron Vite production build.
-- Use a focused widget command during widget work and the full local-test-data command when validating fixture lifecycle or cross-widget integration.
+- Use the browser command first for renderer-only work. Use a focused Electron
+  widget command when validating widget behavior that depends on Electron
+  integration, and the full local-test-data command for fixture lifecycle or
+  cross-widget integration.
 
-Interactive harness scenarios should follow `scripts/PLAYWRIGHT-HARNESS.md`: use semantic Playwright locators for visible user actions, and use IPC only for deterministic setup or state observation when no suitable UI interaction exists. Do not access SQLite or Node APIs from the renderer.
+Interactive Electron harness scenarios should follow `scripts/PLAYWRIGHT-HARNESS.md`: use semantic Playwright locators for visible user actions, and use IPC only for deterministic setup or state observation when no suitable UI interaction exists. Do not access SQLite or Node APIs from the renderer.
 
-Each harness run uses its own temporary profile and database. Logs and screenshots are stored under `artifacts/electron-harness/<scenario>-<uuid>/`. The runner removes the profile only after confirming the Electron process tree exited; if termination cannot be confirmed, it preserves the profile for diagnosis. Harness mode alone enables loopback CDP and suppresses automatic source polling and user-script startup. Do not add these settings to normal app launches.
+Each Electron harness run uses its own temporary profile and database. Logs and screenshots are stored under `artifacts/electron-harness/<scenario>-<uuid>/`. The runner removes the profile only after confirming the Electron process tree exited; if termination cannot be confirmed, it preserves the profile for diagnosis. Harness mode alone enables loopback CDP and suppresses automatic source polling and user-script startup. Do not add these settings to normal app launches.
 
 Never use the live production database for tests or test writes. Harness scripts must use the profile and database provided by the runner. `PERSONAL_NEWS_DB_PATH` is an explicit database override; dev and harness reject paths that resolve to the protected production database.
 

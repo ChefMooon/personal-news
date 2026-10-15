@@ -1,5 +1,48 @@
 # Interactive Electron Playwright scenarios
 
+## Renderer-only browser workflows
+
+For front-end-only changes, use one of two browser workflows. Start a persistent
+localhost preview with:
+
+```powershell
+npm run dev:renderer-browser
+```
+
+The preview is available at [http://127.0.0.1:4175/](http://127.0.0.1:4175/).
+The preview runs standalone Vite with existing synthetic fixtures and a mocked
+`window.api`. It remains running for direct or agent-driven Playwright
+interaction and supports HMR. Stop it with Ctrl+C. It does not launch Electron
+or access a database, and it does not automatically open a browser. It uses the
+same fixture content as Electron and provides six feature-specific dashboard
+pages, each with Small, Medium, and Large fixture widget instances.
+
+For an automated headless smoke check, run:
+
+```powershell
+npm run test:renderer-browser
+```
+
+This headless Playwright Chromium scenario verifies all six fixture-backed
+dashboard pages at 12-, 8-, 4-, and 1-column projections. It also navigates the
+standalone YouTube, Reddit Digest, Saved Posts, Sports, and Settings routes and
+checks their initial fixture content and browser-shim calls. It visits every
+Settings tab and opens Astronomy details through the fixture dashboard. It saves
+screenshots and diagnostics. It uses standalone Vite, the same fixture content
+as Electron, and a mocked `window.api`, without Electron or a database.
+
+Treat this fixture matrix as the starting browser check: if a renderer-only
+change falls outside its coverage, add or adapt a focused automated browser
+scenario before considering the change validated. The live preview lets an agent
+interact with the UI; it does not by itself provide automated coverage for
+behavior outside the matrix.
+
+Follow up with an Electron scenario when the changed behavior crosses an
+integration boundary such as IPC, persistence, preload or security, or main
+process behavior. Electron is also appropriate for materially broader or
+complex changes whose interactions are not represented by the standalone
+renderer scenario. The browser run does not validate those integration paths.
+
 Run the existing dashboard drag scenario with:
 
 ```powershell

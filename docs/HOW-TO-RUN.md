@@ -72,7 +72,7 @@ Use the isolated interactive scenario with:
 npm run test:dashboard-drag
 ```
 
-Each harness run gets a unique OS temporary root containing its own Electron
+Each Electron harness run gets a unique OS temporary root containing its own Electron
 `user-data/` profile and `harness.db`; it does not reuse development or
 production data. Run logs and available failure screenshots are kept outside
 that temporary profile under
@@ -81,6 +81,23 @@ only after confirming the Electron process tree has exited. If termination
 cannot be confirmed, it fails and preserves the profile. To author another
 scenario, use the Playwright pattern in
 [`scripts/PLAYWRIGHT-HARNESS.md`](../scripts/PLAYWRIGHT-HARNESS.md).
+
+For renderer-only changes, use the standalone browser workflows described in
+[`scripts/PLAYWRIGHT-HARNESS.md`](../scripts/PLAYWRIGHT-HARNESS.md):
+`npm run dev:renderer-browser` starts a persistent localhost preview at
+`http://127.0.0.1:4175/` for direct or Playwright interaction with HMR. It uses
+the same fixture content as Electron across six feature-specific dashboard
+pages, each with Small, Medium, and Large fixture widget instances.
+`npm run test:renderer-browser` runs the headless Playwright Chromium matrix,
+verifying all six dashboard pages at 12-, 8-, 4-, and 1-column projections,
+then smoke-checking the standalone YouTube, Reddit Digest, Saved Posts, Sports,
+and Settings routes, all Settings tabs, and Astronomy details. It saves
+screenshots and diagnostics. Both
+modes use synthetic fixtures and a mocked `window.api`, without Electron or a
+database. Add or adapt a focused automated browser scenario when a renderer-only
+change falls outside this matrix. Use Electron scenarios for changes crossing
+IPC, persistence, preload/security, or main-process boundaries, and for
+materially broader or complex integration cases.
 
 `PERSONAL_NEWS_DB_PATH` explicitly overrides the database file. Packaged mode
 supports this override for isolated smoke tests; dev and harness reject a
