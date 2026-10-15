@@ -324,3 +324,81 @@
   border-left: 1px solid hsl(var(--border));
   padding-left: 1rem;
 }
+
+/* Summary columns follow the weather region, including the inline settings preview. */
+.weather-summary {
+  container-type: inline-size;
+}
+.weather-summary-grid {
+  grid-template-columns: minmax(120px, 1fr) minmax(0, 2fr);
+}
+.weather-summary-grid--alert {
+  grid-template-columns: minmax(120px, 1fr) minmax(0, 2fr) auto;
+}
+.weather-summary-metrics {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.weather-summary-alert {
+  max-width: 260px;
+}
+@container (max-width: 680px) {
+  .weather-summary-grid--alert {
+    grid-template-columns: minmax(120px, 1fr) minmax(0, 2fr) auto;
+  }
+  .weather-summary-alert {
+    max-width: 180px;
+  }
+}
+@container (max-width: 520px) {
+  .weather-summary-grid,
+  .weather-summary-grid--alert {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .weather-summary-metrics {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+  .weather-summary-alert {
+    grid-column: 2;
+    grid-row: 1;
+  }
+}
+
+@container (max-width: 680px) {
+  .weather-summary-grid:not(.weather-summary-grid--compact):has(
+      .weather-summary-alert > [role="alert"]
+    ) {
+    grid-template-columns: minmax(120px, 1fr) minmax(0, 2fr);
+  }
+  .weather-summary-grid:not(.weather-summary-grid--compact):has(
+      .weather-summary-alert > [role="alert"]
+    )
+    .weather-summary-alert {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    max-width: none;
+  }
+}
+@container (max-width: 520px) {
+  .weather-summary-grid--compact {
+    grid-template-columns: minmax(100px, 1fr) minmax(0, 2fr);
+  }
+  .weather-summary-grid--compact.weather-summary-grid--alert {
+    grid-template-columns: minmax(100px, 1fr) minmax(0, 2fr) auto;
+  }
+  .weather-summary-grid--compact .weather-summary-metrics {
+    grid-column: 2;
+    grid-row: 1;
+    gap: 4px 8px;
+  }
+  .weather-summary-grid--compact .weather-summary-alert {
+    grid-column: 3;
+  }
+  .weather-summary-grid:not(.weather-summary-grid--compact):has(
+      .weather-summary-alert > [role="alert"]
+    )
+    .weather-summary-metrics {
+    grid-column: 2;
+    grid-row: 1;
+  }
+}

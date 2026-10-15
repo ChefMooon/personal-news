@@ -143,7 +143,7 @@ function WeatherWidget(): React.ReactElement {
       }
     : null;
   const currentRefreshError = effectiveLocationId
-    ? manualRefreshError ?? snapshotError
+    ? (manualRefreshError ?? snapshotError)
     : null;
   const preview = !effectiveLocationId ? (
     <div className="rounded-md border border-dashed px-4 py-5 text-sm text-muted-foreground">
@@ -151,7 +151,9 @@ function WeatherWidget(): React.ReactElement {
       Settings - Weather.
     </div>
   ) : loading ? (
-    <p className="text-sm text-muted-foreground">Loading weather...</p>
+    <p role="status" className="text-sm text-muted-foreground">
+      Loading weather...
+    </p>
   ) : !layoutProps ? (
     <div className="rounded-md border border-dashed px-4 py-5 text-sm text-muted-foreground">
       No weather data cached yet. Use Settings - Weather to refresh now, or wait
@@ -169,19 +171,28 @@ function WeatherWidget(): React.ReactElement {
       <CardHeader className="shrink-0 pb-2">
         <div className="flex min-w-0 items-start justify-between gap-2">
           <CardTitle className="flex min-w-0 items-center gap-2 text-base">
-            <CloudSun className="h-5 w-5 shrink-0 text-sky-500" />
+            <CloudSun className="h-5 w-5 shrink-0 text-primary" />
             {label ?? "Weather"}
           </CardTitle>
           <div className="flex shrink-0 items-center gap-2">
             {!isEditing && (
               <>
-                <p className="text-[11px] text-muted-foreground">
-                  Updated:{" "}
-                  {formatLastSynced(
-                    snapshot?.fetchedAt ?? null,
-                    settings.timeFormat,
-                  )}
-                </p>
+                {currentRefreshError || snapshotRefreshing || refreshing ? (
+                  <WeatherRefreshStatus
+                    refreshing={snapshotRefreshing || refreshing}
+                    error={currentRefreshError}
+                    hasSnapshot={Boolean(snapshot)}
+                    onRetry={refreshNow}
+                  />
+                ) : (
+                  <p className="text-[11px] text-muted-foreground">
+                    Updated:{" "}
+                    {formatLastSynced(
+                      snapshot?.fetchedAt ?? null,
+                      settings.timeFormat,
+                    )}
+                  </p>
+                )}
                 <button
                   type="button"
                   className="rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
@@ -259,20 +270,16 @@ function WeatherWidget(): React.ReactElement {
       </CardHeader>
       <CardContent
         ref={cardContentRef}
-        className="min-h-0 flex-1 overflow-hidden"
+        className="flex min-h-0 flex-1 flex-col overflow-hidden"
         style={
           isEditing && editContentHeight
             ? { height: editContentHeight, overflow: "hidden" }
             : undefined
         }
       >
-        <WeatherRefreshStatus
-          refreshing={snapshotRefreshing || refreshing}
-          error={currentRefreshError}
-          hasSnapshot={Boolean(snapshot)}
-          onRetry={refreshNow}
-        />
-        <div className={isEditing ? "weather-card-edit" : "h-full min-h-0"}>
+        <div
+          className={isEditing ? "weather-card-edit flex-1" : "min-h-0 flex-1"}
+        >
           <div
             data-weather-vertical-viewport={!isEditing ? "" : undefined}
             className={

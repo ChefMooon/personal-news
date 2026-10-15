@@ -17,20 +17,21 @@ export function WeatherRefreshStatus({
 
   return (
     <div
-      className="mb-2 flex items-center gap-2 text-xs"
+      className="flex max-w-48 min-w-0 items-center gap-2 text-[11px]"
       role={error ? "alert" : "status"}
     >
       {error ? (
         <>
-          <span className="text-destructive">
-            {hasSnapshot
-              ? "Weather data may be stale"
-              : "Could not load weather data"}
-            : {error}
+          <span
+            className="min-w-0 flex-1 truncate font-medium text-foreground"
+            title={`${error}${hasSnapshot ? " Showing the last weather snapshot." : ""}`}
+          >
+            {hasSnapshot ? "Refresh failed" : "Weather unavailable"}
           </span>
           <button
             type="button"
-            className="underline"
+            className="shrink-0 rounded underline focus-visible:outline focus-visible:outline-ring"
+            disabled={refreshing}
             onClick={() => void onRetry()}
           >
             Retry

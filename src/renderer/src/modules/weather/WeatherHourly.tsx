@@ -1,4 +1,5 @@
 import React from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import type {
   WeatherHourlyPoint,
   WeatherSettings,
@@ -120,18 +121,19 @@ function TemperatureAreaChart({
   settings,
   gradientId,
   height,
+  width,
 }: {
   points: WeatherHourlyPoint[];
   metric: HourlyChartMetric;
   settings: WeatherSettings;
   gradientId: string;
   height: number;
+  width: number;
 }): React.ReactElement {
-  const width = Math.max(points.length * 58, 340);
   const chartTop = 7;
   const chartBottom = height - 3;
-  const chartLeft = 18;
-  const chartRight = width - 8;
+  const chartLeft = width / (points.length * 2);
+  const chartRight = width - chartLeft;
   const chart = hourlyChartCoordinates(points, metric, height);
   const colors = chartColor(metric);
   const coordinates = chart.coordinates.map((coordinate) =>
@@ -190,8 +192,8 @@ function TemperatureAreaChart({
 
   return (
     <svg
-      className="block"
-      width={width}
+      className="absolute inset-0 block"
+      width="100%"
       height={height}
       viewBox={`0 0 ${width} ${height}`}
       role="img"
@@ -241,13 +243,16 @@ function TemperatureAreaChart({
           </linearGradient>
         </defs>
       )}
-      {[
-        chart.min,
-        chart.min != null && chart.max != null
-          ? (chart.min + chart.max) / 2
-          : null,
-        chart.max,
-      ].map((value, index) => {
+      {(height < 48
+        ? [chart.min, chart.max]
+        : [
+            chart.min,
+            chart.min != null && chart.max != null
+              ? (chart.min + chart.max) / 2
+              : null,
+            chart.max,
+          ]
+      ).map((value, index) => {
         const y =
           chartBottom -
           ((value != null && chart.min != null ? value - chart.min : 0) /
@@ -269,7 +274,7 @@ function TemperatureAreaChart({
               x={0}
               y={y + 3}
               fill="hsl(var(--muted-foreground))"
-              fontSize="9"
+              fontSize="11"
             >
               {formatChartValue(value, metric, settings)}
             </text>
@@ -291,7 +296,7 @@ function TemperatureAreaChart({
           stroke={
             metric === "overview" ? `url(#${gradientId}-line)` : colors.line
           }
-          strokeWidth="1.5"
+          strokeWidth="2"
         />
       ))}
     </svg>
@@ -323,13 +328,61 @@ export function WeatherHourly({
 }): React.ReactElement {
   const gradientId = React.useId();
   const chartHostRef = React.useRef<HTMLDivElement>(null);
+  const timelineRef = React.useRef<HTMLDivElement>(null);
+  const timelineId = React.useId();
+  const [scrollEdges, setScrollEdges] = React.useState({
+    before: false,
+    after: false,
+  });
+  const hourlyCount = Math.min(points.length, cap);
+  React.useEffect(() => {
+    const timeline = timelineRef.current;
+    if (!timeline) return;
+    const updateEdges = (): void => {
+      const before = timeline.scrollLeft > 1;
+      const after =
+        timeline.scrollLeft + timeline.clientWidth < timeline.scrollWidth - 1;
+      setScrollEdges((current) =>
+        current.before === before && current.after === after
+          ? current
+          : { before, after },
+      );
+    };
+    const observer = new ResizeObserver(updateEdges);
+    observer.observe(timeline);
+    if (timeline.firstElementChild)
+      observer.observe(timeline.firstElementChild);
+    timeline.addEventListener("scroll", updateEdges, { passive: true });
+    updateEdges();
+    return () => {
+      observer.disconnect();
+      timeline.removeEventListener("scroll", updateEdges);
+    };
+  }, [hourlyCount, presentation]);
+  const scrollHours = (direction: number): void => {
+    const timeline = timelineRef.current;
+    if (!timeline || !hourlyCount) return;
+    const hourWidth = timeline.scrollWidth / hourlyCount;
+    const hoursPerPage = Math.max(
+      1,
+      Math.floor(timeline.clientWidth / hourWidth) - 1,
+    );
+    timeline.scrollBy({
+      left: direction * hoursPerPage * hourWidth,
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        ? "instant"
+        : "smooth",
+    });
+  };
+  const [measuredChartWidth, setMeasuredChartWidth] = React.useState(340);
   const [measuredChartHeight, setMeasuredChartHeight] =
     React.useState(chartHeight);
   React.useEffect(() => {
     const host = chartHostRef.current;
-    if (!fillAvailable || presentation === "compact" || !host) return;
+    if (presentation === "compact" || !host) return;
     const observer = new ResizeObserver(() => {
-      const nextHeight = Math.max(chartHeight, Math.floor(host.clientHeight));
+      setMeasuredChartWidth(Math.floor(host.clientWidth));
+      const nextHeight = Math.max(16, Math.floor(host.clientHeight));
       setMeasuredChartHeight((current) =>
         current === nextHeight ? current : nextHeight,
       );
@@ -365,7 +418,7 @@ export function WeatherHourly({
   return (
     <section
       className={cn(
-        "min-w-0 rounded-md border bg-muted/5",
+        "min-w-0 rounded-md border bg-card",
         fillAvailable && "flex min-h-0 flex-1 flex-col",
         denseSpacing ? "p-1.5" : "p-2.5",
       )}
@@ -383,8 +436,8 @@ export function WeatherHourly({
                   className={cn(
                     "px-2 py-1",
                     config.hourlyMetric === key
-                      ? "bg-accent font-medium"
-                      : "text-muted-foreground hover:bg-accent/50",
+                      ? "bg-primary/10 text-primary font-semibold"
+                      : "text-muted-foreground hover:bg-muted",
                   )}
                   aria-pressed={config.hourlyMetric === key}
                   onClick={() => onMetricChange(key)}
@@ -398,95 +451,143 @@ export function WeatherHourly({
       )}
       <div
         className={cn(
-          "weather-timeline-scroll min-w-0 overflow-x-auto",
+          "relative min-w-0",
           fillAvailable && "flex min-h-0 flex-1 flex-col",
-          denseSpacing ? "mt-1" : "mt-2",
+          (showHeading || presentation === "tabbed") &&
+            (denseSpacing ? "mt-1" : "mt-2"),
         )}
       >
         <div
+          ref={timelineRef}
+          id={timelineId}
+          role="region"
+          aria-label="Hourly forecast timeline"
+          tabIndex={0}
           className={cn(
-            "grid gap-0.5",
-            fillAvailable &&
-              presentation === "compact" &&
-              "flex-1 items-stretch",
+            "weather-timeline-scroll min-w-0 overflow-x-auto rounded-sm focus-visible:outline focus-visible:outline-ring",
+            fillAvailable && "flex min-h-0 flex-1 flex-col",
           )}
           style={{
-            minWidth: presentation === "compact" ? 0 : minWidth,
-            gridTemplateColumns: `repeat(${visible.length}, minmax(0, 1fr))`,
+            maskImage: `linear-gradient(to right, ${scrollEdges.before ? "transparent, black 28px" : "black, black"}, ${scrollEdges.after ? "black calc(100% - 28px), transparent" : "black, black"})`,
           }}
         >
-          {visible.map((point, index) => (
-            <div
-              key={point.time}
-              aria-current={index === 0 ? "time" : undefined}
-              className={cn(
-                cn(
-                  "flex min-w-0 flex-col items-center rounded-md px-1 text-center",
-                  fillAvailable &&
-                    presentation === "compact" &&
-                    "h-full justify-evenly",
-                  denseSpacing ? "gap-0 py-0.5" : "gap-0.5 py-1",
-                ),
-                index === 0
-                  ? "border border-primary/40 bg-primary/10"
-                  : "bg-transparent",
-              )}
-            >
-              <span className="text-[10px] leading-none text-muted-foreground">
-                {index === 0 ? "Now" : formatHourLabel(point.time, settings)}
-              </span>
-              {weatherIcon(point.weatherCode, true, true)}
-              <span className="text-[10px] font-semibold leading-none">
-                {formatTemp(point.temperature, settings)}
-              </span>
-              {presentation === "compact" &&
-                config.hourlyMetric !== "overview" && (
-                  <span className="text-[9px] leading-none text-muted-foreground">
-                    {metricValue(point)}
-                  </span>
-                )}
-            </div>
-          ))}
-        </div>
-        {presentation !== "compact" && (
           <div
-            ref={chartHostRef}
-            className={cn(fillAvailable && "flex-1")}
-            style={fillAvailable ? { minHeight: chartHeight } : undefined}
-          >
-            <TemperatureAreaChart
-              points={visible}
-              metric={config.hourlyMetric}
-              settings={settings}
-              gradientId={`weather-hourly-${gradientId}`}
-              height={fillAvailable ? measuredChartHeight : chartHeight}
-            />
-          </div>
-        )}
-        {presentation !== "compact" && (
-          <div
-            className="mt-1 grid gap-0.5"
+            className={cn(
+              "grid shrink-0 gap-0.5",
+              fillAvailable &&
+                presentation === "compact" &&
+                "flex-1 items-stretch",
+            )}
             style={{
               minWidth,
               gridTemplateColumns: `repeat(${visible.length}, minmax(0, 1fr))`,
             }}
           >
-            {visible.map((point) =>
-              config.hourlyMetric === "overview" ? (
-                <RainProbabilityPill
-                  key={point.time}
-                  probability={point.precipitationProbability}
-                />
-              ) : (
-                <div
-                  key={`${point.time}:${config.hourlyMetric}`}
-                  className="rounded-md bg-muted/20 px-1.5 py-1 text-center text-[11px] font-semibold"
-                >
-                  {metricValue(point)}
-                </div>
-              ),
-            )}
+            {visible.map((point, index) => (
+              <div
+                key={point.time}
+                aria-current={index === 0 ? "time" : undefined}
+                className={cn(
+                  cn(
+                    "flex min-w-0 flex-col items-center rounded-md px-1 text-center",
+                    fillAvailable &&
+                      presentation === "compact" &&
+                      "h-full justify-evenly",
+                    denseSpacing ? "gap-0 py-0.5" : "gap-0.5 py-1",
+                  ),
+                  index === 0
+                    ? "border border-primary/40 bg-primary/10"
+                    : "bg-transparent",
+                )}
+              >
+                <span className="text-[11px] leading-none text-muted-foreground">
+                  {index === 0 ? "Now" : formatHourLabel(point.time, settings)}
+                </span>
+                {weatherIcon(point.weatherCode, true, true)}
+                <span className="text-[11px] font-semibold leading-none">
+                  {formatTemp(point.temperature, settings)}
+                </span>
+                {presentation === "compact" &&
+                  config.hourlyMetric !== "overview" && (
+                    <span className="text-[9px] leading-none text-muted-foreground">
+                      {metricValue(point)}
+                    </span>
+                  )}
+              </div>
+            ))}
           </div>
+          {presentation !== "compact" && (
+            <div
+              ref={chartHostRef}
+              className={cn(
+                "relative min-w-0 shrink-0",
+                fillAvailable && "min-h-0 flex-1",
+              )}
+              style={{
+                minWidth,
+                minHeight: fillAvailable ? 0 : chartHeight,
+                height: fillAvailable ? undefined : chartHeight,
+              }}
+            >
+              <TemperatureAreaChart
+                points={visible}
+                metric={config.hourlyMetric}
+                settings={settings}
+                gradientId={`weather-hourly-${gradientId}`}
+                width={measuredChartWidth}
+                height={fillAvailable ? measuredChartHeight : chartHeight}
+              />
+            </div>
+          )}
+          {presentation !== "compact" && (
+            <div
+              className="mt-1 grid shrink-0 gap-0.5"
+              style={{
+                minWidth,
+                gridTemplateColumns: `repeat(${visible.length}, minmax(0, 1fr))`,
+              }}
+            >
+              {visible.map((point) =>
+                config.hourlyMetric === "overview" ? (
+                  <RainProbabilityPill
+                    key={point.time}
+                    probability={point.precipitationProbability}
+                  />
+                ) : (
+                  <div
+                    key={`${point.time}:${config.hourlyMetric}`}
+                    className="rounded-md bg-muted/20 px-1.5 py-1 text-center text-[11px] font-semibold"
+                  >
+                    {metricValue(point)}
+                  </div>
+                ),
+              )}
+            </div>
+          )}
+        </div>
+        {(["before", "after"] as const).map(
+          (edge) =>
+            scrollEdges[edge] && (
+              <button
+                key={edge}
+                type="button"
+                aria-label={
+                  edge === "before" ? "Show earlier hours" : "Show later hours"
+                }
+                aria-controls={timelineId}
+                onClick={() => scrollHours(edge === "before" ? -1 : 1)}
+                className={cn(
+                  "absolute top-1/2 z-10 -translate-y-1/2 rounded-full border bg-card p-0.5 text-foreground shadow-sm transition-colors hover:bg-muted focus-visible:outline focus-visible:outline-ring",
+                  edge === "before" ? "left-0" : "right-0",
+                )}
+              >
+                {edge === "before" ? (
+                  <ChevronLeft className="h-4 w-4" />
+                ) : (
+                  <ChevronRight className="h-4 w-4" />
+                )}
+              </button>
+            ),
         )}
       </div>
     </section>

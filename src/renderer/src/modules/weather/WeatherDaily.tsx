@@ -47,7 +47,7 @@ export function WeatherDaily({
     <section
       aria-label="Daily forecast"
       className={cn(
-        "min-w-0 rounded-md border bg-muted/5",
+        "min-w-0 rounded-md border bg-card",
         denseSpacing ? "p-1.5" : "p-2.5",
       )}
     >

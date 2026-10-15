@@ -185,17 +185,16 @@ export function WeatherSummary({
   return (
     <section
       className={cn(
-        "min-w-0 rounded-md border bg-muted/5",
+        "weather-summary min-w-0 rounded-md border bg-card",
         compact || denseSpacing ? "p-2" : "p-3",
       )}
       aria-label="Current weather"
     >
       <div
         className={cn(
-          "grid min-w-0 gap-3",
-          trailing
-            ? "grid-cols-[minmax(9rem,1.1fr)_minmax(0,2fr)_auto]"
-            : "grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)]",
+          "weather-summary-grid grid min-w-0 gap-2",
+          compact && "weather-summary-grid--compact",
+          trailing && "weather-summary-grid--alert",
         )}
       >
         <div className="flex min-w-0 items-start gap-2.5">
@@ -235,37 +234,27 @@ export function WeatherSummary({
         {details.length > 0 && (
           <div
             className={cn(
-              "grid min-w-0 self-center text-left",
-              compact
-                ? "grid-cols-4 gap-x-2 gap-y-1"
-                : trailing
-                  ? "grid-cols-4 gap-x-3 gap-y-2"
-                  : "grid-cols-4 gap-x-3 gap-y-2 lg:grid-cols-5",
+              "weather-summary-metrics grid min-w-0 self-center text-left",
+              compact ? "gap-x-3 gap-y-1" : "gap-x-3 gap-y-1.5",
             )}
           >
             {details.map(([label, value]) => (
               <div key={label} className="min-w-0">
-                <p
-                  className={cn(
-                    "truncate font-medium text-muted-foreground",
-                    compact ? "text-[9px]" : "text-[10px]",
-                  )}
-                >
+                <p className="text-[11px] font-medium text-muted-foreground">
                   {label}
                 </p>
-                <p
-                  className={cn(
-                    "truncate font-semibold leading-tight",
-                    compact ? "text-[10px]" : "text-xs",
-                  )}
-                >
+                <p className="whitespace-nowrap text-xs font-semibold leading-tight tabular-nums">
                   {value}
                 </p>
               </div>
             ))}
           </div>
         )}
-        {trailing && <div className="self-start">{trailing}</div>}
+        {trailing && (
+          <div className="weather-summary-alert min-w-0 self-start">
+            {trailing}
+          </div>
+        )}
       </div>
     </section>
   );
@@ -309,7 +298,7 @@ export function WeatherInlineAlert({
       <div ref={alertRef} className="relative self-start">
         <button
           type="button"
-          className="rounded-md border border-amber-500/20 bg-amber-500/10 p-1.5 text-amber-500 hover:bg-amber-500/20"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-1.5 text-foreground hover:bg-destructive/20"
           aria-label="Show weather alert"
           aria-expanded={popoverOpen}
           aria-haspopup="dialog"
@@ -319,18 +308,18 @@ export function WeatherInlineAlert({
         </button>
         {popoverOpen && (
           <div
-            className="absolute right-0 top-full z-20 mt-2 w-64 max-w-[calc(100vw-2rem)] rounded-md border border-amber-500/20 bg-popover p-3 text-popover-foreground shadow-lg"
+            className="absolute right-0 top-full z-20 mt-2 w-64 max-w-[calc(100vw-2rem)] rounded-md border border-destructive/40 bg-popover p-3 text-popover-foreground shadow-lg"
             role="dialog"
             aria-label="Weather alerts"
           >
             <div className="flex items-start gap-2">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-foreground" />
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-medium">{title}</p>
                 {snapshot.alerts.map((alert) => (
                   <p
                     key={alert.id}
-                    className="mt-1 break-words text-[10px] text-muted-foreground"
+                    className="mt-1 break-words text-xs text-muted-foreground"
                   >
                     {alert.message}
                   </p>
@@ -345,21 +334,21 @@ export function WeatherInlineAlert({
   return (
     <div
       className={cn(
-        "flex min-w-0 items-start rounded-md border border-amber-500/20 bg-amber-500/10 text-amber-600 dark:text-amber-400",
+        "flex min-w-0 items-start rounded-md border border-destructive/40 bg-destructive/10 text-foreground",
         "max-w-[min(100%,20rem)] gap-1.5 px-2 py-1.5",
       )}
       role="alert"
       aria-label={title}
     >
-      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-foreground" />
       {showTitle && (
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[10px] font-medium">{title}</p>
+          <p className="break-words text-xs font-semibold">{title}</p>
           {showDetails &&
             snapshot.alerts.map((alert) => (
               <p
                 key={alert.id}
-                className="break-words text-[9px] text-muted-foreground"
+                className="break-words text-[11px] text-foreground"
               >
                 {alert.message}
               </p>
