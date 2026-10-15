@@ -55,6 +55,7 @@ export function WeatherSmall(props: WeatherLayoutProps): React.ReactElement {
           presentation="compact"
           denseSpacing
           fillAvailable
+          showHeading={false}
           onMetricChange={props.onMetricChange}
         />
       )}

@@ -307,6 +307,7 @@ export function WeatherHourly({
   chartHeight = 85,
   denseSpacing = false,
   fillAvailable = false,
+  showHeading = true,
   onMetricChange,
 }: {
   points: WeatherHourlyPoint[];
@@ -317,6 +318,7 @@ export function WeatherHourly({
   chartHeight?: number;
   denseSpacing?: boolean;
   fillAvailable?: boolean;
+  showHeading?: boolean;
   onMetricChange: (metric: WeatherViewConfig["hourlyMetric"]) => void;
 }): React.ReactElement {
   const gradientId = React.useId();
@@ -369,29 +371,31 @@ export function WeatherHourly({
       )}
       aria-label="Hourly forecast"
     >
-      <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
-        <h3 className="text-xs font-semibold">Hourly</h3>
-        {presentation === "tabbed" && (
-          <div className="flex max-w-full flex-wrap overflow-hidden rounded-md border text-[10px]">
-            {tabs.map(([key, label]) => (
-              <button
-                key={key}
-                type="button"
-                className={cn(
-                  "px-2 py-1",
-                  config.hourlyMetric === key
-                    ? "bg-accent font-medium"
-                    : "text-muted-foreground hover:bg-accent/50",
-                )}
-                aria-pressed={config.hourlyMetric === key}
-                onClick={() => onMetricChange(key)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
+      {(showHeading || presentation === "tabbed") && (
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+          {showHeading && <h3 className="text-xs font-semibold">Hourly</h3>}
+          {presentation === "tabbed" && (
+            <div className="flex max-w-full flex-wrap overflow-hidden rounded-md border text-[10px]">
+              {tabs.map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  className={cn(
+                    "px-2 py-1",
+                    config.hourlyMetric === key
+                      ? "bg-accent font-medium"
+                      : "text-muted-foreground hover:bg-accent/50",
+                  )}
+                  aria-pressed={config.hourlyMetric === key}
+                  onClick={() => onMetricChange(key)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
       <div
         className={cn(
           "weather-timeline-scroll min-w-0 overflow-x-auto",
