@@ -1,6 +1,6 @@
 import React from "react";
 import {
-  AstronomyEventList,
+  AstronomyUpcomingEvents,
   AstronomyPositions,
   AstronomySummaryPrimitives,
   Timetable,
@@ -27,7 +27,7 @@ export function AstronomyMedium({
   ).slice(0, eventLimit);
 
   return (
-    <div className="min-w-0 space-y-3">
+    <div className="min-w-0 space-y-4">
       <AstronomySummaryPrimitives
         astronomy={astronomy}
         timezone={timezone}
@@ -40,7 +40,7 @@ export function AstronomyMedium({
       <div
         className={`grid min-w-0 gap-3 ${stacked ? "grid-cols-1" : "grid-cols-2"}`}
       >
-        <AstronomyPositions horizon={horizon} compact />
+        <AstronomyPositions horizon={horizon} />
         <section className="flex h-full min-w-0 w-full flex-col">
           <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Daily timetable
@@ -55,20 +55,11 @@ export function AstronomyMedium({
           </div>
         </section>
       </div>
-      <section className="min-w-0">
-        <h3 className="mb-1.5 text-xs font-semibold">Upcoming events</h3>
-        {events.length > 0 ? (
-          <AstronomyEventList
-            events={events}
-            timezone={timezone}
-            timeFormat={timeFormat}
-          />
-        ) : (
-          <p className="text-[11px] text-muted-foreground">
-            No upcoming global events listed.
-          </p>
-        )}
-      </section>
+      <AstronomyUpcomingEvents
+        events={events}
+        timezone={timezone}
+        timeFormat={timeFormat}
+      />
     </div>
   );
 }

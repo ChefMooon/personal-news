@@ -17,6 +17,23 @@ export {
   solarStateLabel,
 } from "../weather/astronomy-display";
 
+/** Localized calendar date for an event, using its saved location timezone. */
+export function formatEventDate(
+  unixSeconds: number,
+  timeZone: string | null,
+): string {
+  if (!timeZone || !Number.isFinite(unixSeconds)) return "Unavailable";
+  try {
+    return new Date(unixSeconds * 1000).toLocaleDateString([], {
+      timeZone,
+      month: "short",
+      day: "numeric",
+    });
+  } catch {
+    return "Unavailable";
+  }
+}
+
 /** Maximum number of events shown in the compact summary list. */
 export const SUMMARY_EVENT_LIMIT = 5;
 

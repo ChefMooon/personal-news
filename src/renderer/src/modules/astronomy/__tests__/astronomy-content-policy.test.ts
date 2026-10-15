@@ -76,10 +76,12 @@ describe("astronomy content policy", () => {
     });
 
     expect(policy.visibleSections).toEqual([
+      "horizon",
+      "moon",
+      "next-phase",
       "sky-arc",
-      "lunar-detail",
-      "planets",
       "timetable",
+      "planets",
       "events",
     ]);
     expect(policy.planetLimit).toBe(7);

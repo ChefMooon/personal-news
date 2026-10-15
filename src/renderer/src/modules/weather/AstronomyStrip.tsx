@@ -42,11 +42,13 @@ export function MoonPhaseGlyph({
   illuminationPercent,
   label,
   size = 40,
+  themeColors = false,
 }: {
   phaseAngle: number | null;
   illuminationPercent?: number | null;
   label: string;
   size?: number;
+  themeColors?: boolean;
 }): React.ReactElement {
   let litPath: string | null = null;
   if (phaseAngle != null && Number.isFinite(phaseAngle)) {
@@ -71,6 +73,13 @@ export function MoonPhaseGlyph({
       `A ${rx.toFixed(2)} ${r} 0 0 ${terminatorSweep} ${cx} ${cy - r}`,
       "Z",
     ].join(" ");
+    // At the endpoints the limb and terminator coincide; draw the full disc
+    // explicitly so the two arcs cannot cancel out at an exact full Moon.
+    if (illumination === 1) {
+      litPath = `M ${cx} ${cy - r} A ${r} ${r} 0 1 0 ${cx} ${cy + r} A ${r} ${r} 0 1 0 ${cx} ${cy - r} Z`;
+    } else if (illumination === 0) {
+      litPath = `M ${cx} ${cy - r}`;
+    }
   }
 
   return (
@@ -85,17 +94,30 @@ export function MoonPhaseGlyph({
           cx={20}
           cy={20}
           r={19}
-          className="fill-none stroke-slate-400/35 drop-shadow-[0_0_2px_rgba(148,163,184,0.35)] dark:stroke-slate-500/45"
+          className={
+            themeColors
+              ? "fill-none stroke-border"
+              : "fill-none stroke-slate-400/35 drop-shadow-[0_0_2px_rgba(148,163,184,0.35)] dark:stroke-slate-500/45"
+          }
           strokeWidth="1"
         />
         <circle
           cx={20}
           cy={20}
           r={18}
-          className="fill-muted/20 stroke-slate-500 dark:stroke-slate-400"
+          className={
+            themeColors
+              ? "fill-muted stroke-muted-foreground"
+              : "fill-muted/20 stroke-slate-500 dark:stroke-slate-400"
+          }
           strokeWidth="1"
         />
-        {litPath && <path d={litPath} className="fill-amber-300" />}
+        {litPath && (
+          <path
+            d={litPath}
+            className={themeColors ? "fill-primary" : "fill-amber-300"}
+          />
+        )}
         {!litPath && (
           <text
             x={20}
@@ -112,11 +134,18 @@ export function MoonPhaseGlyph({
   );
 }
 
-export function SunGlyph(): React.ReactElement {
+export function SunGlyph({
+  themeColors = false,
+}: {
+  themeColors?: boolean;
+}): React.ReactElement {
   return (
     <svg
       aria-hidden="true"
-      className="h-7 w-7 shrink-0 text-amber-300"
+      className={cn(
+        "h-7 w-7 shrink-0",
+        themeColors ? "text-primary" : "text-amber-300",
+      )}
       viewBox="0 0 40 40"
       fill="none"
     >
@@ -134,9 +163,11 @@ export function SunGlyph(): React.ReactElement {
 export function HorizonEventIcon({
   body,
   direction,
+  themeColors = false,
 }: {
   body: "sun" | "moon";
   direction: "rise" | "set";
+  themeColors?: boolean;
 }): React.ReactElement {
   const arrowY = direction === "rise" ? 9 : 31;
   const arcPath =
@@ -166,7 +197,11 @@ export function HorizonEventIcon({
           cx="20"
           cy={arrowY}
           r="4"
-          className="fill-amber-300 stroke-current"
+          className={
+            themeColors
+              ? "fill-primary stroke-current"
+              : "fill-amber-300 stroke-current"
+          }
           strokeWidth="1.5"
         />
       ) : (

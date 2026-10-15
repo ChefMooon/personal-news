@@ -237,6 +237,36 @@ try {
         `${view.id}-${projection.columns}-columns.png`,
       );
       await page.screenshot({ path: screenshot, fullPage: true });
+      if (moduleId === "astronomy") {
+        for (const size of ["small", "medium", "large"]) {
+          const widget = page.locator(
+            `[data-widget-instance-id="pn_dev_fixture_widget_astronomy_${size}"]`,
+          );
+          // Capture each full card even when the dashboard scroll viewport is
+          // shorter than its contents, and catch clipped data inside the card.
+          const overflow = await widget.evaluate((element) => {
+            const bounds = element.getBoundingClientRect();
+            return [...element.querySelectorAll("p, td, li, button")].some(
+              (item) => {
+                const box = item.getBoundingClientRect();
+                return (
+                  box.right > bounds.right + 1 || box.bottom > bounds.bottom + 1
+                );
+              },
+            );
+          });
+          assert(
+            !overflow,
+            `Astronomy/${size} clips content at ${projection.columns} columns`,
+          );
+          await widget.screenshot({
+            path: path.join(
+              artifactDir,
+              `astronomy-${size}-${projection.columns}-columns.png`,
+            ),
+          });
+        }
+      }
       measurements.push({
         moduleId,
         columns: actualColumns,

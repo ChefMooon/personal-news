@@ -1,13 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
-import {
-  MoonStar,
-  RefreshCcw,
-  RotateCcw,
-  Settings2,
-  X,
-} from "lucide-react";
+import { MoonStar, RefreshCcw, RotateCcw, Settings2, X } from "lucide-react";
 import { useWidgetInstance } from "../../contexts/WidgetInstanceContext";
 import { useAstronomyEnabled } from "../../contexts/AstronomyEnabledContext";
 import {
@@ -346,7 +340,7 @@ function AstronomyWidget(): React.ReactElement {
         <div className="flex items-start justify-between gap-2">
           <div>
             <CardTitle className="flex items-center gap-2 text-base">
-              <MoonStar className="h-5 w-5 text-indigo-400" />
+              <MoonStar className="h-5 w-5 text-primary" />
               {widgetTitle}
             </CardTitle>
           </div>
