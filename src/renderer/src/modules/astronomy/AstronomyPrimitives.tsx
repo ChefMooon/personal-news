@@ -1,5 +1,5 @@
 import React from "react";
-import { Globe } from "lucide-react";
+import { Globe, Moon, Sun } from "lucide-react";
 import type {
   AstronomyGlobalEvent,
   AstronomyHorizonData,
@@ -11,6 +11,9 @@ import { Badge } from "../../components/ui/badge";
 import { cn } from "../../lib/utils";
 import {
   eventFamilyLabel,
+  compassDirection,
+  altitudeGaugePercent,
+  formatAltitudePosition,
   formatDegrees,
   formatHorizonTime,
   formatKilometers,
@@ -22,7 +25,6 @@ import {
   nextRiseSetItem,
   planetsInCanonicalOrder,
   planetDisplayState,
-  skyArcPosition,
   solarStateLabel,
   upcomingGlobalEvents,
 } from "./astronomy-display";
@@ -242,7 +244,7 @@ export function AstronomyDetailedPrimitives({
   );
   return (
     <div className="min-w-0 space-y-4">
-      <AstronomySkyArc horizon={horizon} />
+      <AstronomyPositions horizon={horizon} />
       <section className="min-w-0">
         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Lunar detail
@@ -302,170 +304,99 @@ export function AstronomyDetailedPrimitives({
   );
 }
 
-export function AstronomySkyArc({
+export function AstronomyPositions({
   horizon,
   compact = false,
 }: {
   horizon: AstronomyHorizonData | null;
   compact?: boolean;
 }): React.ReactElement {
-  const sunPosition = horizon
-    ? skyArcPosition(horizon.sunAltitude, horizon.sunAzimuth)
-    : null;
-  const moonPosition = horizon
-    ? skyArcPosition(horizon.moonAltitude, horizon.moonAzimuth)
-    : null;
-
-  const plotPoint = (position: {
-    xPercent: number;
-    yPercent: number;
-  }): { x: number; y: number } => ({
-    x: 24 + (position.xPercent / 100) * 272,
-    y: 134 - (position.yPercent / 100) * 108,
-  });
-  const sunPoint = sunPosition ? plotPoint(sunPosition) : null;
-  const moonPoint = moonPosition ? plotPoint(moonPosition) : null;
+  const bodies = [
+    {
+      name: "Sun",
+      altitude: horizon?.sunAltitude,
+      azimuth: horizon?.sunAzimuth,
+    },
+    {
+      name: "Moon",
+      altitude: horizon?.moonAltitude,
+      azimuth: horizon?.moonAzimuth,
+    },
+  ] as const;
 
   return (
-    <section className="min-w-0">
+    <section className="@container min-w-0">
       <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        Sky arc
+        Sun &amp; Moon positions
       </h3>
-      <div className="min-w-0 rounded-md border bg-card p-3 shadow-sm">
-        <div className="relative min-w-0">
-          <svg
-            role="img"
-            aria-label="Sky arc showing the current Sun and Moon positions"
-            viewBox="0 0 320 170"
-            className={cn(
-              "block h-auto w-full",
-              compact ? "max-h-32" : "max-h-64",
-            )}
-          >
-            <defs>
-              <linearGradient id="sky-arc-fill" x1="0" x2="0" y1="0" y2="1">
-                <stop offset="0" stopColor="hsl(var(--primary) / 0.12)" />
-                <stop offset="1" stopColor="hsl(var(--background))" />
-              </linearGradient>
-              <filter
-                id="sky-arc-glow"
-                x="-50%"
-                y="-50%"
-                width="200%"
-                height="200%"
-              >
-                <feGaussianBlur stdDeviation="2.5" />
-              </filter>
-            </defs>
-            <path
-              d="M 24 134 A 136 108 0 0 1 296 134 L 24 134 Z"
-              className="fill-[url(#sky-arc-fill)]"
-            />
-            <path
-              d="M 24 134 A 136 108 0 0 1 296 134"
-              fill="none"
-              className="stroke-border"
-              strokeWidth="1.5"
-            />
-            <line
-              x1="16"
-              y1="134"
-              x2="304"
-              y2="134"
-              className="stroke-border/90"
-              strokeDasharray="3 4"
-            />
-            {[24, 92, 160, 228, 296].map((x) => (
-              <line
-                key={x}
-                x1={x}
-                y1="130"
-                x2={x}
-                y2="138"
-                className="stroke-muted-foreground/70"
-              />
-            ))}
-            <text x="18" y="153" fontSize="9" className="fill-muted-foreground">
-              East
-            </text>
-            <text x="151" y="22" fontSize="9" className="fill-muted-foreground">
-              Zenith
-            </text>
-            <text
-              x="270"
-              y="153"
-              fontSize="9"
-              className="fill-muted-foreground"
-            >
-              West
-            </text>
-            {sunPoint && (
-              <g>
-                <circle
-                  cx={sunPoint.x}
-                  cy={sunPoint.y}
-                  r="12"
-                  className="fill-amber-300/30"
-                  filter="url(#sky-arc-glow)"
-                />
-                <circle
-                  cx={sunPoint.x}
-                  cy={sunPoint.y}
-                  r="7"
-                  className="fill-amber-300 stroke-amber-100"
-                  strokeWidth="1.5"
-                />
-                <text
-                  x={sunPoint.x + 11}
-                  y={sunPoint.y + 4}
-                  fontSize="10"
-                  className="fill-foreground"
-                >
-                  Sun
-                </text>
-              </g>
-            )}
-            {moonPoint && (
-              <g>
-                <circle
-                  cx={moonPoint.x}
-                  cy={moonPoint.y}
-                  r="11"
-                  className="fill-sky-300/25"
-                  filter="url(#sky-arc-glow)"
-                />
-                <circle
-                  cx={moonPoint.x}
-                  cy={moonPoint.y}
-                  r="6"
-                  className="fill-sky-200 stroke-sky-100"
-                  strokeWidth="1.5"
-                />
-                <text
-                  x={moonPoint.x + 10}
-                  y={moonPoint.y + 4}
-                  fontSize="10"
-                  className="fill-foreground"
-                >
-                  Moon
-                </text>
-              </g>
-            )}
-          </svg>
-        </div>
-        <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-xs">
-          <span>
-            Sun: {formatDegrees(horizon?.sunAltitude) ?? "Unavailable"}
-          </span>
-          <span className="ml-auto">
-            Moon: {formatDegrees(horizon?.moonAltitude) ?? "Unavailable"}
-          </span>
-        </div>
-        {!sunPoint && !moonPoint && (
-          <p className="mt-2 text-[11px] text-muted-foreground">
-            Position geometry unavailable for this snapshot.
-          </p>
+      <div
+        className={cn(
+          "grid min-w-0 grid-cols-1 rounded-md border bg-card",
+          "@min-[34rem]:grid-cols-2",
+          compact ? "gap-2 p-2" : "gap-4 p-4",
         )}
+      >
+        {bodies.map(({ name, altitude, azimuth }) => {
+          const direction = compassDirection(azimuth);
+          const relative = formatAltitudePosition(altitude);
+          return (
+            <div key={name} className="min-w-0">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold">{name}</p>
+                <p className="text-xs tabular-nums">{relative}</p>
+                <p className="text-[11px] text-muted-foreground">
+                  {direction
+                    ? `${direction} · ${formatDegrees(azimuth)}`
+                    : "Direction unavailable"}
+                </p>
+              </div>
+            </div>
+          );
+        })}
+        <div
+          className="relative col-span-full mt-1 h-20"
+          aria-hidden="true"
+        >
+          <div className="absolute inset-x-0 top-1/2 border-t-2 border-foreground/60" />
+          <div className="absolute bottom-0 left-1/4 top-0 border-l border-dashed border-border" />
+          <div className="absolute bottom-0 left-3/4 top-0 border-l border-dashed border-border" />
+          {bodies.map(({ name, altitude }, index) => {
+            const gauge = altitudeGaugePercent(altitude);
+            const isSun = name === "Sun";
+            const BodyIcon = isSun ? Sun : Moon;
+            return gauge == null ? null : (
+              <span
+                key={name}
+                className={cn(
+                  "absolute grid h-7 w-7 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full ring-2 ring-card",
+                  isSun
+                    ? "bg-amber-200/30 text-amber-600 drop-shadow-[0_0_6px_rgba(245,158,11,0.7)] dark:bg-amber-200/20 dark:text-amber-300"
+                    : "bg-sky-200/35 text-sky-700 drop-shadow-[0_0_6px_rgba(125,211,252,0.65)] dark:bg-sky-200/20 dark:text-sky-200",
+                )}
+                style={{
+                  left: index === 0 ? "25%" : "75%",
+                  top: `${100 - gauge}%`,
+                }}
+              >
+                <BodyIcon
+                  aria-hidden="true"
+                  className={cn(
+                    "h-4 w-4",
+                    !isSun && "fill-sky-100/60 dark:fill-sky-100/40",
+                  )}
+                  strokeWidth={2.25}
+                />
+              </span>
+            );
+          })}
+        </div>
+        <div className="col-span-full grid grid-cols-2 text-center text-xs font-medium text-muted-foreground" aria-hidden="true">
+          <span>Sun</span>
+          <span>Moon</span>
+        </div>
+        <p className="col-span-full text-center text-xs font-medium text-foreground" aria-hidden="true">
+          Horizon · 0°
+        </p>
       </div>
     </section>
   );

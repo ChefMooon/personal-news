@@ -1,7 +1,7 @@
 import React from "react";
 import {
   AstronomyEventList,
-  AstronomySkyArc,
+  AstronomyPositions,
   AstronomySummaryPrimitives,
   Timetable,
   astronomyGroupData,
@@ -15,7 +15,11 @@ export function AstronomyMedium({
   timeFormat,
   nowSeconds,
   eventLimit = 5,
-}: AstronomyPresetProps & { eventLimit?: number }): React.ReactElement {
+  stacked = false,
+}: AstronomyPresetProps & {
+  eventLimit?: number;
+  stacked?: boolean;
+}): React.ReactElement {
   const horizon = astronomyGroupData(astronomy?.groups.horizon);
   const events = upcomingGlobalEvents(
     astronomyGroupData(astronomy?.groups.events),
@@ -33,8 +37,10 @@ export function AstronomyMedium({
         showSunAltitude={false}
         showNextRiseSet={false}
       />
-      <div className="grid min-w-0 gap-3 min-[560px]:grid-cols-2">
-        <AstronomySkyArc horizon={horizon} compact />
+      <div
+        className={`grid min-w-0 gap-3 ${stacked ? "grid-cols-1" : "grid-cols-2"}`}
+      >
+        <AstronomyPositions horizon={horizon} compact />
         <section className="flex h-full min-w-0 w-full flex-col">
           <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Daily timetable

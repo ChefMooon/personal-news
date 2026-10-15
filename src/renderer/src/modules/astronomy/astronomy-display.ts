@@ -240,36 +240,49 @@ export function horizonGeometryState(
   if (altitude == null || !Number.isFinite(altitude)) {
     return "Unavailable";
   }
+  if (altitude === 0) return "At horizon";
   return altitude > 0 ? "Above horizon" : "Below horizon";
 }
 
-export interface SkyArcPosition {
-  xPercent: number;
-  yPercent: number;
+const COMPASS_DIRECTIONS = [
+  "North",
+  "Northeast",
+  "East",
+  "Southeast",
+  "South",
+  "Southwest",
+  "West",
+  "Northwest",
+] as const;
+
+/** Whole-degree position wording that preserves the side of the horizon near zero. */
+export function formatAltitudePosition(
+  altitude: number | null | undefined,
+): string {
+  if (altitude == null || !Number.isFinite(altitude)) {
+    return "Altitude unavailable";
+  }
+  if (altitude === 0) return "At horizon";
+  const side = altitude > 0 ? "above" : "below";
+  const degrees = Math.abs(Math.round(altitude));
+  return degrees === 0
+    ? `Less than 1° ${side} horizon`
+    : `${degrees}° ${side} horizon`;
 }
 
-/**
- * Rectangular sky plot position for a body: azimuth maps east (90°) to the
- * left edge and west (270°) to the right edge with clamping outside that
- * range; altitude maps 0° (horizon) to the bottom and 90° (zenith) to the top.
- */
-export function skyArcPosition(
-  altitudeDeg: number | null | undefined,
+/** Convert any finite azimuth into its nearest 8-point compass direction. */
+export function compassDirection(
   azimuthDeg: number | null | undefined,
-): SkyArcPosition | null {
-  if (
-    altitudeDeg == null ||
-    !Number.isFinite(altitudeDeg) ||
-    azimuthDeg == null ||
-    !Number.isFinite(azimuthDeg)
-  ) {
-    return null;
-  }
+): string | null {
+  if (azimuthDeg == null || !Number.isFinite(azimuthDeg)) return null;
   const wrapped = ((azimuthDeg % 360) + 360) % 360;
-  const xFraction = Math.max(0, Math.min(1, (wrapped - 90) / 180));
-  const clampedAltitude = Math.max(0, Math.min(90, altitudeDeg));
-  return {
-    xPercent: xFraction * 100,
-    yPercent: (1 - clampedAltitude / 90) * 100,
-  };
+  return COMPASS_DIRECTIONS[Math.round(wrapped / 45) % 8];
+}
+
+/** Map altitude across the full -90° to +90° range, with 0° at the horizon. */
+export function altitudeGaugePercent(
+  altitudeDeg: number | null | undefined,
+): number | null {
+  if (altitudeDeg == null || !Number.isFinite(altitudeDeg)) return null;
+  return ((Math.max(-90, Math.min(90, altitudeDeg)) + 90) / 180) * 100;
 }

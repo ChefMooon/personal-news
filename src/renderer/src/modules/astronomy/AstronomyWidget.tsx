@@ -309,6 +309,7 @@ function AstronomyWidget(): React.ReactElement {
               timeFormat={weatherSettings.timeFormat}
               nowSeconds={nowSeconds}
               eventLimit={contentPolicy.eventLimit ?? 3}
+              stacked={contentPolicy.stacked}
             />
           ) : (
             <AstronomyLarge

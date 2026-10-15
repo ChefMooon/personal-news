@@ -6,10 +6,13 @@ import type {
 } from "../../../../../shared/ipc-types";
 import {
   CANONICAL_PLANET_ORDER,
+  altitudeGaugePercent,
   clampSynodicProgress,
   countdownLabel,
+  compassDirection,
   eventFamilyLabel,
   formatAstronomicalUnits,
+  formatAltitudePosition,
   formatCalculatedAt,
   formatDegrees,
   formatKilometers,
@@ -20,7 +23,6 @@ import {
   nextRiseSetItem,
   planetsInCanonicalOrder,
   planetDisplayState,
-  skyArcPosition,
   solarStateLabel,
   SUMMARY_EVENT_LIMIT,
   upcomingGlobalEvents,
@@ -219,24 +221,39 @@ describe("horizon geometry state wording", () => {
   it("states above/below horizon factually from altitude", () => {
     expect(horizonGeometryState(12)).toBe("Above horizon");
     expect(horizonGeometryState(-0.5)).toBe("Below horizon");
+    expect(horizonGeometryState(0)).toBe("At horizon");
     expect(horizonGeometryState(null)).toBe("Unavailable");
   });
 });
 
-describe("sky arc positioning", () => {
-  it("maps azimuth east-to-west across the plot and clamps outside", () => {
-    expect(skyArcPosition(45, 90)).toEqual({ xPercent: 0, yPercent: 50 });
-    expect(skyArcPosition(45, 270)).toEqual({ xPercent: 100, yPercent: 50 });
-    expect(skyArcPosition(0, 180)).toEqual({ xPercent: 50, yPercent: 100 });
-    expect(skyArcPosition(90, 180)).toEqual({ xPercent: 50, yPercent: 0 });
-    // North (0°) and beyond west clamp onto the edges.
-    expect(skyArcPosition(30, 0)?.xPercent).toBe(0);
-    expect(skyArcPosition(30, 350)?.xPercent).toBe(100);
+describe("position display helpers", () => {
+  it("maps the full altitude range around the labeled horizon", () => {
+    expect(altitudeGaugePercent(-90)).toBe(0);
+    expect(altitudeGaugePercent(0)).toBe(50);
+    expect(altitudeGaugePercent(90)).toBe(100);
+    expect(altitudeGaugePercent(-30)).toBeCloseTo(33.33, 1);
+    expect(altitudeGaugePercent(-120)).toBe(0);
+    expect(altitudeGaugePercent(null)).toBeNull();
   });
 
-  it("returns null for incomplete positions instead of guessing", () => {
-    expect(skyArcPosition(null, 180)).toBeNull();
-    expect(skyArcPosition(30, undefined)).toBeNull();
+  it("describes azimuth over the full compass", () => {
+    expect(compassDirection(0)).toBe("North");
+    expect(compassDirection(90)).toBe("East");
+    expect(compassDirection(135)).toBe("Southeast");
+    expect(compassDirection(180)).toBe("South");
+    expect(compassDirection(270)).toBe("West");
+    expect(compassDirection(359)).toBe("North");
+    expect(compassDirection(-90)).toBe("West");
+    expect(compassDirection(null)).toBeNull();
+  });
+
+  it("keeps near-horizon altitude wording unambiguous", () => {
+    expect(formatAltitudePosition(35)).toBe("35° above horizon");
+    expect(formatAltitudePosition(-13)).toBe("13° below horizon");
+    expect(formatAltitudePosition(0.2)).toBe("Less than 1° above horizon");
+    expect(formatAltitudePosition(-0.2)).toBe("Less than 1° below horizon");
+    expect(formatAltitudePosition(0)).toBe("At horizon");
+    expect(formatAltitudePosition(null)).toBe("Altitude unavailable");
   });
 });
 
