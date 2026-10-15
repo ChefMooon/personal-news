@@ -1055,6 +1055,7 @@ export interface SavedPostsViewConfig {
   sort_by: "saved_at" | "score";
   sort_dir: "asc" | "desc";
   max_posts: number;
+  postColumns: 1 | 2;
   // Grouping
   group_by: "none" | "source";
   showGroupHeaders: boolean;

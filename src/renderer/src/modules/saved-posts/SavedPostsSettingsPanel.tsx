@@ -85,7 +85,7 @@ export function SavedPostsSettingsPanel({
   onChange,
   sizeControl,
 }: SavedPostsSettingsPanelProps): React.ReactElement {
-  const { instanceId } = useWidgetInstance();
+  const { instanceId, size } = useWidgetInstance();
   const [draft, setDraft] = useState<SavedPostsViewConfig>(config);
   const [subredditsExpanded, setSubredditsExpanded] = useState(true);
   const [subredditsExpandedLoaded, setSubredditsExpandedLoaded] =
@@ -825,6 +825,34 @@ export function SavedPostsSettingsPanel({
                   }
                 />
               </SettingRow>
+
+              {size !== "small" && (
+                <SettingRow
+                  label="Post columns"
+                  description="Used for Medium and Large widgets"
+                >
+                  <Select
+                    value={String(draft.postColumns)}
+                    onValueChange={(value) =>
+                      applyUpdate({
+                        ...draft,
+                        postColumns: value === "2" ? 2 : 1,
+                      })
+                    }
+                  >
+                    <SelectTrigger
+                      className="w-[105px] h-8 text-xs"
+                      aria-label="Post columns"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1">1 column</SelectItem>
+                      <SelectItem value="2">2 columns</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </SettingRow>
+              )}
 
               <SettingRow label='Show "View All" link'>
                 <Switch

@@ -23,13 +23,7 @@ import {
   CardContent,
 } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
-import {
-  Bookmark,
-  Settings2,
-  RotateCcw,
-  RefreshCcw,
-  X,
-} from "lucide-react";
+import { Bookmark, Settings2, RotateCcw, RefreshCcw, X } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -312,6 +306,8 @@ function SavedPostsWidget(): React.ReactElement {
     configuredMaxPosts: config.max_posts,
     fetchedPostCount: posts.length,
     expanded: isExpanded,
+    postColumns: config.postColumns,
+    cardDensity: config.cardDensity,
   });
 
   const effectiveCardConfig = {
@@ -335,7 +331,6 @@ function SavedPostsWidget(): React.ReactElement {
       visiblePostLimit={contentPolicy.visiblePostLimit}
       disclosureRequired={contentPolicy.disclosureRequired}
       viewportId={postsViewportId}
-      onToggleExpanded={() => setIsExpanded((expanded) => !expanded)}
       onOpen={handleOpenExternal}
       onPeek={handlePeekExternal}
       onToggleViewed={handleToggleViewed}
@@ -370,6 +365,21 @@ function SavedPostsWidget(): React.ReactElement {
                 className="h-6 px-2 py-0 text-[10px] font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
               >
                 View All
+              </Button>
+            )}
+            {contentPolicy.disclosureRequired && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                aria-expanded={isExpanded}
+                aria-controls={postsViewportId}
+                onClick={() => setIsExpanded((expanded) => !expanded)}
+                className="h-6 w-[7rem] shrink-0 justify-center whitespace-nowrap px-2 py-0 text-[10px] font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
+              >
+                {isExpanded
+                  ? "Show fewer posts"
+                  : `Show all ${posts.length} posts`}
               </Button>
             )}
             {isEditing ? (
@@ -455,9 +465,7 @@ function SavedPostsWidget(): React.ReactElement {
         )}
         <div
           className={
-            isEditing
-              ? "saved-posts-card-edit"
-              : "flex min-h-0 flex-1 flex-col"
+            isEditing ? "saved-posts-card-edit" : "flex min-h-0 flex-1 flex-col"
           }
         >
           <div

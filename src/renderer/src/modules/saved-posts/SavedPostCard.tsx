@@ -44,6 +44,10 @@ export function SavedPostCard({
   const author = formatAuthor(post);
   const isViewed = post.viewed_at !== null;
   const isSmall = config.size === "small";
+  const isCompactMedium =
+    config.size === "medium" && config.cardDensity === "compact";
+  const isInlineCompact = isSmall || isCompactMedium;
+  const cardPadding = isCompactMedium ? "py-0.5" : "py-1";
 
   return (
     <SavedPostItemActions
@@ -58,7 +62,7 @@ export function SavedPostCard({
         <div
           className={
             config.cardDensity === "compact"
-              ? "flex h-full items-start gap-2 py-1 px-2 rounded bg-muted/30 w-full hover:bg-muted/50 transition-colors"
+              ? `flex h-full items-start gap-2 ${cardPadding} px-2 rounded bg-muted/30 w-full hover:bg-muted/50 transition-colors`
               : "flex h-full items-start gap-2 py-3 px-2 rounded bg-muted/30 w-full hover:bg-muted/50 transition-colors"
           }
           onContextMenu={onContextMenu}
@@ -70,7 +74,7 @@ export function SavedPostCard({
           >
             <div
               className={
-                isSmall
+                isInlineCompact
                   ? "flex min-w-0 items-center gap-1.5"
                   : "flex items-center gap-1.5 flex-wrap"
               }
@@ -90,7 +94,7 @@ export function SavedPostCard({
               {author && config.showMetadata && (
                 <span className="text-xs text-muted-foreground">{author}</span>
               )}
-              {isSmall && (
+              {isInlineCompact && (
                 <span
                   className={`min-w-0 flex-1 truncate text-sm font-medium ${isViewed ? "text-foreground/70" : ""}`}
                 >
@@ -98,7 +102,7 @@ export function SavedPostCard({
                 </span>
               )}
             </div>
-            {!isSmall && (
+            {!isInlineCompact && (
               <div
                 className={
                   config.cardDensity === "compact"
@@ -109,7 +113,7 @@ export function SavedPostCard({
                 {post.title}
               </div>
             )}
-            {isSmall ? (
+            {isInlineCompact ? (
               <p
                 aria-hidden={!post.note}
                 className="mt-0.5 min-h-4 text-xs leading-4 text-muted-foreground italic line-clamp-1"

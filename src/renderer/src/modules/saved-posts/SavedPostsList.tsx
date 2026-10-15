@@ -1,5 +1,4 @@
 import React from "react";
-import { Button } from "../../components/ui/button";
 import { type LinkSource, type SavedPost } from "../../../../shared/ipc-types";
 import { SavedPostCard, type SavedPostCardConfig } from "./SavedPostCard";
 import { SAVED_POST_SOURCE_LABELS } from "./saved-posts-constants";
@@ -22,7 +21,6 @@ interface SavedPostsListProps {
   visiblePostLimit: number;
   disclosureRequired: boolean;
   viewportId: string;
-  onToggleExpanded: () => void;
   onOpen: (post: SavedPost) => void;
   onPeek: (post: SavedPost) => void;
   onToggleViewed: (post: SavedPost, viewed: boolean) => void;
@@ -42,7 +40,6 @@ export function SavedPostsList({
   visiblePostLimit,
   disclosureRequired,
   viewportId,
-  onToggleExpanded,
   onOpen,
   onPeek,
   onToggleViewed,
@@ -64,13 +61,21 @@ export function SavedPostsList({
   const renderPostList = (postsToRender: SavedPost[]): React.ReactElement => (
     <div
       className={
-        columnCount === 2
-          ? "grid h-full min-h-0 grid-cols-2 auto-rows-fr gap-x-4 gap-y-3"
-          : cardConfig.size === "small"
-            ? "grid h-full min-h-0 grid-cols-1 auto-rows-fr gap-y-1"
-            : cardConfig.cardDensity === "compact"
-              ? "space-y-1"
-              : "grid h-full min-h-0 grid-cols-1 auto-rows-fr gap-y-3"
+        expanded ||
+        (cardConfig.size === "large" && columnCount === 1) ||
+        (cardConfig.size === "medium" &&
+          columnCount === 1 &&
+          cardConfig.cardDensity === "detailed")
+          ? columnCount === 2
+            ? "grid min-w-0 grid-cols-2 auto-rows-max gap-x-4 gap-y-3"
+            : `grid min-w-0 grid-cols-1 ${cardConfig.size === "large" ? "gap-y-3" : "gap-y-1"}`
+          : columnCount === 2
+            ? "grid h-full min-h-0 grid-cols-2 auto-rows-fr gap-x-4 gap-y-3"
+            : cardConfig.size === "small"
+              ? "grid h-full min-h-0 grid-cols-1 auto-rows-fr gap-y-1"
+              : cardConfig.cardDensity === "compact"
+                ? "space-y-1"
+                : "grid h-full min-h-0 grid-cols-1 auto-rows-fr gap-y-3"
       }
     >
       {postsToRender.map((post) => (
@@ -102,7 +107,7 @@ export function SavedPostsList({
             <div key={source}>
               {showGroupHeaders && (
                 <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-                {SAVED_POST_SOURCE_LABELS[source]}
+                  {SAVED_POST_SOURCE_LABELS[source]}
                 </h4>
               )}
               {renderPostList(visibleGroup)}
@@ -117,23 +122,12 @@ export function SavedPostsList({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {disclosureRequired && (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="mb-1 h-7 shrink-0 self-start px-2 text-xs"
-          aria-expanded={expanded}
-          aria-controls={viewportId}
-          onClick={onToggleExpanded}
-        >
-          {expanded ? "Show fewer posts" : `Show all ${posts.length} posts`}
-        </Button>
-      )}
       <div
         id={viewportId}
         className={
-          expanded && disclosureRequired
+          cardConfig.size === "large" ||
+          (cardConfig.size === "medium" && columnCount === 1) ||
+          (expanded && disclosureRequired)
             ? "min-h-0 flex-1 overflow-y-auto overscroll-contain"
             : "min-h-0 flex-1"
         }

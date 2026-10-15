@@ -8,6 +8,8 @@ describe("getSavedPostsContentPolicy", () => {
       configuredMaxPosts: 20,
       fetchedPostCount: 6,
       expanded: false,
+      postColumns: 2,
+      cardDensity: "detailed",
     });
 
     expect(policy.visiblePostLimit).toBe(3);
@@ -16,48 +18,69 @@ describe("getSavedPostsContentPolicy", () => {
     expect(policy.effectiveCardDensity).toBe("compact");
     expect(policy.showMetadata).toBe(false);
     expect(policy.showBodyPreview).toBe(false);
+    expect(policy.columnCount).toBe(1);
   });
 
-  it("caps Medium at eight", () => {
+  it("caps Medium at six and defaults to one column", () => {
     const policy = getSavedPostsContentPolicy({
       size: "medium",
-      configuredMaxPosts: 5,
-      fetchedPostCount: 5,
+      configuredMaxPosts: 10,
+      fetchedPostCount: 6,
       expanded: false,
+      postColumns: 1,
+      cardDensity: "compact",
     });
 
-    expect(policy.visiblePostLimit).toBe(8);
+    expect(policy.visiblePostLimit).toBe(6);
     expect(policy.disclosureRequired).toBe(false);
-    expect(policy.effectiveCardDensity).toBe("detailed");
-    expect(policy.columnCount).toBe(2);
+    expect(policy.effectiveCardDensity).toBe("compact");
+    expect(policy.columnCount).toBe(1);
   });
 
-  it("shows all fetched Large posts and allows the viewport to scroll", () => {
+  it("allows two columns for Medium", () => {
     const policy = getSavedPostsContentPolicy({
-      size: "large",
-      configuredMaxPosts: 3,
-      fetchedPostCount: 3,
+      size: "medium",
+      configuredMaxPosts: 20,
+      fetchedPostCount: 10,
       expanded: false,
+      postColumns: 2,
+      cardDensity: "detailed",
     });
 
-    expect(policy.visiblePostLimit).toBe(3);
-    expect(policy.disclosureRequired).toBe(false);
-    expect(policy.viewportOverflow).toBe("auto");
+    expect(policy.columnCount).toBe(2);
+    expect(policy.visiblePostLimit).toBe(6);
+  });
+
+  it("caps Large at six and discloses additional fetched posts", () => {
+    const policy = getSavedPostsContentPolicy({
+      size: "large",
+      configuredMaxPosts: 10,
+      fetchedPostCount: 8,
+      expanded: false,
+      postColumns: 1,
+      cardDensity: "detailed",
+    });
+
+    expect(policy.visiblePostLimit).toBe(6);
+    expect(policy.disclosureRequired).toBe(true);
+    expect(policy.viewportOverflow).toBe("hidden");
     expect(policy.showMetadata).toBe(true);
     expect(policy.showBodyPreview).toBe(true);
   });
 
-  it("uses the configured fetch limit for Large", () => {
+  it("caps Large previews while allowing the rest of the configured posts", () => {
     const policy = getSavedPostsContentPolicy({
       size: "large",
       configuredMaxPosts: 20,
       fetchedPostCount: 20,
       expanded: false,
+      postColumns: 1,
+      cardDensity: "detailed",
     });
 
-    expect(policy.visiblePostLimit).toBe(20);
-    expect(policy.disclosureRequired).toBe(false);
-    expect(policy.viewportOverflow).toBe("auto");
+    expect(policy.visiblePostLimit).toBe(6);
+    expect(policy.disclosureRequired).toBe(true);
+    expect(policy.viewportOverflow).toBe("hidden");
     expect(policy.columnCount).toBe(1);
   });
 
@@ -67,6 +90,8 @@ describe("getSavedPostsContentPolicy", () => {
       configuredMaxPosts: 20,
       fetchedPostCount: 12,
       expanded: true,
+      postColumns: 1,
+      cardDensity: "detailed",
     });
 
     expect(policy.disclosureRequired).toBe(true);
@@ -81,6 +106,8 @@ describe("getSavedPostsContentPolicy", () => {
         configuredMaxPosts: 5,
         fetchedPostCount: 0,
         expanded: false,
+        postColumns: 1,
+        cardDensity: "detailed",
       }).disclosureRequired,
     ).toBe(false);
   });
