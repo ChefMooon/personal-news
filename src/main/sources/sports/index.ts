@@ -1143,6 +1143,10 @@ export function setSportsTeamOrder(orderedIds: string[]): IpcMutationResult {
 }
 
 export async function getSportsLeagues(sport: string): Promise<SportLeague[]> {
+  const db = ensureDb();
+  if (isDevTestDataActive(db)) {
+    return listLeagues(db, sport);
+  }
   return ensureLeagueCatalogLoaded(sport);
 }
 

@@ -33,6 +33,7 @@ import {
   getSportsTodayEvents,
   getSportsTeamEvents,
   getSportsEventDetails,
+  getSportsLeagues,
   getSportsStandings,
 } from "../sources/sports";
 import {
@@ -453,6 +454,7 @@ describe("development test data", () => {
           SPORTS_FIXTURE_SPORT,
         ),
       ).toEqual([]);
+      expect(await getSportsLeagues("Soccer")).toEqual([]);
       expect(fetch).not.toHaveBeenCalled();
     } finally {
       vi.unstubAllGlobals();
