@@ -1,12 +1,5 @@
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-import { toast } from "sonner";
-import { RefreshCcw, RotateCcw, Settings2, X } from "lucide-react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { AlertCircle, RefreshCcw, RotateCcw, Settings2, X } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -31,16 +24,6 @@ import {
   useSportsViewConfig,
 } from "../../hooks/useSportsViewConfig";
 import {
-  IPC,
-  type IpcMutationResult,
-  type SportEvent,
-  type SportLeague,
-  type SportsDataUpdatedEvent,
-  type SportSyncStatus,
-  type SportTeamEvents,
-  type TrackedTeam,
-} from "../../../../shared/ipc-types";
-import {
   ALL_SPORTS_ID,
   SUPPORTED_SPORTS,
   getSportLabel,
@@ -48,71 +31,13 @@ import {
 import { AllGamesView } from "./AllGamesView";
 import { CompactSportsView } from "./CompactSportsView";
 import { MediumLiveGameView } from "./MediumLiveGameView";
-import { getLeagueKey } from "./league-display";
 import { MyTeamsView } from "./MyTeamsView";
 import { SportsSettingsPanel } from "./SportsSettingsPanel";
 import { WidgetSizeControl } from "../../components/WidgetSizeControl";
-import {
-  getMediumTeamItems,
-  getMediumItemCount,
-  getSportsContentPolicy,
-  shouldShowMediumTeamCarousel,
-} from "./sports-content-policy";
+import { getSportsContentPolicy } from "./sports-content-policy";
+import { SportsMediumLayout } from "./SportsMediumLayout";
+import { useSportsWidgetData } from "./useSportsWidgetData";
 import { getGamePhase } from "./utils";
-import { getLocalDateKey } from "../../../../shared/sports-event-utils";
-import { resolveTrackedTeamSide } from "./side-resolution";
-import { getEligibleTodayGames } from "./sports-game-selection";
-
-function dedupeEvents(events: SportEvent[]): SportEvent[] {
-  const seen = new Set<string>();
-  const result: SportEvent[] = [];
-  for (const event of events) {
-    if (seen.has(event.eventId)) {
-      continue;
-    }
-    seen.add(event.eventId);
-    result.push(event);
-  }
-  return result;
-}
-
-function sortUpcomingEvents(a: SportEvent, b: SportEvent): number {
-  const aValue = Date.parse(`${a.eventDate}T${a.eventTime ?? "12:00"}:00Z`);
-  const bValue = Date.parse(`${b.eventDate}T${b.eventTime ?? "12:00"}:00Z`);
-  return aValue - bValue;
-}
-
-function formatLastSynced(timestamp: number | null): string {
-  if (timestamp == null) {
-    return "Never";
-  }
-
-  const date = new Date(timestamp * 1000);
-  const today = new Date();
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  const timeLabel = date.toLocaleTimeString([], {
-    hour: "numeric",
-    minute: "2-digit",
-  });
-  const sameDay = date.toDateString() === today.toDateString();
-  const isYesterday = date.toDateString() === yesterday.toDateString();
-
-  if (sameDay) {
-    return `Today at ${timeLabel}`;
-  }
-
-  if (isYesterday) {
-    return `Yesterday at ${timeLabel}`;
-  }
-
-  return date.toLocaleString([], {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
 
 function SportsWidget(): React.ReactElement {
   const { instanceId, label, size, editMode, onSizeChange } =
@@ -125,26 +50,26 @@ function SportsWidget(): React.ReactElement {
   );
   const showSportLabels = config.sport === ALL_SPORTS_ID;
   const sportLabel = getSportLabel(config.sport);
-  const [todayEvents, setTodayEvents] = useState<SportEvent[]>([]);
-  const [trackedTeams, setTrackedTeams] = useState<TrackedTeam[]>([]);
-  const [leagues, setLeagues] = useState<SportLeague[]>([]);
-  const [syncStatusBySport, setSyncStatusBySport] = useState<
-    Record<string, SportSyncStatus>
-  >({});
-  const [teamEventsById, setTeamEventsById] = useState<
-    Record<string, SportTeamEvents>
-  >({});
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const {
+    todayEvents,
+    teamEventsById,
+    loading,
+    refreshing,
+    refreshError,
+    refreshNow,
+    leaguesById,
+    enabledTeams,
+    fallbackEvents,
+    lastUpdatedLabel,
+    compactEvents,
+    eligibleTodayEvents,
+  } = useSportsWidgetData(selectedSports);
   const [selectedGameId, setSelectedGameId] = useState<string | null>(null);
-  const [mediumContentExpanded, setMediumContentExpanded] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [snapshotConfig, setSnapshotConfig] = useState(config);
   const [editContentHeight, setEditContentHeight] = useState<number | null>(
     null,
   );
-  const hasLoadedDataRef = useRef(false);
-  const latestLoadIdRef = useRef(0);
   const cardContentRef = useRef<HTMLDivElement | null>(null);
   const previousSizeRef = useRef(size);
   const [contentWidth, setContentWidth] = useState<number | undefined>();
@@ -166,109 +91,7 @@ function SportsWidget(): React.ReactElement {
     if (previousSizeRef.current === size) return;
     previousSizeRef.current = size;
     if (isEditing) setEditContentHeight(null);
-    setMediumContentExpanded(false);
   }, [isEditing, size]);
-
-  const loadTeamEvents = useCallback(
-    async (teams: TrackedTeam[]): Promise<Record<string, SportTeamEvents>> => {
-      const pairs = await Promise.all(
-        teams.map(async (team) => {
-          const events = (await window.api.invoke(IPC.SPORTS_GET_TEAM_EVENTS, {
-            teamId: team.teamId,
-          })) as SportTeamEvents;
-          return [team.teamId, events] as const;
-        }),
-      );
-
-      return Object.fromEntries(pairs);
-    },
-    [],
-  );
-
-  const loadData = useCallback(
-    async ({ preserveContent = false }: { preserveContent?: boolean } = {}) => {
-      const loadId = latestLoadIdRef.current + 1;
-      latestLoadIdRef.current = loadId;
-
-      if (!preserveContent || !hasLoadedDataRef.current) {
-        setLoading(true);
-      }
-
-      try {
-        const [eventResults, leagueResults, allTeams, statusList] =
-          await Promise.all([
-            Promise.all(
-              selectedSports.map((sport) =>
-                window.api.invoke(IPC.SPORTS_GET_TODAY_EVENTS, { sport }),
-              ),
-            ),
-            Promise.all(
-              selectedSports.map((sport) =>
-                window.api.invoke(IPC.SPORTS_GET_LEAGUES, { sport }),
-              ),
-            ),
-            window.api.invoke(IPC.SPORTS_GET_TRACKED_TEAMS),
-            window.api.invoke(IPC.SPORTS_GET_STATUS),
-          ]);
-
-        const selectedSportSet = new Set(selectedSports);
-        const sportTeams = (allTeams as TrackedTeam[]).filter((team) =>
-          selectedSportSet.has(team.sport),
-        );
-        const nextTeamEventsById = await loadTeamEvents(sportTeams);
-        const nextStatusBySport = Object.fromEntries(
-          (statusList as SportSyncStatus[]).map(
-            (status) => [status.sport, status] as const,
-          ),
-        );
-
-        if (loadId !== latestLoadIdRef.current) {
-          return;
-        }
-
-        setTodayEvents((eventResults as SportEvent[][]).flat());
-        setLeagues((leagueResults as SportLeague[][]).flat());
-        setTrackedTeams(sportTeams);
-        setSyncStatusBySport(nextStatusBySport);
-        setTeamEventsById(nextTeamEventsById);
-        hasLoadedDataRef.current = true;
-      } catch (err) {
-        if (loadId !== latestLoadIdRef.current) {
-          return;
-        }
-
-        toast.error(
-          err instanceof Error
-            ? err.message
-            : "Failed to load Sports widget data.",
-        );
-      } finally {
-        if (loadId === latestLoadIdRef.current) {
-          setLoading(false);
-        }
-      }
-    },
-    [loadTeamEvents, selectedSports],
-  );
-
-  useEffect(() => {
-    void loadData();
-  }, [loadData]);
-
-  useEffect(() => {
-    return window.api.on(IPC.SPORTS_DATA_UPDATED, (event) => {
-      const payload = event as SportsDataUpdatedEvent;
-      if (!selectedSports.includes(payload.sport)) {
-        return;
-      }
-
-      if (!payload.ok && payload.error) {
-        toast.error(payload.error);
-      }
-
-      void loadData({ preserveContent: true });
-    });
-  }, [loadData, selectedSports]);
 
   useEffect(() => {
     if (!isEditing) {
@@ -285,83 +108,6 @@ function SportsWidget(): React.ReactElement {
     return () => window.removeEventListener("keydown", handler);
   }, [isEditing]);
 
-  const leaguesById = useMemo(
-    () =>
-      Object.fromEntries(
-        leagues.map(
-          (league) =>
-            [getLeagueKey(league.sport, league.leagueId), league] as const,
-        ),
-      ),
-    [leagues],
-  );
-
-  const enabledTeams = useMemo(
-    () =>
-      trackedTeams
-        .filter((team) => team.enabled)
-        .sort((a, b) => a.sortOrder - b.sortOrder),
-    [trackedTeams],
-  );
-
-  const fallbackEvents = useMemo(() => {
-    const enabledLeagueIds = new Set(
-      leagues
-        .filter((league) => league.enabled)
-        .map((league) => getLeagueKey(league.sport, league.leagueId)),
-    );
-    return dedupeEvents(
-      enabledTeams.flatMap((team) => teamEventsById[team.teamId]?.next ?? []),
-    )
-      .filter(
-        (event) =>
-          enabledLeagueIds.size === 0 ||
-          enabledLeagueIds.has(getLeagueKey(event.sport, event.leagueId)),
-      )
-      .sort(sortUpcomingEvents);
-  }, [enabledTeams, leagues, teamEventsById]);
-
-  const lastUpdatedAt = useMemo(() => {
-    const timestamps = selectedSports
-      .map((sport) => syncStatusBySport[sport]?.lastFetchedAt ?? null)
-      .filter((timestamp): timestamp is number => timestamp != null);
-
-    if (timestamps.length === 0) {
-      return null;
-    }
-
-    return Math.max(...timestamps);
-  }, [selectedSports, syncStatusBySport]);
-
-  const lastUpdatedLabel = useMemo(
-    () => formatLastSynced(lastUpdatedAt),
-    [lastUpdatedAt],
-  );
-
-  const compactEvents = useMemo(() => {
-    const events = [
-      ...enabledTeams.flatMap((team) => [
-        ...(teamEventsById[team.teamId]?.next ?? []),
-        ...(teamEventsById[team.teamId]?.last ?? []),
-      ]),
-      ...todayEvents,
-    ];
-    const trackedEvents = events.filter((event) =>
-      enabledTeams.some(
-        (team) =>
-          resolveTrackedTeamSide(event, team.teamId, team.name) !== null,
-      ),
-    );
-    const seen = new Set<string>();
-    return trackedEvents.filter((event) => {
-      if (seen.has(event.eventId)) return false;
-      seen.add(event.eventId);
-      return true;
-    });
-  }, [enabledTeams, todayEvents, teamEventsById]);
-
-  const localToday = getLocalDateKey(new Date());
-  const eligibleTodayEvents = getEligibleTodayGames(compactEvents, localToday);
   const liveTodayCount = eligibleTodayEvents.filter(
     (event) =>
       getGamePhase(event) === "live" || getGamePhase(event) === "scheduled",
@@ -374,24 +120,6 @@ function SportsWidget(): React.ReactElement {
     eventCount: eligibleTodayEvents.length,
     contentWidth,
   });
-  const mediumItemCount = getMediumItemCount({
-    viewMode: config.viewMode,
-    todayEventCount: todayEvents.length,
-    fallbackEventCount: fallbackEvents.length,
-    teamCount: enabledTeams.length,
-  });
-  const mediumHasMore =
-    size === "medium" && config.viewMode !== "today" && mediumItemCount > 1;
-  const mediumTeamPanel =
-    size === "medium" &&
-    config.viewMode !== "today" &&
-    config.viewMode !== "all_games";
-  const mediumDisclosureLabel =
-    config.viewMode === "all_games" ? "View all games" : "View all teams";
-
-  useEffect(() => {
-    setMediumContentExpanded(false);
-  }, [config.viewMode]);
 
   useEffect(() => {
     if (
@@ -406,29 +134,6 @@ function SportsWidget(): React.ReactElement {
     );
     setSelectedGameId(nextGame?.eventId ?? null);
   }, [eligibleTodayEvents, selectedGameId]);
-
-  const refreshNow = async (): Promise<void> => {
-    setRefreshing(true);
-    try {
-      const results = (await Promise.all(
-        selectedSports.map((sport) =>
-          window.api.invoke(IPC.SPORTS_REFRESH, { sport }),
-        ),
-      )) as IpcMutationResult[];
-      const failed = results.find((result) => !result.ok);
-      if (failed) {
-        toast.error(failed.error ?? "Failed to refresh Sports data.");
-        return;
-      }
-      toast.success("Sports data refresh complete.");
-    } catch (err) {
-      toast.error(
-        err instanceof Error ? err.message : "Failed to refresh Sports data.",
-      );
-    } finally {
-      setRefreshing(false);
-    }
-  };
 
   function handleOpenEdit(): void {
     const currentHeight =
@@ -550,6 +255,29 @@ function SportsWidget(): React.ReactElement {
             : { overflow: "hidden" }
         }
       >
+        {refreshError && (
+          <div
+            className="mb-2 flex shrink-0 items-center justify-between gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs"
+            role="alert"
+          >
+            <span className="flex min-w-0 items-center gap-2 text-destructive">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span className="truncate">
+                Sports data update failed: {refreshError}
+              </span>
+            </span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 shrink-0 px-2"
+              onClick={() => void refreshNow()}
+              disabled={refreshing}
+            >
+              Retry
+            </Button>
+          </div>
+        )}
         {isEditing ? (
           <div className="sports-card-edit">
             <div className="sports-card-edit__preview">
@@ -650,111 +378,22 @@ function SportsWidget(): React.ReactElement {
             fillAvailable
           />
         ) : size === "medium" ? (
-          <div
-            data-sports-layout="medium"
-            className="grid min-h-0 flex-1 grid-cols-[minmax(0,3fr)_minmax(0,2fr)] grid-rows-[minmax(0,1fr)] gap-2"
-          >
-            <div className="min-h-0 min-w-0">
-              <MediumLiveGameView
-                events={eligibleTodayEvents}
-                teams={enabledTeams}
-                teamEventsById={teamEventsById}
-                selectedGameId={selectedGameId}
-                onSelectGame={setSelectedGameId}
-                dense
-              />
-            </div>
-            <div
-              className={
-                mediumTeamPanel
-                  ? "flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border"
-                  : "flex min-h-0 flex-1 flex-col"
-              }
-            >
-              <div
-                data-sports-content-viewport="medium"
-                className={
-                  mediumTeamPanel && !mediumContentExpanded
-                    ? "flex min-h-0 flex-1 flex-col overflow-hidden"
-                    : mediumContentExpanded
-                      ? "min-h-0 flex-1 overflow-y-auto"
-                      : "shrink-0 overflow-hidden"
-                }
-              >
-                {config.viewMode === "all_games" ? (
-                  <AllGamesView
-                    events={
-                      mediumContentExpanded
-                        ? todayEvents
-                        : todayEvents.slice(0, 1)
-                    }
-                    leaguesById={leaguesById}
-                    showTime={config.showTime}
-                    showVenue={config.showVenue}
-                    showLiveStartTime={config.showLiveStartTime}
-                    fallbackEvents={
-                      mediumContentExpanded
-                        ? fallbackEvents
-                        : fallbackEvents.slice(0, 1)
-                    }
-                    fallbackEventLimit={
-                      mediumContentExpanded ? Number.POSITIVE_INFINITY : 1
-                    }
-                    showSportLabels={showSportLabels}
-                  />
-                ) : (
-                  <MyTeamsView
-                    teams={getMediumTeamItems(
-                      enabledTeams,
-                      config.viewMode,
-                      mediumContentExpanded,
-                    )}
-                    teamEventsById={teamEventsById}
-                    leaguesById={leaguesById}
-                    showVenue={config.showVenue}
-                    showTime={config.showTime}
-                    showLiveStartTime={config.showLiveStartTime}
-                    viewMode={config.viewMode}
-                    showSportLabels={showSportLabels}
-                    showTeamCarousel={shouldShowMediumTeamCarousel(
-                      config.viewMode,
-                      sportsPolicy.showTeamCarousel,
-                    )}
-                    hideTodayGameCards
-                    fillAvailable={
-                      !mediumContentExpanded && config.viewMode !== "today"
-                    }
-                  />
-                )}
-              </div>
-              {mediumHasMore && (
-                <div
-                  className={
-                    mediumTeamPanel
-                      ? "shrink-0 border-t bg-muted/10"
-                      : "mt-auto shrink-0 pt-2"
-                  }
-                >
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className={
-                      mediumTeamPanel
-                        ? "h-8 w-full rounded-none border-0 bg-transparent text-xs shadow-none hover:bg-muted/40"
-                        : "w-full text-xs"
-                    }
-                    aria-expanded={mediumContentExpanded}
-                    onClick={() =>
-                      setMediumContentExpanded((expanded) => !expanded)
-                    }
-                  >
-                    {mediumContentExpanded ? "Show less" : mediumDisclosureLabel}
-                  </Button>
-                </div>
-              )}
-            </div>
-          </div>
+          <SportsMediumLayout
+            viewMode={config.viewMode}
+            todayEvents={todayEvents}
+            fallbackEvents={fallbackEvents}
+            eligibleTodayEvents={eligibleTodayEvents}
+            teams={enabledTeams}
+            teamEventsById={teamEventsById}
+            leaguesById={leaguesById}
+            showTime={config.showTime}
+            showVenue={config.showVenue}
+            showLiveStartTime={config.showLiveStartTime}
+            showSportLabels={showSportLabels}
+            showTeamCarousel={sportsPolicy.showTeamCarousel}
+            selectedGameId={selectedGameId}
+            onSelectGame={setSelectedGameId}
+          />
         ) : size === "large" ? (
           <div
             data-sports-layout="large"

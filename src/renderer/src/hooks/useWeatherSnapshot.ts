@@ -1,35 +1,62 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { IPC, type WeatherSnapshot } from "../../../shared/ipc-types";
 
 export function useWeatherSnapshot(locationId: string | null): {
   snapshot: WeatherSnapshot | null;
   loading: boolean;
+  refreshing: boolean;
+  error: string | null;
   refetch: () => void;
 } {
-  const [snapshot, setSnapshot] = useState<WeatherSnapshot | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<{
+    locationId: string;
+    snapshot: WeatherSnapshot | null;
+  } | null>(null);
+  const [fetching, setFetching] = useState(false);
+  const [errorState, setErrorState] = useState<{
+    locationId: string;
+    message: string;
+  } | null>(null);
+  const requestId = useRef(0);
+  const hasSnapshot = locationId != null && result?.locationId === locationId;
+  const snapshot = hasSnapshot ? result.snapshot : null;
+  const error = errorState?.locationId === locationId ? errorState.message : null;
+  const loading = locationId != null && !hasSnapshot && !error;
+  const refreshing = locationId != null && hasSnapshot && fetching;
 
   const refetch = useCallback(() => {
+    const id = ++requestId.current;
     if (!locationId) {
-      setSnapshot(null);
-      setLoading(false);
+      setFetching(false);
+      setErrorState(null);
       return;
     }
 
-    setLoading(true);
+    setFetching(true);
+    setErrorState(null);
     window.api
       .invoke(IPC.WEATHER_GET_SNAPSHOT, locationId)
       .then((data) => {
-        setSnapshot((data as WeatherSnapshot | null) ?? null);
+        if (id === requestId.current) {
+          setResult({
+            locationId,
+            snapshot: (data as WeatherSnapshot | null) ?? null,
+          });
+        }
       })
       .catch((err) => {
-        toast.error(
-          err instanceof Error ? err.message : "Failed to load weather data.",
-        );
+        if (id === requestId.current) {
+          const message =
+            err instanceof Error
+              ? err.message
+              : "Failed to load weather data.";
+          setErrorState({ locationId, message });
+          toast.error(message);
+        }
       })
       .finally(() => {
-        setLoading(false);
+        if (id === requestId.current) setFetching(false);
       });
   }, [locationId]);
 
@@ -56,5 +83,5 @@ export function useWeatherSnapshot(locationId: string | null): {
     });
   }, [locationId, refetch]);
 
-  return { snapshot, loading, refetch };
+  return { snapshot, loading, refreshing, error, refetch };
 }

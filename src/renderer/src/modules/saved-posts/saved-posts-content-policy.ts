@@ -15,28 +15,26 @@ interface SavedPostsContentPolicyOptions {
   size: WidgetSize;
   configuredMaxPosts: number;
   fetchedPostCount: number;
-  totalPostCount: number;
   expanded: boolean;
 }
 
-export const SAVED_POSTS_SIZE_LIMITS: Record<WidgetSize, number> = {
+export const SAVED_POSTS_SIZE_LIMITS: Partial<Record<WidgetSize, number>> = {
   small: 3,
   medium: 8,
-  large: 6,
 };
 
 export function getSavedPostsContentPolicy({
   size,
   configuredMaxPosts,
   fetchedPostCount,
-  totalPostCount,
   expanded,
 }: SavedPostsContentPolicyOptions): SavedPostsContentPolicy {
-  void configuredMaxPosts;
-  void fetchedPostCount;
-  void totalPostCount;
-  const visiblePostLimit = SAVED_POSTS_SIZE_LIMITS[size];
-  const disclosureRequired = false;
+  const visiblePostLimit =
+    size === "large"
+      ? configuredMaxPosts
+      : (SAVED_POSTS_SIZE_LIMITS[size] ?? configuredMaxPosts);
+  const disclosureRequired =
+    size !== "large" && fetchedPostCount > visiblePostLimit;
 
   return {
     visiblePostLimit,

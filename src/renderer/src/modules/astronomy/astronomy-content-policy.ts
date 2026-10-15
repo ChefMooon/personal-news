@@ -17,7 +17,6 @@ export interface AstronomyContentPolicyInput {
   savedViewMode: AstronomyViewMode;
   availableWidth: number | null;
   snapshot: AstronomySnapshot | null;
-  disclosed: boolean;
 }
 
 export interface AstronomyContentPolicy {
@@ -83,7 +82,7 @@ export function getAstronomyContentPolicy(
       detailsAvailable,
       isCapped: true,
       stacked,
-      verticalOverflow: input.disclosed ? "viewport" : "none",
+      verticalOverflow: "none",
       measureRuntimeRows: true,
     };
   }

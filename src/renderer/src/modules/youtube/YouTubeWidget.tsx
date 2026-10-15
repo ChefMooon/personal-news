@@ -79,7 +79,7 @@ function YouTubeWidget(): React.ReactElement {
   const { instanceId, label, size, editMode, onSizeChange } =
     useWidgetInstance();
   const widgetTitle = label ?? "YouTube";
-  const { channels, loading } = useYouTubeChannels();
+  const { channels, loading, refreshing, error, retry } = useYouTubeChannels();
   const { config: viewConfig, setConfig } = useYouTubeViewConfig(instanceId);
   const [isEditing, setIsEditing] = useState(false);
   const contentPolicy = useMemo(
@@ -179,8 +179,36 @@ function YouTubeWidget(): React.ReactElement {
 
   const channelList = (
     <>
+      {!loading && (refreshing || (channels.length > 0 && error)) && (
+        <div
+          className="mb-2 flex items-center gap-2 text-xs"
+          role={error ? "alert" : "status"}
+        >
+          {refreshing ? (
+            <span className="text-muted-foreground">Refreshing channels…</span>
+          ) : (
+            <span className="text-destructive">Could not refresh channels: {error}</span>
+          )}
+          {error && (
+            <button type="button" className="underline" onClick={retry}>
+              Retry
+            </button>
+          )}
+        </div>
+      )}
       {loading ? (
         <p className="text-sm text-muted-foreground">Loading channels...</p>
+      ) : error && channels.length === 0 ? (
+        <div className="space-y-2 text-sm text-destructive" role="alert">
+          <p>Could not load YouTube channels: {error}</p>
+          <button
+            type="button"
+            className="text-xs underline"
+            onClick={retry}
+          >
+            Retry
+          </button>
+        </div>
       ) : displayedChannels.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           {enabledCount === 0
@@ -206,7 +234,12 @@ function YouTubeWidget(): React.ReactElement {
             <button
               type="button"
               className="mt-2 text-xs font-medium text-primary hover:underline"
-              onClick={() => setExpandedChannels((expanded) => !expanded)}
+              onClick={() => {
+                if (expandedChannels && cardContentRef.current) {
+                  cardContentRef.current.scrollTop = 0;
+                }
+                setExpandedChannels((expanded) => !expanded);
+              }}
             >
               {expandedChannels
                 ? "Show fewer channels"

@@ -22,7 +22,6 @@ describe("astronomy content policy", () => {
       savedViewMode: "detailed",
       availableWidth: 300,
       snapshot,
-      disclosed: false,
     });
 
     expect(policy.effectiveViewMode).toBe("summary");
@@ -38,7 +37,6 @@ describe("astronomy content policy", () => {
       savedViewMode: "detailed",
       availableWidth: 440,
       snapshot,
-      disclosed: false,
     });
 
     expect(policy.visibleSections).toEqual([
@@ -56,17 +54,16 @@ describe("astronomy content policy", () => {
     expect(astronomyHasOmittedDetail(policy, snapshot)).toBe(true);
   });
 
-  it("allows Medium disclosure to own the viewport", () => {
+  it("keeps Medium overflow static while preserving runtime row measurement", () => {
     const policy = getAstronomyContentPolicy({
       size: "medium",
       savedViewMode: "summary",
       availableWidth: 700,
       snapshot,
-      disclosed: true,
     });
 
     expect(policy.stacked).toBe(false);
-    expect(policy.verticalOverflow).toBe("viewport");
+    expect(policy.verticalOverflow).toBe("none");
     expect(policy.measureRuntimeRows).toBe(true);
   });
 
@@ -76,7 +73,6 @@ describe("astronomy content policy", () => {
       savedViewMode: "detailed",
       availableWidth: 1000,
       snapshot,
-      disclosed: false,
     });
 
     expect(policy.visibleSections).toEqual([

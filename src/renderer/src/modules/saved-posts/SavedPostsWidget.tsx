@@ -15,19 +15,16 @@ import {
 import { useNtfyStaleness } from "../../hooks/useNtfyStaleness";
 import { useWidgetInstance } from "../../contexts/WidgetInstanceContext";
 import { SavedPostsSettingsPanel } from "./SavedPostsSettingsPanel";
-import { SavedPostItemActions } from "./SavedPostItemActions";
+import { SavedPostsList } from "./SavedPostsList";
 import {
   Card,
   CardHeader,
   CardTitle,
   CardContent,
 } from "../../components/ui/card";
-import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import {
   Bookmark,
-  ArrowUp,
-  Clock,
   Settings2,
   RotateCcw,
   RefreshCcw,
@@ -44,7 +41,6 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "../../components/ui/alert-dialog";
-import { formatRelativeTime } from "../../lib/time";
 import { toRedditPostUrl } from "../../lib/utils";
 import { registerRendererModule } from "../registry";
 import {
@@ -56,166 +52,7 @@ import {
 import { NtfyOnboardingWizard } from "./NtfyOnboardingWizard";
 import { AddSavedPostModal } from "./AddSavedPostModal";
 import { WidgetSizeControl } from "../../components/WidgetSizeControl";
-import {
-  getSavedPostsContentPolicy,
-  SAVED_POSTS_SIZE_LIMITS,
-} from "./saved-posts-content-policy";
-
-const SOURCE_LABELS: Record<LinkSource, string> = {
-  reddit: "Reddit",
-  x: "X",
-  bsky: "Bluesky",
-  generic: "Link",
-};
-
-function formatAuthor(post: SavedPost): string | null {
-  if (!post.author) return null;
-  if (post.source === "reddit") return `u/${post.author}`;
-  if (post.source === "x") return `@${post.author}`;
-  return post.author;
-}
-
-function PostCard({
-  post,
-  allTags,
-  config,
-  onOpen,
-  onPeek,
-  onToggleViewed,
-  onAfterMutation,
-}: {
-  post: SavedPost;
-  allTags: string[];
-  config: {
-    showMetadata: boolean;
-    showSourceBadge: boolean;
-    showUrl: boolean;
-    showBodyPreview: boolean;
-    cardDensity: "compact" | "detailed";
-    size: "small" | "medium" | "large";
-  };
-  onOpen: (post: SavedPost) => void;
-  onPeek: (post: SavedPost) => void;
-  onToggleViewed: (post: SavedPost, viewed: boolean) => void;
-  onAfterMutation: () => Promise<void> | void;
-}): React.ReactElement {
-  const author = formatAuthor(post);
-  const isViewed = post.viewed_at !== null;
-  const isSmall = config.size === "small";
-  return (
-    <SavedPostItemActions
-      post={post}
-      allTags={allTags}
-      onOpenPost={onOpen}
-      onPeekPost={onPeek}
-      onSetViewed={onToggleViewed}
-      onAfterMutation={onAfterMutation}
-    >
-      {({ onContextMenu, trigger, peekButton, viewedToggle }) => (
-        <div
-          className={
-            config.cardDensity === "compact"
-              ? "flex h-full items-start gap-2 py-1 px-2 rounded bg-muted/30 w-full hover:bg-muted/50 transition-colors"
-              : "flex h-full items-start gap-2 py-3 px-2 rounded bg-muted/30 w-full hover:bg-muted/50 transition-colors"
-          }
-          onContextMenu={onContextMenu}
-        >
-          <button
-            type="button"
-            onClick={() => onOpen(post)}
-            className="min-w-0 flex-1 text-left hover:opacity-80 transition-opacity"
-          >
-            <div
-              className={
-                isSmall
-                  ? "flex min-w-0 items-center gap-1.5"
-                  : "flex items-center gap-1.5 flex-wrap"
-              }
-            >
-              {config.showSourceBadge && (
-                <Badge variant="outline" className="text-xs shrink-0">
-                  {SOURCE_LABELS[post.source]}
-                </Badge>
-              )}
-              {post.source === "reddit" &&
-                post.subreddit &&
-                config.showMetadata && (
-                  <Badge variant="secondary" className="text-xs shrink-0">
-                    r/{post.subreddit}
-                  </Badge>
-                )}
-              {author && config.showMetadata && (
-                <span className="text-xs text-muted-foreground">{author}</span>
-              )}
-              {isSmall && (
-                <span
-                  className={`min-w-0 flex-1 truncate text-sm font-medium ${isViewed ? "text-foreground/70" : ""}`}
-                >
-                  {post.title}
-                </span>
-              )}
-            </div>
-            {!isSmall && (
-              <div
-                className={
-                  config.cardDensity === "compact"
-                    ? `text-sm font-medium line-clamp-2 flex-1 ${isViewed ? "text-foreground/70" : ""}`
-                    : `text-sm font-medium ${isViewed ? "text-foreground/70" : ""}`
-                }
-              >
-                {post.title}
-              </div>
-            )}
-            {isSmall ? (
-              <p
-                aria-hidden={!post.note}
-                className="mt-0.5 min-h-4 text-xs leading-4 text-muted-foreground italic line-clamp-1"
-              >
-                {post.note ?? ""}
-              </p>
-            ) : (
-              post.note && (
-                <p className="mt-1 text-xs text-muted-foreground italic line-clamp-2">
-                  {post.note}
-                </p>
-              )
-            )}
-            {config.showUrl && (
-              <p className="text-xs text-muted-foreground truncate max-w-full">
-                {post.url}
-              </p>
-            )}
-            {config.showBodyPreview && post.body && (
-              <p className="text-xs text-muted-foreground line-clamp-2">
-                {post.body}
-              </p>
-            )}
-            <div className="flex items-center gap-2 text-xs">
-              {post.score !== null && config.showMetadata && (
-                <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-muted/60 text-foreground/80 whitespace-nowrap">
-                  <ArrowUp className="h-3 w-3" />
-                  <span>{post.score.toLocaleString()}</span>
-                </div>
-              )}
-              <div
-                className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-muted/60 text-foreground/80 whitespace-nowrap"
-                title={new Date(post.saved_at * 1000).toLocaleString()}
-              >
-                <Clock className="h-3 w-3" />
-                <span>{formatRelativeTime(post.saved_at)}</span>
-              </div>
-            </div>
-          </button>
-          <div className="mt-0.5 flex items-center gap-1 shrink-0">
-            {viewedToggle}
-            {peekButton}
-            {trigger}
-          </div>
-        </div>
-      )}
-    </SavedPostItemActions>
-  );
-}
+import { getSavedPostsContentPolicy } from "./saved-posts-content-policy";
 
 function SavedPostsWidget(): React.ReactElement {
   const instance = useWidgetInstance();
@@ -226,6 +63,7 @@ function SavedPostsWidget(): React.ReactElement {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
   const [snapshotConfig, setSnapshotConfig] =
     useState<SavedPostsViewConfig | null>(null);
   const [editContentHeight, setEditContentHeight] = useState<number | null>(
@@ -245,8 +83,8 @@ function SavedPostsWidget(): React.ReactElement {
   }, [instance.size, isEditing]);
 
   // Fetch posts with the widget's configured filters
-  const { posts, total, loading, error, refetch } = useSavedPosts({
-    limit: Math.max(config.max_posts, SAVED_POSTS_SIZE_LIMITS[instance.size]),
+  const { posts, loading, error, refetch } = useSavedPosts({
+    limit: config.max_posts,
     offset: 0,
     subreddit_filter: config.subreddit_filter,
     tag_filter: config.tag_filter,
@@ -473,8 +311,7 @@ function SavedPostsWidget(): React.ReactElement {
     size: instance.size,
     configuredMaxPosts: config.max_posts,
     fetchedPostCount: posts.length,
-    totalPostCount: total,
-    expanded: false,
+    expanded: isExpanded,
   });
 
   const effectiveCardConfig = {
@@ -483,76 +320,28 @@ function SavedPostsWidget(): React.ReactElement {
     showBodyPreview: config.showBodyPreview && contentPolicy.showBodyPreview,
     cardDensity: contentPolicy.effectiveCardDensity,
   };
-
-  const renderPostList = (postsToRender: SavedPost[]): React.ReactElement =>
-    (() => {
-      return (
-        <div
-          className={
-            contentPolicy.columnCount === 2
-              ? "grid h-full min-h-0 grid-cols-2 auto-rows-fr gap-x-4 gap-y-3"
-              : instance.size === "small"
-                ? "grid h-full min-h-0 grid-cols-1 auto-rows-fr gap-y-1"
-                : config.cardDensity === "compact"
-                  ? "space-y-1"
-                  : "grid h-full min-h-0 grid-cols-1 auto-rows-fr gap-y-3"
-          }
-        >
-          {postsToRender.map((post) => (
-            <PostCard
-              key={post.post_id}
-              post={post}
-              allTags={allTags}
-              config={effectiveCardConfig}
-              onOpen={handleOpenExternal}
-              onPeek={handlePeekExternal}
-              onToggleViewed={handleToggleViewed}
-              onAfterMutation={handleAfterMutation}
-            />
-          ))}
-        </div>
-      );
-    })();
-
-  const renderPreviewContent = (): React.ReactNode => {
-    if (loading && posts.length === 0) {
-      return <p className="text-sm text-muted-foreground">Loading...</p>;
-    }
-
-    if (error && posts.length === 0) {
-      return <p className="text-sm text-destructive">{error}</p>;
-    }
-
-    if (posts.length === 0) {
-      return (
-        <p className="text-sm text-muted-foreground">No saved posts yet.</p>
-      );
-    }
-
-    const visiblePosts = posts.slice(0, contentPolicy.visiblePostLimit);
-
-    if (groupedPosts) {
-      const visiblePostIds = new Set(visiblePosts.map((post) => post.post_id));
-      return (
-        <div className="space-y-4">
-          {groupedPosts.map(({ source, posts: groupPosts }) => (
-            <div key={source}>
-              {config.showGroupHeaders && (
-                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-                  {SOURCE_LABELS[source]}
-                </h4>
-              )}
-              {renderPostList(
-                groupPosts.filter((post) => visiblePostIds.has(post.post_id)),
-              )}
-            </div>
-          ))}
-        </div>
-      );
-    }
-
-    return renderPostList(visiblePosts);
-  };
+  const postsViewportId = `saved-posts-posts-${instance.instanceId}`;
+  const savedPostsList = (
+    <SavedPostsList
+      posts={posts}
+      loading={loading}
+      error={error}
+      allTags={allTags}
+      cardConfig={effectiveCardConfig}
+      groupedPosts={groupedPosts}
+      showGroupHeaders={config.showGroupHeaders}
+      columnCount={contentPolicy.columnCount}
+      expanded={isExpanded}
+      visiblePostLimit={contentPolicy.visiblePostLimit}
+      disclosureRequired={contentPolicy.disclosureRequired}
+      viewportId={postsViewportId}
+      onToggleExpanded={() => setIsExpanded((expanded) => !expanded)}
+      onOpen={handleOpenExternal}
+      onPeek={handlePeekExternal}
+      onToggleViewed={handleToggleViewed}
+      onAfterMutation={handleAfterMutation}
+    />
+  );
 
   return (
     <Card className="flex min-h-0 flex-col">
@@ -661,7 +450,7 @@ function SavedPostsWidget(): React.ReactElement {
             aria-hidden="true"
             className="absolute left-0 top-0 w-full invisible pointer-events-none"
           >
-            {renderPreviewContent()}
+            {savedPostsList}
           </div>
         )}
         <div
@@ -676,7 +465,7 @@ function SavedPostsWidget(): React.ReactElement {
               isEditing ? "saved-posts-card-edit__preview" : "min-h-0 flex-1"
             }
           >
-            {renderPreviewContent()}
+            {savedPostsList}
           </div>
           {isEditing && (
             <div className="saved-posts-card-edit__panel">

@@ -1,5 +1,4 @@
 import React, { useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
 import { CloudSun, RefreshCcw, RotateCcw, Settings2, X } from "lucide-react";
 import { useWidgetInstance } from "../../contexts/WidgetInstanceContext";
 import { useAstronomyEnabled } from "../../contexts/AstronomyEnabledContext";
@@ -32,10 +31,11 @@ import { WidgetSizeControl } from "../../components/WidgetSizeControl";
 import { WeatherSmall } from "./WeatherSmall";
 import { WeatherMedium } from "./WeatherMedium";
 import { WeatherLarge } from "./WeatherLarge";
+import { WeatherRefreshStatus } from "./WeatherRefreshStatus";
+import { useWeatherRefresh } from "./useWeatherRefresh";
 import { getWeatherContentPolicy } from "./weather-content-policy";
 import { registerRendererModule } from "../registry";
 import type { WeatherViewConfig } from "../../../../shared/ipc-types";
-import { IPC, type IpcMutationResult } from "../../../../shared/ipc-types";
 
 function formatLastSynced(
   timestamp: number | null,
@@ -59,16 +59,24 @@ function WeatherWidget(): React.ReactElement {
   const { locations, search, saveLocation } = useWeatherLocations();
   const { settings } = useWeatherSettings();
   const effectiveLocationId = config.locationId ?? settings.defaultLocationId;
-  const { snapshot, loading } = useWeatherSnapshot(effectiveLocationId);
+  const {
+    refreshing,
+    error: manualRefreshError,
+    refreshNow,
+  } = useWeatherRefresh(effectiveLocationId);
+  const {
+    snapshot,
+    loading,
+    refreshing: snapshotRefreshing,
+    error: snapshotError,
+  } = useWeatherSnapshot(effectiveLocationId);
   const [isEditing, setIsEditing] = useState(false);
   const [snapshotConfig, setSnapshotConfig] =
     useState<WeatherViewConfig | null>(null);
   const [editContentHeight, setEditContentHeight] = useState<number | null>(
     null,
   );
-  const [refreshing, setRefreshing] = useState(false);
   const [contentWidth, setContentWidth] = useState<number | undefined>();
-  const lastManualRefreshAt = useRef<number | null>(null);
   const cardContentRef = useRef<HTMLDivElement | null>(null);
   const previousSizeRef = useRef(size);
   useEffect(() => {
@@ -107,37 +115,6 @@ function WeatherWidget(): React.ReactElement {
   const updateHourlyMetric = (
     hourlyMetric: WeatherViewConfig["hourlyMetric"],
   ): void => setConfig({ ...config, hourlyMetric });
-  const refreshNow = async (): Promise<void> => {
-    const now = Date.now();
-    if (
-      lastManualRefreshAt.current != null &&
-      now - lastManualRefreshAt.current < 60_000
-    ) {
-      toast.warning(
-        `Please wait ${Math.ceil((60_000 - (now - lastManualRefreshAt.current)) / 1000)}s before refreshing again.`,
-      );
-      return;
-    }
-    setRefreshing(true);
-    lastManualRefreshAt.current = now;
-    try {
-      const result = (await window.api.invoke(
-        IPC.WEATHER_REFRESH,
-        effectiveLocationId,
-      )) as IpcMutationResult;
-      if (!result.ok)
-        toast.error(result.error ?? "Failed to refresh weather data.");
-      else toast.success("Weather data refreshed.");
-    } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Failed to refresh weather data.",
-      );
-    } finally {
-      setRefreshing(false);
-    }
-  };
   const handleOpenEdit = (): void => {
     const height = cardContentRef.current?.getBoundingClientRect().height;
     if (height && height > 0) setEditContentHeight(height);
@@ -164,6 +141,9 @@ function WeatherWidget(): React.ReactElement {
         policy,
         onMetricChange: updateHourlyMetric,
       }
+    : null;
+  const currentRefreshError = effectiveLocationId
+    ? manualRefreshError ?? snapshotError
     : null;
   const preview = !effectiveLocationId ? (
     <div className="rounded-md border border-dashed px-4 py-5 text-sm text-muted-foreground">
@@ -206,11 +186,15 @@ function WeatherWidget(): React.ReactElement {
                   type="button"
                   className="rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                   onClick={() => void refreshNow()}
-                  disabled={refreshing}
+                  disabled={refreshing || snapshotRefreshing}
                   aria-label="Refresh weather data"
                 >
                   <RefreshCcw
-                    className={refreshing ? "h-4 w-4 animate-spin" : "h-4 w-4"}
+                    className={
+                      refreshing || snapshotRefreshing
+                        ? "h-4 w-4 animate-spin"
+                        : "h-4 w-4"
+                    }
                   />
                 </button>
               </>
@@ -282,6 +266,12 @@ function WeatherWidget(): React.ReactElement {
             : undefined
         }
       >
+        <WeatherRefreshStatus
+          refreshing={snapshotRefreshing || refreshing}
+          error={currentRefreshError}
+          hasSnapshot={Boolean(snapshot)}
+          onRetry={refreshNow}
+        />
         <div className={isEditing ? "weather-card-edit" : "h-full min-h-0"}>
           <div
             data-weather-vertical-viewport={!isEditing ? "" : undefined}

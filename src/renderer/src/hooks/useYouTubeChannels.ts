@@ -1,30 +1,49 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
 import type { YtChannel } from "../../../shared/ipc-types";
 
 export function useYouTubeChannels(): {
   channels: YtChannel[];
   loading: boolean;
+  refreshing: boolean;
+  error: string | null;
+  retry: () => void;
 } {
   const [channels, setChannels] = useState<YtChannel[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const requestId = useRef(0);
+  const hasLoaded = useRef(false);
 
   const fetch = useCallback(() => {
-    setLoading(true);
+    const id = ++requestId.current;
+    setError(null);
+    if (!hasLoaded.current) setLoading(true);
+    else setRefreshing(true);
     window.api
       .invoke("youtube:getChannels")
       .then((data) => {
-        setChannels(data as YtChannel[]);
+        if (id === requestId.current) {
+          setChannels(data as YtChannel[]);
+          hasLoaded.current = true;
+        }
       })
       .catch((err) => {
-        toast.error(
-          err instanceof Error
-            ? err.message
-            : "Failed to load YouTube channels.",
-        );
+        if (id === requestId.current) {
+          const message =
+            err instanceof Error
+              ? err.message
+              : "Failed to load YouTube channels.";
+          setError(message);
+          toast.error(message);
+        }
       })
       .finally(() => {
-        setLoading(false);
+        if (id === requestId.current) {
+          setLoading(false);
+          setRefreshing(false);
+        }
       });
   }, []);
 
@@ -39,5 +58,5 @@ export function useYouTubeChannels(): {
     return window.api.on("youtube:updated", handler);
   }, [fetch]);
 
-  return { channels, loading };
+  return { channels, loading, refreshing, error, retry: fetch };
 }

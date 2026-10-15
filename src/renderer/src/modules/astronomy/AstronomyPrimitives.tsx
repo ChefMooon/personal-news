@@ -34,13 +34,20 @@ import {
 
 export type AstronomyTimeFormat = WeatherSettings["timeFormat"];
 
+export interface AstronomyPresetProps {
+  astronomy: AstronomySnapshot | null;
+  timezone: string | null;
+  timeFormat: AstronomyTimeFormat;
+  nowSeconds: number;
+}
+
 export function astronomyGroupData<T>(
   group: { status: string; data: T | null } | undefined,
 ): T | null {
   return group?.status === "unavailable" ? null : (group?.data ?? null);
 }
 
-function timeValue(
+export function formatAstronomyTime(
   time: number | null | undefined,
   timezone: string | null,
   format: AstronomyTimeFormat,
@@ -50,7 +57,7 @@ function timeValue(
     : "Unavailable";
 }
 
-function dateValue(
+export function formatAstronomyDateTime(
   time: number | null | undefined,
   timezone: string | null,
   format: AstronomyTimeFormat,
@@ -58,34 +65,6 @@ function dateValue(
   return timezone && time != null
     ? (formatNextPhaseDateTime(time, timezone, format) ?? "Unavailable")
     : "Unavailable";
-}
-
-function SmallHorizonRow({
-  label,
-  time,
-  body,
-  direction,
-  timezone,
-  timeFormat,
-}: {
-  label: string;
-  time: number | null | undefined;
-  body: "sun" | "moon";
-  direction: "rise" | "set";
-  timezone: string | null;
-  timeFormat: AstronomyTimeFormat;
-}): React.ReactElement {
-  return (
-    <div className="flex items-center justify-between gap-3">
-      <span className="flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
-        <HorizonEventIcon body={body} direction={direction} />
-        <span>{label}</span>
-      </span>
-      <span className="shrink-0 text-xs font-semibold tabular-nums">
-        {timeValue(time, timezone, timeFormat)}
-      </span>
-    </div>
-  );
 }
 
 export function AstronomySummaryPrimitives({
@@ -137,7 +116,11 @@ export function AstronomySummaryPrimitives({
           <p className="truncate text-[11px] text-muted-foreground">
             Next:{" "}
             {next
-              ? `${next.label} ${timeValue(next.time, timezone, timeFormat)}`
+              ? `${next.label} ${formatAstronomyTime(
+                  next.time,
+                  timezone,
+                  timeFormat,
+                )}`
               : "Unavailable"}
           </p>
         )}
@@ -183,7 +166,7 @@ export function AstronomySummaryPrimitives({
           </p>
           <p className="text-[11px] text-muted-foreground">
             {milestone
-              ? dateValue(milestone.time, timezone, timeFormat)
+              ? formatAstronomyDateTime(milestone.time, timezone, timeFormat)
               : "Next phase unavailable"}
           </p>
         </div>
@@ -191,7 +174,7 @@ export function AstronomySummaryPrimitives({
       {!compact && events.length > 0 && (
         <div className="min-w-0 sm:col-span-3">
           <h3 className="mb-1.5 text-xs font-semibold">Upcoming events</h3>
-          <EventList
+          <AstronomyEventList
             events={events}
             timezone={timezone}
             timeFormat={timeFormat}
@@ -202,7 +185,7 @@ export function AstronomySummaryPrimitives({
   );
 }
 
-function EventList({
+export function AstronomyEventList({
   events,
   timezone,
   timeFormat,
@@ -231,7 +214,7 @@ function EventList({
             </Badge>
           </span>
           <span className="shrink-0 text-[11px] text-muted-foreground">
-            {dateValue(event.time, timezone, timeFormat)}
+            {formatAstronomyDateTime(event.time, timezone, timeFormat)}
           </span>
         </li>
       ))}
@@ -304,7 +287,7 @@ export function AstronomyDetailedPrimitives({
           Milestones and events
         </h3>
         {events.length ? (
-          <EventList
+          <AstronomyEventList
             events={events}
             timezone={timezone}
             timeFormat={timeFormat}
@@ -511,10 +494,10 @@ function PlanetGrid({
             Mag {formatMagnitudeValue(entry?.magnitude) ?? "Unavailable"}
           </p>
           <p className="text-[11px] text-muted-foreground">
-            Rise {timeValue(entry?.riseTime, timezone, timeFormat)}
+            Rise {formatAstronomyTime(entry?.riseTime, timezone, timeFormat)}
           </p>
           <p className="text-[11px] text-muted-foreground">
-            Set {timeValue(entry?.setTime, timezone, timeFormat)}
+            Set {formatAstronomyTime(entry?.setTime, timezone, timeFormat)}
           </p>
         </div>
       ))}
@@ -560,7 +543,7 @@ export function Timetable({
                 </span>
               </td>
               <td className={cn("px-2", compact ? "py-1" : "py-1.5")}>
-                {timeValue(time, timezone, timeFormat)}
+                {formatAstronomyTime(time, timezone, timeFormat)}
               </td>
               <td
                 className={cn(
@@ -582,195 +565,4 @@ export function Timetable({
       </table>
     </div>
   );
-}
-
-export function AstronomySmall({
-  astronomy,
-  timezone,
-  timeFormat,
-}: AstronomyProps): React.ReactElement {
-  const horizon = astronomyGroupData(astronomy?.groups.horizon);
-  const moon = astronomyGroupData(astronomy?.groups.moon);
-  const milestone = nextPrimaryPhaseMilestone(astronomy);
-
-  return (
-    <div className="grid min-w-0 gap-x-4 gap-y-3 min-[360px]:grid-cols-2">
-      <div className="col-span-full flex items-center justify-between gap-2">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-          Astronomy
-        </span>
-        <Badge variant="secondary" className="max-w-[65%]">
-          <span className="truncate">
-            {horizon ? solarStateLabel(horizon.solarState) : "Unavailable"}
-          </span>
-        </Badge>
-      </div>
-
-      <section className="min-w-0 space-y-1.5">
-        <h3 className="flex h-10 items-center gap-2 text-xs font-semibold">
-          <SunGlyph />
-          Sun
-        </h3>
-        <SmallHorizonRow
-          label="Sunrise"
-          time={horizon?.sun.riseTime}
-          body="sun"
-          direction="rise"
-          timezone={timezone}
-          timeFormat={timeFormat}
-        />
-        <SmallHorizonRow
-          label="Sunset"
-          time={horizon?.sun.setTime}
-          body="sun"
-          direction="set"
-          timezone={timezone}
-          timeFormat={timeFormat}
-        />
-      </section>
-
-      <div className="min-w-0 space-y-3">
-        <section className="min-w-0 space-y-1.5">
-          <div className="flex h-10 min-w-0 items-center gap-3">
-            <MoonPhaseGlyph
-              phaseAngle={moon?.phaseAngle ?? null}
-              illuminationPercent={moon?.illuminationPercent}
-              label={
-                moon
-                  ? `${moonPhaseDisplayName(moon.phaseName)}, ${Math.round(moon.illuminationPercent)}% illuminated`
-                  : "Moon phase unavailable"
-              }
-              size={36}
-            />
-            <div className="min-w-0">
-              <h3 className="text-xs font-semibold">Moon</h3>
-              <p className="truncate text-[11px] text-muted-foreground">
-                {moon
-                  ? `${Math.round(moon.illuminationPercent)}% illuminated`
-                  : "Moon data unavailable"}
-              </p>
-            </div>
-          </div>
-          <SmallHorizonRow
-            label="Moonrise"
-            time={horizon?.moon.riseTime}
-            body="moon"
-            direction="rise"
-            timezone={timezone}
-            timeFormat={timeFormat}
-          />
-          <SmallHorizonRow
-            label="Moonset"
-            time={horizon?.moon.setTime}
-            body="moon"
-            direction="set"
-            timezone={timezone}
-            timeFormat={timeFormat}
-          />
-        </section>
-
-        <section className="min-w-0 space-y-1">
-          <h3 className="text-xs font-semibold">Next phase</h3>
-          <p className="truncate text-xs font-medium">
-            {milestone?.name
-              ? moonPhaseDisplayName(milestone.name)
-              : "Unavailable"}
-          </p>
-          <p className="text-[11px] text-muted-foreground">
-            {milestone
-              ? dateValue(milestone.time, timezone, timeFormat)
-              : "Next phase unavailable"}
-          </p>
-        </section>
-      </div>
-    </div>
-  );
-}
-export function AstronomyMedium({
-  astronomy,
-  timezone,
-  timeFormat,
-  nowSeconds,
-  eventLimit = 5,
-}: AstronomyProps & { eventLimit?: number }): React.ReactElement {
-  const horizon = astronomyGroupData(astronomy?.groups.horizon);
-  const events = upcomingGlobalEvents(
-    astronomyGroupData(astronomy?.groups.events),
-    nowSeconds,
-  ).slice(0, eventLimit);
-
-  return (
-    <div className="min-w-0 space-y-3">
-      <AstronomySummaryPrimitives
-        astronomy={astronomy}
-        timezone={timezone}
-        timeFormat={timeFormat}
-        nowSeconds={nowSeconds}
-        eventLimit={0}
-        showSunAltitude={false}
-        showNextRiseSet={false}
-      />
-      <div className="grid min-w-0 gap-3 min-[560px]:grid-cols-2">
-        <AstronomySkyArc horizon={horizon} compact />
-        <section className="flex h-full min-w-0 w-full flex-col">
-          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Daily timetable
-          </h3>
-          <div className="flex min-h-0 flex-1">
-            <Timetable
-              horizon={horizon}
-              timezone={timezone}
-              timeFormat={timeFormat}
-              compact
-            />
-          </div>
-        </section>
-      </div>
-      <section className="min-w-0">
-        <h3 className="mb-1.5 text-xs font-semibold">Upcoming events</h3>
-        {events.length > 0 ? (
-          <EventList
-            events={events}
-            timezone={timezone}
-            timeFormat={timeFormat}
-          />
-        ) : (
-          <p className="text-[11px] text-muted-foreground">
-            No upcoming global events listed.
-          </p>
-        )}
-      </section>
-    </div>
-  );
-}
-export function AstronomyLarge({
-  astronomy,
-  timezone,
-  timeFormat,
-  nowSeconds,
-  detailed,
-}: AstronomyProps & { detailed: boolean }): React.ReactElement {
-  return detailed ? (
-    <AstronomyDetailedPrimitives
-      astronomy={astronomy}
-      timezone={timezone}
-      timeFormat={timeFormat}
-      nowSeconds={nowSeconds}
-    />
-  ) : (
-    <AstronomySummaryPrimitives
-      astronomy={astronomy}
-      timezone={timezone}
-      timeFormat={timeFormat}
-      nowSeconds={nowSeconds}
-      eventLimit={5}
-    />
-  );
-}
-
-interface AstronomyProps {
-  astronomy: AstronomySnapshot | null;
-  timezone: string | null;
-  timeFormat: AstronomyTimeFormat;
-  nowSeconds: number;
 }

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useRedditDigest } from "../../hooks/useRedditDigest";
 import {
@@ -11,6 +11,7 @@ import { RedditDigestSettingsPanel } from "./RedditDigestSettingsPanel";
 import { WidgetSizeControl } from "../../components/WidgetSizeControl";
 import { ScrollArea } from "../../components/ui/scroll-area";
 import { SubredditColumn } from "./SubredditColumn";
+import { useRedditDigestViewModel } from "./useRedditDigestViewModel";
 import { getRedditDigestContentPolicy } from "./reddit-content-policy";
 import {
   Card,
@@ -36,13 +37,18 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "../../components/ui/alert-dialog";
-import { RefreshCcw, RotateCcw, Settings2, X } from "lucide-react";
+import {
+  AlertCircle,
+  ChevronLeft,
+  ChevronRight,
+  RefreshCcw,
+  RotateCcw,
+  Settings2,
+  X,
+} from "lucide-react";
 import { formatRelativeTime } from "../../lib/time";
 import { registerRendererModule } from "../registry";
-import type {
-  DigestPost,
-  DigestViewConfig,
-} from "../../../../shared/ipc-types";
+import type { DigestViewConfig } from "../../../../shared/ipc-types";
 
 function RedditDigestWidget(): React.ReactElement {
   const { instanceId, label, size, editMode, onSizeChange } =
@@ -57,6 +63,7 @@ function RedditDigestWidget(): React.ReactElement {
     null,
   );
   const [smallGroupIndex, setSmallGroupIndex] = useState(0);
+  const [columnGroupPage, setColumnGroupPage] = useState(0);
   const [contentWidth, setContentWidth] = useState(0);
   const cardContentRef = useRef<HTMLDivElement | null>(null);
   const previousSizeRef = useRef(size);
@@ -103,115 +110,19 @@ function RedditDigestWidget(): React.ReactElement {
       : config.week_mode === "specific"
         ? selectedSpecificWeek
         : null;
-  const { posts, loading } = useRedditDigest(requestWeek, config.hide_viewed);
-
-  const rangeWeekSet = useMemo(() => {
-    if (config.week_mode !== "range") {
-      return null;
-    }
-    return new Set(
-      weeks
-        .slice(0, config.week_range_count)
-        .map((week) => week.week_start_date),
-    );
-  }, [config.week_mode, config.week_range_count, weeks]);
-
-  const visiblePosts = useMemo(() => {
-    if (config.week_mode !== "range" || !rangeWeekSet) {
-      return posts;
-    }
-    return posts.filter((post) => rangeWeekSet.has(post.week_start_date));
-  }, [config.week_mode, posts, rangeWeekSet]);
-
-  const availableSubreddits = useMemo(
-    () => [...new Set(visiblePosts.map((p) => p.subreddit))].sort(),
-    [visiblePosts],
+  const { posts, loading, refreshing, error, retry } = useRedditDigest(
+    requestWeek,
+    config.hide_viewed,
   );
 
-  const selectedSubreddits = useMemo(
-    () =>
-      config.selected_subreddits.filter((subreddit) =>
-        availableSubreddits.includes(subreddit),
-      ),
-    [availableSubreddits, config.selected_subreddits],
-  );
-
-  const orderedSubreddits = useMemo(() => {
-    const availableMap = new Map(
-      availableSubreddits.map((subreddit) => [subreddit, subreddit]),
-    );
-    const inOrder = config.subreddit_order
-      .map((subreddit) => availableMap.get(subreddit))
-      .filter((subreddit): subreddit is string => subreddit !== undefined);
-    const seen = new Set(inOrder);
-    const rest = availableSubreddits.filter(
-      (subreddit) => !seen.has(subreddit),
-    );
-    const ordered = [...inOrder, ...rest];
-
-    if (config.pinned_subreddits.length === 0) {
-      return ordered;
-    }
-
-    const pinned = new Set(config.pinned_subreddits);
-    const pinnedItems = ordered.filter((subreddit) => pinned.has(subreddit));
-    const unpinnedItems = ordered.filter((subreddit) => !pinned.has(subreddit));
-    return [...pinnedItems, ...unpinnedItems];
-  }, [availableSubreddits, config.pinned_subreddits, config.subreddit_order]);
-
-  const filteredPosts = useMemo(
-    () =>
-      config.subreddit_mode === "selected"
-        ? visiblePosts.filter((post) =>
-            selectedSubreddits.includes(post.subreddit),
-          )
-        : visiblePosts,
-    [config.subreddit_mode, selectedSubreddits, visiblePosts],
-  );
-
-  // Sort posts client-side
-  const sortedPosts = useMemo(() => {
-    return [...filteredPosts].sort((a, b) => {
-      const aVal = a[config.sort_by] ?? 0;
-      const bVal = b[config.sort_by] ?? 0;
-      return config.sort_dir === "desc"
-        ? (bVal as number) - (aVal as number)
-        : (aVal as number) - (bVal as number);
-    });
-  }, [filteredPosts, config.sort_by, config.sort_dir]);
-
-  const groups = useMemo((): Map<string, DigestPost[]> => {
-    const map = new Map<string, DigestPost[]>();
-    if (config.group_by === "subreddit") {
-      for (const post of sortedPosts) {
-        const existing = map.get(post.subreddit) ?? [];
-        existing.push(post);
-        map.set(post.subreddit, existing);
-      }
-    } else {
-      map.set("All", sortedPosts);
-    }
-    return map;
-  }, [sortedPosts, config.group_by]);
-
-  const lastFetched =
-    visiblePosts.length > 0
-      ? Math.max(...visiblePosts.map((p) => p.fetched_at))
-      : null;
-  const groupKeys = useMemo(() => {
-    if (config.group_by !== "subreddit") {
-      return Array.from(groups.keys());
-    }
-
-    const orderedKeys = orderedSubreddits.filter((subreddit) =>
-      groups.has(subreddit),
-    );
-    const orderedKeySet = new Set(orderedKeys);
-    const remainingKeys = Array.from(groups.keys()).filter(
-      (subreddit) => !orderedKeySet.has(subreddit),
-    );
-    return [...orderedKeys, ...remainingKeys];
-  }, [config.group_by, groups, orderedSubreddits]);
+  const {
+    visiblePosts,
+    availableSubreddits,
+    sortedPosts,
+    groups,
+    lastFetched,
+    groupKeys,
+  } = useRedditDigestViewModel({ posts, weeks, config });
   const contentPolicy = getRedditDigestContentPolicy(
     size,
     contentWidth,
@@ -227,13 +138,28 @@ function RedditDigestWidget(): React.ReactElement {
     );
   }, [groupKeys]);
 
+  const columnCount = Math.max(1, contentPolicy.columnCount);
+  const columnPageCount = Math.ceil(groupKeys.length / columnCount);
+  const groupKeySignature = JSON.stringify(groupKeys);
+  useEffect(() => {
+    setColumnGroupPage(0);
+  }, [groupKeySignature]);
+  useEffect(() => {
+    setColumnGroupPage((page) =>
+      columnPageCount === 0 ? 0 : Math.min(page, columnPageCount - 1),
+    );
+  }, [columnPageCount]);
+
   const displayGroupKeys =
     size === "small"
       ? groupKeys.length > 0
         ? [groupKeys[smallGroupIndex]]
         : []
       : contentPolicy.effectiveMode === "columns"
-        ? groupKeys.slice(0, contentPolicy.columnCount)
+        ? groupKeys.slice(
+            columnGroupPage * columnCount,
+            (columnGroupPage + 1) * columnCount,
+          )
         : groupKeys;
   const widgetTitle = label ?? "Reddit Digest";
   const effectiveLoading = loading || weeksLoading;
@@ -300,6 +226,46 @@ function RedditDigestWidget(): React.ReactElement {
     </div>
   ) : null;
 
+  const columnGroupNavigation =
+    contentPolicy.effectiveMode === "columns" && columnPageCount > 1 ? (
+      <div className="mb-2 flex items-center justify-between gap-2 border-b pb-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-7 px-2"
+          aria-label="Previous subreddit groups"
+          disabled={columnGroupPage === 0}
+          onClick={() => setColumnGroupPage((page) => Math.max(0, page - 1))}
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        <span
+          className="text-xs tabular-nums text-muted-foreground"
+          aria-live="polite"
+        >
+          {columnGroupPage * columnCount + 1}–
+          {Math.min((columnGroupPage + 1) * columnCount, groupKeys.length)} of{" "}
+          {groupKeys.length} groups
+        </span>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-7 px-2"
+          aria-label="Next subreddit groups"
+          disabled={columnGroupPage >= columnPageCount - 1}
+          onClick={() =>
+            setColumnGroupPage((page) =>
+              Math.min(columnPageCount - 1, page + 1),
+            )
+          }
+        >
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      </div>
+    ) : null;
+
   const digestContent = effectiveLoading ? (
     <p className="text-sm text-muted-foreground">Loading posts...</p>
   ) : visiblePosts.length === 0 ? (
@@ -311,22 +277,25 @@ function RedditDigestWidget(): React.ReactElement {
       No posts match the current filter.
     </p>
   ) : contentPolicy.effectiveMode === "columns" ? (
-    <div
-      className="grid min-w-0 gap-4"
-      style={{
-        gridTemplateColumns: `repeat(${contentPolicy.columnCount}, minmax(0, 1fr))`,
-      }}
-    >
-      {displayGroupKeys.map((key) => (
-        <SubredditColumn
-          key={key}
-          label={key}
-          posts={groups.get(key) ?? []}
-          maxPosts={contentPolicy.postsPerGroupLimit}
-          showPagination={size === "large"}
-        />
-      ))}
-    </div>
+    <>
+      {columnGroupNavigation}
+      <div
+        className="grid min-w-0 gap-4"
+        style={{
+          gridTemplateColumns: `repeat(${contentPolicy.columnCount}, minmax(0, 1fr))`,
+        }}
+      >
+        {displayGroupKeys.map((key) => (
+          <SubredditColumn
+            key={key}
+            label={key}
+            posts={groups.get(key) ?? []}
+            maxPosts={contentPolicy.postsPerGroupLimit}
+            showPagination={size === "large"}
+          />
+        ))}
+      </div>
+    </>
   ) : size === "small" ? (
     <div className="min-w-0">
       {smallSubredditSelector}
@@ -455,6 +424,31 @@ function RedditDigestWidget(): React.ReactElement {
             : { overflowY: contentPolicy.overflow }),
         }}
       >
+        {error && (
+          <div
+            className="mb-2 flex items-center justify-between gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs"
+            role="alert"
+          >
+            <span className="flex min-w-0 items-center gap-2 text-destructive">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span className="truncate">{error}</span>
+            </span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 shrink-0 px-2"
+              onClick={retry}
+            >
+              Retry
+            </Button>
+          </div>
+        )}
+        {refreshing && !effectiveLoading && (
+          <p className="mb-2 text-xs text-muted-foreground" role="status">
+            Refreshing posts…
+          </p>
+        )}
         <div className={isEditing ? "reddit-digest-card-edit" : undefined}>
           <div
             className={

@@ -96,21 +96,20 @@ unit.
 - [ ] New or updated pure policy behavior has focused coverage following the
   repository's existing test patterns.
 
-## Initial code organization review observations
+## Current code organization observations
 
-These observations are from a static review of the six shipped widgets on
-2026-10-15. They identify review candidates, not required refactors based only
-on file length.
+These observations reflect a follow-up review of the six shipped widgets on
+2026-10-15, after the organization refactors. They identify current review
+candidates, not required refactors based only on file length.
 
 | Module | Current structure | Review direction |
 | ------ | ----------------- | ---------------- |
-| YouTube | The main widget is a focused shell; channel and video pieces are separate. The settings panel is large and owns many related controls. | Keep the existing shared card and channel components. If the settings panel grows further, split by cohesive settings sections rather than by arbitrary line count. |
-| Reddit Digest | The main widget combines policy selection, size/mode rendering, and a Small group selector; post columns are separate. The settings panel is large. | Preserve the content policy and post-column component. Consider extracting the Small group selector or the columns/tabs body only if it gives that behavior a clearer owner. |
-| Saved Posts | The main widget combines settings shell, data state, and list rendering; post actions and the settings panel are already separate. | Fix the content-disclosure policy first. A focused list/state renderer is a candidate if the widget continues to grow; do not create one component per preset without distinct layouts. |
-| Sports | The widget already uses compact, live-game, team, and all-games components, but the main widget and `MyTeamsView` are large. | Keep its meaningful view components. Review `MyTeamsView` and the Medium disclosure block for cohesive extraction rather than splitting every preset mechanically. |
-| Weather | Small, Medium, and Large have real layout components, with shared forecast and summary components. | This is a useful example of size components backed by shared module components and a separate content policy. |
-| Astronomy | The main widget is very large and contains primitives, presentation, settings, and orchestration; the size-named files are re-exports rather than owning the layouts. | Highest-priority organization review: move real presentation and primitive responsibilities into cohesive modules, keeping the widget shell focused. Do not simply move the existing code into thin size wrappers. |
+| YouTube | The widget remains a focused shell with separate channel/video components and an active settings panel. The unused settings dialog has been removed. | Keep the current shell and channel components. The settings panel is large but cohesive; split it only if a settings section gains a clear independent owner. |
+| Reddit Digest | The widget composes its modes and navigation; `useRedditDigestViewModel.ts` owns filtering, ordering, grouping, and related derived data. Policy and post-column presentation are separate. | Keep the view-model, policy, and column boundaries. The settings panel is large but cohesive; reconsider only if its controls develop distinct workflows. |
+| Saved Posts | The widget coordinates data, configuration, grouping, measurement, actions, and settings. `SavedPostCard.tsx` and `SavedPostsList.tsx` own post and list presentation; actions, settings, policy, and shared labels are separate. | Keep grouping and row measurement with the shell while they jointly drive layout. Avoid preset-specific files unless the layouts materially diverge. |
+| Sports | `useSportsWidgetData.ts` owns data loading and derived datasets; `SportsMediumLayout.tsx` owns Medium disclosure; `MyTeamsView.tsx` dispatches to `TeamCards.tsx` and `TodayTeamsView.tsx`. `TeamCards.tsx` now selects today/last/next events and dispatches team rows; `TeamCardViews.tsx` owns summarized, standard, and detailed cards; `TeamBadges.tsx` owns shared team and opponent badges; `team-display-utils.ts` owns date, score, opponent, outcome, streak, metadata, and today-state helpers. | Responsibilities are separated by data selection, visual variants, reusable badges, and display calculations. Keep team event ordering, local-date interpretation, score conventions, phase labels, and fill behavior consistent when these modules change. |
+| Weather | The shell composes real size layouts and shared forecast pieces. Content policy, manual refresh state, and refresh status presentation are separate. | Keep the existing boundaries. Split settings or forecast components only if a distinct responsibility emerges. |
+| Astronomy | The shell coordinates data and settings; the settings panel and Small/Medium/Large layouts have dedicated files. Shared primitives remain available to the Astronomy Details route. | Keep the current shell and shared primitive API. Split shared presentation only when it forms a clearer reusable unit. |
 
-Revisit these observations after behavioral follow-ups. Make refactors separately
-from content-policy fixes when possible so each change has a clear purpose and
-can be reviewed on its own.
+Keep behavior changes separate from organization refactors when possible so
+each change has a clear purpose and can be reviewed on its own.

@@ -1,5 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
-import { toast } from "sonner";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   IPC,
   type DigestPost,
@@ -9,15 +8,32 @@ import {
 export function useRedditDigest(
   weekStartDate?: string | null,
   hideViewed = false,
-): { posts: DigestPost[]; loading: boolean } {
+): {
+  posts: DigestPost[];
+  loading: boolean;
+  refreshing: boolean;
+  error: string | null;
+  retry: () => void;
+} {
   const [posts, setPosts] = useState<DigestPost[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const requestIdRef = useRef(0);
+  const queryKey = `${weekStartDate ?? "all"}:${hideViewed ? "hidden" : "all"}`;
+  const loadedQueryRef = useRef<string | null>(null);
 
   const fetchPosts = useCallback(
     (options?: { silent?: boolean }): void => {
       const silent = options?.silent ?? false;
-      if (!silent) {
+      const sameQuery = loadedQueryRef.current === queryKey;
+      const requestId = ++requestIdRef.current;
+      if (silent && sameQuery) {
+        setRefreshing(true);
+      } else {
         setLoading(true);
+        setRefreshing(false);
+        if (!sameQuery) setPosts([]);
       }
 
       window.api
@@ -28,22 +44,29 @@ export function useRedditDigest(
             : undefined,
         )
         .then((data) => {
+          if (requestId !== requestIdRef.current) return;
           setPosts(data as DigestPost[]);
+          loadedQueryRef.current = queryKey;
+          setError(null);
         })
         .catch((err) => {
-          toast.error(
+          if (requestId !== requestIdRef.current) return;
+          loadedQueryRef.current = queryKey;
+          if (!sameQuery) setPosts([]);
+          setError(
             err instanceof Error
               ? err.message
               : "Failed to load Reddit Digest posts.",
           );
         })
         .finally(() => {
-          if (!silent) {
+          if (requestId === requestIdRef.current) {
             setLoading(false);
+            setRefreshing(false);
           }
         });
     },
-    [hideViewed, weekStartDate],
+    [hideViewed, queryKey, weekStartDate],
   );
 
   useEffect(() => {
@@ -85,5 +108,12 @@ export function useRedditDigest(
     return unsubscribe;
   }, [fetchPosts, hideViewed]);
 
-  return { posts, loading };
+  const queryIsLoaded = loadedQueryRef.current === queryKey;
+  return {
+    posts: queryIsLoaded ? posts : [],
+    loading: loading || !queryIsLoaded,
+    refreshing: queryIsLoaded && refreshing,
+    error: queryIsLoaded ? error : null,
+    retry: () => fetchPosts({ silent: true }),
+  };
 }

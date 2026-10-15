@@ -65,7 +65,9 @@ export function ChannelRow({
   carouselRows,
   onToggleCollapse,
 }: ChannelRowProps): React.ReactElement {
-  const { videos } = useYouTubeVideos(channel.channel_id);
+  const { videos, loading, refreshing, error, retry } = useYouTubeVideos(
+    channel.channel_id,
+  );
 
   const effectiveConfig = getEffectiveConfig(viewConfig, channel.channel_id);
   const filteredVideos = applyMediaTypeFilter(videos, effectiveConfig);
@@ -234,25 +236,49 @@ export function ChannelRow({
         </div>
       )}
 
-      {isContentVisible && (
-        <div className={compactRows ? "flex gap-2" : "flex gap-4"}>
-          {viewConfig.showUpcomingPanel && streams.length > 0 && (
-            <>
-              <StreamPanel streams={streams} compact={compactRows} />
-              <Separator orientation="vertical" className="h-auto" />
-            </>
+      {(loading || refreshing || error) && (
+        <div
+          className="mb-2 flex items-center gap-2 text-xs"
+          role={error ? "alert" : "status"}
+        >
+          {loading ? (
+            <span className="text-muted-foreground">Loading videos…</span>
+          ) : refreshing ? (
+            <span className="text-muted-foreground">Refreshing videos…</span>
+          ) : (
+            <span className="text-destructive">
+              Could not refresh {channel.name}: {error}
+            </span>
           )}
-          <div className="flex-1 min-w-0">
-            <VideoCarousel
-              videos={regularVideos}
-              maxItems={Number.POSITIVE_INFINITY}
-              sortDirection={viewConfig.videoSortDirection}
-              density={compactRows ? "compact" : viewConfig.cardDensity}
-              rows={carouselRows}
-            />
-          </div>
+          {error && (
+            <button type="button" className="underline" onClick={retry}>
+              Retry
+            </button>
+          )}
         </div>
       )}
+
+      {isContentVisible &&
+        (!loading || videos.length > 0) &&
+        (!error || videos.length > 0) && (
+          <div className={compactRows ? "flex gap-2" : "flex gap-4"}>
+            {viewConfig.showUpcomingPanel && streams.length > 0 && (
+              <>
+                <StreamPanel streams={streams} compact={compactRows} />
+                <Separator orientation="vertical" className="h-auto" />
+              </>
+            )}
+            <div className="flex-1 min-w-0">
+              <VideoCarousel
+                videos={regularVideos}
+                maxItems={Number.POSITIVE_INFINITY}
+                sortDirection={viewConfig.videoSortDirection}
+                density={compactRows ? "compact" : viewConfig.cardDensity}
+                rows={carouselRows}
+              />
+            </div>
+          </div>
+        )}
     </div>
   );
 }
