@@ -14,6 +14,7 @@ import {
   CardTitle,
   CardContent,
 } from "../../components/ui/card";
+import { Button } from "../../components/ui/button";
 import { Separator } from "../../components/ui/separator";
 import { RefreshCcw, RotateCcw, Settings2, X, Youtube } from "lucide-react";
 import {
@@ -146,6 +147,8 @@ function YouTubeWidget(): React.ReactElement {
   );
   const hasMoreChannels =
     allDisplayedChannels.length > contentPolicy.channelLimit;
+  const moreChannelCount =
+    allDisplayedChannels.length - contentPolicy.channelLimit;
   const visibleChannels = expandedChannels
     ? allDisplayedChannels
     : displayedChannels;
@@ -230,7 +233,7 @@ function YouTubeWidget(): React.ReactElement {
               />
             </div>
           ))}
-          {hasMoreChannels && (
+          {hasMoreChannels && size === "large" && (
             <button
               type="button"
               className="mt-2 text-xs font-medium text-primary hover:underline"
@@ -243,7 +246,7 @@ function YouTubeWidget(): React.ReactElement {
             >
               {expandedChannels
                 ? "Show fewer channels"
-                : `Show ${allDisplayedChannels.length - contentPolicy.channelLimit} more channel${allDisplayedChannels.length - contentPolicy.channelLimit === 1 ? "" : "s"}`}
+                : `Show ${moreChannelCount} more channel${moreChannelCount === 1 ? "" : "s"}`}
             </button>
           )}
         </div>
@@ -308,14 +311,30 @@ function YouTubeWidget(): React.ReactElement {
               </button>
             </div>
           ) : (
-            <button
-              type="button"
-              className="p-1 rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-              aria-label="YouTube widget settings"
-              onClick={handleOpenEdit}
-            >
-              <Settings2 className="h-4 w-4" />
-            </button>
+            <div className="flex items-center gap-2">
+              {size !== "large" && hasMoreChannels && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  aria-expanded={expandedChannels}
+                  onClick={() => setExpandedChannels((expanded) => !expanded)}
+                  className="h-6 w-[8rem] shrink-0 justify-center whitespace-nowrap px-2 py-0 text-[10px] font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
+                >
+                  {expandedChannels
+                    ? "Show fewer channels"
+                    : `Show ${moreChannelCount} more channel${moreChannelCount === 1 ? "" : "s"}`}
+                </Button>
+              )}
+              <button
+                type="button"
+                className="p-1 rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                aria-label="YouTube widget settings"
+                onClick={handleOpenEdit}
+              >
+                <Settings2 className="h-4 w-4" />
+              </button>
+            </div>
           )}
         </div>
       </CardHeader>
