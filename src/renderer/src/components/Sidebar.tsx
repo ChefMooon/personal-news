@@ -52,6 +52,7 @@ function SidebarNavLink({
     <NavLink
       to={to}
       end={to === "/"}
+      aria-label={label}
       className={({ isActive }) =>
         cn(
           "mx-1 flex items-center rounded-md py-2 text-sm transition-colors duration-150",
@@ -91,7 +92,18 @@ export function Sidebar(): React.ReactElement {
   const { scripts } = useScripts();
   const hasStaleScripts = scripts.some((s) => s.is_stale);
   const { config, setCollapsed } = useSidebarConfig();
-  const collapsed = config.collapsed;
+  const [narrowViewport, setNarrowViewport] = React.useState(() =>
+    window.matchMedia("(max-width: 639px)").matches,
+  );
+  React.useEffect(() => {
+    const mediaQuery = window.matchMedia("(max-width: 639px)");
+    const updateNarrowViewport = (): void =>
+      setNarrowViewport(mediaQuery.matches);
+    mediaQuery.addEventListener("change", updateNarrowViewport);
+    return () =>
+      mediaQuery.removeEventListener("change", updateNarrowViewport);
+  }, []);
+  const collapsed = config.collapsed || narrowViewport;
   const { enabled: redditDigestEnabled } = useRedditDigestEnabled();
   const { enabled: savedPostsEnabled } = useSavedPostsEnabled();
   const { enabled: sportsEnabled } = useSportsEnabled();
@@ -169,28 +181,28 @@ export function Sidebar(): React.ReactElement {
       )}
       style={{ flexShrink: 0 }}
     >
-      <div
-        className={cn(
-          "flex items-center border-b px-2 py-1.5",
-          collapsed ? "justify-center" : "justify-end",
-        )}
-      >
-        <button
-          type="button"
-          onClick={() => setCollapsed(!collapsed)}
+      {!narrowViewport && (
+        <div
           className={cn(
-            "flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground",
+            "flex items-center border-b px-2 py-1.5",
+            collapsed ? "justify-center" : "justify-end",
           )}
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          aria-pressed={collapsed}
         >
-          {collapsed ? (
-            <ChevronRight className="h-5 w-5 shrink-0" />
-          ) : (
-            <ChevronLeft className="h-5 w-5 shrink-0" />
-          )}
-        </button>
-      </div>
+          <button
+            type="button"
+            onClick={() => setCollapsed(!config.collapsed)}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground"
+            aria-label={config.collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            aria-pressed={config.collapsed}
+          >
+            {config.collapsed ? (
+              <ChevronRight className="h-5 w-5 shrink-0" />
+            ) : (
+              <ChevronLeft className="h-5 w-5 shrink-0" />
+            )}
+          </button>
+        </div>
+      )}
 
       <TooltipProvider delayDuration={120} skipDelayDuration={0}>
         {/* Nav items */}

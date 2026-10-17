@@ -603,20 +603,48 @@ try {
     ),
     `24-hour rise time did not use the selected location timezone (${expectedEasternRiseTimes.join(", ")})`,
   );
-  for (const width of [1240, 1040, 840, 620]) {
+  for (const width of [390, 620, 840, 1240, 1600]) {
     await page.setViewportSize({ width, height: 1200 });
-    await page.waitForTimeout(40);
+    await page.waitForTimeout(250);
     const dimensions = await page.evaluate(() => ({
       viewport: document.documentElement.clientWidth,
       page: document.documentElement.scrollWidth,
       mainViewport: document.querySelector("main")?.clientWidth ?? 0,
       mainContent: document.querySelector("main")?.scrollWidth ?? 0,
+      sidebarWidth:
+        document.querySelector("main")?.previousElementSibling
+          ?.getBoundingClientRect().width ?? 0,
+      cardWidth:
+        document.querySelector("main > div > div")?.getBoundingClientRect()
+          .width ?? 0,
     }));
     assert(
       dimensions.page <= dimensions.viewport + 1 &&
         dimensions.mainContent <= dimensions.mainViewport + 1,
       `Astronomy details overflowed horizontally at ${width}px: ${JSON.stringify(dimensions)}`,
     );
+    if (width < 640) {
+      assert(
+        dimensions.sidebarWidth <= 57,
+        `Sidebar did not collapse at ${width}px: ${JSON.stringify(dimensions)}`,
+      );
+      assert(
+        (await page.getByRole("link", { name: "Dashboard", exact: true }).count()) ===
+          1,
+        `Collapsed sidebar link is not accessible by name at ${width}px`,
+      );
+    } else {
+      assert(
+        dimensions.sidebarWidth > 57,
+        `Sidebar did not restore its saved desktop width at ${width}px: ${JSON.stringify(dimensions)}`,
+      );
+    }
+    if (width >= 1240) {
+      assert(
+        dimensions.cardWidth >= dimensions.mainViewport * 0.9,
+        `Astronomy details did not use the available main width at ${width}px: ${JSON.stringify(dimensions)}`,
+      );
+    }
     const screenshot = path.join(
       artifactDir,
       `astronomy-details-${width}px.png`,

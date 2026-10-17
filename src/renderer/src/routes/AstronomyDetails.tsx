@@ -56,7 +56,7 @@ export default function AstronomyDetails(): React.ReactElement {
   }
 
   return (
-    <div className="mx-auto w-full max-w-5xl p-4 md:p-6">
+    <div className="min-w-0 w-full p-4 md:p-6">
       <Card className="min-w-0">
         <CardHeader className="border-b">
           <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
