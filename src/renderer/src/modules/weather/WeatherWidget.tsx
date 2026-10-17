@@ -32,6 +32,7 @@ import { WeatherSmall } from "./WeatherSmall";
 import { WeatherMedium } from "./WeatherMedium";
 import { WeatherLarge } from "./WeatherLarge";
 import { WeatherRefreshStatus } from "./WeatherRefreshStatus";
+import { WeatherAstronomyDetailsLink } from "./WeatherAstronomy";
 import { useWeatherRefresh } from "./useWeatherRefresh";
 import { getWeatherContentPolicy } from "./weather-content-policy";
 import { registerRendererModule } from "../registry";
@@ -210,6 +211,12 @@ function WeatherWidget(): React.ReactElement {
                 </button>
               </>
             )}
+            {!isEditing &&
+              policy.showAstronomy &&
+              effectiveLocationId &&
+              snapshot?.location.timezone && (
+                <WeatherAstronomyDetailsLink locationId={effectiveLocationId} />
+              )}
             {isEditing ? (
               <div className="flex items-center gap-0.5">
                 <button
@@ -270,7 +277,7 @@ function WeatherWidget(): React.ReactElement {
       </CardHeader>
       <CardContent
         ref={cardContentRef}
-        className="flex min-h-0 flex-1 flex-col overflow-hidden"
+        className="relative flex min-h-0 flex-1 flex-col overflow-hidden"
         style={
           isEditing && editContentHeight
             ? { height: editContentHeight, overflow: "hidden" }

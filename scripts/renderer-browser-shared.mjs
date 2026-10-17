@@ -33,9 +33,55 @@ export async function loadRendererBrowserFixtures(vite) {
   const sportsEvents = sports.buildSportsFixture(fixtureContext);
   const weatherFixture = weather.buildWeatherFixture(fixtureContext);
   const astronomySnapshot = astronomy.buildAstronomyFixture(fixtureContext);
+  const easternLocation = {
+    ...weatherFixture.snapshot.location,
+    id: "pn_dev_fixture_weather_location_east",
+    name: "Fixture Atoll",
+    admin1: "Line Islands",
+    country: "Synthetic Country",
+    timezone: "Pacific/Kiritimati",
+  };
+  const easternAstronomySnapshot = structuredClone(astronomySnapshot);
+  easternAstronomySnapshot.locationId = easternLocation.id;
+  easternAstronomySnapshot.forTimestamp += 3600;
+  easternAstronomySnapshot.calculatedAt -= 1800;
+  easternAstronomySnapshot.groups.planets.data = [
+    ...easternAstronomySnapshot.groups.planets.data,
+    ["Mercury", 13],
+    ["Mars", 21],
+    ["Uranus", 2],
+    ["Neptune", 3],
+  ].map((planet) => {
+    if (!Array.isArray(planet)) return planet;
+    const [body, altitude] = planet;
+    return {
+      body,
+      altitude,
+      azimuth: 222,
+      riseTime: fixtureContext.now / 1000 + 5400,
+      setTime: fixtureContext.now / 1000 + 18000,
+      magnitude: 1.4,
+      illuminationPercent: 67,
+      phaseAngle: 47,
+      heliocentricDistanceAu: 8.2,
+      geocentricDistanceAu: 7.1,
+      eclipticLongitude: 211,
+      eclipticLatitude: -1.8,
+      skyState: "up",
+    };
+  });
+  easternAstronomySnapshot.groups.events.data.push({
+    family: "season",
+    label: "Past synthetic equinox",
+    time: fixtureContext.now / 1000 - 86400,
+    localVisibility: null,
+  });
   // Weather snapshots reference the independently cached astronomy snapshot
   // for the same fixture location in the app's persisted data model.
   weatherFixture.snapshot.astronomy = astronomySnapshot;
+  const easternWeatherSnapshot = structuredClone(weatherFixture.snapshot);
+  easternWeatherSnapshot.location = easternLocation;
+  easternWeatherSnapshot.astronomy = easternAstronomySnapshot;
   const weeks = [...new Set(posts.map((post) => post.week_start_date))]
     .sort()
     .reverse()
@@ -63,6 +109,17 @@ export async function loadRendererBrowserFixtures(vite) {
       ]),
     ),
   );
+  for (const size of dashboard.DASHBOARD_FIXTURE_SIZES) {
+    const weatherConfigKey = dashboard.fixtureConfigKey(
+      "weather",
+      dashboard.fixtureWidgetId("weather", size),
+    );
+    widgetConfigs[weatherConfigKey] = {
+      ...widgetConfigs[weatherConfigKey],
+      locationId: size === "medium" ? null : easternLocation.id,
+      showAstronomy: true,
+    };
+  }
   const teams = sports.SPORTS_FIXTURE_LEAGUES.flatMap((league, leagueIndex) =>
     [league.home, league.away].map((team, teamIndex) => ({
       teamId: team.teamId,
@@ -99,7 +156,7 @@ export async function loadRendererBrowserFixtures(vite) {
       reddit_digest: posts.map((post) => post.title),
       saved_posts: savedPosts.map((post) => post.title),
       sports: teams.map((team) => team.name),
-      weather: [weatherFixture.snapshot.location.name],
+      weather: [weatherFixture.snapshot.location.name, easternLocation.name],
       astronomy: [
         astronomySnapshot.groups.planets.data.find(
           (planet) => planet.body === "Jupiter",
@@ -107,6 +164,12 @@ export async function loadRendererBrowserFixtures(vite) {
         String(astronomySnapshot.groups.moon.data.illuminationPercent),
         astronomySnapshot.groups.moon.data.phaseName.replaceAll("_", " "),
       ].filter(Boolean),
+      astronomyDetails: [
+        "Fixture Atoll",
+        "Pacific/Kiritimati",
+        "Past synthetic equinox",
+        "Mercury",
+      ],
     },
     youtube: youtubeData,
     posts,
@@ -137,7 +200,16 @@ export async function loadRendererBrowserFixtures(vite) {
       ),
     },
     weather: weatherFixture,
+    weatherSnapshots: {
+      [weatherFixture.snapshot.location.id]: weatherFixture.snapshot,
+      [easternLocation.id]: easternWeatherSnapshot,
+    },
     astronomy: astronomySnapshot,
+    astronomyLocations: [weatherFixture.snapshot.location, easternLocation],
+    astronomyDetailsSnapshots: {
+      [weatherFixture.snapshot.location.id]: astronomySnapshot,
+      [easternLocation.id]: easternAstronomySnapshot,
+    },
   };
 }
 

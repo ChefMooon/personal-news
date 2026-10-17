@@ -8,11 +8,13 @@ import {
 
 interface AstronomyEnabledContextValue {
   enabled: boolean;
+  loading: boolean;
   setEnabled: (value: boolean) => void;
 }
 
 const AstronomyEnabledContext = createContext<AstronomyEnabledContextValue>({
   enabled: DEFAULT_ASTRONOMY_SETTINGS.enabled,
+  loading: true,
   setEnabled: () => {},
 });
 
@@ -31,9 +33,11 @@ export function AstronomyEnabledProvider({
   const [enabled, setEnabledState] = useState<boolean>(
     DEFAULT_ASTRONOMY_SETTINGS.enabled,
   );
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const load = (): void => {
+      setLoading(true);
       window.api
         .invoke(IPC.ASTRONOMY_GET_SETTINGS)
         .then((data) => {
@@ -48,6 +52,9 @@ export function AstronomyEnabledProvider({
               ? err.message
               : "Failed to load Astronomy setting.",
           );
+        })
+        .finally(() => {
+          setLoading(false);
         });
     };
     load();
@@ -71,7 +78,7 @@ export function AstronomyEnabledProvider({
   };
 
   return (
-    <AstronomyEnabledContext.Provider value={{ enabled, setEnabled }}>
+    <AstronomyEnabledContext.Provider value={{ enabled, loading, setEnabled }}>
       {children}
     </AstronomyEnabledContext.Provider>
   );

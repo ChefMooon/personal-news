@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import { ArrowLeft, MoonStar } from "lucide-react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { useAstronomyEnabled } from "../contexts/AstronomyEnabledContext";
 import { useAstronomySnapshot } from "../hooks/useAstronomySnapshot";
 import { resolveAstronomyLocationId } from "../hooks/useAstronomyConfig";
@@ -28,8 +28,8 @@ function locationLabel(location: {
 export default function AstronomyDetails(): React.ReactElement {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { enabled } = useAstronomyEnabled();
-  const { locations } = useWeatherLocations();
+  const { enabled, loading: astronomyEnabledLoading } = useAstronomyEnabled();
+  const { locations, loading: locationsLoading } = useWeatherLocations();
   const { settings, loading: settingsLoading } = useWeatherSettings();
   const requestedLocationId = searchParams.get("locationId");
   const locationId = useMemo(
@@ -42,8 +42,18 @@ export default function AstronomyDetails(): React.ReactElement {
     [locations, requestedLocationId, settings.defaultLocationId],
   );
   const location = locations.find((entry) => entry.id === locationId) ?? null;
-  const { snapshot, loading } = useAstronomySnapshot(locationId, enabled);
+  const { snapshot, loading } = useAstronomySnapshot(
+    locationId,
+    enabled && !astronomyEnabledLoading,
+  );
   const nowMilliseconds = useNowMilliseconds(enabled && snapshot != null);
+
+  if (astronomyEnabledLoading) {
+    return <></>;
+  }
+  if (!enabled) {
+    return <Navigate to="/" replace />;
+  }
 
   return (
     <div className="mx-auto w-full max-w-5xl p-4 md:p-6">
@@ -67,12 +77,17 @@ export default function AstronomyDetails(): React.ReactElement {
               Return
             </button>
           </div>
-          <p className="text-sm text-muted-foreground">
-            {location ? locationLabel(location) : "Weather default location"}
-          </p>
+          <div className="min-w-0 space-y-1 text-sm text-muted-foreground">
+            <p className="break-words">
+              {location ? locationLabel(location) : "Weather default location"}
+            </p>
+            <p className="break-all text-xs">
+              Timezone: {location?.timezone ?? "Unavailable"}
+            </p>
+          </div>
         </CardHeader>
         <CardContent className="min-w-0 pt-5">
-          {settingsLoading || loading ? (
+          {locationsLoading || settingsLoading || loading ? (
             <p className="text-sm text-muted-foreground">
               Loading astronomy...
             </p>
@@ -91,6 +106,7 @@ export default function AstronomyDetails(): React.ReactElement {
                 timezone={location?.timezone ?? null}
                 timeFormat={settings.timeFormat}
                 nowSeconds={Math.floor(nowMilliseconds / 1000)}
+                fullSnapshot
               />
             </div>
           )}

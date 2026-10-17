@@ -29,6 +29,7 @@ describe("astronomy content policy", () => {
     expect(policy.eventLimit).toBe(0);
     expect(policy.verticalOverflow).toBe("none");
     expect(policy.measureRuntimeRows).toBe(false);
+    expect(policy.detailsAvailable).toBe(true);
   });
 
   it("caps Medium at four preview groups and stacks below the readable width", () => {
@@ -52,6 +53,7 @@ describe("astronomy content policy", () => {
     expect(policy.verticalOverflow).toBe("none");
     expect(policy.measureRuntimeRows).toBe(true);
     expect(astronomyHasOmittedDetail(policy, snapshot)).toBe(true);
+    expect(policy.detailsAvailable).toBe(true);
   });
 
   it("keeps Medium overflow static while preserving runtime row measurement", () => {
@@ -88,5 +90,6 @@ describe("astronomy content policy", () => {
     expect(policy.eventLimit).toBeNull();
     expect(policy.verticalOverflow).toBe("content");
     expect(policy.measureRuntimeRows).toBe(true);
+    expect(policy.detailsAvailable).toBe(false);
   });
 });

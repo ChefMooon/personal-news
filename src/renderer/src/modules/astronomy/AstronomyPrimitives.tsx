@@ -12,6 +12,7 @@ import { cn } from "../../lib/utils";
 import {
   eventFamilyLabel,
   formatEventDate,
+  formatAstronomicalUnits,
   compassDirection,
   altitudeGaugePercent,
   formatAltitudePosition,
@@ -20,13 +21,17 @@ import {
   formatKilometers,
   formatMagnitudeValue,
   formatNextPhaseDateTime,
+  clampSynodicProgress,
+  formatCalculatedAt,
   horizonGeometryState,
   moonPhaseDisplayName,
+  nearestSynodicMilestone,
   nextPrimaryPhaseMilestone,
   nextRiseSetItem,
   planetsInCanonicalOrder,
   planetDisplayState,
   solarStateLabel,
+  chronologicalGlobalEvents,
   upcomingGlobalEvents,
 } from "./astronomy-display";
 import {
@@ -326,20 +331,29 @@ export function AstronomyDetailedPrimitives({
   timezone,
   timeFormat,
   nowSeconds,
+  fullSnapshot = false,
 }: {
   astronomy: AstronomySnapshot | null;
   timezone: string | null;
   timeFormat: AstronomyTimeFormat;
   nowSeconds: number;
+  fullSnapshot?: boolean;
 }): React.ReactElement {
   const horizon = astronomyGroupData(astronomy?.groups.horizon);
   const planets = astronomyGroupData(astronomy?.groups.planets);
-  const events = upcomingGlobalEvents(
-    astronomyGroupData(astronomy?.groups.events),
-    nowSeconds,
-  );
+  const eventData = astronomyGroupData(astronomy?.groups.events);
+  const events = fullSnapshot
+    ? chronologicalGlobalEvents(eventData)
+    : upcomingGlobalEvents(eventData, nowSeconds);
   return (
     <div className="@container/details min-w-0 space-y-5">
+      {fullSnapshot && (
+        <AstronomySnapshotMetadata
+          astronomy={astronomy}
+          timezone={timezone}
+          timeFormat={timeFormat}
+        />
+      )}
       <AstronomySummaryPrimitives
         astronomy={astronomy}
         timezone={timezone}
@@ -349,9 +363,36 @@ export function AstronomyDetailedPrimitives({
         showSunAltitude={false}
         showNextRiseSet={false}
       />
+      {fullSnapshot && (
+        <AstronomyMoonDetails
+          astronomy={astronomy}
+          timezone={timezone}
+          timeFormat={timeFormat}
+        />
+      )}
       <div className="grid min-w-0 items-stretch gap-4 @min-[44rem]/details:grid-cols-2">
-        <AstronomyPositions horizon={horizon} />
+        {fullSnapshot ? (
+          <section className="min-w-0 space-y-2">
+            <GroupStatusLabel
+              label="Horizon"
+              status={astronomy?.groups.horizon.status}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Positions and sky states are calculated geometry, not live
+              observations.
+            </p>
+            <AstronomyPositions horizon={horizon} />
+          </section>
+        ) : (
+          <AstronomyPositions horizon={horizon} />
+        )}
         <section className="flex min-w-0 flex-col">
+          {fullSnapshot && (
+            <GroupStatusLabel
+              label="Horizon"
+              status={astronomy?.groups.horizon.status}
+            />
+          )}
           <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Daily timetable
           </h3>
@@ -365,23 +406,269 @@ export function AstronomyDetailedPrimitives({
       </div>
 
       <section className="@container/planets min-w-0">
-        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Planets
-        </h3>
-        <div className="grid min-w-0 grid-cols-1 gap-2 @min-[26rem]/planets:grid-cols-12 @min-[87rem]/planets:grid-cols-7">
-          <PlanetGrid
-            planets={planets}
-            timezone={timezone}
-            timeFormat={timeFormat}
-          />
-        </div>
+        {fullSnapshot ? (
+          <div className="mb-2 flex min-w-0 flex-wrap items-center justify-between gap-2">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Planets
+            </h3>
+            <GroupStatusLabel
+              label="Planets"
+              status={astronomy?.groups.planets.status}
+            />
+          </div>
+        ) : (
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Planets
+          </h3>
+        )}
+        {fullSnapshot && (
+          <p className="mb-2 text-[11px] text-muted-foreground">
+            Calculated positions and sky states are not live observations or
+            visibility guarantees.
+          </p>
+        )}
+        {fullSnapshot && planets == null ? (
+          <p className="rounded-md border border-dashed px-3 py-3 text-xs text-muted-foreground">
+            Planet data is unavailable.
+          </p>
+        ) : fullSnapshot && planets?.length === 0 ? (
+          <p className="rounded-md border border-dashed px-3 py-3 text-xs text-muted-foreground">
+            No planets were returned.
+          </p>
+        ) : (
+          <div className="grid min-w-0 grid-cols-1 gap-2 @min-[26rem]/planets:grid-cols-12 @min-[87rem]/planets:grid-cols-7">
+            <PlanetGrid
+              planets={planets}
+              timezone={timezone}
+              timeFormat={timeFormat}
+              includeOtherBodies={fullSnapshot}
+              includeExtendedData={fullSnapshot}
+            />
+          </div>
+        )}
       </section>
-      <AstronomyUpcomingEvents
-        events={events}
-        timezone={timezone}
-        timeFormat={timeFormat}
-      />
+      {fullSnapshot ? (
+        <AstronomyAllGlobalEvents
+          events={events}
+          status={astronomy?.groups.events.status}
+          timezone={timezone}
+          timeFormat={timeFormat}
+        />
+      ) : (
+        <AstronomyUpcomingEvents
+          events={events ?? []}
+          timezone={timezone}
+          timeFormat={timeFormat}
+        />
+      )}
     </div>
+  );
+}
+
+function AstronomySnapshotMetadata({
+  astronomy,
+  timezone,
+  timeFormat,
+}: Pick<
+  AstronomyPresetProps,
+  "astronomy" | "timezone" | "timeFormat"
+>): React.ReactElement {
+  const calculatedAt = formatCalculatedAt(
+    astronomy?.calculatedAt,
+    timezone,
+    timeFormat,
+  );
+  const forTimestamp = formatCalculatedAt(
+    astronomy?.forTimestamp,
+    timezone,
+    timeFormat,
+  );
+  const groupStatuses = [
+    ["Moon", astronomy?.groups.moon.status],
+    ["Horizon", astronomy?.groups.horizon.status],
+    ["Planets", astronomy?.groups.planets.status],
+    ["Global events", astronomy?.groups.events.status],
+  ] as const;
+
+  return (
+    <section
+      aria-label="Astronomy snapshot status"
+      className="min-w-0 space-y-3 rounded-md border bg-muted/20 p-3"
+    >
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <span className="text-xs font-semibold">Snapshot</span>
+        <Badge variant={astronomy?.stale ? "destructive" : "secondary"}>
+          {astronomy?.stale ? "Stale snapshot" : "Fresh snapshot"}
+        </Badge>
+        <Badge variant="outline">{astronomy?.status ?? "Unavailable"}</Badge>
+      </div>
+      <dl className="grid min-w-0 grid-cols-1 gap-x-4 gap-y-2 text-xs @min-[28rem]/details:grid-cols-2">
+        <div className="min-w-0">
+          <dt className="text-muted-foreground">Target time</dt>
+          <dd className="break-words tabular-nums">
+            {forTimestamp ?? "Unavailable"}
+          </dd>
+        </div>
+        <div className="min-w-0">
+          <dt className="text-muted-foreground">Calculated at</dt>
+          <dd className="break-words tabular-nums">
+            {calculatedAt ?? "Unavailable"}
+          </dd>
+        </div>
+      </dl>
+      <div
+        className="flex min-w-0 flex-wrap gap-1.5"
+        aria-label="Data group status"
+      >
+        {groupStatuses.map(([label, status]) => (
+          <GroupStatusLabel key={label} label={label} status={status} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function GroupStatusLabel({
+  label,
+  status,
+}: {
+  label: string;
+  status: string | undefined;
+}): React.ReactElement {
+  const text =
+    status === "fresh"
+      ? "Fresh"
+      : status === "stale"
+        ? "Stale"
+        : status === "unavailable"
+          ? "Unavailable"
+          : "Unknown";
+  return (
+    <Badge variant={status === "stale" ? "destructive" : "outline"}>
+      {label}: {text}
+    </Badge>
+  );
+}
+
+function AstronomyMoonDetails({
+  astronomy,
+  timezone,
+  timeFormat,
+}: Pick<
+  AstronomyPresetProps,
+  "astronomy" | "timezone" | "timeFormat"
+>): React.ReactElement {
+  const moon = astronomyGroupData(astronomy?.groups.moon);
+  const progress = moon
+    ? clampSynodicProgress(moon.synodicProgress * 100)
+    : null;
+  const items: Array<[string, string]> = moon
+    ? [
+        ["Phase angle", formatDegrees(moon.phaseAngle) ?? "Unavailable"],
+        ["Trend", moon.trend === "waxing" ? "Waxing" : "Waning"],
+        [
+          "Synodic progress",
+          progress == null
+            ? "Unavailable"
+            : `${progress.toFixed(1)}% · Near ${nearestSynodicMilestone(progress)}`,
+        ],
+        [
+          "Libration latitude",
+          formatDegrees(moon.librationLatitude) ?? "Unavailable",
+        ],
+        [
+          "Libration longitude",
+          formatDegrees(moon.librationLongitude) ?? "Unavailable",
+        ],
+        [
+          "Next primary phase",
+          moon.nextPrimaryPhaseName
+            ? `${moonPhaseDisplayName(moon.nextPrimaryPhaseName)} · ${formatAstronomyDateTime(moon.nextPrimaryPhaseTime, timezone, timeFormat)}`
+            : "Unavailable",
+        ],
+        [
+          "Next perigee",
+          formatAstronomyDateTime(moon.nextPerigeeTime, timezone, timeFormat),
+        ],
+        [
+          "Next apogee",
+          formatAstronomyDateTime(moon.nextApogeeTime, timezone, timeFormat),
+        ],
+      ]
+    : [];
+
+  return (
+    <section className="min-w-0 space-y-2">
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Moon details
+        </h3>
+        <GroupStatusLabel label="Moon" status={astronomy?.groups.moon.status} />
+      </div>
+      {moon ? (
+        <dl className="grid min-w-0 grid-cols-1 gap-2 rounded-md border bg-card p-3 @min-[32rem]/details:grid-cols-2 @min-[64rem]/details:grid-cols-4">
+          {items.map(([label, value]) => (
+            <div key={label} className="min-w-0">
+              <dt className="text-[11px] text-muted-foreground">{label}</dt>
+              <dd className="break-words text-xs font-medium tabular-nums">
+                {value}
+              </dd>
+            </div>
+          ))}
+          <div className="min-w-0">
+            <dt className="text-[11px] text-muted-foreground">Distance</dt>
+            <dd className="break-words text-xs font-medium tabular-nums">
+              {formatKilometers(moon.distanceKm) ?? "Unavailable"}
+            </dd>
+          </div>
+        </dl>
+      ) : (
+        <p className="rounded-md border border-dashed px-3 py-3 text-xs text-muted-foreground">
+          Moon data is unavailable.
+        </p>
+      )}
+    </section>
+  );
+}
+
+function AstronomyAllGlobalEvents({
+  events,
+  status,
+  timezone,
+  timeFormat,
+}: Pick<AstronomyPresetProps, "timezone" | "timeFormat"> & {
+  events: AstronomyGlobalEvent[] | null;
+  status: string | undefined;
+}): React.ReactElement {
+  return (
+    <section className="min-w-0 space-y-2">
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Global events
+        </h3>
+        <GroupStatusLabel label="Global events" status={status} />
+      </div>
+      <p className="text-[11px] text-muted-foreground">
+        Event times are shown in the selected location&apos;s timezone. These
+        events are global and do not indicate local visibility.
+      </p>
+      {events == null ? (
+        <p className="rounded-md border border-dashed px-3 py-3 text-xs text-muted-foreground">
+          Global event data is unavailable.
+        </p>
+      ) : events.length > 0 ? (
+        <AstronomyEventList
+          dateFirst
+          events={events}
+          timezone={timezone}
+          timeFormat={timeFormat}
+        />
+      ) : (
+        <p className="rounded-md border border-dashed px-3 py-3 text-xs text-muted-foreground">
+          No global events were returned.
+        </p>
+      )}
+    </section>
   );
 }
 
@@ -474,77 +761,139 @@ function PlanetGrid({
   planets,
   timezone,
   timeFormat,
+  includeOtherBodies = false,
+  includeExtendedData = false,
 }: {
   planets: AstronomyPlanetData[] | null;
   timezone: string | null;
   timeFormat: AstronomyTimeFormat;
+  includeOtherBodies?: boolean;
+  includeExtendedData?: boolean;
 }): React.ReactElement {
   // Twelve tracks balance the seven canonical cards into quarters, then thirds.
   // At wider widths each card instead occupies one of seven equal columns.
   return (
     <>
-      {planetsInCanonicalOrder(planets).map(({ body, entry }, index) => {
-        const direction = compassDirection(entry?.azimuth);
-        return (
-          <article
-            key={body}
-            aria-label={`${body} observing information`}
-            className={cn(
-              "min-w-0 rounded-md border bg-card p-3",
-              index === 6
-                ? "@min-[26rem]/planets:col-span-12"
-                : "@min-[26rem]/planets:col-span-6",
-              index < 4
-                ? "@min-[48rem]/planets:col-span-3"
-                : "@min-[48rem]/planets:col-span-4",
-              "@min-[87rem]/planets:col-span-1",
-            )}
-          >
-            <div className="flex min-w-0 items-center gap-2.5">
-              <PlanetGlyph body={body} />
-              <div className="min-w-0 space-y-1">
-                <h4 className="text-sm font-semibold">{body}</h4>
-                <Badge
-                  variant="outline"
-                  className="max-w-full px-2 text-[10px]"
-                >
-                  {entry ? planetDisplayState(entry) : "Unknown"}
-                </Badge>
+      {planetsInCanonicalOrder(planets, includeOtherBodies).map(
+        ({ body, entry }, index) => {
+          if (!entry && includeOtherBodies) return null;
+          const direction = compassDirection(entry?.azimuth);
+          return (
+            <article
+              key={body}
+              aria-label={`${body} observing information`}
+              className={cn(
+                "min-w-0 rounded-md border bg-card p-3",
+                index === 6
+                  ? "@min-[26rem]/planets:col-span-12"
+                  : "@min-[26rem]/planets:col-span-6",
+                index < 4
+                  ? "@min-[48rem]/planets:col-span-3"
+                  : "@min-[48rem]/planets:col-span-4",
+                "@min-[87rem]/planets:col-span-1",
+              )}
+            >
+              <div className="flex min-w-0 items-center gap-2.5">
+                <PlanetGlyph body={body} />
+                <div className="min-w-0 space-y-1">
+                  <h4 className="text-sm font-semibold">{body}</h4>
+                  <Badge
+                    variant="outline"
+                    className="max-w-full px-2 text-[10px]"
+                  >
+                    {entry ? planetDisplayState(entry) : "Unknown"}
+                  </Badge>
+                </div>
               </div>
-            </div>
-            <div className="my-3 min-w-0 rounded-md bg-muted/30 p-2">
-              <p className="text-xs font-semibold tabular-nums">
-                {formatAltitudePosition(entry?.altitude)}
-              </p>
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                {direction
-                  ? `${direction} · ${formatDegrees(entry?.azimuth)}`
-                  : "Direction unavailable"}
-              </p>
-            </div>
-            <dl className="space-y-1 text-[11px]">
-              <div className="flex flex-wrap justify-between gap-x-2">
-                <dt className="text-muted-foreground">Brightness (mag)</dt>
-                <dd className="tabular-nums">
-                  {formatMagnitudeValue(entry?.magnitude) ?? "Unavailable"}
-                </dd>
+              <div className="my-3 min-w-0 rounded-md bg-muted/30 p-2">
+                <p className="text-xs font-semibold tabular-nums">
+                  {formatAltitudePosition(entry?.altitude)}
+                </p>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  {direction
+                    ? `${direction} · ${formatDegrees(entry?.azimuth)}`
+                    : "Direction unavailable"}
+                </p>
               </div>
-              <div className="flex flex-wrap justify-between gap-x-2">
-                <dt className="text-muted-foreground">Rise</dt>
-                <dd className="tabular-nums">
-                  {formatAstronomyTime(entry?.riseTime, timezone, timeFormat)}
-                </dd>
-              </div>
-              <div className="flex flex-wrap justify-between gap-x-2">
-                <dt className="text-muted-foreground">Set</dt>
-                <dd className="tabular-nums">
-                  {formatAstronomyTime(entry?.setTime, timezone, timeFormat)}
-                </dd>
-              </div>
-            </dl>
-          </article>
-        );
-      })}
+              <dl className="space-y-1 text-[11px]">
+                <div className="flex flex-wrap justify-between gap-x-2">
+                  <dt className="text-muted-foreground">Brightness (mag)</dt>
+                  <dd className="tabular-nums">
+                    {formatMagnitudeValue(entry?.magnitude) ?? "Unavailable"}
+                  </dd>
+                </div>
+                <div className="flex flex-wrap justify-between gap-x-2">
+                  <dt className="text-muted-foreground">Rise</dt>
+                  <dd className="tabular-nums">
+                    {formatAstronomyTime(entry?.riseTime, timezone, timeFormat)}
+                  </dd>
+                </div>
+                <div className="flex flex-wrap justify-between gap-x-2">
+                  <dt className="text-muted-foreground">Set</dt>
+                  <dd className="tabular-nums">
+                    {formatAstronomyTime(entry?.setTime, timezone, timeFormat)}
+                  </dd>
+                </div>
+                {includeExtendedData && (
+                  <>
+                    <div className="flex flex-wrap justify-between gap-x-2">
+                      <dt className="text-muted-foreground">Illumination</dt>
+                      <dd className="tabular-nums">
+                        {entry?.illuminationPercent == null
+                          ? "Unavailable"
+                          : `${entry.illuminationPercent}%`}
+                      </dd>
+                    </div>
+                    <div className="flex flex-wrap justify-between gap-x-2">
+                      <dt className="text-muted-foreground">Phase angle</dt>
+                      <dd className="tabular-nums">
+                        {formatDegrees(entry?.phaseAngle) ?? "Unavailable"}
+                      </dd>
+                    </div>
+                    <div className="flex flex-wrap justify-between gap-x-2">
+                      <dt className="text-muted-foreground">
+                        Heliocentric distance
+                      </dt>
+                      <dd className="tabular-nums">
+                        {formatAstronomicalUnits(
+                          entry?.heliocentricDistanceAu,
+                        ) ?? "Unavailable"}
+                      </dd>
+                    </div>
+                    <div className="flex flex-wrap justify-between gap-x-2">
+                      <dt className="text-muted-foreground">
+                        Geocentric distance
+                      </dt>
+                      <dd className="tabular-nums">
+                        {formatAstronomicalUnits(entry?.geocentricDistanceAu) ??
+                          "Unavailable"}
+                      </dd>
+                    </div>
+                    <div className="flex flex-wrap justify-between gap-x-2">
+                      <dt className="text-muted-foreground">
+                        Ecliptic longitude
+                      </dt>
+                      <dd className="tabular-nums">
+                        {formatDegrees(entry?.eclipticLongitude) ??
+                          "Unavailable"}
+                      </dd>
+                    </div>
+                    <div className="flex flex-wrap justify-between gap-x-2">
+                      <dt className="text-muted-foreground">
+                        Ecliptic latitude
+                      </dt>
+                      <dd className="tabular-nums">
+                        {formatDegrees(entry?.eclipticLatitude) ??
+                          "Unavailable"}
+                      </dd>
+                    </div>
+                  </>
+                )}
+              </dl>
+            </article>
+          );
+        },
+      )}
     </>
   );
 }

@@ -96,12 +96,29 @@ export const CANONICAL_PLANET_ORDER = [
 
 export function planetsInCanonicalOrder(
   data: AstronomyPlanetData[] | null | undefined,
+  includeOtherBodies = false,
 ): Array<{ body: string; entry: AstronomyPlanetData | null }> {
   const byBody = new Map((data ?? []).map((entry) => [entry.body, entry]));
-  return CANONICAL_PLANET_ORDER.map((body) => ({
+  const canonical = CANONICAL_PLANET_ORDER.map((body) => ({
     body,
     entry: byBody.get(body) ?? null,
   }));
+  if (!includeOtherBodies) return canonical;
+  const canonicalBodies = new Set<string>(CANONICAL_PLANET_ORDER);
+  return [
+    ...canonical,
+    ...(data ?? [])
+      .filter((entry) => !canonicalBodies.has(entry.body))
+      .map((entry) => ({ body: entry.body, entry })),
+  ];
+}
+
+/** Chronologically ordered copy of every returned global event. */
+export function chronologicalGlobalEvents(
+  events: AstronomyGlobalEvent[] | null | undefined,
+): AstronomyGlobalEvent[] | null {
+  if (events == null) return null;
+  return [...events].sort((a, b) => a.time - b.time);
 }
 
 /**

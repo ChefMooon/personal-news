@@ -3190,6 +3190,8 @@ function SidebarTab(): React.ReactElement {
   const { enabled: redditDigestEnabled } = useRedditDigestEnabled();
   const { enabled: savedPostsEnabled } = useSavedPostsEnabled();
   const { enabled: sportsEnabled } = useSportsEnabled();
+  const { enabled: astronomyEnabled, loading: astronomyLoading } =
+    useAstronomyEnabled();
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -3234,6 +3236,12 @@ function SidebarTab(): React.ReactElement {
       label: "Sports",
       description: "Dedicated sports page and related widgets.",
       available: sportsEnabled,
+    },
+    {
+      id: "astronomy",
+      label: "Astronomy",
+      description: "Detailed Astronomy data for the default Weather location.",
+      available: !astronomyLoading && astronomyEnabled,
     },
     {
       id: "scripts",

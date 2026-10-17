@@ -428,6 +428,7 @@ export const CUSTOMIZABLE_SIDEBAR_ITEM_IDS = [
   "saved-posts",
   "sports",
   "scripts",
+  "astronomy",
 ] as const;
 
 export type SidebarItemId = (typeof CUSTOMIZABLE_SIDEBAR_ITEM_IDS)[number];

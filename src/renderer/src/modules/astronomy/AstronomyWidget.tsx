@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { MoonStar, RefreshCcw, RotateCcw, Settings2, X } from "lucide-react";
 import { useWidgetInstance } from "../../contexts/WidgetInstanceContext";
 import { useAstronomyEnabled } from "../../contexts/AstronomyEnabledContext";
@@ -53,7 +53,6 @@ function AstronomyWidget(): React.ReactElement {
     onRuntimeRowsChange,
   } = useWidgetInstance();
   const widgetTitle = label ?? "Astronomy";
-  const navigate = useNavigate();
   const { enabled: featureEnabled } = useAstronomyEnabled();
   const { config, setConfig } = useAstronomyConfig(instanceId);
   const { locations, loading: locationsLoading } = useWeatherLocations();
@@ -261,14 +260,6 @@ function AstronomyWidget(): React.ReactElement {
     setSnapshotConfig(DEFAULT_ASTRONOMY_VIEW_CONFIG);
   }
 
-  const openDetails = (): void => {
-    if (effectiveLocationId) {
-      navigate(
-        `/astronomy/details?locationId=${encodeURIComponent(effectiveLocationId)}`,
-      );
-    }
-  };
-
   const preview = (
     <div
       ref={contentViewportRef}
@@ -313,21 +304,6 @@ function AstronomyWidget(): React.ReactElement {
               nowSeconds={nowSeconds}
               detailed={contentPolicy.effectiveViewMode === "detailed"}
             />
-          )}
-          {contentPolicy.detailsAvailable && (
-            <div className="flex justify-end pt-1">
-              <button
-                type="button"
-                className="text-xs font-medium text-primary underline-offset-4 hover:underline"
-                onClick={() => {
-                  setDisclosed(true);
-                  openDetails();
-                }}
-                disabled={!effectiveLocationId}
-              >
-                {disclosed ? "Open full details" : "Details"}
-              </button>
-            </div>
           )}
         </>
       )}
@@ -426,7 +402,7 @@ function AstronomyWidget(): React.ReactElement {
       </CardHeader>
       <CardContent
         ref={cardContentRef}
-        className="astronomy-card-content flex min-h-0 flex-1 flex-col overflow-hidden"
+        className="astronomy-card-content relative flex min-h-0 flex-1 flex-col overflow-hidden"
         style={
           isEditing && editContentHeight
             ? { height: editContentHeight, overflow: "hidden" }
@@ -461,6 +437,20 @@ function AstronomyWidget(): React.ReactElement {
             </div>
           )}
         </div>
+        {!isEditing &&
+          featureEnabled &&
+          contentPolicy.detailsAvailable &&
+          effectiveLocationId && (
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex justify-end bg-gradient-to-t from-background via-background/95 to-transparent px-2 pb-1 pt-4">
+              <Link
+                to={`/astronomy/details?locationId=${encodeURIComponent(effectiveLocationId)}`}
+                className="pointer-events-auto inline-flex min-h-7 items-center rounded px-2 text-xs font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                onClick={() => setDisclosed(true)}
+              >
+                {disclosed ? "Open full details" : "Details"}
+              </Link>
+            </div>
+          )}
       </CardContent>
     </Card>
   );

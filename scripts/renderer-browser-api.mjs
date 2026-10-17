@@ -1,5 +1,10 @@
 // Keep this function closure-free so Vite and Playwright can serialize the same adapter.
 export function installRendererBrowserApi(fixtures) {
+  const scenarioKey = "__rendererBrowserScenario";
+  const getScenario = () => {
+    const raw = sessionStorage.getItem(scenarioKey);
+    return raw ? JSON.parse(raw) : {};
+  };
   const calls = [];
   const apiErrors = [];
   const listeners = new Map();
@@ -33,7 +38,7 @@ export function installRendererBrowserApi(fixtures) {
     view_order: fixtures.views.map((view) => view.id),
     views: Object.fromEntries(fixtures.views.map((view) => [view.id, view])),
   };
-  let sidebarConfig = {
+  const defaultSidebarConfig = {
     itemOrder: [
       "dashboard",
       "youtube",
@@ -47,6 +52,14 @@ export function installRendererBrowserApi(fixtures) {
     ],
     hiddenItemIds: [],
     collapsed: false,
+  };
+  let sidebarConfig = JSON.parse(
+    sessionStorage.getItem("__rendererBrowserSidebarConfig") ??
+      JSON.stringify(defaultSidebarConfig),
+  );
+  let astronomySettings = {
+    enabled: getScenario().astronomyEnabled ?? true,
+    pollIntervalMinutes: 60,
   };
   const supportedEvents = new Set([
     "app:showTrayHint",
@@ -128,6 +141,17 @@ export function installRendererBrowserApi(fixtures) {
   };
   const invoke = (channel, ...args) => {
     calls.push({ kind: "invoke", channel, args });
+    if (channel === "astronomy:getSettings") {
+      const delay = Math.max(
+        0,
+        Number(getScenario().astronomySettingsDelayMs) || 0,
+      );
+      return delay > 0
+        ? new Promise((resolve) =>
+            setTimeout(() => resolve(astronomySettings), delay),
+          )
+        : Promise.resolve(astronomySettings);
+    }
     if (channel === "devTestData:getStatus")
       return Promise.resolve({
         available: true,
@@ -137,6 +161,46 @@ export function installRendererBrowserApi(fixtures) {
         updateAvailable: false,
       });
     if (channel === "settings:get") {
+      const scenario = getScenario();
+      const astronomyWidgetId = args[0]?.replace("astronomy_view_config:", "");
+      const weatherWidgetId = args[0]?.replace("weather_view_config:", "");
+      if (
+        args[0]?.startsWith("astronomy_view_config:") &&
+        Object.hasOwn(
+          scenario.astronomyWidgetLocations ?? {},
+          astronomyWidgetId,
+        )
+      ) {
+        return Promise.resolve(
+          JSON.stringify({
+            locationId: scenario.astronomyWidgetLocations[astronomyWidgetId],
+            viewMode:
+              scenario.astronomyWidgetViewModes?.[astronomyWidgetId] ??
+              "summary",
+          }),
+        );
+      }
+      if (
+        args[0]?.startsWith("weather_view_config:") &&
+        Object.hasOwn(scenario.weatherWidgetConfigs ?? {}, weatherWidgetId)
+      ) {
+        return Promise.resolve(
+          JSON.stringify(scenario.weatherWidgetConfigs[weatherWidgetId]),
+        );
+      }
+      const astronomyConfigKey =
+        "astronomy_view_config:pn_dev_fixture_widget_astronomy_medium";
+      if (
+        args[0] === astronomyConfigKey &&
+        Object.hasOwn(scenario, "astronomyWidgetLocationId")
+      ) {
+        return Promise.resolve(
+          JSON.stringify({
+            locationId: scenario.astronomyWidgetLocationId,
+            viewMode: "summary",
+          }),
+        );
+      }
       if (Object.hasOwn(settings, args[0]))
         return Promise.resolve(settings[args[0]]);
       // The production settings:get handler returns null for absent keys.
@@ -152,7 +216,15 @@ export function installRendererBrowserApi(fixtures) {
     }
     if (channel === "settings:setSidebarConfig") {
       sidebarConfig = args[0] ?? sidebarConfig;
+      sessionStorage.setItem(
+        "__rendererBrowserSidebarConfig",
+        JSON.stringify(sidebarConfig),
+      );
       return Promise.resolve({ ok: true });
+    }
+    if (channel === "astronomy:setSettings") {
+      astronomySettings = { ...astronomySettings, ...(args[0] ?? {}) };
+      return Promise.resolve(astronomySettings);
     }
     if (channel === "settings:getYouTubeViewConfig") {
       return Promise.resolve(fixtures.presetConfigs.youtube);
@@ -326,15 +398,20 @@ export function installRendererBrowserApi(fixtures) {
     if (channel === "sports:getEventDetails")
       return Promise.resolve(fixtures.sports.details[args[0]?.eventId] ?? null);
     if (channel === "weather:getSnapshot")
-      return Promise.resolve(
-        args[0] === fixtures.weather.snapshot.location.id
-          ? fixtures.weather.snapshot
-          : null,
-      );
-    if (channel === "astronomy:getSnapshot")
-      return Promise.resolve(
-        args[0] === fixtures.astronomy.locationId ? fixtures.astronomy : null,
-      );
+      return Promise.resolve(fixtures.weatherSnapshots?.[args[0]] ?? null);
+    if (channel === "astronomy:getSnapshot") {
+      const scenario = getScenario();
+      const snapshot = Object.hasOwn(scenario, "astronomySnapshot")
+        ? scenario.astronomySnapshot
+        : (fixtures.astronomyDetailsSnapshots?.[args[0]] ??
+          (args[0] === fixtures.astronomy.locationId
+            ? fixtures.astronomy
+            : null));
+      const delay = Math.max(0, Number(scenario.astronomySnapshotDelayMs) || 0);
+      return delay > 0
+        ? new Promise((resolve) => setTimeout(() => resolve(snapshot), delay))
+        : Promise.resolve(snapshot);
+    }
 
     const defaults = {
       "window:getState": { isMaximized: false },
@@ -390,14 +467,17 @@ export function installRendererBrowserApi(fixtures) {
       "youtube:getChannels": fixtures.youtube.channels,
       "sports:getTrackedTeams": fixtures.sports.teams,
       "sports:getStatus": fixtures.sports.status,
-      "weather:getLocations": [fixtures.weather.snapshot.location],
+      "weather:getLocations": getScenario().weatherLocations ??
+        fixtures.astronomyLocations ?? [fixtures.weather.snapshot.location],
       "weather:getSettings": {
         pollIntervalMinutes: 30,
-        defaultLocationId: fixtures.weather.snapshot.location.id,
+        defaultLocationId: Object.hasOwn(getScenario(), "defaultLocationId")
+          ? getScenario().defaultLocationId
+          : fixtures.weather.snapshot.location.id,
         temperatureUnit: "celsius",
         windSpeedUnit: "kmh",
         precipitationUnit: "mm",
-        timeFormat: "system",
+        timeFormat: getScenario().timeFormat ?? "system",
         showAlertsInWidgets: true,
         thresholds: {
           rainMm: 10,
@@ -412,7 +492,7 @@ export function installRendererBrowserApi(fixtures) {
         lastFetchedAt: fixtures.weather.snapshot.fetchedAt,
         staleLocationCount: 0,
       },
-      "astronomy:getSettings": { enabled: true, pollIntervalMinutes: 60 },
+      "astronomy:getSettings": astronomySettings,
       "astronomy:getStatus": {
         locationCount: 1,
         cachedLocationCount: 1,
@@ -429,7 +509,19 @@ export function installRendererBrowserApi(fixtures) {
     value: apiErrors,
   });
   Object.defineProperty(window, "__rendererBrowserFixtures", {
-    value: { views: fixtures.views, evidence: fixtures.fixtureEvidence },
+    value: {
+      views: fixtures.views,
+      evidence: fixtures.fixtureEvidence,
+      astronomyDetailsSnapshots: fixtures.astronomyDetailsSnapshots,
+    },
+  });
+  Object.defineProperty(window, "__rendererBrowserEmit", {
+    value: (channel, payload) => {
+      for (const callback of listeners.get(channel) ?? []) callback(payload);
+    },
+  });
+  Object.defineProperty(window, "__rendererBrowserGetSidebarConfig", {
+    value: () => JSON.parse(JSON.stringify(sidebarConfig)),
   });
   Object.defineProperty(window, "api", {
     configurable: false,

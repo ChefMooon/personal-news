@@ -10,6 +10,7 @@ import {
   Youtube,
   Newspaper,
   Trophy,
+  MoonStar,
 } from "lucide-react";
 import { cn } from "../lib/utils";
 import { useScripts } from "../hooks/useScripts";
@@ -17,6 +18,7 @@ import { useSidebarConfig } from "../hooks/useSidebarConfig";
 import { useRedditDigestEnabled } from "../contexts/RedditDigestEnabledContext";
 import { useSavedPostsEnabled } from "../contexts/SavedPostsEnabledContext";
 import { useSportsEnabled } from "../contexts/SportsEnabledContext";
+import { useAstronomyEnabled } from "../contexts/AstronomyEnabledContext";
 import {
   Tooltip,
   TooltipContent,
@@ -93,6 +95,8 @@ export function Sidebar(): React.ReactElement {
   const { enabled: redditDigestEnabled } = useRedditDigestEnabled();
   const { enabled: savedPostsEnabled } = useSavedPostsEnabled();
   const { enabled: sportsEnabled } = useSportsEnabled();
+  const { enabled: astronomyEnabled, loading: astronomyLoading } =
+    useAstronomyEnabled();
 
   const allNavItems: NavItem[] = [
     {
@@ -126,6 +130,12 @@ export function Sidebar(): React.ReactElement {
       icon: <Trophy className="h-5 w-5 shrink-0" />,
     },
     {
+      id: "astronomy",
+      to: "/astronomy/details",
+      label: "Astronomy",
+      icon: <MoonStar className="h-5 w-5 shrink-0" />,
+    },
+    {
       id: "scripts",
       to: "/scripts",
       label: "Script Manager",
@@ -141,6 +151,7 @@ export function Sidebar(): React.ReactElement {
     ...(redditDigestEnabled ? ["reddit-digest" as const] : []),
     ...(savedPostsEnabled ? ["saved-posts" as const] : []),
     ...(sportsEnabled ? ["sports" as const] : []),
+    ...(!astronomyLoading && astronomyEnabled ? ["astronomy" as const] : []),
   ]);
   const hiddenItemIds = new Set(config.hiddenItemIds);
   const navItems = config.itemOrder
