@@ -1,16 +1,20 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
-  <circle cx="64" cy="64" r="42.8" fill="#2563eb" />
-  <circle cx="64" cy="64" r="42.8" fill="url(#iconGlow)" opacity="0.75" />
-  <ellipse cx="64" cy="64" rx="42.8" ry="13.6" fill="none" stroke="#dbeafe" stroke-width="6.4" opacity="0.45" />
-  <ellipse cx="64" cy="64" rx="42.8" ry="27.6" fill="none" stroke="#dbeafe" stroke-width="5.6" opacity="0.26" />
-  <ellipse cx="64" cy="64" rx="14.8" ry="42.8" fill="none" stroke="#dbeafe" stroke-width="6.4" opacity="0.42" />
-  <ellipse cx="64" cy="64" rx="28.4" ry="42.8" fill="none" stroke="#dbeafe" stroke-width="5.6" opacity="0.22" />
-  <circle cx="64" cy="64" r="42.8" fill="none" stroke="#0f172a" stroke-width="7.2" opacity="0.9" />
-  <ellipse cx="49.6" cy="45.6" rx="16.8" ry="10" fill="#ffffff" opacity="0.14" transform="rotate(-20 49.6 45.6)" />
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">Personal News — Spectral Horizon</title>
+  <desc id="desc">A crisp blue globe with broad panels and open charcoal channels on a dark charcoal gradient tile.</desc>
   <defs>
-    <radialGradient id="iconGlow" cx="36%" cy="32%" r="72%">
-      <stop offset="0%" stop-color="#93c5fd" stop-opacity="0.5" />
-      <stop offset="100%" stop-color="#1d4ed8" stop-opacity="0" />
-    </radialGradient>
+    <linearGradient id="tile" x1="108" y1="84" x2="916" y2="940" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#252C31"/>
+      <stop offset="1" stop-color="#13191F"/>
+    </linearGradient>
+    <clipPath id="sphere-clip"><circle cx="512" cy="512" r="344"/></clipPath>
   </defs>
+  <rect id="app-tile" x="32" y="32" width="960" height="960" rx="220" fill="url(#tile)"/>
+  <g id="globe" clip-path="url(#sphere-clip)">
+    <circle id="sphere" cx="512" cy="512" r="344" fill="#4B8EFF"/>
+    <ellipse id="central-meridian" cx="512" cy="512" rx="156" ry="344" fill="#9CCBFF" stroke="#1C2329" stroke-width="28"/>
+    <g id="latitude-channels" fill="none" stroke="#1C2329" stroke-width="28">
+      <path d="M190 386C350 466 674 466 834 386"/>
+      <path d="M190 638C350 558 674 558 834 638"/>
+    </g>
+  </g>
 </svg>
