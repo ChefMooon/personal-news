@@ -25,6 +25,10 @@ import {
   DEFAULT_SIDEBAR_CONFIG,
   normalizeSidebarConfig,
 } from "../../shared/ipc-types";
+import {
+  DEFAULT_LARGE_VISIBLE_CHANNEL_COUNT,
+  normalizeLargeVisibleChannelCount,
+} from "../../shared/youtube-view-config";
 import type {
   AstronomyRefreshResult,
   AstronomySettings,
@@ -381,6 +385,7 @@ const DEFAULT_YOUTUBE_VIEW_CONFIG: YouTubeViewConfig = {
   selectedChannelIds: [],
   channelOrder: [],
   pinnedChannelIds: [],
+  largeVisibleChannelCount: DEFAULT_LARGE_VISIBLE_CHANNEL_COUNT,
   showUpcomingPanel: true,
   maxVideosPerChannel: 15,
   videoSortDirection: "newest",
@@ -3342,7 +3347,13 @@ export function registerIpcHandlers(): void {
 
       try {
         const parsed = JSON.parse(raw) as Partial<YouTubeViewConfig>;
-        return { ...DEFAULT_YOUTUBE_VIEW_CONFIG, ...parsed };
+        const merged = { ...DEFAULT_YOUTUBE_VIEW_CONFIG, ...parsed };
+        return {
+          ...merged,
+          largeVisibleChannelCount: normalizeLargeVisibleChannelCount(
+            merged.largeVisibleChannelCount,
+          ),
+        };
       } catch {
         return DEFAULT_YOUTUBE_VIEW_CONFIG;
       }
@@ -3363,7 +3374,12 @@ export function registerIpcHandlers(): void {
 
       setSetting(
         `${YOUTUBE_VIEW_CONFIG_KEY_PREFIX}${instanceId}`,
-        JSON.stringify(config),
+        JSON.stringify({
+          ...config,
+          largeVisibleChannelCount: normalizeLargeVisibleChannelCount(
+            config.largeVisibleChannelCount,
+          ),
+        }),
       );
       return { ok: true, error: null };
     },

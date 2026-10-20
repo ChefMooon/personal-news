@@ -781,6 +781,7 @@ export interface YouTubeViewConfig {
   selectedChannelIds: string[];
   channelOrder: string[];
   pinnedChannelIds: string[];
+  largeVisibleChannelCount: number;
   // Stream panel
   showUpcomingPanel: boolean;
   // Layout & display

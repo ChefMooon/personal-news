@@ -227,10 +227,18 @@ export function installRendererBrowserApi(fixtures) {
       return Promise.resolve(astronomySettings);
     }
     if (channel === "settings:getYouTubeViewConfig") {
-      return Promise.resolve(fixtures.presetConfigs.youtube);
+      const key = `youtube_view_config:${args[0]}`;
+      const instanceConfig = sessionStorage.getItem(key) ?? settings[key];
+      return Promise.resolve(
+        instanceConfig
+          ? JSON.parse(instanceConfig)
+          : fixtures.presetConfigs.youtube,
+      );
     }
     if (channel === "settings:setYouTubeViewConfig") {
-      settings[`youtube_view_config:${args[0]}`] = JSON.stringify(args[1]);
+      const key = `youtube_view_config:${args[0]}`;
+      settings[key] = JSON.stringify(args[1]);
+      sessionStorage.setItem(key, settings[key]);
       return Promise.resolve(true);
     }
     if (channel === "reddit:getDigestPosts") {

@@ -6,6 +6,7 @@ import {
   type YouTubeVideosFilterResult,
   type YoutubeVideoWatchedChangedEvent,
 } from "../../../shared/ipc-types";
+import { subscribeToYouTubeUpdated } from "./youtube-updated-subscription";
 
 interface UseYouTubeVideosFilteredOptions {
   limit?: number;
@@ -94,7 +95,7 @@ export function useYouTubeVideosFiltered(
     const handler = (): void => {
       void fetch();
     };
-    return window.api.on(IPC.YOUTUBE_UPDATED, handler);
+    return subscribeToYouTubeUpdated(handler);
   }, [fetch]);
 
   useEffect(() => {

@@ -5,6 +5,7 @@ import {
   type YtVideo,
   type YoutubeVideoWatchedChangedEvent,
 } from "../../../shared/ipc-types";
+import { subscribeToYouTubeUpdated } from "./youtube-updated-subscription";
 
 export function useYouTubeVideos(channelId: string): {
   videos: YtVideo[];
@@ -64,7 +65,7 @@ export function useYouTubeVideos(channelId: string): {
       fetch();
     };
 
-    return window.api.on(IPC.YOUTUBE_UPDATED, handler);
+    return subscribeToYouTubeUpdated(handler);
   }, [fetch]);
 
   useEffect(() => {

@@ -42,6 +42,7 @@ export const DASHBOARD_FIXTURE_PRESETS: readonly DashboardPreset[] = [
       selectedChannelIds: [...YOUTUBE_FIXTURE_CHANNEL_IDS],
       channelOrder: [...YOUTUBE_FIXTURE_CHANNEL_IDS],
       pinnedChannelIds: [],
+      largeVisibleChannelCount: 2,
       showVideos: true,
       showShorts: true,
       showLiveNow: true,

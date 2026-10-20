@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
 import type { YtChannel } from "../../../shared/ipc-types";
+import { subscribeToYouTubeUpdated } from "./youtube-updated-subscription";
 
 export function useYouTubeChannels(): {
   channels: YtChannel[];
@@ -55,7 +56,7 @@ export function useYouTubeChannels(): {
     const handler = (): void => {
       fetch();
     };
-    return window.api.on("youtube:updated", handler);
+    return subscribeToYouTubeUpdated(handler);
   }, [fetch]);
 
   return { channels, loading, refreshing, error, retry: fetch };

@@ -1014,6 +1014,160 @@ try {
       .locator(`[data-dashboard-tab-id="pn_dev_fixture_dashboard_${moduleId}"]`)
       .click();
   };
+  const youtubeLargeId = "pn_dev_fixture_widget_youtube_large";
+  await openFixtureDashboard("youtube");
+  const youtubeLarge = page.locator(
+    `[data-widget-instance-id="${youtubeLargeId}"]`,
+  );
+  const smallMediumHeights = await page.evaluate(() =>
+    ["pn_dev_fixture_widget_youtube_small", "pn_dev_fixture_widget_youtube_medium"].map((instanceId) =>
+      document.querySelector(`[data-widget-instance-id="${instanceId}"]`).getBoundingClientRect().height,
+    ),
+  );
+  await youtubeLarge.getByRole("button", { name: "YouTube widget settings" }).click();
+  const chooseVisibleChannels = async (count) => {
+    await youtubeLarge.getByRole("combobox", { name: "Initially visible channels" }).click();
+    await page.getByRole("option", { name: String(count), exact: true }).click();
+    await page.waitForFunction(
+      async ({ instanceId, expected }) => {
+        const config = await window.api.invoke("settings:getYouTubeViewConfig", instanceId);
+        return config.largeVisibleChannelCount === expected;
+      },
+      { instanceId: youtubeLargeId, expected: count },
+    );
+  };
+  await chooseVisibleChannels(1);
+  await youtubeLarge.getByRole("button", { name: "Close settings" }).click();
+  const youtubeContent = youtubeLarge.locator(".youtube-card-content");
+  await page.waitForTimeout(500);
+  const heightAtOne = await youtubeLarge.evaluate((element) => element.getBoundingClientRect().height);
+  const countOneGeometry = await youtubeContent.evaluate((element) => {
+    const box = element.getBoundingClientRect();
+    const rows = [...element.querySelectorAll(":scope > div > div > div > div")];
+    return {
+      completeRows: rows.filter((row) => {
+        const rect = row.getBoundingClientRect();
+        return rect.height > 0 && rect.top >= box.top && rect.bottom <= box.bottom;
+      }).length,
+      partialRows: rows.filter((row) => {
+        const rect = row.getBoundingClientRect();
+        return rect.height > 0 && rect.top < box.bottom && rect.bottom > box.bottom;
+      }).length,
+    };
+  });
+  await youtubeLarge.getByRole("button", { name: "YouTube widget settings" }).click();
+  await chooseVisibleChannels(2);
+  await youtubeLarge.getByRole("button", { name: "Close settings" }).click();
+  await page.waitForTimeout(150);
+  const contentHeightAtTwo = await youtubeContent.evaluate((element) => element.clientHeight);
+  const cardHeightAtTwo = await youtubeLarge.evaluate((element) => element.getBoundingClientRect().height);
+  const countTwoGeometry = await youtubeContent.evaluate((element) => {
+    const box = element.getBoundingClientRect();
+    const rows = [...element.querySelectorAll(":scope > div > div > div > div")];
+    return {
+      clientHeight: element.clientHeight,
+      rowBounds: rows.slice(0, 3).map((row) => {
+        const rect = row.getBoundingClientRect();
+        return { top: rect.top - box.top, bottom: rect.bottom - box.top };
+      }),
+      partialRows: rows.filter((row) => {
+        const rect = row.getBoundingClientRect();
+        return rect.height > 0 && rect.top < box.bottom && rect.bottom > box.bottom;
+      }).length,
+    };
+  });
+  await youtubeLarge.getByRole("button", { name: "YouTube widget settings" }).click();
+  await chooseVisibleChannels(3);
+  await youtubeLarge.getByRole("button", { name: "Close settings" }).click();
+  await page.waitForTimeout(500);
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  const expandedHeights = await page.evaluate(async (instanceId) => {
+    const heights = [];
+    for (let sample = 0; sample < 25; sample += 1) {
+      const content = document.querySelector(`[data-widget-instance-id="${instanceId}"] .youtube-card-content`);
+      heights.push(content?.clientHeight ?? -1);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    return heights;
+  }, youtubeLargeId);
+  const stableExpandedHeight = new Set(expandedHeights).size === 1;
+  const scrollEvidence = await youtubeContent.evaluate((element) => {
+    const rows = [...element.querySelectorAll(":scope > div > div > div > div")];
+    const visibleRows = rows.filter((row) => row.getBoundingClientRect().height > 0);
+    const box = element.getBoundingClientRect();
+    const completeRows = visibleRows.filter((row) => {
+      const rect = row.getBoundingClientRect();
+      return rect.top >= box.top && rect.bottom <= box.bottom;
+    }).length;
+    return {
+      clientHeight: element.clientHeight,
+      scrollHeight: element.scrollHeight,
+      overflowY: getComputedStyle(element).overflowY,
+      nestedScrollers: [...element.querySelectorAll("*")].filter((node) => {
+        const style = getComputedStyle(node);
+        return (style.overflowY === "auto" || style.overflowY === "scroll") && node.scrollHeight > node.clientHeight;
+      }).length,
+      completeRows,
+      partialRows: visibleRows.filter((row) => {
+        const rect = row.getBoundingClientRect();
+        return rect.top < box.bottom && rect.bottom > box.bottom;
+      }).length,
+      lastChannel: element.innerText.includes("Synthetic Nature Channel"),
+    };
+  });
+  const smallMediumHeightsAfter = await page.evaluate(() =>
+    ["pn_dev_fixture_widget_youtube_small", "pn_dev_fixture_widget_youtube_medium"].map((instanceId) =>
+      document.querySelector(`[data-widget-instance-id="${instanceId}"]`).getBoundingClientRect().height,
+    ),
+  );
+  assert(
+    heightAtOne < cardHeightAtTwo && countOneGeometry.completeRows >= 1 && countOneGeometry.partialRows === 0 &&
+      countTwoGeometry.partialRows === 0 && scrollEvidence.clientHeight > contentHeightAtTwo && scrollEvidence.completeRows >= 3 &&
+      scrollEvidence.overflowY === "auto" && scrollEvidence.nestedScrollers === 0 &&
+      scrollEvidence.lastChannel && stableExpandedHeight &&
+      smallMediumHeightsAfter.every((height, index) => Math.abs(height - smallMediumHeights[index]) < 1),
+    `Large YouTube must compact at count 1, show count 2 without a partial third row, expand at count 3, keep its expanded height stable, and use one scroll container without changing Small or Medium geometry: ${JSON.stringify({ heightAtOne, countOneGeometry, cardHeightAtTwo, contentHeightAtTwo, countTwoGeometry, expandedHeights, smallMediumHeights, smallMediumHeightsAfter, ...scrollEvidence })}`,
+  );
+  await youtubeLarge.getByRole("button", { name: "YouTube widget settings" }).click();
+  await chooseVisibleChannels(2);
+  await youtubeLarge.getByRole("button", { name: "Close settings" }).click();
+  await page.waitForFunction(() => {
+    const content = document.querySelector('[data-widget-instance-id="pn_dev_fixture_widget_youtube_large"] .youtube-card-content');
+    return Boolean(content && content.scrollHeight > content.clientHeight);
+  });
+  const lastChannel = youtubeContent.getByText("Synthetic Nature Channel", { exact: true });
+  await youtubeContent.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  await lastChannel.waitFor({ state: "visible" });
+  const lastChannelReached = await lastChannel.evaluate((element) => {
+    const viewport = element.closest(".youtube-card-content");
+    const row = element.getBoundingClientRect();
+    const box = viewport.getBoundingClientRect();
+    return Boolean(viewport && viewport.scrollTop > 0 && row.bottom > box.top && row.top < box.bottom);
+  });
+  assert(lastChannelReached, "Scrolling the Large YouTube list must bring the last channel into view");
+  await youtubeLarge.getByRole("button", { name: "YouTube widget settings" }).click();
+  await chooseVisibleChannels(3);
+  await youtubeLarge.getByRole("button", { name: "Close settings" }).click();
+  await page.reload({ waitUntil: "networkidle" });
+  await page.getByRole("link", { name: "Dashboard", exact: true }).click();
+  await page.locator('[data-dashboard-tab-id="pn_dev_fixture_dashboard_youtube"]').click();
+  const persistedLargeConfig = await page.evaluate(
+    (instanceId) => window.api.invoke("settings:getYouTubeViewConfig", instanceId),
+    youtubeLargeId,
+  );
+  const isolatedMediumConfig = await page.evaluate(
+    (instanceId) => window.api.invoke("settings:getYouTubeViewConfig", instanceId),
+    "pn_dev_fixture_widget_youtube_medium",
+  );
+  assert(
+    persistedLargeConfig.largeVisibleChannelCount === 3,
+    "Large YouTube visible channel count must persist after reopening the dashboard");
+  assert(
+    (isolatedMediumConfig.largeVisibleChannelCount ?? 2) === 2,
+    "Changing the Large widget must not change another YouTube instance");
+
   const assertDetailsDestination = async (
     expectedLocationId,
     expectedContent,

@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { IPC, type YouTubeViewConfig } from "../../../shared/ipc-types";
+import {
+  DEFAULT_LARGE_VISIBLE_CHANNEL_COUNT,
+  normalizeLargeVisibleChannelCount,
+} from "../../../shared/youtube-view-config";
 
 export const DEFAULT_YOUTUBE_VIEW_CONFIG: YouTubeViewConfig = {
   showVideos: true,
@@ -12,6 +16,7 @@ export const DEFAULT_YOUTUBE_VIEW_CONFIG: YouTubeViewConfig = {
   selectedChannelIds: [],
   channelOrder: [],
   pinnedChannelIds: [],
+  largeVisibleChannelCount: DEFAULT_LARGE_VISIBLE_CHANNEL_COUNT,
   showUpcomingPanel: true,
   maxVideosPerChannel: 15,
   videoSortDirection: "newest",
@@ -43,9 +48,15 @@ export function useYouTubeViewConfig(instanceId: string): {
     window.api
       .invoke(IPC.SETTINGS_GET_YOUTUBE_VIEW_CONFIG, instanceId)
       .then((value) => {
-        setConfigState({
+        const merged = {
           ...DEFAULT_YOUTUBE_VIEW_CONFIG,
           ...(value as Partial<YouTubeViewConfig>),
+        };
+        setConfigState({
+          ...merged,
+          largeVisibleChannelCount: normalizeLargeVisibleChannelCount(
+            merged.largeVisibleChannelCount,
+          ),
         });
       })
       .catch((err) => {

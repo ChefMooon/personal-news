@@ -209,7 +209,10 @@ function toGridLayout(
     h:
       layout.widget_instances[i]?.moduleId === "astronomy"
         ? item.h + Math.max(0, Math.floor(runtimeRows[i] ?? 0))
-        : item.h,
+        : layout.widget_instances[i]?.moduleId === "youtube" &&
+            layout.widget_instances[i]?.size === "large"
+          ? Math.max(4, item.h + (runtimeRows[i] ?? 0))
+          : item.h,
   }));
 }
 
@@ -1110,11 +1113,16 @@ export default function Dashboard(): React.ReactElement {
                         value={{
                           ...instance,
                           editMode,
+                          runtimeRows: runtimeRows[instanceId] ?? 0,
                           onSizeChange: (size) =>
                             handleSizeChange(instanceId, size),
                           onRuntimeRowsChange: (rows) =>
                             setRuntimeRows((current) => {
-                              const normalized = Math.max(0, Math.floor(rows));
+                              const normalized =
+                                instance.moduleId === "youtube" &&
+                                instance.size === "large"
+                                  ? Math.round(rows * 100) / 100
+                                  : Math.max(0, Math.floor(rows));
                               if (normalized === 0) {
                                 if (!(instanceId in current)) return current;
                                 const next = { ...current };

@@ -355,7 +355,7 @@ export function YouTubeSettingsPanel({
   onChange,
   sizeControl,
 }: YouTubeSettingsPanelProps): React.ReactElement {
-  const { instanceId } = useWidgetInstance();
+  const { instanceId, size } = useWidgetInstance();
   const [draft, setDraft] = useState<YouTubeViewConfig>(config);
   const [channelsExpanded, setChannelsExpanded] = useState(true);
   const [channelsExpandedLoaded, setChannelsExpandedLoaded] = useState(false);
@@ -658,6 +658,33 @@ export function YouTubeSettingsPanel({
           <div>
             <SectionHeader title="Layout" />
             <div className="space-y-0.5">
+              {size === "large" && (
+                <SettingRow
+                  label="Initially visible channels"
+                  description="Scroll the channel list to reach the remaining channels"
+                >
+                  <Select
+                    value={String(draft.largeVisibleChannelCount)}
+                    onValueChange={(value) =>
+                      applyUpdate({ ...draft, largeVisibleChannelCount: Number(value) })
+                    }
+                  >
+                    <SelectTrigger
+                      className="w-[80px] h-8 text-xs"
+                      aria-label="Initially visible channels"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[1, 2, 3, 4, 5].map((count) => (
+                        <SelectItem key={count} value={String(count)}>
+                          {count}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </SettingRow>
+              )}
               <SettingRow label="Max videos per channel">
                 <Select
                   value={String(draft.maxVideosPerChannel)}
