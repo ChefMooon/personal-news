@@ -4,6 +4,23 @@ All notable changes to this project are documented in this file.
 
 The format follows Keep a Changelog, and this project uses Semantic Versioning.
 
+## [1.5.0] - 2026-10-20
+
+### Added
+
+- Added a full Astronomy details page with location-aware links for observing information.
+- Added configurable channel counts for large YouTube widgets.
+- Added Saved Posts previews, multi-column layouts, and a quick peek action.
+
+### Changed
+
+- Improved responsive layouts and content navigation across Astronomy, Sports, Weather, and Saved Posts widgets.
+- Made dashboard editing controls more compact and easier to use, and moved YouTube channel disclosure into the widget header.
+
+### Fixed
+
+- Fixed content visibility, paging, and layout issues in compact and large widgets, including Weather forecast navigation and Saved Posts scrolling.
+
 ## [1.4.3] - 2026-09-23
 
 ### Fixed
