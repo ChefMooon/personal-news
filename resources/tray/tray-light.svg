@@ -1,16 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
-  <circle cx="8" cy="8" r="5.35" fill="#3b82f6" />
-  <circle cx="8" cy="8" r="5.35" fill="url(#trayLightGlow)" opacity="0.82" />
-  <ellipse cx="8" cy="8" rx="5.35" ry="1.7" fill="none" stroke="#eff6ff" stroke-width="0.8" opacity="0.6" />
-  <ellipse cx="8" cy="8" rx="5.35" ry="3.45" fill="none" stroke="#eff6ff" stroke-width="0.7" opacity="0.34" />
-  <ellipse cx="8" cy="8" rx="1.85" ry="5.35" fill="none" stroke="#eff6ff" stroke-width="0.8" opacity="0.56" />
-  <ellipse cx="8" cy="8" rx="3.55" ry="5.35" fill="none" stroke="#eff6ff" stroke-width="0.7" opacity="0.28" />
-  <circle cx="8" cy="8" r="5.35" fill="none" stroke="#ffffff" stroke-width="0.9" opacity="0.95" />
-  <ellipse cx="6.2" cy="5.7" rx="2.1" ry="1.25" fill="#ffffff" opacity="0.2" transform="rotate(-20 6.2 5.7)" />
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
   <defs>
-    <radialGradient id="trayLightGlow" cx="36%" cy="32%" r="72%">
-      <stop offset="0%" stop-color="#bfdbfe" stop-opacity="0.55" />
-      <stop offset="100%" stop-color="#2563eb" stop-opacity="0" />
-    </radialGradient>
+    <clipPath id="globe-clip"><circle cx="16" cy="16" r="13.5" /></clipPath>
   </defs>
+  <g clip-path="url(#globe-clip)">
+    <circle cx="16" cy="16" r="13.5" fill="#4B8EFF" />
+    <ellipse cx="16" cy="16" rx="6.1" ry="13.5" fill="#9CCBFF" stroke="#1C2329" stroke-width="1.1" />
+    <g fill="none" stroke="#1C2329" stroke-width="1.1">
+      <path d="M3.5 11.1C9.8 14.2 22.2 14.2 28.5 11.1" />
+      <path d="M3.5 20.9C9.8 17.8 22.2 17.8 28.5 20.9" />
+    </g>
+  </g>
+  <circle cx="16" cy="16" r="13.5" fill="none" stroke="#1C2329" stroke-width="1.2" />
 </svg>

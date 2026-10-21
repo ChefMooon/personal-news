@@ -26,6 +26,11 @@ const icoTargets = [
   { file: "icon.ico", sizes: [16, 24, 32, 48, 64, 128, 256] },
 ];
 
+const trayTargets = ["tray-dark", "tray-light"].map((name) => ({
+  source: path.join(resourcesDir, "tray", `${name}.svg`),
+  output: path.join(resourcesDir, "tray", `${name}.png`),
+}));
+
 const checkOnly = process.argv.includes("--check");
 
 async function renderPng(svg, size) {
@@ -58,6 +63,14 @@ async function main() {
     generatedAssets.set(target.file, ico);
   }
 
+  for (const target of trayTargets) {
+    const traySvg = await readFile(target.source, "utf8");
+    generatedAssets.set(
+      path.relative(resourcesDir, target.output),
+      await renderPng(traySvg, 32),
+    );
+  }
+
   const mismatches = [];
   for (const [file, expected] of generatedAssets) {
     const targetPath = path.join(resourcesDir, file);
@@ -83,7 +96,7 @@ async function main() {
   }
 
   process.stdout.write(
-    `${checkOnly ? "Verified" : "Generated"} ${rasterTargets.length + icoTargets.length + 1} non-tray icon assets from ${path.relative(workspaceRoot, sourceSvgPath)}.\n`,
+    `${checkOnly ? "Verified" : "Generated"} ${generatedAssets.size} icon assets, including tray icons.\n`,
   );
 }
 
