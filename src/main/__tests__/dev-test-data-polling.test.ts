@@ -113,6 +113,50 @@ function getSetting(key: string): string | null {
   return row?.value ?? null;
 }
 
+function addEnabledSportsLeague(leagueId: string, sport = "Basketball"): void {
+  const now = Math.floor(Date.now() / 1000);
+  database
+    .prepare(
+      `INSERT INTO sports_leagues (league_id, sport, name, enabled, sort_order, added_at)
+    VALUES (?, ?, ?, 1, 0, ?)`,
+    )
+    .run(leagueId, sport, `${leagueId} League`, now);
+  database
+    .prepare(
+      "INSERT INTO sports_cache_meta (sport, fetch_date, fetched_at) VALUES (?, 'badge-sync', ?)",
+    )
+    .run(`badge:${sport}:${leagueId}`, now);
+}
+
+function addLiveSportsEvent(
+  leagueId: string,
+  sport = "Basketball",
+  eventId = "live-test-event",
+): void {
+  const date = new Date();
+  const eventDate = [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
+  database
+    .prepare(
+      `INSERT INTO sports_events (
+    event_id, league_id, sport, home_team, away_team, home_score, away_score,
+    event_date, status, fetched_date
+  ) VALUES (?, ?, ?, ?, ?, '1', '0', ?, 'Live', ?)`,
+    )
+    .run(
+      eventId,
+      leagueId,
+      sport,
+      `Home ${eventId}`,
+      `Away ${eventId}`,
+      eventDate,
+      eventDate,
+    );
+}
+
 function response(body: unknown, contentType = "application/json"): Response {
   return new Response(typeof body === "string" ? body : JSON.stringify(body), {
     status: 200,
@@ -406,6 +450,296 @@ describe("automatic polling with development fixtures", () => {
         )
         .get(),
     ).toEqual(before);
+  });
+
+  it("queues a manual forced refresh behind an in-flight nonforced refresh", async () => {
+    addEnabledSportsLeague("force-semantics");
+    setSetting("sports_enabled", "false");
+    SportsModule.initialize(database);
+    let releaseFirst!: (events: never[]) => void;
+    mockedState.sportsApi.fetchLeagueEventsForDateWithFallback
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            releaseFirst = resolve;
+          }),
+      )
+      .mockResolvedValue([]);
+
+    const initial = refreshSportsData("Basketball", false);
+    await vi.waitFor(() =>
+      expect(
+        mockedState.sportsApi.fetchLeagueEventsForDateWithFallback,
+      ).toHaveBeenCalledTimes(1),
+    );
+    const forced = refreshSportsData("Basketball", true);
+    releaseFirst([]);
+    await Promise.all([initial, forced]);
+
+    expect(
+      mockedState.sportsApi.fetchLeagueEventsForDateWithFallback,
+    ).toHaveBeenCalledTimes(6);
+  });
+
+  it("isolates league failures and does not mark a partial refresh current", async () => {
+    addEnabledSportsLeague("league-fails");
+    addEnabledSportsLeague("league-succeeds");
+    setSetting("sports_enabled", "false");
+    SportsModule.initialize(database);
+    mockedState.sportsApi.fetchLeagueEventsForDateWithFallback.mockImplementation(
+      async (_date, leagueId) => {
+        if (leagueId === "league-fails")
+          throw new Error("simulated league failure");
+        return [];
+      },
+    );
+
+    await refreshSportsData("Basketball", true);
+
+    expect(
+      mockedState.sportsApi.fetchLeagueEventsForDateWithFallback,
+    ).toHaveBeenCalledTimes(4);
+    expect(
+      database
+        .prepare("SELECT 1 FROM sports_cache_meta WHERE sport = 'Basketball'")
+        .get(),
+    ).toBeUndefined();
+  });
+
+  it("does not advance cache metadata when all enabled leagues fail", async () => {
+    addEnabledSportsLeague("all-fail");
+    setSetting("sports_enabled", "false");
+    SportsModule.initialize(database);
+    mockedState.sportsApi.fetchLeagueEventsForDateWithFallback.mockRejectedValue(
+      new Error("simulated provider outage"),
+    );
+
+    await expect(refreshSportsData("Basketball", true)).rejects.toThrow(
+      "all enabled Basketball leagues",
+    );
+    expect(
+      database
+        .prepare("SELECT 1 FROM sports_cache_meta WHERE sport = 'Basketball'")
+        .get(),
+    ).toBeUndefined();
+  });
+
+  it("retains cached live scores and reschedules polling after provider errors", async () => {
+    addEnabledSportsLeague("live-resilience");
+    addLiveSportsEvent("live-resilience");
+    setSetting("sports_enabled", "false");
+    SportsModule.initialize(database);
+    await refreshSportsData("Basketball", true);
+    const metadataBefore = database
+      .prepare(
+        "SELECT fetched_at FROM sports_cache_meta WHERE sport = 'Basketball'",
+      )
+      .get();
+    mockedState.sportsApi.fetchEventById.mockRejectedValue(
+      new Error("simulated outage"),
+    );
+    mockedState.sportsApi.fetchLeagueEventsForDateWithFallback.mockRejectedValue(
+      new Error("simulated outage"),
+    );
+
+    await vi.advanceTimersByTimeAsync(60_001);
+    const retained = database
+      .prepare(
+        "SELECT home_score, away_score FROM sports_events WHERE event_id = 'live-test-event'",
+      )
+      .get();
+    expect(retained).toEqual({ home_score: "1", away_score: "0" });
+    expect(mockedState.sportsApi.fetchEventById).toHaveBeenCalledTimes(1);
+    expect(
+      database
+        .prepare(
+          "SELECT fetched_at FROM sports_cache_meta WHERE sport = 'Basketball'",
+        )
+        .get(),
+    ).toEqual(metadataBefore);
+
+    await vi.advanceTimersByTimeAsync(60_001);
+    expect(mockedState.sportsApi.fetchEventById).toHaveBeenCalledTimes(2);
+  });
+
+  it("fetches the live fallback scoreboard once for multiple games in a league/date", async () => {
+    addEnabledSportsLeague("live-batch");
+    addLiveSportsEvent("live-batch", "Basketball", "batch-one");
+    addLiveSportsEvent("live-batch", "Basketball", "batch-two");
+    setSetting("sports_enabled", "false");
+    SportsModule.initialize(database);
+    await refreshSportsData("Basketball", true);
+    mockedState.sportsApi.fetchEventById.mockResolvedValue(null);
+    const today = [
+      new Date().getFullYear(),
+      String(new Date().getMonth() + 1).padStart(2, "0"),
+      String(new Date().getDate()).padStart(2, "0"),
+    ].join("-");
+    mockedState.sportsApi.fetchLeagueEventsForDateWithFallback
+      .mockClear()
+      .mockResolvedValue([
+        {
+          eventId: "batch-one",
+          leagueId: "live-batch",
+          sport: "Basketball",
+          homeTeamId: null,
+          awayTeamId: null,
+          homeTeam: "Home batch-one",
+          awayTeam: "Away batch-one",
+          homeTeamBadgeUrl: null,
+          awayTeamBadgeUrl: null,
+          homeScore: "1",
+          awayScore: "0",
+          eventDate: today,
+          eventTime: null,
+          status: "Live",
+          venue: null,
+        },
+        {
+          eventId: "batch-two",
+          leagueId: "live-batch",
+          sport: "Basketball",
+          homeTeamId: null,
+          awayTeamId: null,
+          homeTeam: "Home batch-two",
+          awayTeam: "Away batch-two",
+          homeTeamBadgeUrl: null,
+          awayTeamBadgeUrl: null,
+          homeScore: "1",
+          awayScore: "0",
+          eventDate: today,
+          eventTime: null,
+          status: "Live",
+          venue: null,
+        },
+      ]);
+
+    await vi.advanceTimersByTimeAsync(60_001);
+
+    expect(
+      mockedState.sportsApi.fetchLeagueEventsForDateWithFallback,
+    ).toHaveBeenCalledTimes(1);
+    expect(
+      mockedState.sportsApi.fetchLeagueEventsForDateWithFallback,
+    ).toHaveBeenCalledWith(
+      today,
+      "live-batch",
+      "Basketball",
+      "live-batch League",
+      { forceMergeEspn: true },
+    );
+  });
+
+  it("keeps one live event failure from discarding another event's successful score", async () => {
+    addEnabledSportsLeague("event-isolation");
+    addLiveSportsEvent("event-isolation", "Basketball", "bad-event");
+    addLiveSportsEvent("event-isolation", "Basketball", "good-event");
+    setSetting("sports_enabled", "false");
+    SportsModule.initialize(database);
+    await refreshSportsData("Basketball", true);
+    mockedState.sportsApi.fetchLeagueEventsForDateWithFallback.mockRejectedValue(
+      new Error("fallback unavailable"),
+    );
+    mockedState.sportsApi.fetchEventById.mockImplementation(
+      async (eventId: string) => {
+        if (eventId === "bad-event") throw new Error("one event unavailable");
+        const date = new Date();
+        const eventDate = [
+          date.getFullYear(),
+          String(date.getMonth() + 1).padStart(2, "0"),
+          String(date.getDate()).padStart(2, "0"),
+        ].join("-");
+        return {
+          eventId,
+          leagueId: "event-isolation",
+          sport: "Basketball",
+          homeTeamId: null,
+          awayTeamId: null,
+          homeTeam: `Home ${eventId}`,
+          awayTeam: `Away ${eventId}`,
+          homeTeamBadgeUrl: null,
+          awayTeamBadgeUrl: null,
+          homeScore: "5",
+          awayScore: "0",
+          eventDate,
+          eventTime: null,
+          status: "Live",
+          venue: null,
+        };
+      },
+    );
+
+    await vi.advanceTimersByTimeAsync(60_001);
+
+    expect(
+      database
+        .prepare(
+          "SELECT home_score FROM sports_events WHERE event_id = 'bad-event'",
+        )
+        .get(),
+    ).toEqual({ home_score: "1" });
+    expect(
+      database
+        .prepare(
+          "SELECT home_score FROM sports_events WHERE event_id = 'good-event'",
+        )
+        .get(),
+    ).toEqual({ home_score: "5" });
+  });
+
+  it("waits for an active live write before starting a forced full refresh", async () => {
+    addEnabledSportsLeague("refresh-order");
+    addLiveSportsEvent("refresh-order");
+    setSetting("sports_enabled", "false");
+    SportsModule.initialize(database);
+    await refreshSportsData("Basketball", true);
+    let releaseLive!: (value: unknown) => void;
+    mockedState.sportsApi.fetchEventById.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          releaseLive = resolve;
+        }),
+    );
+    mockedState.sportsApi.fetchLeagueEventsForDateWithFallback.mockClear();
+
+    await vi.advanceTimersByTimeAsync(60_001);
+    await vi.waitFor(() =>
+      expect(mockedState.sportsApi.fetchEventById).toHaveBeenCalledTimes(1),
+    );
+    const forcedRefresh = refreshSportsData("Basketball", true);
+    await Promise.resolve();
+    expect(
+      mockedState.sportsApi.fetchLeagueEventsForDateWithFallback,
+    ).not.toHaveBeenCalled();
+
+    const date = new Date();
+    const eventDate = [
+      date.getFullYear(),
+      String(date.getMonth() + 1).padStart(2, "0"),
+      String(date.getDate()).padStart(2, "0"),
+    ].join("-");
+    releaseLive({
+      eventId: "live-test-event",
+      leagueId: "refresh-order",
+      sport: "Basketball",
+      homeTeamId: null,
+      awayTeamId: null,
+      homeTeam: "Home live-test-event",
+      awayTeam: "Away live-test-event",
+      homeTeamBadgeUrl: null,
+      awayTeamBadgeUrl: null,
+      homeScore: "2",
+      awayScore: "0",
+      eventDate,
+      eventTime: null,
+      status: "Live",
+      venue: null,
+    });
+    await forcedRefresh;
+
+    expect(
+      mockedState.sportsApi.fetchLeagueEventsForDateWithFallback,
+    ).toHaveBeenCalledTimes(3);
   });
 
   it("does not suppress unrelated user-authored scheduled scripts", async () => {

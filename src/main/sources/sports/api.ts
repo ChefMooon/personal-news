@@ -6,21 +6,38 @@ import type {
   TeamSearchResult,
 } from "../../../shared/ipc-types";
 import { normalizeEventStatus } from "./status";
+import { isElectronHarnessRun } from "../../harness-mode";
 
 const SPORTS_DB_FREE_API_KEY = "123";
-const SPORTS_DB_BASE_URL = `https://www.thesportsdb.com/api/v1/json/${SPORTS_DB_FREE_API_KEY}`;
+const DEFAULT_SPORTS_DB_BASE_URL = `https://www.thesportsdb.com/api/v1/json/${SPORTS_DB_FREE_API_KEY}`;
+const SPORTS_DB_BASE_URL = (() => {
+  const override = process.env.PERSONAL_NEWS_HARNESS_SPORTS_DB_BASE_URL?.trim();
+  return isElectronHarnessRun() && override
+    ? override.replace(/\/$/, "")
+    : DEFAULT_SPORTS_DB_BASE_URL;
+})();
 const ESPN_CORE_BASE_URL = "https://sports.core.api.espn.com/v2";
-const SPORTS_API_MIN_INTERVAL_MS = 500;
+// The free SportsDB key is quota limited; leave substantial headroom for bursts.
+const SPORTS_DB_MIN_INTERVAL_MS = 2_500;
+const ESPN_MIN_INTERVAL_MS = 300;
 const SPORTS_API_MAX_RETRIES = 3;
+const SPORTS_API_TIMEOUT_MS = 12_000;
 
 function isTransientSportsApiStatus(status: number): boolean {
   return status === 408 || status === 425 || status === 429 || status >= 500;
 }
 
-let lastSportsRequestAt = 0;
-let sportsRequestQueue: Promise<void> = Promise.resolve();
+const requestState = new Map<
+  string,
+  { lastAt: number; cooldownUntil: number; queue: Promise<void> }
+>();
+const inFlightGets = new Map<string, Promise<string>>();
+const responseCache = new Map<string, { expiresAt: number; body: string }>();
 let leaguesCatalogPromise: Promise<SportLeague[]> | null = null;
-const espnTeamCache = new Map<string, Promise<EspnTeam | null>>();
+const espnTeamCache = new Map<
+  string,
+  { expiresAt: number; promise: Promise<EspnTeam | null> }
+>();
 
 type SportsDbLeague = {
   idLeague?: string;
@@ -265,10 +282,40 @@ function parseRetryAfterMs(value: string | null): number | null {
   return Math.max(0, retryAt - Date.now());
 }
 
-async function scheduleSportsRequest<T>(task: () => Promise<T>): Promise<T> {
-  const previous = sportsRequestQueue;
+function cacheResponse(url: string, body: string, ttlMs: number): void {
+  const now = Date.now();
+  for (const [key, value] of responseCache) {
+    if (value.expiresAt <= now) responseCache.delete(key);
+  }
+  while (responseCache.size >= 250) {
+    const oldest = responseCache.keys().next().value;
+    if (oldest === undefined) break;
+    responseCache.delete(oldest);
+  }
+  responseCache.set(url, { body, expiresAt: now + ttlMs });
+}
+
+async function scheduleSportsRequest<T>(
+  url: string,
+  task: () => Promise<T>,
+): Promise<T> {
+  const host = new URL(url).hostname;
+  const minimumInterval =
+    isElectronHarnessRun() &&
+    new URL(url).origin === new URL(SPORTS_DB_BASE_URL).origin
+      ? 0
+      : host === "www.thesportsdb.com"
+        ? SPORTS_DB_MIN_INTERVAL_MS
+        : ESPN_MIN_INTERVAL_MS;
+  const state = requestState.get(host) ?? {
+    lastAt: 0,
+    cooldownUntil: 0,
+    queue: Promise.resolve(),
+  };
+  requestState.set(host, state);
+  const previous = state.queue;
   let releaseQueue!: () => void;
-  sportsRequestQueue = new Promise<void>((resolve) => {
+  state.queue = new Promise<void>((resolve) => {
     releaseQueue = resolve;
   });
 
@@ -276,18 +323,120 @@ async function scheduleSportsRequest<T>(task: () => Promise<T>): Promise<T> {
 
   const waitMs = Math.max(
     0,
-    SPORTS_API_MIN_INTERVAL_MS - (Date.now() - lastSportsRequestAt),
+    state.cooldownUntil - Date.now(),
+    minimumInterval - (Date.now() - state.lastAt),
   );
   if (waitMs > 0) {
     await delay(waitMs);
   }
 
-  lastSportsRequestAt = Date.now();
+  state.lastAt = Date.now();
 
   try {
-    return await task();
+    const result = await task();
+    if (result instanceof Response && result.status === 429) {
+      const retryAfter =
+        parseRetryAfterMs(result.headers.get("retry-after")) ?? 1_000;
+      state.cooldownUntil = Math.max(
+        state.cooldownUntil,
+        Date.now() + retryAfter,
+      );
+    }
+    return result;
   } finally {
     releaseQueue();
+  }
+}
+
+function retryDelay(url: string, response: Response, attempt: number): number {
+  const value = parseRetryAfterMs(response.headers.get("retry-after"));
+  const wait = value ?? 1_000 * 2 ** attempt;
+  const state = requestState.get(new URL(url).hostname);
+  if (response.status === 429 && state)
+    state.cooldownUntil = Math.max(state.cooldownUntil, Date.now() + wait);
+  return Math.min(wait, 30_000);
+}
+
+async function fetchText(url: string): Promise<string> {
+  const cached = responseCache.get(url);
+  if (cached && cached.expiresAt > Date.now()) return cached.body;
+  if (cached) responseCache.delete(url);
+  const pending = inFlightGets.get(url);
+  if (pending) return pending;
+  const task = (async () => {
+    let lastError: unknown;
+    for (let attempt = 0; attempt <= SPORTS_API_MAX_RETRIES; attempt += 1) {
+      let timeout: ReturnType<typeof setTimeout> | undefined;
+      try {
+        const response = await scheduleSportsRequest(url, () => {
+          const controller = new AbortController();
+          timeout = setTimeout(() => controller.abort(), SPORTS_API_TIMEOUT_MS);
+          return fetch(url, {
+            headers: { Accept: "application/json" },
+            signal: controller.signal,
+          });
+        });
+        const body = await response.text(); // deadline also bounds body consumption
+        if (!response.ok) {
+          if (
+            isTransientSportsApiStatus(response.status) &&
+            attempt < SPORTS_API_MAX_RETRIES
+          ) {
+            const wait = retryDelay(url, response, attempt);
+            await delay(wait);
+            continue;
+          }
+          throw new Error(
+            `Sports provider ${new URL(url).hostname} returned HTTP ${response.status} for ${new URL(url).pathname}.`,
+          );
+        }
+        const { hostname, pathname } = new URL(url);
+        if (/\/lookupevent\.php$/.test(pathname)) {
+          cacheResponse(url, body, 10_000);
+        } else if (/\/scoreboard$/.test(pathname)) {
+          cacheResponse(url, body, 15_000);
+        } else if (
+          /\/search_all_teams\.php|\/lookuptable\.php|\/standings/.test(
+            pathname,
+          )
+        ) {
+          cacheResponse(
+            url,
+            body,
+            /lookuptable|standings/.test(url) ? 5 * 60_000 : 60 * 60_000,
+          );
+        } else if (
+          hostname === "sports.core.api.espn.com" &&
+          /\/teams\//.test(pathname)
+        ) {
+          cacheResponse(url, body, 15 * 60_000);
+        }
+        return body;
+      } catch (error) {
+        lastError = error;
+        if (error instanceof Error && / returned HTTP \d+/.test(error.message))
+          break;
+        if (attempt >= SPORTS_API_MAX_RETRIES) break;
+        await delay(Math.min(1_000 * 2 ** attempt, 8_000));
+      } finally {
+        if (timeout) clearTimeout(timeout);
+      }
+    }
+    const reason =
+      lastError instanceof Error
+        ? lastError.name === "AbortError"
+          ? "timed out"
+          : lastError.message
+        : "network failure";
+    throw new Error(
+      `Sports provider request failed (${new URL(url).hostname}${new URL(url).pathname}): ${reason}`,
+    );
+  })();
+  inFlightGets.set(url, task);
+  try {
+    return await task;
+  } finally {
+    inFlightGets.delete(url);
   }
 }
 
@@ -298,84 +447,36 @@ async function request<T>(
   const search = new URLSearchParams(params);
   const url = `${SPORTS_DB_BASE_URL}/${path}?${search.toString()}`;
 
-  for (let attempt = 0; attempt <= SPORTS_API_MAX_RETRIES; attempt += 1) {
-    const response = await scheduleSportsRequest(() => fetch(url));
-    if (response.ok) {
-      const raw = await response.text();
-      if (!raw.trim()) {
-        return [];
-      }
-
-      let payload: unknown;
-      try {
-        payload = JSON.parse(raw) as unknown;
-      } catch (error) {
-        throw new Error(
-          `Sports API returned invalid JSON for ${path}: ${error instanceof Error ? error.message : "Unknown parse error."}`,
-        );
-      }
-
-      return extractFirstArray<T>(payload);
-    }
-
-    if (
-      isTransientSportsApiStatus(response.status) &&
-      attempt < SPORTS_API_MAX_RETRIES
-    ) {
-      const retryAfterMs = parseRetryAfterMs(
-        response.headers.get("retry-after"),
-      );
-      const backoffMs = retryAfterMs ?? 1000 * 2 ** attempt;
-      await delay(backoffMs);
-      continue;
-    }
-
-    throw new Error(`Sports API request failed with HTTP ${response.status}.`);
+  const raw = await fetchText(url);
+  if (!raw.trim()) {
+    return [];
   }
 
-  throw new Error(
-    "Sports API request failed after retry attempts were exhausted.",
-  );
+  let payload: unknown;
+  try {
+    payload = JSON.parse(raw) as unknown;
+  } catch (error) {
+    throw new Error(
+      `Sports API returned invalid JSON for ${path}: ${error instanceof Error ? error.message : "Unknown parse error."}`,
+    );
+  }
+
+  return extractFirstArray<T>(payload);
 }
 
 async function requestJsonFromUrl<T>(url: string): Promise<T> {
-  for (let attempt = 0; attempt <= SPORTS_API_MAX_RETRIES; attempt += 1) {
-    const response = await scheduleSportsRequest(() =>
-      fetch(url, { headers: { Accept: "application/json" } }),
-    );
-    if (response.ok) {
-      const raw = await response.text();
-      if (!raw.trim()) {
-        throw new Error(`Sports API returned an empty response for ${url}.`);
-      }
-
-      try {
-        return JSON.parse(raw) as T;
-      } catch (error) {
-        throw new Error(
-          `Sports API returned invalid JSON for ${url}: ${error instanceof Error ? error.message : "Unknown parse error."}`,
-        );
-      }
-    }
-
-    if (
-      isTransientSportsApiStatus(response.status) &&
-      attempt < SPORTS_API_MAX_RETRIES
-    ) {
-      const retryAfterMs = parseRetryAfterMs(
-        response.headers.get("retry-after"),
-      );
-      const backoffMs = retryAfterMs ?? 1000 * 2 ** attempt;
-      await delay(backoffMs);
-      continue;
-    }
-
-    throw new Error(`Sports API request failed with HTTP ${response.status}.`);
+  const raw = await fetchText(url);
+  if (!raw.trim()) {
+    throw new Error(`Sports API returned an empty response for ${url}.`);
   }
 
-  throw new Error(
-    "Sports API request failed after retry attempts were exhausted.",
-  );
+  try {
+    return JSON.parse(raw) as T;
+  } catch (error) {
+    throw new Error(
+      `Sports API returned invalid JSON for ${url}: ${error instanceof Error ? error.message : "Unknown parse error."}`,
+    );
+  }
 }
 
 function getEspnStat(
@@ -631,12 +732,23 @@ function supportsLeagueFallback(sport: string, leagueId: string): boolean {
 
 async function fetchEspnTeam(teamRef: string): Promise<EspnTeam | null> {
   const cached = espnTeamCache.get(teamRef);
-  if (cached) {
-    return cached;
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.promise;
   }
+  if (cached) espnTeamCache.delete(teamRef);
 
-  const pending = requestJsonFromUrl<EspnTeam>(teamRef).catch(() => null);
-  espnTeamCache.set(teamRef, pending);
+  const pending = requestJsonFromUrl<EspnTeam>(teamRef)
+    .catch(() => null)
+    .then((team) => {
+      if (!team) espnTeamCache.delete(teamRef);
+      return team;
+    });
+  if (espnTeamCache.size >= 300)
+    espnTeamCache.delete(espnTeamCache.keys().next().value!);
+  espnTeamCache.set(teamRef, {
+    expiresAt: Date.now() + 15 * 60_000,
+    promise: pending,
+  });
   return pending;
 }
 
@@ -922,21 +1034,31 @@ export async function fetchLeagueEventsForDateWithFallback(
   options?: { forceMergeEspn?: boolean },
 ): Promise<SportEvent[]> {
   const forceMergeEspn = options?.forceMergeEspn === true;
-  const sportsDbEvents = await fetchLeagueEventsForDate(date, leagueName);
-
-  // Restrict fallback scope for performance and reliability unless explicitly requested.
   const supportsFallback =
     forceMergeEspn || supportsLeagueFallback(sport, leagueId);
+  const [sportsDbResult, espnResult] = await Promise.allSettled([
+    fetchLeagueEventsForDate(date, leagueName),
+    supportsFallback
+      ? fetchEspnLeagueEventsForDate(date, leagueId, sport, leagueName)
+      : Promise.resolve(null),
+  ]);
+  const sportsDbEvents =
+    sportsDbResult.status === "fulfilled" ? sportsDbResult.value : [];
   if (!supportsFallback) {
+    if (sportsDbResult.status === "rejected") throw sportsDbResult.reason;
     return sportsDbEvents;
   }
-
-  const espnEvents = await fetchEspnLeagueEventsForDate(
-    date,
-    leagueId,
-    sport,
-    leagueName,
-  );
+  if (
+    sportsDbResult.status === "rejected" &&
+    espnResult.status === "rejected"
+  ) {
+    throw new AggregateError(
+      [sportsDbResult.reason, espnResult.reason],
+      `Both sports providers failed for ${leagueName} on ${date}.`,
+    );
+  }
+  const espnEvents =
+    espnResult.status === "fulfilled" ? espnResult.value : null;
   if (!espnEvents || espnEvents.length === 0) {
     return sportsDbEvents;
   }
@@ -972,18 +1094,34 @@ export async function fetchEventDetails(
   );
 }
 
+export async function fetchEspnEventDetails(
+  event: SportEvent,
+): Promise<SportEventDetail | null> {
+  if (!event.eventId.startsWith("espn:")) return null;
+  const events = await fetchEspnLeagueEventsForDate(
+    event.eventDate,
+    event.leagueId,
+    event.sport,
+  );
+  const match = events?.find((item) => item.eventId === event.eventId);
+  return match ? { ...match, progress: null, descriptionEN: null } : null;
+}
+
 export async function fetchLeagueStandings(
   leagueId: string,
   season: string,
   sport: string,
   leagueName?: string,
 ): Promise<SportStandingRow[]> {
-  const espnRows = await fetchEspnStandings(
-    leagueId,
-    sport,
-    season,
-    leagueName,
-  );
+  let espnRows: SportStandingRow[] | null = null;
+  try {
+    espnRows = await fetchEspnStandings(leagueId, sport, season, leagueName);
+  } catch (error) {
+    console.warn(
+      `[Sports] ESPN standings unavailable for ${leagueName ?? leagueId}; trying SportsDB:`,
+      error,
+    );
+  }
   if (espnRows) {
     return espnRows;
   }

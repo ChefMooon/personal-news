@@ -152,7 +152,7 @@ export function StandingsTable({
   // Lazy fetch: only load standings once the user expands the card the first time.
   // Subsequent collapse/expand cycles reuse the cached rows.
   React.useEffect(() => {
-    if (collapsed || hasLoaded || loading) {
+    if (collapsed || hasLoaded) {
       return;
     }
 
@@ -182,9 +182,7 @@ export function StandingsTable({
               ? loadError.message
               : "Failed to load standings.",
           );
-          setRows([]);
-          setHasLoaded(true);
-          onRowsLoaded?.(league.leagueId, []);
+          // Keep any previously shown rows available and allow a retry.
         }
       } finally {
         if (!cancelled) {
@@ -201,7 +199,6 @@ export function StandingsTable({
   }, [
     collapsed,
     hasLoaded,
-    loading,
     league.leagueId,
     league.name,
     league.sport,
@@ -285,8 +282,9 @@ export function StandingsTable({
           {loading ? (
             <StandingsExpandedLoading />
           ) : error ? (
-            <div className="rounded-xl border border-dashed px-3 py-3 text-sm text-muted-foreground">
+            <div className="flex items-center justify-between gap-3 rounded-xl border border-dashed px-3 py-3 text-sm text-muted-foreground">
               {error}
+              <Button type="button" variant="outline" size="sm" onClick={() => { setHasLoaded(false); setError(null); }}>Retry</Button>
             </div>
           ) : rows.length === 0 ? (
             <div className="rounded-xl border border-dashed px-3 py-3 text-sm text-muted-foreground">

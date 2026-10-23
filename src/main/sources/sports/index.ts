@@ -32,6 +32,7 @@ import type { DataSourceModule } from "../registry";
 import {
   fetchEventById,
   fetchEventDetails,
+  fetchEspnEventDetails,
   fetchTeamBadgesForLeague,
   fetchTeamDetails,
   fetchLastEventsForTeam,
@@ -90,7 +91,12 @@ const DEFAULT_ENABLED_LEAGUE_PATTERNS: Partial<
 };
 
 let dbRef: Database.Database | null = null;
-const refreshPromises = new Map<string, Promise<void>>();
+const refreshPromises = new Map<
+  string,
+  { promise: Promise<void>; force: boolean }
+>();
+const queuedForcedRefreshes = new Map<string, Promise<void>>();
+const liveRefreshPromises = new Map<string, Promise<void>>();
 const badgeRefreshPromises = new Map<string, Promise<void>>();
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 const liveRefreshTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -119,6 +125,18 @@ function ensureDb(): Database.Database {
 
 function isSportsEnabled(): boolean {
   return getSetting(SPORTS_ENABLED_KEY) !== "false";
+}
+
+function getLiveRefreshIntervalMs(): number {
+  if (isElectronHarnessRun()) {
+    const override = Number.parseInt(
+      process.env.PERSONAL_NEWS_HARNESS_SPORTS_LIVE_INTERVAL_MS ?? "",
+      10,
+    );
+    if (Number.isFinite(override) && override >= 10 && override <= 10_000)
+      return override;
+  }
+  return LIVE_REFRESH_INTERVAL_MS;
 }
 
 function getPollIntervalMinutes(): number {
@@ -588,7 +606,7 @@ function updateLiveEventState(event: SportEvent): void {
   liveEventState.set(event.eventId, state);
 }
 
-function recordEspnFallbackFailure(eventId: string): void {
+function recordEspnFallbackFailure(eventId: string, sport: string): void {
   const state = liveEventState.get(eventId);
   if (!state) {
     return;
@@ -597,6 +615,15 @@ function recordEspnFallbackFailure(eventId: string): void {
   state.espnRetries++;
   state.lastFailureTime = Date.now();
   liveEventState.set(eventId, state);
+  if (state.espnRetries === ESPN_FAILURE_NOTIFICATION_THRESHOLD) {
+    emitSportsFetchWarning({
+      sport,
+      message:
+        "Live sports data is temporarily unavailable; showing cached scores.",
+      severity: "warning",
+      timestamp: Date.now(),
+    });
+  }
 }
 
 function emitSportsUpdated(payload: SportsDataUpdatedEvent): void {
@@ -703,11 +730,46 @@ function scheduleLiveRefreshIfNeeded(sport: string): void {
   const timer = setTimeout(() => {
     liveRefreshTimers.delete(sport);
     if (!isDevTestDataActive(db)) {
-      void doLiveRefresh(sport, "automatic");
+      void runLiveRefresh(sport, "automatic")
+        .catch((error) => {
+          console.warn(
+            `[Sports] Live refresh failed for ${sport}; retaining cached scores:`,
+            error,
+          );
+          emitSportsFetchWarning({
+            sport,
+            message:
+              "Live sports data is temporarily unavailable; showing cached scores.",
+            severity: "warning",
+            timestamp: Date.now(),
+          });
+        })
+        .finally(() => {
+          if (dbRef && !isDevTestDataActive(db))
+            scheduleLiveRefreshIfNeeded(sport);
+        });
     }
-  }, LIVE_REFRESH_INTERVAL_MS);
+  }, getLiveRefreshIntervalMs());
 
   liveRefreshTimers.set(sport, timer);
+}
+
+async function runLiveRefresh(
+  sport: string,
+  trigger: SportsRefreshTrigger,
+): Promise<void> {
+  const fullRefresh = refreshPromises.get(sport)?.promise;
+  if (fullRefresh) {
+    await fullRefresh.catch(() => undefined);
+    return;
+  }
+  const existing = liveRefreshPromises.get(sport);
+  if (existing) return existing;
+  const task = doLiveRefresh(sport, trigger).finally(() => {
+    liveRefreshPromises.delete(sport);
+  });
+  liveRefreshPromises.set(sport, task);
+  return task;
 }
 
 async function doLiveRefresh(
@@ -729,11 +791,23 @@ async function doLiveRefresh(
     ),
   );
 
+  const fallbackGroups = new Map<
+    string,
+    { date: string; leagueId: string; name: string; events: SportEvent[] }
+  >();
   for (const event of liveEvents) {
     const isEspnBackedEvent = event.eventId.startsWith("espn:");
-    const refreshedEvent = isEspnBackedEvent
-      ? null
-      : await fetchEventById(event.eventId);
+    let refreshedEvent: SportEvent | null = null;
+    if (!isEspnBackedEvent) {
+      try {
+        refreshedEvent = await fetchEventById(event.eventId);
+      } catch (error) {
+        console.warn(
+          `[Sports] Event refresh failed for ${event.eventId}:`,
+          error,
+        );
+      }
+    }
     const shouldAttemptFallback =
       SPORTS_WITH_ESPN.has(sport) &&
       shouldRetryEspnFallback(event.eventId) &&
@@ -742,46 +816,50 @@ async function doLiveRefresh(
         isEventDataStale(refreshedEvent));
 
     if (shouldAttemptFallback) {
-      try {
-        const leagueName = leagueNamesById.get(event.leagueId) ?? "";
-        const mergedEvents = await fetchLeagueEventsForDateWithFallback(
-          event.eventDate,
-          event.leagueId,
-          sport,
-          leagueName,
-          { forceMergeEspn: true },
-        );
-        const fallbackMatch = pickBestLiveRefreshCandidate(event, mergedEvents);
-        if (fallbackMatch) {
-          refreshedEvents.push(fallbackMatch);
-          continue;
-        }
-      } catch (error) {
-        console.warn(
-          "[Sports] ESPN fallback failed:",
-          error instanceof Error ? error.message : error,
-        );
-        recordEspnFallbackFailure(event.eventId);
-
-        // Emit warning after 3 consecutive failures
-        const state = liveEventState.get(event.eventId);
-        if (
-          state &&
-          state.espnRetries === ESPN_FAILURE_NOTIFICATION_THRESHOLD
-        ) {
-          emitSportsFetchWarning({
-            sport,
-            message:
-              "Live sports data temporarily unavailable, using cached score",
-            severity: "warning",
-            timestamp: Date.now(),
-          });
-        }
-      }
+      const key = `${event.leagueId}:${event.eventDate}`;
+      const group = fallbackGroups.get(key) ?? {
+        date: event.eventDate,
+        leagueId: event.leagueId,
+        name: leagueNamesById.get(event.leagueId) ?? "",
+        events: [],
+      };
+      group.events.push(refreshedEvent ?? event);
+      fallbackGroups.set(key, group);
     }
-
     if (refreshedEvent) {
       refreshedEvents.push(refreshedEvent);
+    }
+  }
+
+  for (const group of fallbackGroups.values()) {
+    try {
+      const mergedEvents = await fetchLeagueEventsForDateWithFallback(
+        group.date,
+        group.leagueId,
+        sport,
+        group.name,
+        { forceMergeEspn: true },
+      );
+      for (const event of group.events) {
+        const match = pickBestLiveRefreshCandidate(event, mergedEvents);
+        if (match) {
+          const prior = refreshedEvents.findIndex(
+            (item) =>
+              item.eventId === event.eventId || isSameMatch(item, event),
+          );
+          if (prior >= 0) refreshedEvents.splice(prior, 1);
+          refreshedEvents.push(match);
+        } else if (
+          event.eventId.startsWith("espn:") ||
+          !refreshedEvents.some((item) => item.eventId === event.eventId)
+        ) {
+          recordEspnFallbackFailure(event.eventId, sport);
+        }
+      }
+    } catch (error) {
+      console.warn("[Sports] Batched live fallback failed:", error);
+      for (const event of group.events)
+        recordEspnFallbackFailure(event.eventId, sport);
     }
   }
 
@@ -799,13 +877,20 @@ async function doLiveRefresh(
       }
     }
     for (const [leagueId, leagueEvents] of eventsByLeague) {
-      await backfillEventTeamBadges(
-        db,
-        leagueEvents,
-        sport,
-        leagueNamesById.get(leagueId),
-        trigger,
-      );
+      try {
+        await backfillEventTeamBadges(
+          db,
+          leagueEvents,
+          sport,
+          leagueNamesById.get(leagueId),
+          trigger,
+        );
+      } catch (error) {
+        console.warn(
+          `[Sports] Badge enrichment failed for league ${leagueId}; retaining live scores:`,
+          error,
+        );
+      }
     }
     if (trigger === "automatic" && isDevTestDataActive(db)) {
       return;
@@ -821,7 +906,8 @@ async function doLiveRefresh(
   if (trigger === "automatic" && isDevTestDataActive(db)) {
     return;
   }
-  upsertCacheMeta(db, sport, fetchDate, Math.floor(Date.now() / 1000));
+  if (refreshedEvents.length > 0 || liveEvents.length === 0)
+    upsertCacheMeta(db, sport, fetchDate, Math.floor(Date.now() / 1000));
   emitSportsUpdated({ sport, ok: true, error: null });
   scheduleLiveRefreshIfNeeded(sport);
 }
@@ -849,47 +935,78 @@ async function doRefreshSport(
 
   const enabledLeagues = listEnabledLeagues(db, sport);
   const fetchDates = getAdjacentLocalDateKeys(fetchDate);
+  let successfulLeagues = 0;
+  const failedLeagues: string[] = [];
   for (const league of enabledLeagues) {
     if (trigger === "automatic" && isDevTestDataActive(db)) {
       return;
     }
-    const eventsById = new Map<string, SportEvent>();
-    for (const eventDate of fetchDates) {
-      const eventsForDate = await fetchLeagueEventsForDateWithFallback(
-        eventDate,
-        league.leagueId,
-        league.sport,
-        league.name,
+    try {
+      const eventsById = new Map<string, SportEvent>();
+      for (const eventDate of fetchDates) {
+        const eventsForDate = await fetchLeagueEventsForDateWithFallback(
+          eventDate,
+          league.leagueId,
+          league.sport,
+          league.name,
+        );
+        for (const event of eventsForDate) eventsById.set(event.eventId, event);
+      }
+
+      const dedupedByMatch = new Map<string, SportEvent>();
+      for (const event of eventsById.values()) {
+        const signature = [
+          event.sport,
+          event.leagueId,
+          event.eventDate,
+          event.eventTime ?? "",
+          event.homeTeam.toLowerCase(),
+          event.awayTeam.toLowerCase(),
+        ].join("|");
+
+        const existing = dedupedByMatch.get(signature);
+        if (!existing || !existing.eventId.startsWith("espn:")) {
+          dedupedByMatch.set(signature, event);
+        }
+      }
+
+      const events = Array.from(dedupedByMatch.values());
+      try {
+        await backfillEventTeamBadges(db, events, sport, league.name, trigger);
+      } catch (error) {
+        console.warn(
+          `[Sports] Badge enrichment failed for ${league.name}; retaining event scores:`,
+          error,
+        );
+      }
+      if (trigger === "automatic" && isDevTestDataActive(db)) return;
+      upsertEvents(
+        db,
+        events,
+        fetchDate,
+        () => trigger !== "automatic" || !isDevTestDataActive(db),
       );
-      for (const event of eventsForDate) {
-        eventsById.set(event.eventId, event);
-      }
+      successfulLeagues += 1;
+    } catch (error) {
+      failedLeagues.push(league.name);
+      console.warn(
+        `[Sports] League refresh failed for ${league.name}; retaining cached events:`,
+        error,
+      );
     }
+  }
 
-    const dedupedByMatch = new Map<string, SportEvent>();
-    for (const event of eventsById.values()) {
-      const signature = [
-        event.sport,
-        event.leagueId,
-        event.eventDate,
-        event.eventTime ?? "",
-        event.homeTeam.toLowerCase(),
-        event.awayTeam.toLowerCase(),
-      ].join("|");
-
-      const existing = dedupedByMatch.get(signature);
-      if (!existing || !existing.eventId.startsWith("espn:")) {
-        dedupedByMatch.set(signature, event);
-      }
-    }
-
-    const events = Array.from(dedupedByMatch.values());
-    await backfillEventTeamBadges(db, events, sport, league.name, trigger);
-    if (trigger === "automatic" && isDevTestDataActive(db)) {
-      return;
-    }
-    upsertEvents(db, events, fetchDate, () => {
-      return trigger !== "automatic" || !isDevTestDataActive(db);
+  if (enabledLeagues.length > 0 && successfulLeagues === 0) {
+    throw new Error(
+      `Sports refresh failed for all enabled ${sport} leagues: ${failedLeagues.join(", ")}`,
+    );
+  }
+  if (failedLeagues.length > 0) {
+    emitSportsFetchWarning({
+      sport,
+      message: `Some ${sport} league data could not be refreshed (${failedLeagues.join(", ")}); cached results were kept.`,
+      severity: "warning",
+      timestamp: Date.now(),
     });
   }
 
@@ -904,7 +1021,8 @@ async function doRefreshSport(
   if (trigger === "automatic" && isDevTestDataActive(db)) {
     return;
   }
-  upsertCacheMeta(db, sport, fetchDate, Math.floor(Date.now() / 1000));
+  if (failedLeagues.length === 0)
+    upsertCacheMeta(db, sport, fetchDate, Math.floor(Date.now() / 1000));
   scheduleLiveRefreshIfNeeded(sport);
 }
 
@@ -916,13 +1034,25 @@ async function refreshSportInternal(
   if (trigger === "automatic" && dbRef && isDevTestDataActive(dbRef)) {
     return;
   }
-  const promiseKey = `${trigger}:${sport}`;
+  const promiseKey = sport;
   const existing = refreshPromises.get(promiseKey);
   if (existing) {
-    return existing;
+    if (!force || existing.force) return existing.promise;
+    const queued = queuedForcedRefreshes.get(sport);
+    if (queued) return queued;
+    const forcedTask = existing.promise
+      .catch(() => undefined)
+      .then(() => refreshSportInternal(sport, true, trigger))
+      .finally(() => queuedForcedRefreshes.delete(sport));
+    queuedForcedRefreshes.set(sport, forcedTask);
+    return forcedTask;
   }
 
-  const task = doRefreshSport(sport, force, trigger)
+  const liveTask = liveRefreshPromises.get(sport);
+  const refreshTask = liveTask
+    ? liveTask.then(() => doRefreshSport(sport, force, trigger))
+    : doRefreshSport(sport, force, trigger);
+  const task = refreshTask
     .then(() => {
       emitSportsUpdated({ sport, ok: true, error: null });
     })
@@ -938,7 +1068,7 @@ async function refreshSportInternal(
       refreshPromises.delete(promiseKey);
     });
 
-  refreshPromises.set(promiseKey, task);
+  refreshPromises.set(promiseKey, { promise: task, force });
   return task;
 }
 
@@ -976,6 +1106,10 @@ export async function getSportsEventDetails(
   ) {
     const event = getCachedEvent(ensureDb(), eventId);
     return event ? { ...event, ...getSportsFixtureEventDetail(event) } : null;
+  }
+  if (eventId.startsWith("espn:")) {
+    const event = getCachedEvent(ensureDb(), eventId);
+    return event ? fetchEspnEventDetails(event) : null;
   }
   return fetchEventDetails(eventId);
 }
@@ -1248,5 +1382,7 @@ export const SportsModule: DataSourceModule = {
     dbRef = null;
     badgeRefreshPromises.clear();
     refreshPromises.clear();
+    queuedForcedRefreshes.clear();
+    liveRefreshPromises.clear();
   },
 };

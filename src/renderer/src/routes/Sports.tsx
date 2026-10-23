@@ -406,10 +406,7 @@ export default function SportsPage(): React.ReactElement {
       <div className="mx-auto max-w-7xl px-6 py-6">
         {selectedEvent ? (
           <div className="mb-6">
-            <ExpandedGameCard
-              key={selectedEvent.eventId}
-              event={selectedEvent}
-            />
+            <ExpandedGameCard event={selectedEvent} />
           </div>
         ) : null}
 

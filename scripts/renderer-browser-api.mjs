@@ -8,6 +8,7 @@ export function installRendererBrowserApi(fixtures) {
   const calls = [];
   const apiErrors = [];
   const listeners = new Map();
+  let eventDetailsHandler = null;
   const settings = {
     weather_enabled: "true",
     sports_enabled: "true",
@@ -403,6 +404,8 @@ export function installRendererBrowserApi(fixtures) {
           (league) => league.sport === args[0]?.sport,
         ),
       );
+    if (channel === "sports:getEventDetails" && eventDetailsHandler)
+      return Promise.resolve(eventDetailsHandler(args[0]?.eventId));
     if (channel === "sports:getEventDetails")
       return Promise.resolve(fixtures.sports.details[args[0]?.eventId] ?? null);
     if (channel === "weather:getSnapshot")
@@ -520,12 +523,18 @@ export function installRendererBrowserApi(fixtures) {
     value: {
       views: fixtures.views,
       evidence: fixtures.fixtureEvidence,
+      sportsEvents: fixtures.sports.todayEvents,
       astronomyDetailsSnapshots: fixtures.astronomyDetailsSnapshots,
     },
   });
   Object.defineProperty(window, "__rendererBrowserEmit", {
     value: (channel, payload) => {
       for (const callback of listeners.get(channel) ?? []) callback(payload);
+    },
+  });
+  Object.defineProperty(window, "__rendererBrowserSetEventDetailsHandler", {
+    value: (handler) => {
+      eventDetailsHandler = handler;
     },
   });
   Object.defineProperty(window, "__rendererBrowserGetSidebarConfig", {

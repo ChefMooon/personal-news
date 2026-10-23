@@ -22,6 +22,9 @@ function mergeDetailWithEvent(
 ): SportEventDetail {
   return {
     ...detail,
+    homeScore: event.homeScore ?? detail.homeScore,
+    awayScore: event.awayScore ?? detail.awayScore,
+    status: event.status ?? detail.status,
     homeTeamBadgeUrl: detail.homeTeamBadgeUrl ?? event.homeTeamBadgeUrl ?? null,
     awayTeamBadgeUrl: detail.awayTeamBadgeUrl ?? event.awayTeamBadgeUrl ?? null,
   };
@@ -133,13 +136,19 @@ export function ExpandedGameCard({
 }: {
   event: SportEvent;
 }): React.ReactElement {
-  const [detail, setDetail] = React.useState<SportEventDetail | null>(null);
+  const [detail, setDetail] = React.useState<{
+    eventId: string;
+    value: SportEventDetail;
+  } | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const { searchStations } = useRadioPlayer();
   const latestRequestIdRef = React.useRef(0);
+  const currentEventRef = React.useRef(event);
+  currentEventRef.current = event;
 
   const loadDetails = React.useCallback(async () => {
+    const eventId = event.eventId;
     const requestId = latestRequestIdRef.current + 1;
     latestRequestIdRef.current = requestId;
     setLoading(true);
@@ -148,13 +157,23 @@ export function ExpandedGameCard({
 
     try {
       const result = (await window.api.invoke(IPC.SPORTS_GET_EVENT_DETAILS, {
-        eventId: event.eventId,
+        eventId,
       })) as SportEventDetail | null;
-      if (requestId !== latestRequestIdRef.current) {
+      if (
+        requestId !== latestRequestIdRef.current ||
+        currentEventRef.current.eventId !== eventId
+      ) {
         return;
       }
 
-      setDetail(result ? mergeDetailWithEvent(result, event) : null);
+      setDetail(
+        result
+          ? {
+              eventId,
+              value: mergeDetailWithEvent(result, currentEventRef.current),
+            }
+          : null,
+      );
     } catch (loadError) {
       if (requestId !== latestRequestIdRef.current) {
         return;
@@ -170,14 +189,19 @@ export function ExpandedGameCard({
         setLoading(false);
       }
     }
-  }, [event]);
+  }, [event.eventId]);
 
   React.useEffect(() => {
     void loadDetails();
+    return () => {
+      // Invalidate any unresolved request when this card changes identity or unmounts.
+      latestRequestIdRef.current += 1;
+    };
   }, [loadDetails]);
 
-  const live = isLiveStatus(detail?.status ?? event.status);
-  const resolvedDetail = detail ?? event;
+  const currentDetail = detail?.eventId === event.eventId ? detail.value : null;
+  const live = isLiveStatus(currentDetail?.status ?? event.status);
+  const resolvedDetail = currentDetail ?? event;
 
   return (
     <section className="rounded-2xl border bg-card px-5 py-5 shadow-sm">
@@ -286,16 +310,16 @@ export function ExpandedGameCard({
                 <p className="text-sm font-medium">
                   {resolvedDetail.status ?? "Status unavailable"}
                 </p>
-                {detail?.progress ? (
+                {currentDetail?.progress ? (
                   <p className="mt-1 text-xs text-muted-foreground">
-                    {detail.progress}
+                    {currentDetail.progress}
                   </p>
                 ) : null}
               </div>
             </div>
-            {detail?.descriptionEN ? (
+            {currentDetail?.descriptionEN ? (
               <p className="mt-4 text-sm leading-6 text-muted-foreground">
-                {detail.descriptionEN}
+                {currentDetail.descriptionEN}
               </p>
             ) : null}
           </div>

@@ -243,6 +243,7 @@ export async function runElectronHarness({
   command = process.platform === "win32" ? "npm.cmd" : "npm",
   args = ["run", "dev"],
   startupTimeoutMs = STARTUP_TIMEOUT_MS,
+  extraEnv = {},
 } = {}) {
   if (!name || typeof scenario !== "function") {
     throw new TypeError("Harness name and scenario callback are required");
@@ -290,6 +291,7 @@ export async function runElectronHarness({
   try {
     const env = {
       ...process.env,
+      ...extraEnv,
       [HARNESS_ENV]: "1",
       [HARNESS_ROOT_ENV]: temporaryRoot,
       [HARNESS_USER_DATA_ENV]: profileDirectory,
