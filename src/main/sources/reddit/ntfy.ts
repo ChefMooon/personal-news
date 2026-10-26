@@ -157,7 +157,7 @@ export async function pollNtfy(
   let lastProcessedId: string | null = null;
   const failedEntries: NtfySyncFailureEntry[] = [];
   const duplicateUrls: string[] = [];
-  const dedupeTracker = createNtfyDedupeTracker(db, "reddit", isPaused);
+  const dedupeTracker = createNtfyDedupeTracker(db, "reddit", () => !isPaused());
   const backfilledCount = isPaused()
     ? 0
     : dedupeTracker.backfillExistingSavedPosts();
