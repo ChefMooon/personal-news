@@ -4,6 +4,17 @@ All notable changes to this project are documented in this file.
 
 The format follows Keep a Changelog, and this project uses Semantic Versioning.
 
+## [1.5.1] - 2026-10-26
+
+### Changed
+
+- Updated the tray icon artwork for a clearer appearance.
+
+### Fixed
+
+- Fixed Saved Posts so newly shared ntfy links can be ingested.
+- Improved Sports widget reliability and efficiency when retrieving updates.
+
 ## [1.5.0] - 2026-10-20
 
 ### Added
