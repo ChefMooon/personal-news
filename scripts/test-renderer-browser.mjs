@@ -97,6 +97,88 @@ try {
     `Expected six fixture pages; got ${fixtureManifest.views.length}`,
   );
 
+  const mainScrollbarGeometry = await page.evaluate(async () => {
+    const main = document.querySelector("main");
+    if (!main) throw new Error("Main content viewport was not mounted");
+    const originalChildren = [...main.children].map((child) => ({
+      child,
+      display: child.style.display,
+    }));
+    for (const { child } of originalChildren) child.style.display = "none";
+    const probe = document.createElement("div");
+    probe.dataset.scrollbarRegression = "true";
+    const gutter = getComputedStyle(main).scrollbarGutter;
+    const originalOverflow = main.style.overflowY;
+    main.style.overflowY = "hidden";
+    main.append(probe);
+    const baselineIsScrollable = main.scrollHeight > main.clientHeight;
+    const widthWithoutForcedOverflow = main.clientWidth;
+    probe.style.height = "200vh";
+    main.style.overflowY = "auto";
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    const widthWithOverflow = main.clientWidth;
+    const scrollable = main.scrollHeight > main.clientHeight;
+    probe.remove();
+    main.style.overflowY = originalOverflow;
+    for (const { child, display } of originalChildren)
+      child.style.display = display;
+    return {
+      gutter,
+      baselineIsScrollable,
+      widthWithoutForcedOverflow,
+      widthWithOverflow,
+      scrollable,
+    };
+  });
+  assert(
+    mainScrollbarGeometry.gutter.includes("stable") &&
+      !mainScrollbarGeometry.baselineIsScrollable &&
+      mainScrollbarGeometry.widthWithoutForcedOverflow ===
+        mainScrollbarGeometry.widthWithOverflow &&
+      mainScrollbarGeometry.scrollable,
+    `Main content width shifted when vertical overflow changed: ${JSON.stringify(mainScrollbarGeometry)}`,
+  );
+
+  await page
+    .locator('[data-dashboard-tab-id="pn_dev_fixture_dashboard_youtube"]')
+    .click();
+  const nestedScrollbarGeometry = await page.evaluate(async () => {
+    const viewport = document.querySelector(
+      '[data-widget-instance-id="pn_dev_fixture_widget_youtube_large"] .youtube-card-content',
+    );
+    if (!(viewport instanceof HTMLElement))
+      throw new Error("Large YouTube content viewport was not mounted");
+    const content = viewport.firstElementChild;
+    if (!(content instanceof HTMLElement))
+      throw new Error("Large YouTube content was empty");
+    const originalOverflow = viewport.style.overflowY;
+    const probe = document.createElement("div");
+    probe.style.height = "1600px";
+    probe.dataset.scrollbarRegression = "true";
+    viewport.style.overflowY = "hidden";
+    content.append(probe);
+    const widthWithoutScrollbar = viewport.clientWidth;
+    viewport.style.overflowY = "auto";
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    const widthWithScrollbar = viewport.clientWidth;
+    const scrollable = viewport.scrollHeight > viewport.clientHeight;
+    probe.remove();
+    viewport.style.overflowY = originalOverflow;
+    return {
+      gutter: getComputedStyle(viewport).scrollbarGutter,
+      widthWithoutScrollbar,
+      widthWithScrollbar,
+      scrollable,
+    };
+  });
+  assert(
+    nestedScrollbarGeometry.gutter.includes("stable") &&
+      nestedScrollbarGeometry.widthWithoutScrollbar ===
+        nestedScrollbarGeometry.widthWithScrollbar &&
+      nestedScrollbarGeometry.scrollable,
+    `Nested widget content width shifted when vertical overflow changed: ${JSON.stringify(nestedScrollbarGeometry)}`,
+  );
+
   for (const projection of projections) {
     for (const view of fixtureManifest.views) {
       const firstInstance =

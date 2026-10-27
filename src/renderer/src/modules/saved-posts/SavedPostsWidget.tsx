@@ -445,7 +445,7 @@ function SavedPostsWidget(): React.ReactElement {
       </CardHeader>
       <CardContent
         ref={cardContentRef}
-        className="relative flex min-h-0 flex-1 flex-col"
+        className="saved-posts-card-content relative flex min-h-0 flex-1 flex-col"
         style={
           isEditing
             ? editContentHeight

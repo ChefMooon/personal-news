@@ -418,6 +418,7 @@ function RedditDigestWidget(): React.ReactElement {
       </CardHeader>
       <CardContent
         ref={cardContentRef}
+        className="reddit-digest-card-content"
         style={{
           ...(isEditing && editContentHeight
             ? { height: editContentHeight, overflow: "hidden" }

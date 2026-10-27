@@ -84,10 +84,23 @@
 .dashboard-grid [data-widget-instance-id] > .rounded-lg.border > .p-6 {
   min-height: 0;
   overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+/* Reserve native scrollbar space only on actual scroll containers. */
+main,
+:where([class~="overflow-auto"], [class~="overflow-y-auto"]) {
+  scrollbar-gutter: stable;
 }
 
 .youtube-card-content {
   padding-top: 0.5rem;
+  scrollbar-gutter: stable;
+}
+
+.reddit-digest-card-content,
+.saved-posts-card-content {
+  scrollbar-gutter: stable;
 }
 
 .youtube-card-content > .youtube-card-edit {
@@ -170,6 +183,7 @@
 }
 .youtube-card-edit__preview {
   overflow-y: auto;
+  scrollbar-gutter: stable;
   min-width: 0;
   min-height: 0;
 }
@@ -192,6 +206,7 @@
 
 .saved-posts-card-edit__preview {
   overflow-y: auto;
+  scrollbar-gutter: stable;
   min-width: 0;
   min-height: 0;
 }
@@ -199,6 +214,7 @@
 .saved-posts-card-edit__panel {
   display: flex;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   overflow-x: hidden;
   min-height: 0;
   border-left: 1px solid hsl(var(--border));
@@ -221,6 +237,7 @@
 
 .weather-card-edit__preview {
   overflow-y: auto;
+  scrollbar-gutter: stable;
   min-width: 0;
   min-height: 0;
 }
@@ -244,6 +261,7 @@
 
 .sports-card-edit__preview {
   overflow-y: auto;
+  scrollbar-gutter: stable;
   min-width: 0;
   min-height: 0;
 }
@@ -267,6 +285,7 @@
 
 .astronomy-card-edit__preview {
   overflow-y: auto;
+  scrollbar-gutter: stable;
   min-width: 0;
   min-height: 0;
 }
@@ -313,6 +332,7 @@
 .reddit-digest-card-edit__preview {
   overflow-y: auto;
   overflow-x: auto;
+  scrollbar-gutter: stable;
   min-width: 0;
   min-height: 0;
 }
