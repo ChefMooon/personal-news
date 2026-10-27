@@ -84,6 +84,9 @@
 .dashboard-grid [data-widget-instance-id] > .rounded-lg.border > .p-6 {
   min-height: 0;
   overflow-y: auto;
+}
+
+.dashboard-grid [data-widget-instance-id] > .rounded-lg.border > .p-6:not(.card-header) {
   scrollbar-gutter: stable;
 }
 

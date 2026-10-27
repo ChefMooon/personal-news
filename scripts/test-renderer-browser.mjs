@@ -342,15 +342,22 @@ try {
                 const bounds = element.getBoundingClientRect();
                 const widgetBounds = widget.getBoundingClientRect();
                 const settingsBounds = settings.getBoundingClientRect();
-                return (
-                  bounds.top < widgetBounds.top + 80 &&
-                  widgetBounds.right - bounds.right < 64 &&
-                  bounds.right <= settingsBounds.left
-                );
+                return {
+                  inTopRight:
+                    bounds.top < widgetBounds.top + 80 &&
+                    widgetBounds.right - settingsBounds.right < 64,
+                  adjacent:
+                    element.nextElementSibling === settings &&
+                    bounds.right <= settingsBounds.left,
+                  linkRight: bounds.right,
+                  settingsLeft: settingsBounds.left,
+                  settingsRight: settingsBounds.right,
+                  widgetRight: widgetBounds.right,
+                };
               });
               assert(
-                inHeader,
-                `Weather/${size} Astronomy action is not immediately left of settings in the top-right header`,
+                inHeader && inHeader.inTopRight && inHeader.adjacent,
+                `Weather/${size} Astronomy action is not immediately left of settings in the top-right header: ${JSON.stringify(inHeader)}`,
               );
             }
           }
