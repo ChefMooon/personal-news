@@ -2134,11 +2134,13 @@ export function registerIpcHandlers(): void {
         viewed_at: number | null;
         note: string | null;
         tags: string | null;
+        metadata_status: "link_only" | null;
       }>;
 
       const posts: SavedPost[] = rows.map((row) => ({
         ...row,
         source: row.source as SavedPost["source"],
+        metadata_status: row.metadata_status,
         tags: row.tags ? (JSON.parse(row.tags) as string[]) : [],
       }));
 
@@ -2294,10 +2296,10 @@ export function registerIpcHandlers(): void {
         const postId = metadata.postId;
         const savedAt = Math.floor(Date.now() / 1000);
 
-        persistSavedPost(db, { ...metadata, savedAt, tags: normalizedTags });
+        const metadataStatus = persistSavedPost(db, { ...metadata, savedAt, tags: normalizedTags });
 
         emitRedditUpdated();
-        return { ok: true, error: null, created: true, postId };
+        return { ok: true, error: null, created: true, postId, metadataStatus };
       } catch (error) {
         const message =
           error instanceof Error ? error.message : "Failed to save post.";
@@ -2322,6 +2324,7 @@ export function registerIpcHandlers(): void {
           subreddit: null,
           tags: [],
           note,
+          metadataStatus: null,
         };
       }
 
@@ -2449,6 +2452,7 @@ export function registerIpcHandlers(): void {
     return {
       postsIngested: result.postsIngested,
       messagesReceived: result.messagesReceived,
+      linkOnlyCount: result.linkOnlyCount,
       lastPolledAt,
     };
   });

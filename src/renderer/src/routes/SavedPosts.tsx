@@ -518,7 +518,9 @@ function SavedPostsContent(): React.ReactElement {
     const results = await Promise.allSettled(
       selectedPosts.map((post) => {
         const url =
-          post.source === "reddit" ? toRedditPostUrl(post.permalink) : post.url;
+          post.source === "reddit"
+            ? toRedditPostUrl(post.metadata_status === "link_only" ? post.url : post.permalink)
+            : post.url;
         return window.api.invoke(IPC.SHELL_OPEN_EXTERNAL, url);
       }),
     );
@@ -837,7 +839,7 @@ function SavedPostsContent(): React.ReactElement {
                 onPeekPost={(currentPost) => {
                   const url =
                     currentPost.source === "reddit"
-                      ? toRedditPostUrl(currentPost.permalink)
+                      ? toRedditPostUrl(currentPost.metadata_status === "link_only" ? currentPost.url : currentPost.permalink)
                       : currentPost.url;
                   window.api
                     .invoke(IPC.SHELL_OPEN_EXTERNAL, url)
@@ -855,7 +857,7 @@ function SavedPostsContent(): React.ReactElement {
                   }
                   const url =
                     currentPost.source === "reddit"
-                      ? toRedditPostUrl(currentPost.permalink)
+                      ? toRedditPostUrl(currentPost.metadata_status === "link_only" ? currentPost.url : currentPost.permalink)
                       : currentPost.url;
                   window.api
                     .invoke(IPC.SHELL_OPEN_EXTERNAL, url)
@@ -907,6 +909,9 @@ function SavedPostsContent(): React.ReactElement {
                             r/{post.subreddit}
                           </Badge>
                         )}
+                        {post.metadata_status === "link_only" && (
+                          <Badge variant="secondary" className="text-xs shrink-0">Link only · metadata unavailable</Badge>
+                        )}
                         {post.author && (
                           <span className="text-xs text-muted-foreground">
                             {post.source === "reddit"
@@ -933,7 +938,7 @@ function SavedPostsContent(): React.ReactElement {
                           }
                           const url =
                             post.source === "reddit"
-                              ? toRedditPostUrl(post.permalink)
+                              ? toRedditPostUrl(post.metadata_status === "link_only" ? post.url : post.permalink)
                               : post.url;
                           window.api
                             .invoke(IPC.SHELL_OPEN_EXTERNAL, url)

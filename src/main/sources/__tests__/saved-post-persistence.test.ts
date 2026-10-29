@@ -10,7 +10,7 @@ describe("saved-post duplicate persistence", () => {
     db.exec(`CREATE TABLE saved_posts (
       post_id TEXT PRIMARY KEY, title TEXT, url TEXT, permalink TEXT,
       subreddit TEXT, author TEXT, score INTEGER, body TEXT, saved_at INTEGER,
-      tags TEXT, note TEXT, source TEXT, viewed_at INTEGER
+      tags TEXT, note TEXT, source TEXT, viewed_at INTEGER, metadata_status TEXT
     )`);
     const save = db.prepare(SAVED_POST_UPSERT_SQL);
     save.run(
@@ -26,6 +26,7 @@ describe("saved-post duplicate persistence", () => {
       '["personal"]',
       "Original note",
       "x",
+      null,
     );
     db.prepare("UPDATE saved_posts SET viewed_at = 10").run();
     save.run(
@@ -41,6 +42,7 @@ describe("saved-post duplicate persistence", () => {
       null,
       null,
       "x",
+      null,
     );
     expect(
       db
@@ -70,6 +72,7 @@ describe("saved-post duplicate persistence", () => {
       null,
       "Updated note",
       "x",
+      null,
     );
     expect(db.prepare("SELECT title, note FROM saved_posts").get()).toEqual({
       title: "Updated note",
@@ -86,19 +89,43 @@ describe("saved-post duplicate persistence", () => {
     db.exec(`CREATE TABLE saved_posts (
       post_id TEXT PRIMARY KEY, title TEXT, url TEXT, permalink TEXT,
       subreddit TEXT, author TEXT, score INTEGER, body TEXT, saved_at INTEGER,
-      tags TEXT, note TEXT, source TEXT, viewed_at INTEGER
+      tags TEXT, note TEXT, source TEXT, viewed_at INTEGER, metadata_status TEXT
     )`);
     const save = db.prepare(SAVED_POST_UPSERT_SQL);
-    save.run("x_123", "Post by @a", "https://x.com/a/status/123", "url", null, "a", null, null, 1, null, null, "x");
-    save.run("x_123", "Post by @a", "https://x.com/a/status/123", "url", null, "a", null, "Fetched post text", 2, null, null, "x");
-    save.run("x_123", "Post by @a", "https://x.com/a/status/123", "url", null, "a", null, null, 3, null, null, "x");
+    save.run("x_123", "Post by @a", "https://x.com/a/status/123", "url", null, "a", null, null, 1, null, null, "x", null);
+    save.run("x_123", "Post by @a", "https://x.com/a/status/123", "url", null, "a", null, "Fetched post text", 2, null, null, "x", null);
+    save.run("x_123", "Post by @a", "https://x.com/a/status/123", "url", null, "a", null, null, 3, null, null, "x", null);
     expect(db.prepare("SELECT body FROM saved_posts").get()).toEqual({ body: "Fetched post text" });
+    db.close();
+  });
+
+  it("does not let link-only Reddit imports replace rich records, and permits later enrichment", () => {
+    const db = new Database(":memory:");
+    db.exec(`CREATE TABLE saved_posts (
+      post_id TEXT PRIMARY KEY, title TEXT, url TEXT, permalink TEXT,
+      subreddit TEXT, author TEXT, score INTEGER, body TEXT, saved_at INTEGER,
+      tags TEXT, note TEXT, source TEXT, viewed_at INTEGER, metadata_status TEXT
+    )`);
+    expect(persistSavedPost(db, { postId: "abc123", title: "Rich title", url: "https://reddit.com/r/a/comments/abc123", permalink: "/r/a/comments/abc123", subreddit: "a", author: "user", score: 42, body: "body", source: "reddit", savedAt: 10, note: "keep note", tags: ["mine"] })).toBeNull();
+    db.prepare("UPDATE saved_posts SET viewed_at=77").run();
+    expect(persistSavedPost(db, { postId: "abc123", title: "Reddit post (link only)", url: "https://www.reddit.com/r/a/comments/abc123/title", permalink: "canonical", subreddit: "a", author: null, score: null, body: null, source: "reddit", savedAt: 20, note: null, tags: ["a"], metadataStatus: "link_only" })).toBeNull();
+    expect(db.prepare("SELECT title,url,permalink,author,score,body,saved_at,tags,note,viewed_at,metadata_status FROM saved_posts").get()).toEqual({
+      title: "Rich title", url: "https://reddit.com/r/a/comments/abc123", permalink: "/r/a/comments/abc123", author: "user", score: 42, body: "body", saved_at: 10, tags: '["mine"]', note: "keep note", viewed_at: 77, metadata_status: null,
+    });
+    persistSavedPost(db, { postId: "abc123", title: "Reddit post (link only)", url: "https://www.reddit.com/r/a/comments/abc123/title", permalink: "canonical", subreddit: "a", author: null, score: null, body: null, source: "reddit", savedAt: 21, note: "updated note", tags: ["a"], metadataStatus: "link_only" });
+    expect(db.prepare("SELECT title,note,url,permalink,tags,saved_at,viewed_at FROM saved_posts").get()).toEqual({
+      title: "Rich title", note: "updated note", url: "https://reddit.com/r/a/comments/abc123", permalink: "/r/a/comments/abc123", tags: '["mine"]', saved_at: 10, viewed_at: 77,
+    });
+    persistSavedPost(db, { postId: "abc123", title: "Enriched title", url: "https://www.reddit.com/r/a/comments/abc123/title", permalink: "/r/a/comments/abc123/title/", subreddit: "a", author: "user", score: 50, body: "enriched", source: "reddit", savedAt: 30, note: null, tags: null });
+    expect(db.prepare("SELECT title,body,note,viewed_at,metadata_status FROM saved_posts").get()).toEqual({ title: "Enriched title", body: "enriched", note: "updated note", viewed_at: 77, metadata_status: null });
+    const linkOnlyStatus = persistSavedPost(db, { postId: "reddit_link_1", title: "Reddit post (link only)", url: "https://reddit.com/r/a/s/code", permalink: "https://www.reddit.com/r/a/s/code/", subreddit: "a", author: null, score: null, body: null, source: "reddit", savedAt: 40, note: null, tags: null, metadataStatus: "link_only" });
+    expect(linkOnlyStatus).toBe("link_only");
     db.close();
   });
 
   it("rekeys a legacy Bluesky row only when its URL proves the same author and rkey", () => {
     const db = new Database(":memory:");
-    db.exec(`CREATE TABLE saved_posts (post_id TEXT PRIMARY KEY,title TEXT,url TEXT,permalink TEXT,subreddit TEXT,author TEXT,score INTEGER,body TEXT,saved_at INTEGER,tags TEXT,note TEXT,source TEXT,viewed_at INTEGER)`);
+    db.exec(`CREATE TABLE saved_posts (post_id TEXT PRIMARY KEY,title TEXT,url TEXT,permalink TEXT,subreddit TEXT,author TEXT,score INTEGER,body TEXT,saved_at INTEGER,tags TEXT,note TEXT,source TEXT,viewed_at INTEGER,metadata_status TEXT)`);
     db.exec("INSERT INTO saved_posts (post_id,title,url,permalink,saved_at,source,note,tags,viewed_at) VALUES ('bsky_3lxyzabc123','My title','https://bsky.app/profile/alice.example/post/3lxyzabc123','https://bsky.app/profile/alice.example/post/3lxyzabc123',1,'bsky','Keep this','[\"mine\"]',7)");
     persistSavedPost(db, { postId: "bsky_alice.example_3lxyzabc123", title: "Post by @alice.example", url: "https://bsky.app/profile/alice.example/post/3lxyzabc123", permalink: "https://bsky.app/profile/alice.example/post/3lxyzabc123", subreddit: null, author: "alice.example", score: null, body: "Fetched", source: "bsky", savedAt: 2, note: null, tags: ["alice.example"] });
     expect(db.prepare("SELECT post_id,title,note,tags,viewed_at,body FROM saved_posts").all()).toEqual([{ post_id: "bsky_alice.example_3lxyzabc123", title: "My title", note: "Keep this", tags: '["mine"]', viewed_at: 7, body: "Fetched" }]);
@@ -107,7 +134,7 @@ describe("saved-post duplicate persistence", () => {
 
   it("never adopts an rkey-only row owned by another Bluesky author", () => {
     const db = new Database(":memory:");
-    db.exec(`CREATE TABLE saved_posts (post_id TEXT PRIMARY KEY,title TEXT,url TEXT,permalink TEXT,subreddit TEXT,author TEXT,score INTEGER,body TEXT,saved_at INTEGER,tags TEXT,note TEXT,source TEXT,viewed_at INTEGER)`);
+    db.exec(`CREATE TABLE saved_posts (post_id TEXT PRIMARY KEY,title TEXT,url TEXT,permalink TEXT,subreddit TEXT,author TEXT,score INTEGER,body TEXT,saved_at INTEGER,tags TEXT,note TEXT,source TEXT,viewed_at INTEGER,metadata_status TEXT)`);
     db.exec("INSERT INTO saved_posts (post_id,title,url,permalink,saved_at,source) VALUES ('bsky_3lxyzabc123','Bob','https://bsky.app/profile/bob.example/post/3lxyzabc123','https://bsky.app/profile/bob.example/post/3lxyzabc123',1,'bsky')");
     persistSavedPost(db, { postId: "bsky_alice.example_3lxyzabc123", title: "Alice", url: "https://bsky.app/profile/alice.example/post/3lxyzabc123", permalink: "https://bsky.app/profile/alice.example/post/3lxyzabc123", subreddit: null, author: "alice.example", score: null, body: null, source: "bsky", savedAt: 2, note: null, tags: null });
     expect(db.prepare("SELECT post_id,title FROM saved_posts ORDER BY post_id").all()).toEqual([{ post_id: "bsky_3lxyzabc123", title: "Bob" }, { post_id: "bsky_alice.example_3lxyzabc123", title: "Alice" }]);
@@ -116,7 +143,7 @@ describe("saved-post duplicate persistence", () => {
 
   it("does not overwrite a canonical row when a matching legacy row also exists", () => {
     const db = new Database(":memory:");
-    db.exec(`CREATE TABLE saved_posts (post_id TEXT PRIMARY KEY,title TEXT,url TEXT,permalink TEXT,subreddit TEXT,author TEXT,score INTEGER,body TEXT,saved_at INTEGER,tags TEXT,note TEXT,source TEXT,viewed_at INTEGER)`);
+    db.exec(`CREATE TABLE saved_posts (post_id TEXT PRIMARY KEY,title TEXT,url TEXT,permalink TEXT,subreddit TEXT,author TEXT,score INTEGER,body TEXT,saved_at INTEGER,tags TEXT,note TEXT,source TEXT,viewed_at INTEGER,metadata_status TEXT)`);
     db.exec("INSERT INTO saved_posts (post_id,title,url,permalink,saved_at,source,note,tags,viewed_at) VALUES ('bsky_3lxyzabc123','Legacy','https://bsky.app/profile/alice.example/post/3lxyzabc123','https://bsky.app/profile/alice.example/post/3lxyzabc123',1,'bsky','legacy note','[\"legacy\"]',1)");
     db.exec("INSERT INTO saved_posts (post_id,title,url,permalink,saved_at,source,note,tags,viewed_at) VALUES ('bsky_alice.example_3lxyzabc123','Canonical','https://bsky.app/profile/alice.example/post/3lxyzabc123','https://bsky.app/profile/alice.example/post/3lxyzabc123',2,'bsky','canonical note','[\"canonical\"]',2)");
     persistSavedPost(db, { postId: "bsky_alice.example_3lxyzabc123", title: "fallback", url: "https://www.bsky.app/profile/alice.example/post/3lxyzabc123?share=1", permalink: "https://www.bsky.app/profile/alice.example/post/3lxyzabc123?share=1", subreddit: null, author: "alice.example", score: null, body: null, source: "bsky", savedAt: 3, note: null, tags: null });

@@ -60,6 +60,7 @@ function runMigrations(database: Database.Database): void {
     8: "008_saved_posts_subreddit_tags.sql",
     9: "009_ingested_links.sql",
     10: "010_astronomy_cache.sql",
+    11: "011_saved_post_metadata_status.sql",
   };
 
   // Ensure meta table exists first

@@ -197,13 +197,13 @@ export function AddSavedPostModal({
         IPC.REDDIT_CREATE_SAVED_POST,
         payload,
       );
-      const response = result as { ok?: boolean; error?: string | null };
+      const response = result as { ok?: boolean; error?: string | null; metadataStatus?: "link_only" | null };
       if (!response.ok) {
         toast.error(response.error ?? "Failed to save post.");
         return;
       }
 
-      toast.success("Saved post added.");
+      toast.success(response.metadataStatus === "link_only" ? "Reddit link saved without metadata." : "Saved post added.");
       onOpenChange(false);
       onSaved?.();
     } catch (err) {
@@ -407,6 +407,11 @@ export function AddSavedPostModal({
                         </span>
                       ) : null}
                     </div>
+                    {preview.metadataStatus === "link_only" ? (
+                      <p role="status" className="text-amber-700 dark:text-amber-300">
+                        Link only: Reddit requires sign-in for post metadata. The link and your note will be saved without requesting Reddit metadata.
+                      </p>
+                    ) : null}
                     {preview.tags.length > 0 ? (
                       <div className="flex flex-wrap gap-1">
                         {preview.tags.map((tag) => (

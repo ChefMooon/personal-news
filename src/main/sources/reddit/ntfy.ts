@@ -40,6 +40,7 @@ export async function processItemsWithDelay<T>(
 export function buildNtfySyncSummary(input: {
   messagesReceived: number;
   postsIngested: number;
+  linkOnlyCount?: number;
   failedEntries: NtfySyncFailureEntry[];
   error: string | null;
   lastPolledAt: number | null;
@@ -51,6 +52,7 @@ export function buildNtfySyncSummary(input: {
   return {
     messagesReceived: input.messagesReceived,
     postsIngested: input.postsIngested,
+    linkOnlyCount: input.linkOnlyCount ?? 0,
     failedCount: failedUrls.length,
     duplicateCount: input.duplicateCount ?? duplicateUrls.length,
     failedUrls,
@@ -66,10 +68,10 @@ export function buildNtfySyncSummary(input: {
 export async function pollNtfy(
   db: Database.Database,
   trigger: "automatic" | "manual" = "manual",
-): Promise<{ postsIngested: number; messagesReceived: number }> {
+): Promise<{ postsIngested: number; messagesReceived: number; linkOnlyCount: number }> {
   const isPaused = () => trigger === "automatic" && isDevTestDataActive(db);
   if (isPaused()) {
-    return { postsIngested: 0, messagesReceived: 0 };
+    return { postsIngested: 0, messagesReceived: 0, linkOnlyCount: 0 };
   }
 
   const writeSyncSettings = (settings: Record<string, string>): boolean =>
@@ -98,7 +100,7 @@ export async function pollNtfy(
     writeSyncSettings({
       ntfy_last_sync_summary: JSON.stringify(summary),
     });
-    return { postsIngested: 0, messagesReceived: 0 };
+    return { postsIngested: 0, messagesReceived: 0, linkOnlyCount: 0 };
   }
 
   const serverUrl = getSetting("ntfy_server_url") || "https://ntfy.sh";
@@ -156,12 +158,13 @@ export async function pollNtfy(
   }
 
   if (isPaused()) {
-    return { postsIngested: 0, messagesReceived: 0 };
+    return { postsIngested: 0, messagesReceived: 0, linkOnlyCount: 0 };
   }
   const lines = text.split("\n").filter((line) => line.trim().length > 0);
   console.log(`[ntfy] Response OK — ${lines.length} line(s) received`);
 
   let postsIngested = 0;
+  let linkOnlyCount = 0;
   let messagesReceived = 0;
   let duplicateCount = 0;
   let lastProcessedId: string | null = null;
@@ -236,11 +239,12 @@ export async function pollNtfy(
           if (isPaused()) {
             return false;
           }
-          persistSavedPost(db, post);
-          return true;
+          const metadataStatus = persistSavedPost(db, post);
+          return metadataStatus;
         })();
-        if (inserted) {
+        if (inserted !== false) {
           postsIngested++;
+          if (inserted === "link_only") linkOnlyCount++;
           console.log(`[ntfy] Post ingested: ${post.postId}`);
         }
       } catch (error) {
@@ -262,13 +266,14 @@ export async function pollNtfy(
   );
 
   if (isPaused()) {
-    return { postsIngested, messagesReceived };
+    return { postsIngested, messagesReceived, linkOnlyCount };
   }
 
   const lastPolledAt = Math.floor(Date.now() / 1000);
   const summary = buildNtfySyncSummary({
     messagesReceived,
     postsIngested,
+    linkOnlyCount,
     failedEntries,
     error:
       failedEntries.length > 0
@@ -292,5 +297,5 @@ export async function pollNtfy(
   console.log(
     `[ntfy] Poll complete: ${messagesReceived} messages, ${postsIngested} posts ingested`,
   );
-  return { postsIngested, messagesReceived };
+  return { postsIngested, messagesReceived, linkOnlyCount };
 }

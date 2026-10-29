@@ -2555,6 +2555,10 @@ function SavedPostsTab({
                 {syncSummary.postsIngested}
               </p>
               <p>
+                <span className="text-muted-foreground">Link-only saves:</span>{" "}
+                {syncSummary.linkOnlyCount ?? 0}
+              </p>
+              <p>
                 <span className="text-muted-foreground">Failed links:</span>{" "}
                 {syncSummary.failedCount}
               </p>

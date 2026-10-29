@@ -228,7 +228,9 @@ function SavedPostsWidget(): React.ReactElement {
         });
     }
     const url =
-      post.source === "reddit" ? toRedditPostUrl(post.permalink) : post.url;
+      post.source === "reddit"
+        ? toRedditPostUrl(post.metadata_status === "link_only" ? post.url : post.permalink)
+        : post.url;
     window.api.invoke(IPC.SHELL_OPEN_EXTERNAL, url).catch((err) => {
       toast.error(
         err instanceof Error ? err.message : "Failed to open saved post link.",
@@ -238,7 +240,9 @@ function SavedPostsWidget(): React.ReactElement {
 
   const handlePeekExternal = (post: SavedPost): void => {
     const url =
-      post.source === "reddit" ? toRedditPostUrl(post.permalink) : post.url;
+      post.source === "reddit"
+        ? toRedditPostUrl(post.metadata_status === "link_only" ? post.url : post.permalink)
+        : post.url;
     window.api.invoke(IPC.SHELL_OPEN_EXTERNAL, url).catch((err) => {
       toast.error(
         err instanceof Error ? err.message : "Failed to open saved post link.",

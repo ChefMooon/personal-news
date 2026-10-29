@@ -88,6 +88,7 @@ const MIGRATIONS = [
   "008_saved_posts_subreddit_tags.sql",
   "009_ingested_links.sql",
   "010_astronomy_cache.sql",
+  "011_saved_post_metadata_status.sql",
 ];
 const PREVIOUS_HARNESS_VALUE = process.env.PERSONAL_NEWS_ELECTRON_HARNESS;
 const previousResourcesPathDescriptor = Object.getOwnPropertyDescriptor(

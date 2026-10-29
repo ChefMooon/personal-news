@@ -1,17 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
-import type { SavedPostInput } from "../../../shared/ipc-types";
 import {
   detectSource,
   fetchMetadataForUrl,
   normalizeManualSavedPostInput,
 } from "../link-sources";
-import { fetchRedditPost } from "../reddit/metadata";
 import { fetchGenericLinkMetadata } from "../generic-link-metadata";
 import { parseBlueskyPostUrl } from "../bluesky";
 
-vi.mock("../reddit/metadata", () => ({
-  fetchRedditPost: vi.fn(),
-}));
 vi.mock("../generic-link-metadata", () => ({
   fetchGenericLinkMetadata: vi.fn(),
 }));
@@ -21,33 +16,27 @@ vi.mock("../bluesky", async (importOriginal) => ({
   fetchBlueskyPostText: vi.fn().mockResolvedValue(null),
 }));
 
-const mockFetchRedditPost = vi.mocked(fetchRedditPost);
 const mockFetchGeneric = vi.mocked(fetchGenericLinkMetadata);
 
 describe("link source metadata", () => {
-  it("adds a lowercased subreddit tag to Reddit posts", async () => {
-    const redditPost: SavedPostInput = {
-      postId: "abc123",
-      title: "Useful Godot thread",
-      url: "https://reddit.com/r/GodotEngine/comments/abc123/useful_thread/",
-      permalink: "/r/GodotEngine/comments/abc123/useful_thread/",
-      subreddit: "GodotEngine",
-      author: "dev",
-      score: 12,
-      body: null,
-      source: "reddit",
-      savedAt: 1_700_000_000,
-      note: null,
-      tags: null,
-    };
-    mockFetchRedditPost.mockResolvedValueOnce(redditPost);
-
+  it("creates link-only metadata for Reddit without remote requests", async () => {
     const metadata = await fetchMetadataForUrl(
       "https://reddit.com/r/GodotEngine/comments/abc123/useful_thread/",
       null,
     );
 
-    expect(metadata.tags).toEqual(["godotengine"]);
+    expect(metadata).toMatchObject({
+      postId: "abc123", title: "Reddit post (link only)", source: "reddit",
+      tags: ["godotengine"], metadataStatus: "link_only",
+    });
+  });
+
+  it("routes ordinary Reddit pages through generic metadata fallback", async () => {
+    mockFetchGeneric.mockResolvedValueOnce({ title: "Subreddit page", description: null });
+    await expect(fetchMetadataForUrl("https://www.reddit.com/r/GodotEngine/", null)).resolves.toMatchObject({
+      source: "generic", title: "Subreddit page", url: "https://www.reddit.com/r/GodotEngine/",
+    });
+    expect(mockFetchGeneric).toHaveBeenCalledTimes(1);
   });
 
   it("uses the X handle for a local fallback title and tag", async () => {

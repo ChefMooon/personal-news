@@ -1,6 +1,7 @@
 import type Database from "better-sqlite3";
 import { parseXLink } from "../x-links";
 import { parseBlueskyPostUrl } from "../bluesky";
+import { parseRedditPostUrl } from "./validation";
 
 export interface NtfyDedupeTracker {
   shouldProcessUrl(rawUrl: string, now?: number): boolean;
@@ -16,6 +17,8 @@ export function normalizeUrlForDedupe(rawUrl: string): string | null {
 
   try {
     const parsedUrl = new URL(trimmedUrl);
+    const redditPost = parseRedditPostUrl(trimmedUrl);
+    if (redditPost) return redditPost.canonicalUrl;
     const xPostUrl = parseXLink(trimmedUrl)?.canonicalPostUrl;
     if (xPostUrl) return xPostUrl;
     const dedupeCandidate = new URL(trimmedUrl);

@@ -88,7 +88,7 @@ export function NtfyOnboardingWizard({
         toast.success("Connected to ntfy. No messages were found yet.");
       } else {
         toast.success(
-          `Connected. Received ${result.messagesReceived} ntfy message${result.messagesReceived !== 1 ? "s" : ""} and saved ${result.postsIngested} Reddit post${result.postsIngested !== 1 ? "s" : ""}.`,
+          `Connected. Received ${result.messagesReceived} ntfy message${result.messagesReceived !== 1 ? "s" : ""} and saved ${result.postsIngested} Reddit link${result.postsIngested !== 1 ? "s" : ""}${"linkOnlyCount" in result && Number(result.linkOnlyCount) > 0 ? ` (${String(result.linkOnlyCount)} link only)` : ""}.`,
         );
       }
     } catch (err) {

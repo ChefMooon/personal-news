@@ -36,6 +36,7 @@ function createNtfyDatabase(): Database.Database {
       permalink TEXT NOT NULL, subreddit TEXT, author TEXT, score INTEGER,
       body TEXT, saved_at INTEGER NOT NULL, tags TEXT, note TEXT,
       source TEXT NOT NULL DEFAULT 'reddit'
+      , metadata_status TEXT
     );
     CREATE TABLE ingested_links (
       url_key TEXT PRIMARY KEY, normalized_url TEXT NOT NULL,
@@ -208,6 +209,7 @@ describe("pollNtfy", () => {
     await expect(firstPoll).resolves.toEqual({
       postsIngested: 1,
       messagesReceived: 2,
+      linkOnlyCount: 0,
     });
     expect(
       database
@@ -225,6 +227,7 @@ describe("pollNtfy", () => {
     await expect(retryPoll).resolves.toEqual({
       postsIngested: 1,
       messagesReceived: 2,
+      linkOnlyCount: 0,
     });
     expect(
       database
@@ -272,6 +275,7 @@ describe("pollNtfy", () => {
     await expect(firstPoll).resolves.toEqual({
       postsIngested: 2,
       messagesReceived: 2,
+      linkOnlyCount: 0,
     });
     expect(
       database.prepare("SELECT url FROM saved_posts ORDER BY post_id").all(),
@@ -291,6 +295,7 @@ describe("pollNtfy", () => {
     await expect(pollNtfy(database)).resolves.toEqual({
       postsIngested: 0,
       messagesReceived: 1,
+      linkOnlyCount: 0,
     });
     expect(fetchMetadataForUrl).toHaveBeenCalledTimes(2);
     const summaryRow = database
@@ -304,5 +309,30 @@ describe("pollNtfy", () => {
     };
     expect(summary.duplicateCount).toBe(1);
     expect(summary.duplicateUrls).toEqual([replayUrl]);
+  });
+
+  it("saves Reddit links link-only without requesting metadata and reports the count", async () => {
+    vi.useFakeTimers();
+    const database = createNtfyDatabase();
+    settings.set("ntfy_topic", "saved-links");
+    const url = "https://www.reddit.com/r/example/comments/abc123/title/?utm_source=share";
+    mockNtfyResponse([{ id: "message-1", url }]);
+    fetchMetadataForUrl.mockResolvedValue({
+      postId: "abc123", title: "Reddit post (link only)", url,
+      permalink: "https://www.reddit.com/r/example/comments/abc123/title/",
+      subreddit: "example", author: null, score: null, body: null,
+      source: "reddit", savedAt: 1_700_000_000, note: null, tags: ["example"],
+      metadataStatus: "link_only",
+    });
+    const poll = pollNtfy(database);
+    await vi.runAllTimersAsync();
+    await expect(poll).resolves.toMatchObject({ postsIngested: 1, messagesReceived: 1, linkOnlyCount: 1 });
+    expect(fetchMetadataForUrl).toHaveBeenCalledTimes(1);
+    expect(database.prepare("SELECT post_id,title,url,permalink,metadata_status FROM saved_posts").get()).toMatchObject({
+      post_id: "abc123", title: "Reddit post (link only)", url,
+      permalink: "https://www.reddit.com/r/example/comments/abc123/title/", metadata_status: "link_only",
+    });
+    const summary = JSON.parse((database.prepare("SELECT value FROM settings WHERE key='ntfy_last_sync_summary'").get() as {value: string}).value) as {linkOnlyCount: number; hasFailures: boolean};
+    expect(summary).toMatchObject({ linkOnlyCount: 1, hasFailures: false });
   });
 });

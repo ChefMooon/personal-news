@@ -35,6 +35,7 @@ function emitNtfyIngestComplete(
 export async function triggerNtfyPoll(): Promise<{
   postsIngested: number;
   messagesReceived: number;
+  linkOnlyCount: number;
 }> {
   return runNtfyPoll({ throwOnError: true, trigger: "manual" });
 }
@@ -75,18 +76,18 @@ export function applyNtfyPollInterval(minutes: number): void {
 async function runNtfyPoll(options: {
   throwOnError: boolean;
   trigger: "automatic" | "manual";
-}): Promise<{ postsIngested: number; messagesReceived: number }> {
+}): Promise<{ postsIngested: number; messagesReceived: number; linkOnlyCount: number }> {
   if (!dbRef) {
     throw new Error("Reddit module not initialized");
   }
   if (pollingInProgress) {
-    return { postsIngested: 0, messagesReceived: 0 };
+    return { postsIngested: 0, messagesReceived: 0, linkOnlyCount: 0 };
   }
 
   pollingInProgress = true;
   try {
     if (options.trigger === "automatic" && isDevTestDataActive(dbRef)) {
-      return { postsIngested: 0, messagesReceived: 0 };
+      return { postsIngested: 0, messagesReceived: 0, linkOnlyCount: 0 };
     }
     const result = await pollNtfy(dbRef, options.trigger);
     const summary = getSetting("ntfy_last_sync_summary");
@@ -103,7 +104,7 @@ async function runNtfyPoll(options: {
     if (options.throwOnError) {
       throw error;
     }
-    return { postsIngested: 0, messagesReceived: 0 };
+    return { postsIngested: 0, messagesReceived: 0, linkOnlyCount: 0 };
   } finally {
     pollingInProgress = false;
   }

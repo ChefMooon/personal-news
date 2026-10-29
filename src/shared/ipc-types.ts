@@ -886,6 +886,7 @@ export interface SavedPost {
   viewed_at: number | null;
   note: string | null;
   tags: string[];
+  metadata_status?: "link_only" | null;
 }
 
 export interface SavedPostsBulkSetViewedRequest {
@@ -968,6 +969,7 @@ export interface SavedPostInput {
   savedAt: number;
   note: string | null;
   tags: string[] | null;
+  metadataStatus?: "link_only" | null;
 }
 
 export interface CreateSavedPostRequest {
@@ -979,6 +981,7 @@ export interface CreateSavedPostRequest {
 export interface CreateSavedPostResult extends IpcMutationResult {
   postId?: string;
   created?: boolean;
+  metadataStatus?: "link_only" | null;
 }
 
 export interface PreviewSavedPostMetadataRequest {
@@ -994,6 +997,7 @@ export interface SavedPostMetadataPreview {
   subreddit: string | null;
   tags: string[];
   note: string | null;
+  metadataStatus?: "link_only" | null;
 }
 
 export interface NtfySyncFailureEntry {
@@ -1004,6 +1008,7 @@ export interface NtfySyncFailureEntry {
 export interface NtfySyncSummary {
   messagesReceived: number;
   postsIngested: number;
+  linkOnlyCount?: number;
   failedCount: number;
   duplicateCount: number;
   failedUrls: string[];
@@ -1024,6 +1029,7 @@ export interface NtfyStaleness {
 export interface NtfyPollResult {
   postsIngested: number;
   messagesReceived: number;
+  linkOnlyCount?: number;
   lastPolledAt: number;
 }
 

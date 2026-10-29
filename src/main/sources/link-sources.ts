@@ -3,8 +3,7 @@ import type {
   SavedPostInput,
   SavedPostMetadataPreview,
 } from "../../shared/ipc-types";
-import { fetchRedditPost } from "./reddit/metadata";
-import { isRedditPostUrl } from "./reddit/validation";
+import { isRedditPostUrl, parseRedditPostUrl } from "./reddit/validation";
 import { createHash } from "node:crypto";
 import { fetchGenericLinkMetadata } from "./generic-link-metadata";
 import { parseXLink } from "./x-links";
@@ -26,20 +25,12 @@ const SOURCE_DEFINITIONS: SourceDefinition[] = [
   {
     id: "reddit",
     label: "Reddit",
-    urlPattern: /^https?:\/\/((www|new|old|m)\.)?reddit\.com\//i,
+    urlPattern: /^https?:\/\/((www|new|old|m)\.)?reddit\.com(?:\/|$)/i,
     extractPostId: (url) => {
       const match = url.match(/\/comments\/([a-z0-9]+)/i);
       return match ? match[1] : hashUrl(url);
     },
-    fetchMetadata: async (url, note) => {
-      const post = await fetchRedditPost(url);
-      return {
-        ...post,
-        note,
-        source: "reddit",
-        tags: post.subreddit ? [normalizeAutoTag(post.subreddit)] : null,
-      };
-    },
+    fetchMetadata: async (url, note) => createRedditLinkOnlyPost(url, note),
   },
   {
     id: "x",
@@ -153,22 +144,29 @@ export async function fetchMetadataForUrl(
   const source = detectSource(normalizedUrl);
   const def = SOURCE_DEFINITIONS.find((d) => d.id === source);
 
+  if (source === "reddit" && !isRedditPostUrl(normalizedUrl)) {
+    return fetchGenericFallback(normalizedUrl, note);
+  }
+
   if (def) {
     return def.fetchMetadata(normalizedUrl, note);
   }
 
-  if (isRedditPostUrl(normalizedUrl)) {
-    return SOURCE_DEFINITIONS[0].fetchMetadata(normalizedUrl, note);
-  }
+  if (isRedditPostUrl(normalizedUrl)) return createRedditLinkOnlyPost(normalizedUrl, note);
   const parsed = new URL(normalizedUrl);
   if (!parsed.hostname || parsed.username || parsed.password)
     throw new Error(`Unsupported URL: ${url}`);
+  return fetchGenericFallback(normalizedUrl, note, parsed);
+}
+
+async function fetchGenericFallback(url: string, note: string | null, parsed = new URL(url)): Promise<SavedPostInput> {
+  if (!parsed.hostname || parsed.username || parsed.password) throw new Error(`Unsupported URL: ${url}`);
   const post = await fetchGenericLinkMetadata(parsed);
   return {
     postId: `link_${createHash("sha256").update(normalizeDedupeUrl(parsed)).digest("hex")}`,
     title: post.title || note || parsed.hostname,
-    url: normalizedUrl,
-    permalink: normalizedUrl,
+    url,
+    permalink: url,
     subreddit: null,
     author: null,
     score: null,
@@ -177,6 +175,27 @@ export async function fetchMetadataForUrl(
     savedAt: Math.floor(Date.now() / 1000),
     note,
     tags: null,
+  };
+}
+
+export function createRedditLinkOnlyPost(url: string, note: string | null): SavedPostInput {
+  const parsed = parseRedditPostUrl(url);
+  if (!parsed) throw new Error(`Unsupported Reddit post URL: ${url}`);
+  const postId = parsed.postId ?? `reddit_link_${createHash("sha256").update(parsed.canonicalUrl).digest("hex")}`;
+  return {
+    postId,
+    title: "Reddit post (link only)",
+    url,
+    permalink: parsed.canonicalUrl,
+    subreddit: parsed.subreddit,
+    author: null,
+    score: null,
+    body: null,
+    source: "reddit",
+    savedAt: Math.floor(Date.now() / 1000),
+    note,
+    tags: [normalizeAutoTag(parsed.subreddit)],
+    metadataStatus: "link_only",
   };
 }
 
@@ -205,6 +224,7 @@ export async function previewSavedPostMetadata(
     description: metadata.body,
     tags: metadata.tags ?? [],
     note,
+    metadataStatus: metadata.metadataStatus ?? null,
   };
 }
 

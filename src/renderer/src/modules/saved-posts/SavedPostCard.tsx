@@ -137,6 +137,9 @@ export function SavedPostCard({
                 {post.body}
               </p>
             )}
+            {post.metadata_status === "link_only" && (
+              <p className="text-xs text-amber-700 dark:text-amber-300">Link saved · Reddit metadata unavailable</p>
+            )}
             <div className="flex items-center gap-2 text-xs">
               {post.score !== null && config.showMetadata && (
                 <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-muted/60 text-foreground/80 whitespace-nowrap">

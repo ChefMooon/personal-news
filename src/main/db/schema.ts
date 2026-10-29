@@ -19,6 +19,11 @@ const REQUIRED_SCHEMA_MIGRATIONS: RequiredSchemaMigration[] = [
     migrationFile: "009_ingested_links.sql",
     shouldApply: (database) => !tableExists(database, "ingested_links"),
   },
+  {
+    name: "saved-post-metadata-status",
+    migrationFile: "011_saved_post_metadata_status.sql",
+    shouldApply: (database) => tableExists(database, "saved_posts") && !columnExists(database, "saved_posts", "metadata_status"),
+  },
 ];
 
 export function ensureRequiredSchemaMigrations(
@@ -52,4 +57,9 @@ function tableExists(database: Database.Database, tableName: string): boolean {
     .get(tableName) as { name: string } | undefined;
 
   return row != null;
+}
+
+function columnExists(database: Database.Database, tableName: string, columnName: string): boolean {
+  const columns = database.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string }>;
+  return columns.some((column) => column.name === columnName);
 }
