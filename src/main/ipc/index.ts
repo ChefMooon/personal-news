@@ -110,7 +110,7 @@ import {
   triggerNtfyPoll,
 } from "../sources/reddit/index";
 import { createNtfyDedupeTracker } from "../sources/reddit/dedupe";
-import { SAVED_POST_UPSERT_SQL } from "../sources/saved-post-persistence";
+import { persistSavedPost } from "../sources/saved-post-persistence";
 import {
   applyWeatherPollSettings,
   deleteWeatherLocation,
@@ -2294,22 +2294,7 @@ export function registerIpcHandlers(): void {
         const postId = metadata.postId;
         const savedAt = Math.floor(Date.now() / 1000);
 
-        const upsert = db.prepare(SAVED_POST_UPSERT_SQL);
-
-        upsert.run(
-          postId,
-          metadata.title,
-          metadata.url,
-          metadata.permalink,
-          metadata.subreddit,
-          metadata.author,
-          metadata.score,
-          metadata.body,
-          savedAt,
-          JSON.stringify(normalizedTags),
-          note,
-          metadata.source,
-        );
+        persistSavedPost(db, { ...metadata, savedAt, tags: normalizedTags });
 
         emitRedditUpdated();
         return { ok: true, error: null, created: true, postId };

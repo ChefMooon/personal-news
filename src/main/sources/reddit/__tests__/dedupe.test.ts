@@ -33,6 +33,18 @@ describe("normalizeUrlForDedupe", () => {
     );
   });
 
+  it.each([
+    "https://bsky.app/profile/Alice.Example/post/3lxyzabc123?ref=share#thread",
+    "https://bsky.app/profile/alice.example/post/3lxyzabc123/",
+  ])("canonicalizes Bluesky share variants: %s", (url) => {
+    expect(normalizeUrlForDedupe(url)).toBe("https://bsky.app/profile/alice.example/post/3lxyzabc123");
+  });
+
+  it("keeps identical Bluesky record keys from different authors distinct", () => {
+    expect(normalizeUrlForDedupe("https://bsky.app/profile/alice.example/post/3lxyzabc123"))
+      .not.toBe(normalizeUrlForDedupe("https://bsky.app/profile/bob.example/post/3lxyzabc123"));
+  });
+
   it("returns null for invalid URLs", () => {
     expect(normalizeUrlForDedupe("not a url")).toBeNull();
   });

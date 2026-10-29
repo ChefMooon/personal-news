@@ -9,6 +9,7 @@ import { createHash } from "node:crypto";
 import { fetchGenericLinkMetadata } from "./generic-link-metadata";
 import { parseXLink } from "./x-links";
 import { fetchXPostText } from "./x-oembed";
+import { fetchBlueskyPostText, parseBlueskyPostUrl } from "./bluesky";
 
 // --- Source detection ---
 
@@ -77,23 +78,21 @@ const SOURCE_DEFINITIONS: SourceDefinition[] = [
     id: "bsky",
     label: "Bluesky",
     urlPattern: /^https?:\/\/(www\.)?bsky\.app\//i,
-    extractPostId: (url) => {
-      const match = url.match(/\/post\/([a-zA-Z0-9]+)/i);
-      return match ? `bsky_${match[1]}` : hashUrl(url);
-    },
+    extractPostId: (url) => { const post = parseBlueskyPostUrl(url); return post ? `bsky_${post.handle}_${post.rkey}` : hashUrl(url); },
     fetchMetadata: async (url, note) => {
-      const handle = extractBskyHandle(url);
-      const postId = extractBskyPostId(url);
-      const title = note || (handle ? `Post by @${handle}` : url);
+      const post = parseBlueskyPostUrl(url);
+      const handle = post?.handle ?? null;
+      const body = post ? await fetchBlueskyPostText(post) : null;
+      const title = note || (handle ? `Post by @${handle}` : "Bluesky link");
       return {
-        postId,
+        postId: extractBskyPostId(url),
         title,
         url,
         permalink: url,
         subreddit: null,
         author: handle,
         score: null,
-        body: null,
+        body,
         source: "bsky" as LinkSource,
         savedAt: Math.floor(Date.now() / 1000),
         note,
@@ -228,12 +227,7 @@ function extractXPostId(url: string): string {
   return postId ? `x_${postId}` : hashUrl(url);
 }
 
-function extractBskyHandle(url: string): string | null {
-  const match = url.match(/bsky\.app\/profile\/([^/?#]+)/i);
-  return match ? match[1] : null;
-}
-
 function extractBskyPostId(url: string): string {
-  const match = url.match(/\/post\/([a-zA-Z0-9]+)/i);
-  return match ? `bsky_${match[1]}` : hashUrl(url);
+  const post = parseBlueskyPostUrl(url);
+  return post ? `bsky_${post.handle}_${post.rkey}` : hashUrl(url);
 }

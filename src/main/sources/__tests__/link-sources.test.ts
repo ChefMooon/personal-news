@@ -7,6 +7,7 @@ import {
 } from "../link-sources";
 import { fetchRedditPost } from "../reddit/metadata";
 import { fetchGenericLinkMetadata } from "../generic-link-metadata";
+import { parseBlueskyPostUrl } from "../bluesky";
 
 vi.mock("../reddit/metadata", () => ({
   fetchRedditPost: vi.fn(),
@@ -15,6 +16,10 @@ vi.mock("../generic-link-metadata", () => ({
   fetchGenericLinkMetadata: vi.fn(),
 }));
 vi.mock("../x-oembed", () => ({ fetchXPostText: vi.fn().mockResolvedValue(null) }));
+vi.mock("../bluesky", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../bluesky")>()),
+  fetchBlueskyPostText: vi.fn().mockResolvedValue(null),
+}));
 
 const mockFetchRedditPost = vi.mocked(fetchRedditPost);
 const mockFetchGeneric = vi.mocked(fetchGenericLinkMetadata);
@@ -121,15 +126,40 @@ describe("link source metadata", () => {
     },
   );
 
-  it("uses the Bluesky handle for a local fallback title and tag", async () => {
+  it("uses actor-scoped Bluesky identity and fallback metadata", async () => {
     const metadata = await fetchMetadataForUrl(
       "https://bsky.app/profile/User.Example/post/3lxyzabc123",
       null,
     );
 
-    expect(metadata.title).toBe("Post by @User.Example");
-    expect(metadata.author).toBe("User.Example");
+    expect(metadata.title).toBe("Post by @user.example");
+    expect(metadata.author).toBe("user.example");
+    expect(metadata.postId).toBe("bsky_user.example_3lxyzabc123");
     expect(metadata.tags).toEqual(["user.example"]);
+  });
+
+  it.each([
+    "https://bsky.app/profile/user.example/post/3lxyzabc123/extra",
+    "https://bsky.app.evil.test/profile/user.example/post/3lxyzabc123",
+    "https://user@bsky.app/profile/user.example/post/3lxyzabc123",
+    "https://bsky.app/profile/not-a-handle/post/3lxyzabc123",
+  ])("rejects ambiguous Bluesky post URL %s", (url) => {
+    expect(parseBlueskyPostUrl(url)).toBeNull();
+  });
+
+  it.each([
+    "https://bsky.app/profile/user.example/post/3lxyzabc123?x=1#thread",
+    "https://www.bsky.app/profile/user.example/post/3lxyzabc123/",
+    "http://bsky.app/profile/user.example/post/3lxyzabc123",
+  ])("accepts Bluesky share variants for a stable post identity: %s", async (url) => {
+    expect(parseBlueskyPostUrl(url)).toEqual({ handle: "user.example", rkey: "3lxyzabc123" });
+    expect((await fetchMetadataForUrl(url, null)).postId).toBe("bsky_user.example_3lxyzabc123");
+  });
+
+  it("keeps Bluesky profile and non-post URLs neutral", async () => {
+    const metadata = await fetchMetadataForUrl("https://bsky.app/profile/user.example", null);
+    expect(metadata).toMatchObject({ source: "bsky", title: "Bluesky link", author: null, body: null });
+    expect(metadata.postId).toMatch(/^link_/);
   });
 
   it("saves arbitrary links with metadata and a stable SHA-256 identity", async () => {

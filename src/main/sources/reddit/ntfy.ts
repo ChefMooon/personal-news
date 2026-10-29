@@ -5,7 +5,7 @@ import type {
   NtfySyncSummary,
 } from "../../../shared/ipc-types";
 import { fetchMetadataForUrl } from "../link-sources";
-import { SAVED_POST_UPSERT_SQL } from "../saved-post-persistence";
+import { persistSavedPost } from "../saved-post-persistence";
 import { processNtfyMessage } from "./ntfy-message.mjs";
 import { createNtfyDedupeTracker } from "./dedupe";
 import { isDevTestDataActive } from "../../dev-test-data";
@@ -179,7 +179,6 @@ export async function pollNtfy(
     );
   }
 
-  const upsert = db.prepare(SAVED_POST_UPSERT_SQL);
 
   const pendingUrls: Array<{ url: string; note: string | null; retryCursor: string | null }> = [];
 
@@ -237,20 +236,7 @@ export async function pollNtfy(
           if (isPaused()) {
             return false;
           }
-          upsert.run(
-            post.postId,
-            post.title,
-            post.url,
-            post.permalink,
-            post.subreddit,
-            post.author,
-            post.score,
-            post.body,
-            post.savedAt,
-            post.tags ? JSON.stringify(post.tags) : null,
-            post.note,
-            post.source,
-          );
+          persistSavedPost(db, post);
           return true;
         })();
         if (inserted) {

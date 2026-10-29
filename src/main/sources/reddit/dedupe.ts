@@ -1,5 +1,6 @@
 import type Database from "better-sqlite3";
 import { parseXLink } from "../x-links";
+import { parseBlueskyPostUrl } from "../bluesky";
 
 export interface NtfyDedupeTracker {
   shouldProcessUrl(rawUrl: string, now?: number): boolean;
@@ -17,6 +18,11 @@ export function normalizeUrlForDedupe(rawUrl: string): string | null {
     const parsedUrl = new URL(trimmedUrl);
     const xPostUrl = parseXLink(trimmedUrl)?.canonicalPostUrl;
     if (xPostUrl) return xPostUrl;
+    const dedupeCandidate = new URL(trimmedUrl);
+    dedupeCandidate.search = "";
+    dedupeCandidate.hash = "";
+    const bskyPost = parseBlueskyPostUrl(dedupeCandidate.toString());
+    if (bskyPost) return `https://bsky.app/profile/${bskyPost.handle}/post/${bskyPost.rkey}`;
     const protocol = parsedUrl.protocol.toLowerCase();
     const hostname = parsedUrl.hostname.toLowerCase();
     const defaultPort =
@@ -79,6 +85,16 @@ export function createNtfyDedupeTracker(
         row.source,
       );
       remove.run(row.url_key);
+    }
+
+    if (canPersist()) {
+      const oldBsky = db.prepare("SELECT url_key, normalized_url, first_seen_at, last_seen_at, source FROM ingested_links WHERE lower(url_key) LIKE '%bsky.app/%'").all() as typeof legacyRows;
+      for (const row of oldBsky) {
+        const canonical = normalizeUrlForDedupe(row.url_key);
+        if (!canonical || canonical === row.url_key || !canonical.startsWith("https://bsky.app/profile/")) continue;
+        merge.run(canonical, canonical, row.first_seen_at, row.last_seen_at, row.source);
+        remove.run(row.url_key);
+      }
     }
   })();
 
