@@ -22,9 +22,8 @@ const BETTER_SQLITE_NATIVE_PATH = path.join(
   "app.asar.unpacked",
   "node_modules",
   "better-sqlite3",
-  "build",
-  "Release",
-  "better_sqlite3.node",
+  "prebuilds",
+  `${process.platform}-${process.arch}.node`,
 );
 const MIGRATIONS_DIR = path.join(RESOURCES_DIR, "migrations");
 const SOURCE_MIGRATIONS_DIR = path.join(
