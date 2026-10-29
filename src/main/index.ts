@@ -15,11 +15,12 @@ import { join } from "path";
 import { electronApp, optimizer, is } from "@electron-toolkit/utils";
 import { IPC } from "../shared/ipc-types";
 import { openDatabase, resolveDatabasePath } from "./db/database";
-import { registerIpcHandlers } from "./ipc/index";
+import { registerIpcHandlers, setTrustedIpcWebContents } from "./ipc/index";
 import { registerModule, initializeAll, shutdownAll } from "./sources/registry";
 import { YouTubeModule } from "./sources/youtube/index";
 import { RedditModule } from "./sources/reddit/index";
 import { ScriptManagerModule } from "./sources/scripts/index";
+import { isTrustedRendererUrl, parseExternalHttpUrl } from "./security/ipc-policy";
 import { WeatherModule } from "./sources/weather/index";
 import { AstronomyModule } from "./sources/astronomy/index";
 import { SportsModule } from "./sources/sports/index";
@@ -617,6 +618,7 @@ function createWindow(): BrowserWindow {
       nodeIntegration: false,
     },
   });
+  setTrustedIpcWebContents(mainWindow.webContents);
 
   mainWindow.on("ready-to-show", () => {
     const startMinimized = getBooleanSetting("app_start_minimized", false);
@@ -628,8 +630,20 @@ function createWindow(): BrowserWindow {
   });
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url);
+    const url = parseExternalHttpUrl(details.url);
+    if (url) {
+      void shell.openExternal(url.toString()).catch((error: unknown) => {
+        console.error("[Shell] Failed to open external link:", error);
+      });
+    }
     return { action: "deny" };
+  });
+
+  mainWindow.webContents.on("will-navigate", (event, navigationUrl) => {
+    if (!isTrustedRendererUrl(navigationUrl, app.isPackaged, process.env["ELECTRON_RENDERER_URL"], join(__dirname, "../renderer/index.html"))) event.preventDefault();
+  });
+  mainWindow.webContents.on("will-redirect", (event, navigationUrl) => {
+    if (!isTrustedRendererUrl(navigationUrl, app.isPackaged, process.env["ELECTRON_RENDERER_URL"], join(__dirname, "../renderer/index.html"))) event.preventDefault();
   });
 
   if (is.dev && process.env["ELECTRON_RENDERER_URL"]) {

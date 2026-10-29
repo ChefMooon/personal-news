@@ -520,7 +520,7 @@ async function inspectPresetMatrix(
               .querySelector('[aria-label="Hourly forecast"]')
               ?.getBoundingClientRect();
             const astronomyRect = root
-              .querySelector('[aria-label="Astronomy"]')
+              .querySelector('section[aria-label="Astronomy"]')
               ?.getBoundingClientRect();
             return {
               viewports,

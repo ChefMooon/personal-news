@@ -6,7 +6,7 @@ For the tag push and GitHub Releases process itself, use [HOW-TO-RELEASE.md](HOW
 
 ## Prerequisites
 
-- **Node.js** v20+ (v24 also works)
+- **Node.js** v22.12 or later (v24 also works)
 - **npm** v9+
 - **Windows 10+** (tested), macOS or Linux also supported
 - Visual Studio Build Tools (Windows only — required for better-sqlite3 native rebuild)

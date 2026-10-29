@@ -16,6 +16,7 @@ import {
   notifyYoutubeNewVideos,
   notifyYoutubeLiveStart,
 } from "../../notifications/notification-service";
+import { fetchBoundedText } from "../../security/network";
 
 let activePollIntervalMinutes = 15;
 let dbRef: Database.Database | null = null;
@@ -412,15 +413,23 @@ async function refreshChannelThumbnailsFromApi(
     stats.apiRequested += ids.length;
 
     let response: Response;
+    let text: string;
     try {
       const params = new URLSearchParams({
         part: "snippet",
         id: ids.join(","),
         key: apiKey,
       });
-      response = await fetch(
+      ({ response, text } = await fetchBoundedText(
         `https://www.googleapis.com/youtube/v3/channels?${params.toString()}`,
-      );
+        {
+          timeoutMs: 12_000,
+          maxBytes: 2_000_000,
+          maxRedirects: 3,
+          validateRedirect: (_from, to) =>
+            to.protocol === "https:" && to.hostname === "www.googleapis.com",
+        },
+      ));
     } catch {
       stats.failedBatches += 1;
       continue;
@@ -433,7 +442,7 @@ async function refreshChannelThumbnailsFromApi(
 
     let parsedBody: unknown;
     try {
-      parsedBody = (await response.json()) as unknown;
+      parsedBody = JSON.parse(text) as unknown;
     } catch {
       stats.failedBatches += 1;
       continue;
@@ -643,11 +652,15 @@ async function fetchRssCandidatesForChannel(channel: {
 }): Promise<{ candidates: RssCandidate[]; error: string | null }> {
   const feedUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(channel.channel_id)}`;
   try {
-    const response = await fetch(feedUrl);
+    const { response, text: xml } = await fetchBoundedText(feedUrl, {
+      timeoutMs: 10_000,
+      maxBytes: 512_000,
+      maxRedirects: 3,
+      validateRedirect: (_from, to) => /(^|\.)youtube\.com$/i.test(to.hostname),
+    });
     if (!response.ok) {
       throw new Error(`Feed request failed with status ${response.status}`);
     }
-    const xml = await response.text();
     const candidates = parseRssCandidates(xml, channel.channel_id, feedUrl);
     return { candidates, error: null };
   } catch (error) {
@@ -959,15 +972,23 @@ async function pollAllEnabledChannels(
     }
 
     let response: Response;
+    let rawBody: string;
     try {
       const params = new URLSearchParams({
         part: "snippet,contentDetails,statistics,liveStreamingDetails",
         id: ids.join(","),
         key: apiKey as string,
       });
-      response = await fetch(
+      ({ response, text: rawBody } = await fetchBoundedText(
         `https://www.googleapis.com/youtube/v3/videos?${params.toString()}`,
-      );
+        {
+          timeoutMs: 12_000,
+          maxBytes: 2_000_000,
+          maxRedirects: 3,
+          validateRedirect: (_from, to) =>
+            to.protocol === "https:" && to.hostname === "www.googleapis.com",
+        },
+      ));
     } catch (error) {
       const errorMessage =
         error instanceof Error
@@ -1004,7 +1025,6 @@ async function pollAllEnabledChannels(
       continue;
     }
 
-    const rawBody = await response.text();
     let parsedBody: unknown = rawBody;
     try {
       parsedBody = JSON.parse(rawBody);

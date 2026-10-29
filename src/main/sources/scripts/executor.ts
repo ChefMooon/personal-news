@@ -1,9 +1,11 @@
 import { spawn, type ChildProcess } from "child_process";
+import { statSync } from "node:fs";
 import type Database from "better-sqlite3";
 import type {
   ScriptWithLastRun,
   ScriptOutputChunk,
 } from "../../../shared/ipc-types";
+import { isValidScriptExecutionInput } from "./policy";
 
 const OUTPUT_CAP_BYTES = 1024 * 1024; // 1 MB
 const FULL_STDOUT_CAP_BYTES = 5 * 1024 * 1024; // 5 MB
@@ -60,11 +62,29 @@ export function runScript(
   onOutput: (chunk: ScriptOutputChunk) => void,
   activeMap: Map<number, ActiveRun>,
 ): Promise<ScriptRunCompletion> {
+  if (!isValidScriptExecutionInput({
+    id: script.id,
+    filePath: script.file_path,
+    interpreter: script.interpreter,
+    args: script.args,
+    extraArgs: options.extraArgs,
+  })) {
+    return Promise.reject(new Error("Script execution settings are invalid."));
+  }
+  try {
+    if (!statSync(script.file_path).isFile()) {
+      return Promise.reject(new Error("Script file does not exist or is not a regular file."));
+    }
+  } catch {
+    return Promise.reject(new Error("Script file does not exist or is not a regular file."));
+  }
   return new Promise((resolve) => {
     const args = [...parseArgString(script.args), ...options.extraArgs];
     const child = spawn(script.interpreter, [script.file_path, ...args], {
       cwd: undefined,
       stdio: ["ignore", "pipe", "pipe"],
+      shell: false,
+      windowsHide: true,
     });
 
     const now = Math.floor(Date.now() / 1000);

@@ -1,5 +1,6 @@
 import Database from "better-sqlite3";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -96,6 +97,7 @@ const previousResourcesPathDescriptor = Object.getOwnPropertyDescriptor(
 
 let database: Database.Database;
 let fetchMock: ReturnType<typeof vi.fn>;
+let scriptFixturesDir: string | null = null;
 const intervalCallbacks: Array<() => void> = [];
 
 function setSetting(key: string, value: string): void {
@@ -296,6 +298,10 @@ afterEach(() => {
   vi.unstubAllGlobals();
   if (database?.open) {
     database.close();
+  }
+  if (scriptFixturesDir) {
+    rmSync(scriptFixturesDir, { recursive: true, force: true });
+    scriptFixturesDir = null;
   }
   mockedState.database = null;
   if (PREVIOUS_HARNESS_VALUE == null) {
@@ -745,15 +751,20 @@ describe("automatic polling with development fixtures", () => {
   it("does not suppress unrelated user-authored scheduled scripts", async () => {
     seedDevTestData(database);
     const now = Math.floor(Date.now() / 1000);
+    scriptFixturesDir = mkdtempSync(join(tmpdir(), "personal-news-scripts-"));
+    const userScriptPath = join(scriptFixturesDir, "user.py");
+    writeFileSync(userScriptPath, "print('user script')\n", "utf8");
+    setSetting("script_home_dir", scriptFixturesDir);
+    const bundledScriptPath = join(process.cwd(), "resources", "scripts", "reddit_digest.py");
     const insertScript = database.prepare(
       `INSERT INTO scripts (id, name, file_path, interpreter, enabled, created_at)
        VALUES (?, ?, ?, ?, 1, ?)`,
     );
-    insertScript.run(801, "User Script", "C:\\scripts\\user.py", "python", now);
+    insertScript.run(801, "User Script", userScriptPath, "python", now);
     insertScript.run(
       802,
       "Bundled Reddit Digest",
-      "C:\\resources\\reddit_digest.py",
+      bundledScriptPath,
       "python",
       now,
     );
@@ -768,7 +779,7 @@ describe("automatic polling with development fixtures", () => {
       id: 801,
       name: "User Script",
       description: null,
-      file_path: "C:\\scripts\\user.py",
+      file_path: userScriptPath,
       interpreter: "python",
       args: null,
       schedule: null,
@@ -783,7 +794,7 @@ describe("automatic polling with development fixtures", () => {
       ...userScript,
       id: 802,
       name: "Bundled Reddit Digest",
-      file_path: "C:\\resources\\reddit_digest.py",
+      file_path: bundledScriptPath,
     };
     mockedState.runScript.mockImplementation(
       async (_db, script, _options, _onOutput, _activeRuns) => ({

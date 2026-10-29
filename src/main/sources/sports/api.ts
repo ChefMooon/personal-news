@@ -7,6 +7,7 @@ import type {
 } from "../../../shared/ipc-types";
 import { normalizeEventStatus } from "./status";
 import { isElectronHarnessRun } from "../../harness-mode";
+import { fetchBoundedText } from "../../security/network";
 
 const SPORTS_DB_FREE_API_KEY = "123";
 const DEFAULT_SPORTS_DB_BASE_URL = `https://www.thesportsdb.com/api/v1/json/${SPORTS_DB_FREE_API_KEY}`;
@@ -334,9 +335,15 @@ async function scheduleSportsRequest<T>(
 
   try {
     const result = await task();
-    if (result instanceof Response && result.status === 429) {
+    const response =
+      result instanceof Response
+        ? result
+        : result && typeof result === "object" && "response" in result
+          ? (result as { response?: unknown }).response
+          : null;
+    if (response instanceof Response && response.status === 429) {
       const retryAfter =
-        parseRetryAfterMs(result.headers.get("retry-after")) ?? 1_000;
+        parseRetryAfterMs(response.headers.get("retry-after")) ?? 1_000;
       state.cooldownUntil = Math.max(
         state.cooldownUntil,
         Date.now() + retryAfter,
@@ -368,15 +375,24 @@ async function fetchText(url: string): Promise<string> {
     for (let attempt = 0; attempt <= SPORTS_API_MAX_RETRIES; attempt += 1) {
       let timeout: ReturnType<typeof setTimeout> | undefined;
       try {
-        const response = await scheduleSportsRequest(url, () => {
+        const result = await scheduleSportsRequest(url, () => {
           const controller = new AbortController();
           timeout = setTimeout(() => controller.abort(), SPORTS_API_TIMEOUT_MS);
-          return fetch(url, {
+          return fetchBoundedText(url, {
             headers: { Accept: "application/json" },
             signal: controller.signal,
+            timeoutMs: SPORTS_API_TIMEOUT_MS,
+            maxBytes: 2_000_000,
+            maxRedirects: 3,
+            validateRedirect: (from, to) => {
+              if (SPORTS_DB_BASE_URL !== DEFAULT_SPORTS_DB_BASE_URL) {
+                return from.origin === to.origin;
+              }
+              return /(^|\.)(thesportsdb\.com|espn\.com)$/i.test(to.hostname);
+            },
           });
         });
-        const body = await response.text(); // deadline also bounds body consumption
+        const { response, text: body } = result;
         if (!response.ok) {
           if (
             isTransientSportsApiStatus(response.status) &&

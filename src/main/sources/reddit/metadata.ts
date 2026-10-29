@@ -1,5 +1,6 @@
 import type { SavedPostInput } from "../../../shared/ipc-types";
 import { normalizeRedditUrl } from "./validation";
+import { fetchBounded, fetchBoundedText } from "../../security/network";
 
 // /s/SHORTCODE share links — require redirect resolution before the JSON API call
 const SHORT_LINK_PATTERN = /\/r\/[^/]+\/s\/[a-zA-Z0-9]+\/?$/i;
@@ -9,11 +10,14 @@ async function resolveShortLink(url: string): Promise<string> {
   const timeout = setTimeout(() => controller.abort(), 10_000);
   try {
     // HEAD with redirect:follow gives response.url = final canonical URL
-    const res = await fetch(url, {
+    const res = await fetchBounded(url, {
       method: "HEAD",
       headers: { "User-Agent": "personal-news/1.0 (Electron)" },
       signal: controller.signal,
       redirect: "follow",
+      timeoutMs: 10_000,
+      maxRedirects: 5,
+      validateRedirect: (_from, to) => /(^|\.)reddit\.com$/i.test(to.hostname),
     });
     clearTimeout(timeout);
     const resolved = res.url;
@@ -40,39 +44,28 @@ export async function fetchRedditPost(url: string): Promise<SavedPostInput> {
 
   const apiUrl = `${normalized}.json`;
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10_000);
-
   console.log(`[Reddit/metadata] GET ${apiUrl}`);
 
-  let response: Response;
-  try {
-    response = await fetch(apiUrl, {
-      headers: { "User-Agent": "personal-news/1.0 (Electron)" },
-      signal: controller.signal,
-    });
-  } finally {
-    clearTimeout(timeout);
-  }
-
+  const result = await fetchBoundedText(apiUrl, {
+    headers: { "User-Agent": "personal-news/1.0 (Electron)" },
+    timeoutMs: 10_000,
+    maxBytes: 1_000_000,
+    validateRedirect: (_from, to) => /(^|\.)reddit\.com$/i.test(to.hostname),
+  });
+  const response = result.response;
   console.log(
     `[Reddit/metadata] Response: HTTP ${response.status} for ${apiUrl}`,
   );
-
-  if (response.status === 404) {
-    throw new Error(`Reddit post not found: ${url}`);
-  }
   if (!response.ok) {
+    if (response.status === 404)
+      throw new Error(`Reddit post not found: ${url}`);
     throw new Error(`Reddit API error: HTTP ${response.status}`);
   }
-
-  const json = (await response.json()) as unknown;
+  const json = JSON.parse(result.text) as unknown;
   if (!Array.isArray(json) || !json[0]?.data?.children?.[0]?.data) {
     throw new Error(`Unexpected Reddit API response shape for: ${url}`);
   }
-
   const data = json[0].data.children[0].data as Record<string, unknown>;
-
   const author = data.author as string | undefined;
   return {
     postId: data.id as string,

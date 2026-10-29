@@ -2,7 +2,7 @@
 
 This file contains the shared project instructions for coding agents. Check `package.json` and `package-lock.json` for current dependency versions; do not rely on version numbers copied into older notes.
 
-Use Node.js 20 or later (24 also works) and npm 9 or later. See `docs/HOW-TO-RUN.md` for setup and native dependency instructions.
+Use Node.js 22.12 or later and npm 9 or later. See `docs/HOW-TO-RUN.md` for setup and native dependency instructions.
 
 ## Project Structure and Boundaries
 

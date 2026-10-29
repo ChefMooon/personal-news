@@ -2,6 +2,8 @@
 
 An Electron desktop application that brings YouTube, Reddit, saved links, and managed scripts into one configurable local-first dashboard.
 
+See [Security and privacy](docs/SECURITY.md) for information about local storage, network connections, credentials, and scripts.
+
 ## Features
 
 - **Unified Dashboard** — View all your content sources in one place with a customizable layout

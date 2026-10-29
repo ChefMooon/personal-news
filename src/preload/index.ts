@@ -5,6 +5,7 @@ import {
   type SidebarConfig,
   type ThemeInfo,
 } from "../shared/ipc-types";
+import { MAIN_TO_RENDERER_CHANNELS, RENDERER_TO_MAIN_CHANNELS } from "../main/security/ipc-policy";
 
 function isThemeInfo(value: unknown): value is ThemeInfo {
   if (!value || typeof value !== "object") {
@@ -107,6 +108,8 @@ try {
   applyInitialSidebarStateSafely();
 } catch {}
 
+// Keep the context bridge narrow even if renderer code is compromised. Renderer
+// requests and main-process notifications have separate channel allowlists.
 // Expose a typed IPC bridge to the renderer.
 // on() returns a cleanup function instead of requiring a separate off() call.
 // This is necessary because Electron's contextBridge proxies every function argument on each
@@ -114,12 +117,18 @@ try {
 // object, so any map-based lookup silently fails and listeners accumulate.
 contextBridge.exposeInMainWorld("api", {
   invoke: (channel: string, ...args: unknown[]): Promise<unknown> => {
+    if (!RENDERER_TO_MAIN_CHANNELS.has(channel)) {
+      return Promise.reject(new Error("IPC channel is not available to the renderer."));
+    }
     return ipcRenderer.invoke(channel, ...args);
   },
   on: (
     channel: string,
     listener: (...args: unknown[]) => void,
   ): (() => void) => {
+    if (!MAIN_TO_RENDERER_CHANNELS.has(channel)) {
+      throw new Error("IPC event channel is not available to the renderer.");
+    }
     const wrapper: Parameters<typeof ipcRenderer.on>[1] = (_event, ...args) =>
       listener(...args);
     ipcRenderer.on(channel, wrapper);

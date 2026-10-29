@@ -2,13 +2,18 @@ import {
   app,
   BrowserWindow,
   dialog,
-  ipcMain,
+  ipcMain as electronIpcMain,
   safeStorage,
   shell,
 } from "electron";
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, realpath, stat, writeFile } from "node:fs/promises";
+import { realpathSync, statSync } from "node:fs";
+import { join } from "node:path";
 import { XMLParser } from "fast-xml-parser";
 import { getDb } from "../db/database";
+import { isElectronHarnessRun } from "../harness-mode";
+import { isAllowedGenericSettingKey, isExactHttpsHost, isTrustedIpcSenderIdentity, isTrustedRendererUrl, parseExternalHttpUrl, sameCanonicalPath, setSyncIpcRejectionResult } from "../security/ipc-policy";
+import { fetchBoundedText } from "../security/network";
 import {
   clearDevTestData,
   createDevTestDataMutationHandler,
@@ -129,11 +134,13 @@ import {
   activeRuns,
   ensureBundledRedditDigestScript,
   getScriptWithLastRun,
+  isBundledRedditDigestScript,
   refreshScriptSchedule,
   runScriptById,
   setScriptEmitters,
   syncScriptsFromHomeDir,
 } from "../sources/scripts/index";
+import { isPathWithinDirectory, isPythonScriptFilePath, isScriptScheduleInputShape, validateScriptUpdateFields } from "../sources/scripts/policy";
 import {
   getNotificationPreferences,
   setNotificationPreferences,
@@ -158,6 +165,53 @@ const xmlParser = new XMLParser({
 });
 const BUILT_IN_THEME_IDS = new Set(["system", "light", "dark"]);
 const THEME_TOKEN_KEY_PATTERN = /^--[a-z0-9-]+$/i;
+let trustedIpcWebContents: Electron.WebContents | null = null;
+
+export function setTrustedIpcWebContents(webContents: Electron.WebContents): void {
+  trustedIpcWebContents = webContents;
+}
+
+function isProviderHost(url: URL, domains: string[]): boolean {
+  return domains.some((domain) => url.hostname === domain || url.hostname.endsWith(`.${domain}`));
+}
+
+function providerRedirectPolicy(domains: string[]) {
+  return (_from: URL, to: URL): boolean => isProviderHost(to, domains);
+}
+
+function exactHttpsRedirectPolicy(hostname: string) {
+  return (_from: URL, to: URL): boolean => isExactHttpsHost(to, hostname);
+}
+
+function isTrustedIpcSender(event: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent): boolean {
+  const frame = event.senderFrame;
+  if (!frame || event.sender.isDestroyed() || !isTrustedIpcSenderIdentity(event.sender, event.sender.mainFrame, frame, trustedIpcWebContents)) return false;
+  try {
+    return isTrustedRendererUrl(frame.url, app.isPackaged, process.env["ELECTRON_RENDERER_URL"], join(__dirname, "../renderer/index.html"));
+  } catch {
+    return false;
+  }
+  return false;
+}
+
+const guardedIpcMain = {
+  handle: (channel: string, listener: (event: Electron.IpcMainInvokeEvent, ...args: any[]) => any) =>
+    electronIpcMain.handle(channel, (event, ...args) => {
+      if (!isTrustedIpcSender(event)) throw new Error("Untrusted IPC sender.");
+      return listener(event, ...args);
+    }),
+  on: (channel: string, listener: (event: Electron.IpcMainEvent, ...args: any[]) => void) =>
+    electronIpcMain.on(channel, (event, ...args) => {
+      if (!isTrustedIpcSender(event)) {
+        if (channel === IPC.SETTINGS_GET_THEME_SYNC || channel === IPC.SETTINGS_GET_SIDEBAR_CONFIG_SYNC) {
+          setSyncIpcRejectionResult(event);
+        }
+        return;
+      }
+      listener(event, ...args);
+    }),
+};
+const ipcMain = guardedIpcMain;
 
 function getDesktopPlatform(): "darwin" | "win32" | "linux" {
   if (process.platform === "darwin" || process.platform === "win32") {
@@ -572,10 +626,11 @@ async function validateYouTubeApiKey(
     id: "dQw4w9WgXcQ",
     key: apiKey,
   });
-  const response = await fetch(
+  const { response, text } = await fetchBoundedText(
     `https://www.googleapis.com/youtube/v3/videos?${params.toString()}`,
+    { timeoutMs: 10_000, maxBytes: 256_000, maxRedirects: 2, validateRedirect: exactHttpsRedirectPolicy("www.googleapis.com") },
   );
-  const payload = (await response.json()) as { error?: { message?: string } };
+  const payload = JSON.parse(text) as { error?: { message?: string } };
   if (!response.ok || payload.error) {
     return {
       ok: false,
@@ -684,10 +739,11 @@ async function fetchChannelById(
     id: channelId,
     key: apiKey,
   });
-  const response = await fetch(
+  const { response, text } = await fetchBoundedText(
     `https://www.googleapis.com/youtube/v3/channels?${params.toString()}`,
+    { timeoutMs: 10_000, maxBytes: 512_000, maxRedirects: 2, validateRedirect: exactHttpsRedirectPolicy("www.googleapis.com") },
   );
-  const payload = (await response.json()) as {
+  const payload = JSON.parse(text) as {
     items?: Array<{
       id: string;
       snippet: {
@@ -733,12 +789,14 @@ async function fetchChannelFromRss(
   channelId: string,
 ): Promise<YtChannel | null> {
   const feedUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(channelId)}`;
-  const response = await fetch(feedUrl);
+  const { response, text: xml } = await fetchBoundedText(feedUrl, {
+    timeoutMs: 10_000, maxBytes: 1_000_000, maxRedirects: 3,
+    validateRedirect: providerRedirectPolicy(["youtube.com"]),
+  });
   if (!response.ok) {
     return null;
   }
 
-  const xml = await response.text();
   const parsed = xmlParser.parse(xml) as {
     feed?: {
       author?: { name?: string } | Array<{ name?: string }>;
@@ -842,7 +900,15 @@ async function resolveChannelIdFromPage(url: string): Promise<{
   thumbnailUrl: string | null;
 }> {
   logYouTubeResolveDebug("resolveChannelIdFromPage:start", { url });
-  const response = await fetch(url);
+  const initialUrl = new URL(url);
+  const allowedYoutubeDomains = ["youtube.com", "youtu.be"];
+  if (!isProviderHost(initialUrl, allowedYoutubeDomains)) {
+    return { channelId: null, title: null, thumbnailUrl: null };
+  }
+  const { response, text: html } = await fetchBoundedText(url, {
+    timeoutMs: 12_000, maxBytes: 2_000_000, maxRedirects: 4,
+    validateRedirect: providerRedirectPolicy(allowedYoutubeDomains),
+  });
   logYouTubeResolveDebug("resolveChannelIdFromPage:response", {
     url,
     ok: response.ok,
@@ -851,8 +917,6 @@ async function resolveChannelIdFromPage(url: string): Promise<{
   if (!response.ok) {
     return { channelId: null, title: null, thumbnailUrl: null };
   }
-  const html = await response.text();
-
   const extracted = extractChannelIdFromHtml(html);
   const channelId = extracted.channelId;
   const title = extractMetaContent(html, "og:title");
@@ -1420,7 +1484,7 @@ function getCurrentThemeInfo(): ThemeInfo {
 }
 
 export function registerIpcHandlers(): void {
-  registerSportsIpcHandlers();
+  registerSportsIpcHandlers(guardedIpcMain);
 
   function getSenderWindowOrThrow(sender: Electron.WebContents): BrowserWindow {
     const window = BrowserWindow.fromWebContents(sender);
@@ -2525,12 +2589,11 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(
     IPC.SCRIPTS_UPDATE,
     (_event, input: ScriptUpdateInput): IpcMutationResult => {
-      if (!Number.isInteger(input.id) || input.id <= 0) {
-        return { ok: false, error: "Invalid script ID." };
-      }
+      const validationError = validateScriptUpdateFields(input);
+      if (validationError) return { ok: false, error: validationError };
 
       const normalizedName = input.name.trim();
-      const normalizedPath = input.file_path.trim();
+      let normalizedPath = input.file_path.trim();
       const normalizedInterpreter = input.interpreter.trim();
       const normalizedDescription = input.description?.trim() || null;
       const normalizedArgs = input.args?.trim() || null;
@@ -2545,6 +2608,30 @@ export function registerIpcHandlers(): void {
         return { ok: false, error: "Interpreter is required." };
       }
 
+      if (!isPythonScriptFilePath(normalizedPath)) {
+        return { ok: false, error: "Script path must be an absolute .py file." };
+      }
+      const db = getDb();
+      const existingScript = db
+        .prepare("SELECT file_path FROM scripts WHERE id = ?")
+        .get(input.id) as { file_path: string } | undefined;
+      if (!existingScript) return { ok: false, error: "Script not found." };
+      try {
+        const existingPath = realpathSync(existingScript.file_path);
+        normalizedPath = realpathSync(normalizedPath);
+        if (!statSync(normalizedPath).isFile() || !sameCanonicalPath(existingPath, normalizedPath)) {
+          return { ok: false, error: "Script file paths cannot be changed and must remain existing files." };
+        }
+        if (!isBundledRedditDigestScript({ id: input.id, file_path: normalizedPath })) {
+          const scriptHomeDir = getSetting("script_home_dir");
+          if (!scriptHomeDir || !statSync(scriptHomeDir).isDirectory() || !isPathWithinDirectory(normalizedPath, realpathSync(scriptHomeDir))) {
+            return { ok: false, error: "Script must remain inside the configured script directory." };
+          }
+        }
+      } catch {
+        return { ok: false, error: "Script file must exist inside the configured script directory." };
+      }
+
       const schedule = normalizeScriptSchedule(input.schedule);
       if (schedule.error) {
         return { ok: false, error: schedule.error };
@@ -2557,7 +2644,6 @@ export function registerIpcHandlers(): void {
         };
       }
 
-      const db = getDb();
       const result = db
         .prepare(
           `UPDATE scripts
@@ -2596,6 +2682,7 @@ export function registerIpcHandlers(): void {
       if (!Number.isInteger(scriptId) || scriptId <= 0) {
         return { ok: false, error: "Invalid script ID." };
       }
+      if (!isScriptScheduleInputShape(scheduleInput)) return { ok: false, error: "Invalid script schedule." };
 
       const schedule = normalizeScriptSchedule(scheduleInput);
       if (schedule.error) {
@@ -2639,6 +2726,7 @@ export function registerIpcHandlers(): void {
       if (!Number.isInteger(scriptId) || scriptId <= 0) {
         return { ok: false, error: "Invalid script ID." };
       }
+      if (typeof enabled !== "boolean") return { ok: false, error: "Invalid enabled state." };
 
       const db = getDb();
       const existing = db
@@ -3494,6 +3582,9 @@ export function registerIpcHandlers(): void {
 
   // settings:get (generic)
   ipcMain.handle(IPC.SETTINGS_GET, (_event, key: string): string | null => {
+    if (!isAllowedGenericSettingKey(key, isElectronHarnessRun()) || key === YOUTUBE_API_KEY_SETTING) {
+      throw new Error("Setting is not available through the generic settings channel.");
+    }
     return getSetting(key);
   });
 
@@ -3519,12 +3610,40 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(
     IPC.SETTINGS_SET,
     (_event, key: string, value: string): void => {
+      if (typeof key !== "string" || typeof value !== "string" || key.length > 128 || value.length > 100_000 || key === YOUTUBE_API_KEY_SETTING) {
+        throw new Error("Invalid generic setting update.");
+      }
+      if (!isAllowedGenericSettingKey(key, isElectronHarnessRun())) throw new Error("Setting is not available through the generic settings channel.");
+      if ((key.endsWith("_enabled") || key === "app_launch_at_login" || key.startsWith("app_") && key !== "app_window_bounds") && !["0", "1", "true", "false", ""].includes(value)) {
+        throw new Error("Invalid boolean setting value.");
+      }
+      if (key === "ntfy_server_url") {
+        let parsed: URL;
+        try { parsed = new URL(value); } catch { throw new Error("Invalid ntfy server URL."); }
+        if (parsed.protocol !== "https:" && parsed.protocol !== "http:") throw new Error("Invalid ntfy server URL.");
+      }
+      let persistedValue = value;
+      if (key === "script_home_dir") {
+        if (value.length > 32_768 || /[\u0000-\u001f\u007f]/.test(value)) {
+          throw new Error("Invalid script directory path.");
+        }
+        if (value.trim()) {
+          try {
+            if (!statSync(value).isDirectory()) throw new Error("Not a directory.");
+            persistedValue = realpathSync(value);
+          } catch {
+            throw new Error("Script home must be an existing directory.");
+          }
+        } else {
+          persistedValue = "";
+        }
+      }
       const previousValue =
         key === "script_home_dir" || key === REDDIT_DIGEST_SUBREDDITS_SETTING
           ? getSetting(key)
           : null;
-      setSetting(key, value);
-      if (key === "script_home_dir" && previousValue !== value) {
+      setSetting(key, persistedValue);
+      if (key === "script_home_dir" && previousValue !== persistedValue) {
         const db = getDb();
         db.prepare("DELETE FROM scripts").run();
         ensureBundledRedditDigestScript(db);
@@ -3563,15 +3682,35 @@ export function registerIpcHandlers(): void {
   );
 
   // shell:openExternal
-  ipcMain.handle(IPC.SHELL_OPEN_EXTERNAL, (_event, url: string): void => {
-    shell.openExternal(url);
+  ipcMain.handle(IPC.SHELL_OPEN_EXTERNAL, async (_event, url: string): Promise<void> => {
+    const parsed = parseExternalHttpUrl(url);
+    if (!parsed) throw new Error("Only HTTP and HTTPS links can be opened.");
+    await shell.openExternal(parsed.toString());
   });
 
   // shell:openPath
   ipcMain.handle(
     IPC.SHELL_OPEN_PATH,
-    (_event, folderPath: string): Promise<string> => {
-      return shell.openPath(folderPath);
+    async (_event, folderPath: string): Promise<string> => {
+      const configuredDirectory = getSetting("script_home_dir");
+      if (typeof folderPath !== "string" || folderPath.length > 32_768 || !configuredDirectory) {
+        throw new Error("Only the configured script directory can be opened.");
+      }
+      let requestedRealPath: string;
+      let configuredRealPath: string;
+      try {
+        const [requestedInfo, configuredInfo] = await Promise.all([stat(folderPath), stat(configuredDirectory)]);
+        if (!requestedInfo.isDirectory() || !configuredInfo.isDirectory()) {
+          throw new Error("The configured script path must be an existing directory.");
+        }
+        [requestedRealPath, configuredRealPath] = await Promise.all([realpath(folderPath), realpath(configuredDirectory)]);
+      } catch {
+        throw new Error("The configured script path must be an existing directory.");
+      }
+      if (!sameCanonicalPath(requestedRealPath, configuredRealPath)) {
+        throw new Error("Only the configured script directory can be opened.");
+      }
+      return shell.openPath(requestedRealPath);
     },
   );
 

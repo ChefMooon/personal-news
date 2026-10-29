@@ -8,6 +8,7 @@ import { fetchMetadataForUrl } from "../link-sources";
 import { processNtfyMessage } from "./ntfy-message.mjs";
 import { createNtfyDedupeTracker } from "./dedupe";
 import { isDevTestDataActive } from "../../dev-test-data";
+import { fetchBoundedText, parseHttpUrl } from "../../security/network";
 
 export { processNtfyMessage };
 
@@ -111,17 +112,28 @@ export async function pollNtfy(
     Number.isFinite(delaySeconds) ? delaySeconds * 1_000 : 5_000,
   );
 
-  const fetchUrl = `${serverUrl}/${encodeURIComponent(topic)}/json?poll=1&since=${encodeURIComponent(since)}`;
+  let configuredServer: URL;
+  try {
+    configuredServer = parseHttpUrl(serverUrl);
+  } catch {
+    throw new Error("ntfy server URL must be a valid HTTP(S) URL.");
+  }
+  configuredServer.pathname = `${configuredServer.pathname.replace(/\/$/, "")}/${encodeURIComponent(topic)}/json`;
+  configuredServer.searchParams.set("poll", "1");
+  configuredServer.searchParams.set("since", since);
+  const fetchUrl = configuredServer.toString();
   console.log(`[ntfy] Polling: ${fetchUrl}`);
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10_000);
-
   let response: Response;
+  let text: string;
   try {
-    response = await fetch(fetchUrl, { signal: controller.signal });
+    ({ response, text } = await fetchBoundedText(fetchUrl, {
+      timeoutMs: 10_000,
+      maxBytes: 1_000_000,
+      maxRedirects: 3,
+      validateRedirect: (_from, to) => to.origin === configuredServer.origin,
+    }));
   } catch (error) {
-    clearTimeout(timeout);
     const summary = buildNtfySyncSummary({
       messagesReceived: 0,
       postsIngested: 0,
@@ -136,15 +148,12 @@ export async function pollNtfy(
     throw new Error(
       `ntfy unreachable: ${error instanceof Error ? error.message : String(error)}`,
     );
-  } finally {
-    clearTimeout(timeout);
   }
 
   if (!response.ok) {
     throw new Error(`ntfy returned HTTP ${response.status}`);
   }
 
-  const text = await response.text();
   if (isPaused()) {
     return { postsIngested: 0, messagesReceived: 0 };
   }
@@ -157,7 +166,11 @@ export async function pollNtfy(
   let lastProcessedId: string | null = null;
   const failedEntries: NtfySyncFailureEntry[] = [];
   const duplicateUrls: string[] = [];
-  const dedupeTracker = createNtfyDedupeTracker(db, "reddit", () => !isPaused());
+  const dedupeTracker = createNtfyDedupeTracker(
+    db,
+    "reddit",
+    () => !isPaused(),
+  );
   const backfilledCount = isPaused()
     ? 0
     : dedupeTracker.backfillExistingSavedPosts();

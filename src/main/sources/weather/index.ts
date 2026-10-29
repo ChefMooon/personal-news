@@ -32,6 +32,7 @@ import {
   triggerAstronomyRefresh,
 } from "../astronomy/index";
 import { readCachedSnapshot } from "../astronomy/cache";
+import { fetchBoundedText } from "../../security/network";
 import {
   floorUnixSecondsToHour,
   mapCurrentConditions,
@@ -206,8 +207,16 @@ async function fetchGeocodingResults(
     format: "json",
   });
 
-  const response = await fetch(
+  const { response, text } = await fetchBoundedText(
     `https://geocoding-api.open-meteo.com/v1/search?${params.toString()}`,
+    {
+      timeoutMs: 10_000,
+      maxBytes: 256_000,
+      maxRedirects: 3,
+      validateRedirect: (_from, to) =>
+        to.protocol === "https:" &&
+        to.hostname === "geocoding-api.open-meteo.com",
+    },
   );
   if (!response.ok) {
     throw new Error(
@@ -215,7 +224,7 @@ async function fetchGeocodingResults(
     );
   }
 
-  const payload = (await response.json()) as {
+  const payload = JSON.parse(text) as {
     results?: Array<{
       id?: number;
       name?: string;
@@ -585,8 +594,15 @@ async function fetchForecast(
     precipitation_unit: settings.precipitationUnit,
   });
 
-  const response = await fetch(
+  const { response, text } = await fetchBoundedText(
     `https://api.open-meteo.com/v1/forecast?${params.toString()}`,
+    {
+      timeoutMs: 15_000,
+      maxBytes: 1_000_000,
+      maxRedirects: 3,
+      validateRedirect: (_from, to) =>
+        to.protocol === "https:" && to.hostname === "api.open-meteo.com",
+    },
   );
   if (!response.ok) {
     throw new Error(
@@ -594,7 +610,7 @@ async function fetchForecast(
     );
   }
 
-  const payload = (await response.json()) as {
+  const payload = JSON.parse(text) as {
     current?: Record<string, unknown>;
     hourly?: Record<string, unknown>;
     daily?: Record<string, unknown>;
@@ -678,8 +694,16 @@ async function fetchAirQuality(
   });
 
   try {
-    const response = await fetch(
+    const { response, text } = await fetchBoundedText(
       `https://air-quality-api.open-meteo.com/v1/air-quality?${params.toString()}`,
+      {
+        timeoutMs: 10_000,
+        maxBytes: 256_000,
+        maxRedirects: 3,
+        validateRedirect: (_from, to) =>
+          to.protocol === "https:" &&
+          to.hostname === "air-quality-api.open-meteo.com",
+      },
     );
     if (!response.ok) {
       console.error(
@@ -688,7 +712,7 @@ async function fetchAirQuality(
       return null;
     }
 
-    const payload = (await response.json()) as {
+    const payload = JSON.parse(text) as {
       current?: Record<string, unknown>;
     };
     return toNullableNumber(payload.current?.us_aqi);

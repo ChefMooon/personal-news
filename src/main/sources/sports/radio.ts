@@ -1,4 +1,10 @@
 import type { RadioStation, SportEvent } from "../../../shared/ipc-types";
+import {
+  fetchBounded,
+  fetchBoundedText,
+  readBoundedText,
+  parseHttpUrl,
+} from "../../security/network";
 
 // Use the round-robin DNS entry so requests are distributed across all available
 // radio-browser.info nodes rather than hammering a single server that may be down.
@@ -241,9 +247,11 @@ async function probeStream(url: string): Promise<Response> {
   // most direct-audio ICY/SHOUTcast streams.  Some servers reject HEAD (405) or
   // return unhelpful content-types with it, so we fall back to a small GET.
   try {
-    const headResponse = await fetch(url, {
+    const headResponse = await fetchBounded(url, {
       method: "HEAD",
       redirect: "follow",
+      timeoutMs: STREAM_RESOLVE_TIMEOUT_MS,
+      maxRedirects: 5,
       signal: AbortSignal.timeout(STREAM_RESOLVE_TIMEOUT_MS),
       headers: {
         Accept: "audio/*,*/*;q=0.8",
@@ -255,15 +263,19 @@ async function probeStream(url: string): Promise<Response> {
     if (headResponse.ok || headResponse.status === 206) {
       const ct = normalizeContentType(headResponse.headers.get("content-type"));
       if (ct && ct !== "application/octet-stream") {
+        cancelResponseBody(headResponse);
         return headResponse;
       }
     }
+    cancelResponseBody(headResponse);
   } catch {
     // HEAD failed entirely — fall through to GET
   }
 
-  return fetch(url, {
+  return fetchBounded(url, {
     redirect: "follow",
+    timeoutMs: STREAM_RESOLVE_TIMEOUT_MS,
+    maxRedirects: 5,
     signal: AbortSignal.timeout(STREAM_RESOLVE_TIMEOUT_MS),
     headers: {
       Accept: "audio/*,*/*;q=0.8",
@@ -338,7 +350,11 @@ export async function resolveSportsRadioStream(
     return finalUrl;
   }
 
-  const body = await response.text();
+  const body = await readBoundedText(
+    response,
+    64_000,
+    AbortSignal.timeout(STREAM_RESOLVE_TIMEOUT_MS),
+  );
   const playlistUrls = parsePlaylistUrls(body, finalUrl);
 
   for (const candidate of playlistUrls.slice(0, 5)) {
@@ -366,11 +382,12 @@ function normalizeRemoteUrl(value: string | null | undefined): string | null {
     return null;
   }
 
-  if (trimmed.startsWith("//")) {
-    return `https:${trimmed}`;
+  const candidate = trimmed.startsWith("//") ? `https:${trimmed}` : trimmed;
+  try {
+    return parseHttpUrl(candidate).toString();
+  } catch {
+    return null;
   }
-
-  return /^https?:\/\//i.test(trimmed) ? trimmed : null;
 }
 
 function normalizeSearchText(value: string): string {
@@ -462,8 +479,15 @@ export async function searchSportsRadioStations(
         limit: "20",
         hidebroken: "true",
       });
-      const response = await fetch(
+      const { response, text } = await fetchBoundedText(
         `${RADIO_BROWSER_BASE_URL}?${params.toString()}`,
+        {
+          timeoutMs: 10_000,
+          maxBytes: 1_000_000,
+          maxRedirects: 3,
+          validateRedirect: (_from, to) =>
+            /(^|\.)radio-browser\.info$/i.test(to.hostname),
+        },
       );
       if (!response.ok) {
         throw new Error(
@@ -471,7 +495,7 @@ export async function searchSportsRadioStations(
         );
       }
 
-      return response.json() as Promise<RadioBrowserStation[]>;
+      return JSON.parse(text) as RadioBrowserStation[];
     }),
   );
 

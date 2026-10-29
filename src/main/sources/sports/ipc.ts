@@ -1,4 +1,3 @@
-import { ipcMain } from "electron";
 import type {
   IpcMutationResult,
   RadioStation,
@@ -33,7 +32,9 @@ import {
   updateSportsSettings,
 } from "./index";
 
-export function registerSportsIpcHandlers(): void {
+export function registerSportsIpcHandlers(
+  ipcMain: Pick<Electron.IpcMain, "handle">,
+): void {
   ipcMain.handle(IPC.SETTINGS_GET_SPORTS_SETTINGS, (): SportsSettings => {
     return getSportsSettings();
   });

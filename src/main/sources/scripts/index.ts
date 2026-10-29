@@ -1,6 +1,6 @@
 import { app } from "electron";
 import type Database from "better-sqlite3";
-import { existsSync, readdirSync, statSync } from "fs";
+import { existsSync, readdirSync, realpathSync, statSync } from "fs";
 import { basename, dirname, extname, join, resolve } from "path";
 import type { DataSourceModule } from "../registry";
 import type {
@@ -27,6 +27,7 @@ import {
   notifyRedditDigest,
   notifyScriptAutoRun,
 } from "../../notifications/notification-service";
+import { isPathWithinDirectory, isPythonScriptFilePath } from "./policy";
 
 export const activeRuns = new Map<number, ActiveRun>();
 const SCRIPT_HOME_DIR_SETTING = "script_home_dir";
@@ -219,18 +220,24 @@ function getBundledRedditDigestScriptPath(): string {
   return candidates[candidates.length - 1];
 }
 
-function isBundledRedditDigestScript(
+export function isBundledRedditDigestScript(
   script: Pick<ScriptWithLastRun, "id" | "file_path">,
 ): boolean {
-  const configuredId = Number.parseInt(
-    getSetting(REDDIT_DIGEST_SCRIPT_ID_SETTING) ?? "",
-    10,
-  );
-  if (Number.isInteger(configuredId) && configuredId === script.id) {
-    return true;
-  }
-
   return resolve(script.file_path) === getBundledRedditDigestScriptPath();
+}
+
+function isScriptExecutionPathAllowed(script: Pick<ScriptWithLastRun, "id" | "file_path">): boolean {
+  if (!isPythonScriptFilePath(script.file_path)) return false;
+  try {
+    const realScriptPath = realpathSync(script.file_path);
+    if (!statSync(realScriptPath).isFile()) return false;
+    if (isBundledRedditDigestScript({ ...script, file_path: realScriptPath })) return true;
+    const scriptHomeDir = getSetting(SCRIPT_HOME_DIR_SETTING);
+    if (!scriptHomeDir || !statSync(scriptHomeDir).isDirectory()) return false;
+    return isPathWithinDirectory(realScriptPath, realpathSync(scriptHomeDir));
+  } catch {
+    return false;
+  }
 }
 
 function getDatabasePath(db: Database.Database): string | null {
@@ -721,6 +728,9 @@ export function runScriptById(
     redditDigest?: RedditDigestRunOptions;
   },
 ): Promise<void> {
+  if (!isScriptExecutionPathAllowed(script)) {
+    return Promise.reject(new Error("Script file must be an existing Python file in the configured script directory."));
+  }
   const trigger = options?.trigger ?? "manual";
   if (
     isBundledRedditDigestScript(script) &&
