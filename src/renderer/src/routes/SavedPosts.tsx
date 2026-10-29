@@ -952,9 +952,14 @@ function SavedPostsContent(): React.ReactElement {
                       >
                         {post.title}
                       </button>
+                      {post.body && (
+                        <p className="mt-1 whitespace-pre-wrap break-words text-sm text-muted-foreground">
+                          {post.body}
+                        </p>
+                      )}
                       {post.note && (
                         <p className="text-xs text-muted-foreground italic mt-1 line-clamp-2">
-                          {post.note}
+                          <span className="font-medium not-italic">Note: </span>{post.note}
                         </p>
                       )}
                       <div className="mt-1.5">

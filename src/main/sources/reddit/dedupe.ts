@@ -1,4 +1,5 @@
 import type Database from "better-sqlite3";
+import { parseXLink } from "../x-links";
 
 export interface NtfyDedupeTracker {
   shouldProcessUrl(rawUrl: string, now?: number): boolean;
@@ -14,6 +15,8 @@ export function normalizeUrlForDedupe(rawUrl: string): string | null {
 
   try {
     const parsedUrl = new URL(trimmedUrl);
+    const xPostUrl = parseXLink(trimmedUrl)?.canonicalPostUrl;
+    if (xPostUrl) return xPostUrl;
     const protocol = parsedUrl.protocol.toLowerCase();
     const hostname = parsedUrl.hostname.toLowerCase();
     const defaultPort =
@@ -41,6 +44,43 @@ export function createNtfyDedupeTracker(
   canPersist: () => boolean = () => true,
 ): NtfyDedupeTracker {
   const seenInRun = new Set<string>();
+
+  // Older versions stored each share URL separately. Re-key only recognized X
+  // posts, retaining history even after the saved record has been deleted.
+  db.transaction(() => {
+    if (!canPersist()) return;
+    const legacyRows = db
+      .prepare(
+        "SELECT * FROM ingested_links WHERE url_key LIKE '%x.com/%' OR url_key LIKE '%twitter.com/%'",
+      )
+      .all() as Array<{
+      url_key: string;
+      normalized_url: string;
+      first_seen_at: number;
+      last_seen_at: number;
+      source: string;
+    }>;
+    const merge = db.prepare(`
+      INSERT INTO ingested_links (url_key, normalized_url, first_seen_at, last_seen_at, source)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(url_key) DO UPDATE SET
+        first_seen_at = MIN(ingested_links.first_seen_at, excluded.first_seen_at),
+        last_seen_at = MAX(ingested_links.last_seen_at, excluded.last_seen_at)
+    `);
+    const remove = db.prepare("DELETE FROM ingested_links WHERE url_key = ?");
+    for (const row of legacyRows) {
+      const canonical = parseXLink(row.url_key)?.canonicalPostUrl;
+      if (!canonical || canonical === row.url_key) continue;
+      merge.run(
+        canonical,
+        canonical,
+        row.first_seen_at,
+        row.last_seen_at,
+        row.source,
+      );
+      remove.run(row.url_key);
+    }
+  })();
 
   const existingStmt = db.prepare(
     "SELECT 1 FROM ingested_links WHERE url_key = ?",

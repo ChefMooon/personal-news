@@ -7,6 +7,8 @@ import { fetchRedditPost } from "./reddit/metadata";
 import { isRedditPostUrl } from "./reddit/validation";
 import { createHash } from "node:crypto";
 import { fetchGenericLinkMetadata } from "./generic-link-metadata";
+import { parseXLink } from "./x-links";
+import { fetchXPostText } from "./x-oembed";
 
 // --- Source detection ---
 
@@ -41,14 +43,20 @@ const SOURCE_DEFINITIONS: SourceDefinition[] = [
   {
     id: "x",
     label: "X",
-    urlPattern: /^https?:\/\/(www\.)?(x\.com|twitter\.com)\//i,
-    extractPostId: (url) => {
-      const match = url.match(/\/status\/(\d+)/i);
-      return match ? `x_${match[1]}` : hashUrl(url);
-    },
+    urlPattern:
+      /^https?:\/\/(?:(?:www|mobile|m)\.)?(?:x\.com|twitter\.com)(?:\/|$)/i,
+    extractPostId: extractXPostId,
     fetchMetadata: async (url, note) => {
-      const handle = extractXHandle(url);
-      const title = note || (handle ? `Post by @${handle}` : url);
+      const link = parseXLink(url);
+      const handle = link?.handle ?? null;
+      const body = link?.postId ? await fetchXPostText(link.postId, link.handle) : null;
+      const title =
+        note ||
+        (handle
+          ? `Post by @${handle}`
+          : link?.postId
+            ? `X post ${link.postId}`
+            : "X link");
       return {
         postId: extractXPostId(url),
         title,
@@ -57,7 +65,7 @@ const SOURCE_DEFINITIONS: SourceDefinition[] = [
         subreddit: null,
         author: handle,
         score: null,
-        body: null,
+        body,
         source: "x" as LinkSource,
         savedAt: Math.floor(Date.now() / 1000),
         note,
@@ -100,7 +108,8 @@ const SOURCE_DEFINITIONS: SourceDefinition[] = [
 
 export function detectSource(url: string): LinkSource {
   for (const def of SOURCE_DEFINITIONS) {
-    if (def.urlPattern.test(url)) return def.id;
+    if (def.id === "x" ? parseXLink(url) !== null : def.urlPattern.test(url))
+      return def.id;
   }
   return "generic";
 }
@@ -153,7 +162,8 @@ export async function fetchMetadataForUrl(
     return SOURCE_DEFINITIONS[0].fetchMetadata(normalizedUrl, note);
   }
   const parsed = new URL(normalizedUrl);
-  if (!parsed.hostname || parsed.username || parsed.password) throw new Error(`Unsupported URL: ${url}`);
+  if (!parsed.hostname || parsed.username || parsed.password)
+    throw new Error(`Unsupported URL: ${url}`);
   const post = await fetchGenericLinkMetadata(parsed);
   return {
     postId: `link_${createHash("sha256").update(normalizeDedupeUrl(parsed)).digest("hex")}`,
@@ -175,7 +185,11 @@ function normalizeDedupeUrl(url: URL): string {
   const copy = new URL(url.href);
   copy.hash = "";
   copy.hostname = copy.hostname.toLowerCase();
-  if ((copy.protocol === "https:" && copy.port === "443") || (copy.protocol === "http:" && copy.port === "80")) copy.port = "";
+  if (
+    (copy.protocol === "https:" && copy.port === "443") ||
+    (copy.protocol === "http:" && copy.port === "80")
+  )
+    copy.port = "";
   return copy.href;
 }
 
@@ -209,22 +223,9 @@ function normalizeAutoTag(value: string): string {
   return value.trim().toLowerCase();
 }
 
-function extractXHandle(url: string): string | null {
-  const match = url.match(/(?:x\.com|twitter\.com)\/([^/?#]+)/i);
-  if (
-    match &&
-    !["i", "intent", "search", "hashtag", "settings"].includes(
-      match[1].toLowerCase(),
-    )
-  ) {
-    return match[1];
-  }
-  return null;
-}
-
 function extractXPostId(url: string): string {
-  const match = url.match(/\/status\/(\d+)/i);
-  return match ? `x_${match[1]}` : hashUrl(url);
+  const postId = parseXLink(url)?.postId;
+  return postId ? `x_${postId}` : hashUrl(url);
 }
 
 function extractBskyHandle(url: string): string | null {

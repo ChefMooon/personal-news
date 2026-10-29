@@ -5,6 +5,7 @@ import type {
   NtfySyncSummary,
 } from "../../../shared/ipc-types";
 import { fetchMetadataForUrl } from "../link-sources";
+import { SAVED_POST_UPSERT_SQL } from "../saved-post-persistence";
 import { processNtfyMessage } from "./ntfy-message.mjs";
 import { createNtfyDedupeTracker } from "./dedupe";
 import { isDevTestDataActive } from "../../dev-test-data";
@@ -178,16 +179,7 @@ export async function pollNtfy(
     );
   }
 
-  const upsert = db.prepare(`
-    INSERT INTO saved_posts (post_id, title, url, permalink, subreddit, author, score, body, saved_at, tags, note, source)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(post_id) DO UPDATE SET
-      title = excluded.title,
-      url = excluded.url,
-      score = excluded.score,
-      note = COALESCE(excluded.note, saved_posts.note),
-      source = excluded.source
-  `);
+  const upsert = db.prepare(SAVED_POST_UPSERT_SQL);
 
   const pendingUrls: Array<{ url: string; note: string | null; retryCursor: string | null }> = [];
 

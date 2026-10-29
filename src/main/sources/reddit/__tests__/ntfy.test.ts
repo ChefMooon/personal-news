@@ -55,7 +55,11 @@ function mockNtfyResponse(messages: Array<{ id: string; url: string }>): void {
       text: async () =>
         messages
           .map(({ id, url }) =>
-            JSON.stringify({ id, event: "message", message: JSON.stringify({ url }) }),
+            JSON.stringify({
+              id,
+              event: "message",
+              message: JSON.stringify({ url }),
+            }),
           )
           .join("\n"),
     }),
@@ -172,23 +176,66 @@ describe("pollNtfy", () => {
     settings.set("ntfy_topic", "saved-links");
     const one = "https://example.com/one";
     const two = "https://example.com/two";
-    mockNtfyResponse([{ id: "message-1", url: one }, { id: "message-2", url: two }]);
+    mockNtfyResponse([
+      { id: "message-1", url: one },
+      { id: "message-2", url: two },
+    ]);
     fetchMetadataForUrl.mockImplementation(async (url: string) => {
-      if (url === one && fetchMetadataForUrl.mock.calls.filter(([callUrl]) => callUrl === one).length === 1) throw new Error("temporary failure");
-      return { postId: url.endsWith("one") ? "one" : "two", title: "Link", url, permalink: url, subreddit: null, author: null, score: null, body: null, source: "generic", savedAt: 1_700_000_000, note: null, tags: null };
+      if (
+        url === one &&
+        fetchMetadataForUrl.mock.calls.filter(([callUrl]) => callUrl === one)
+          .length === 1
+      )
+        throw new Error("temporary failure");
+      return {
+        postId: url.endsWith("one") ? "one" : "two",
+        title: "Link",
+        url,
+        permalink: url,
+        subreddit: null,
+        author: null,
+        score: null,
+        body: null,
+        source: "generic",
+        savedAt: 1_700_000_000,
+        note: null,
+        tags: null,
+      };
     });
 
     const firstPoll = pollNtfy(database);
     await vi.runAllTimersAsync();
-    await expect(firstPoll).resolves.toEqual({ postsIngested: 1, messagesReceived: 2 });
-    expect(database.prepare("SELECT value FROM settings WHERE key='ntfy_last_message_id'").get()).toBeUndefined();
-    expect(database.prepare("SELECT url_key FROM ingested_links ORDER BY url_key").all()).toEqual([{ url_key: two }]);
+    await expect(firstPoll).resolves.toEqual({
+      postsIngested: 1,
+      messagesReceived: 2,
+    });
+    expect(
+      database
+        .prepare("SELECT value FROM settings WHERE key='ntfy_last_message_id'")
+        .get(),
+    ).toBeUndefined();
+    expect(
+      database
+        .prepare("SELECT url_key FROM ingested_links ORDER BY url_key")
+        .all(),
+    ).toEqual([{ url_key: two }]);
 
     const retryPoll = pollNtfy(database);
     await vi.runAllTimersAsync();
-    await expect(retryPoll).resolves.toEqual({ postsIngested: 1, messagesReceived: 2 });
-    expect(database.prepare("SELECT post_id FROM saved_posts ORDER BY post_id").all()).toEqual([{ post_id: "one" }, { post_id: "two" }]);
-    expect(database.prepare("SELECT value FROM settings WHERE key='ntfy_last_message_id'").get()).toEqual({ value: "message-2" });
+    await expect(retryPoll).resolves.toEqual({
+      postsIngested: 1,
+      messagesReceived: 2,
+    });
+    expect(
+      database
+        .prepare("SELECT post_id FROM saved_posts ORDER BY post_id")
+        .all(),
+    ).toEqual([{ post_id: "one" }, { post_id: "two" }]);
+    expect(
+      database
+        .prepare("SELECT value FROM settings WHERE key='ntfy_last_message_id'")
+        .get(),
+    ).toEqual({ value: "message-2" });
   });
 
   it("ingests distinct X posts and counts only a replay as a duplicate", async () => {
@@ -227,30 +274,35 @@ describe("pollNtfy", () => {
       messagesReceived: 2,
     });
     expect(
-      database
-        .prepare("SELECT url FROM saved_posts ORDER BY post_id")
-        .all(),
+      database.prepare("SELECT url FROM saved_posts ORDER BY post_id").all(),
     ).toEqual([{ url: firstUrl }, { url: secondUrl }]);
     expect(
       database
         .prepare("SELECT url_key FROM ingested_links ORDER BY url_key")
         .all(),
-    ).toEqual([{ url_key: firstUrl }, { url_key: secondUrl }]);
+    ).toEqual([
+      { url_key: "https://x.com/i/web/status/2112204760606802214" },
+      { url_key: "https://x.com/i/web/status/2114379959263502712" },
+    ]);
 
-    mockNtfyResponse([{ id: "message-3", url: firstUrl }]);
+    const replayUrl =
+      "https://mobile.twitter.com/otherhandle/status/2112204760606802214/photo/1?tracking=1";
+    mockNtfyResponse([{ id: "message-3", url: replayUrl }]);
     await expect(pollNtfy(database)).resolves.toEqual({
       postsIngested: 0,
       messagesReceived: 1,
     });
     expect(fetchMetadataForUrl).toHaveBeenCalledTimes(2);
     const summaryRow = database
-      .prepare("SELECT value FROM settings WHERE key = 'ntfy_last_sync_summary'")
+      .prepare(
+        "SELECT value FROM settings WHERE key = 'ntfy_last_sync_summary'",
+      )
       .get() as { value: string };
     const summary = JSON.parse(summaryRow.value) as {
       duplicateCount: number;
       duplicateUrls: string[];
     };
     expect(summary.duplicateCount).toBe(1);
-    expect(summary.duplicateUrls).toEqual([firstUrl]);
+    expect(summary.duplicateUrls).toEqual([replayUrl]);
   });
 });

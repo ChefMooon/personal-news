@@ -110,6 +110,7 @@ import {
   triggerNtfyPoll,
 } from "../sources/reddit/index";
 import { createNtfyDedupeTracker } from "../sources/reddit/dedupe";
+import { SAVED_POST_UPSERT_SQL } from "../sources/saved-post-persistence";
 import {
   applyWeatherPollSettings,
   deleteWeatherLocation,
@@ -2293,16 +2294,7 @@ export function registerIpcHandlers(): void {
         const postId = metadata.postId;
         const savedAt = Math.floor(Date.now() / 1000);
 
-        const upsert = db.prepare(`
-          INSERT INTO saved_posts (post_id, title, url, permalink, subreddit, author, score, body, saved_at, tags, note, source)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          ON CONFLICT(post_id) DO UPDATE SET
-            title = excluded.title,
-            url = excluded.url,
-            score = excluded.score,
-            note = COALESCE(excluded.note, saved_posts.note),
-            source = excluded.source
-        `);
+        const upsert = db.prepare(SAVED_POST_UPSERT_SQL);
 
         upsert.run(
           postId,

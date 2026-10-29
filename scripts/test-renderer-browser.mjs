@@ -539,6 +539,8 @@ try {
         exact: true,
       });
       if (await skipSetup.isVisible()) await skipSetup.click();
+      await page.getByText("Synthetic body text for saved-post search and preview coverage.", { exact: true }).waitFor({ state: "visible" });
+      await page.getByText("Note: Synthetic note: revisit this example.", { exact: true }).waitFor({ state: "visible" });
     }
     const screenshot = path.join(
       artifactDir,
