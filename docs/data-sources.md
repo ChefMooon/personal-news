@@ -218,7 +218,7 @@ The `since` cursor is persisted in the `settings` table so re-ingestion does not
 
 **Error handling:**
 - If ntfy.sh is unreachable (offline), ingestion is skipped silently. No posts are lost — ntfy.sh retains messages; they will be ingested on the next successful poll.
-- If a Reddit URL returns a 404 or cannot be resolved, the message is logged and skipped. The cursor still advances.
+- If source metadata lookup fails (for example, a Reddit URL returns a 404), the message is logged as failed and the cursor remains before that message so it can be retried on the next poll. Links that failed in older versions may already be behind the persisted cursor and remain in the dedupe table; they are not automatically repaired.
 - If a message does not contain a valid HTTP URL, it is ignored.
 
 ### 3.5a Supported URL Sources
@@ -228,7 +228,9 @@ The `since` cursor is persisted in the `settings` table so re-ingestion does not
 | Reddit | `reddit.com` URLs | Fetch full post metadata from Reddit JSON API |
 | X / Twitter | `x.com` or `twitter.com` URLs | Store canonical link, inferred handle, and optional note |
 | Bluesky | `bsky.app` URLs | Store canonical link, inferred handle, and optional note |
-| Generic links | Any other HTTP URL | Store raw URL plus optional note |
+| Generic links | Any other HTTP URL | Best-effort bounded HTML title and description; safely falls back to note and host when unavailable |
+
+Generic metadata requests accept only public HTTP(S) destinations, pin the validated DNS result for each request, follow at most three revalidated redirects, and read at most 256 KiB within a five-second timeout. Script and image resources are never loaded. Saved link IDs use SHA-256 of the URL with its fragment removed and hostname normalized, so equivalent fragment variants deduplicate without schema changes.
 
 ### 3.5 Storage
 

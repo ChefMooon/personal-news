@@ -32,7 +32,7 @@ The `DataSourceModule` contract lives in `src/main/sources/registry.ts`. A modul
 
 - Polls the configured ntfy topic (default server `https://ntfy.sh`) for messages containing links to save. Polling uses a persisted message cursor and is scheduled while Saved Posts is enabled.
 - Reddit post enrichment uses Reddit's public JSON endpoint by requesting the normalized post URL with `.json`; `/s/` short links are resolved before fetching metadata.
-- Saved Posts source matching is in `link-sources.ts`. It has dedicated handling for Reddit, X/Twitter, and Bluesky URLs; X and Bluesky metadata is derived from the URL and optional note without calling those platforms' APIs. Unmatched generic URLs are not currently supported by the metadata ingestion path.
+- Saved Posts source matching is in `link-sources.ts`. Reddit uses its JSON endpoint; X/Twitter and Bluesky metadata is derived from the URL and optional note; other HTTP(S) links receive a bounded best-effort HTML metadata lookup with URL/note fallback. Generic fetches validate and pin public DNS addresses on each hop, and constrain redirects, time, and response bytes.
 - Reddit Digest's standalone route can fetch a subreddit top-post listing through `src/main/ipc/index.ts`; scheduled digest ingestion is described under Script Manager below.
 
 ## Script Manager and Reddit Digest

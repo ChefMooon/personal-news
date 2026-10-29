@@ -171,9 +171,7 @@ export async function pollNtfy(
     "reddit",
     () => !isPaused(),
   );
-  const backfilledCount = isPaused()
-    ? 0
-    : dedupeTracker.backfillExistingSavedPosts();
+  const backfilledCount = isPaused() ? 0 : dedupeTracker.backfillExistingSavedPosts();
   if (backfilledCount > 0) {
     console.log(
       `[ntfy] Backfilled ${backfilledCount} existing saved-post URLs into dedupe tracker`,
@@ -191,7 +189,7 @@ export async function pollNtfy(
       source = excluded.source
   `);
 
-  const pendingUrls: Array<{ url: string; note: string | null }> = [];
+  const pendingUrls: Array<{ url: string; note: string | null; retryCursor: string | null }> = [];
 
   for (const line of lines) {
     let msg: NtfyMessage;
@@ -205,6 +203,7 @@ export async function pollNtfy(
       continue;
     }
 
+    const retryCursor = lastProcessedId ?? lastMessageId;
     lastProcessedId = msg.id;
     messagesReceived++;
 
@@ -225,12 +224,14 @@ export async function pollNtfy(
       continue;
     }
 
-    pendingUrls.push({ url, note });
+    pendingUrls.push({ url, note, retryCursor });
   }
+
+  let retryCursor: string | null | undefined;
 
   await processItemsWithDelay(
     pendingUrls,
-    async ({ url, note }) => {
+    async ({ url, note, retryCursor: itemRetryCursor }) => {
       if (isPaused()) {
         return;
       }
@@ -265,6 +266,10 @@ export async function pollNtfy(
           console.log(`[ntfy] Post ingested: ${post.postId}`);
         }
       } catch (error) {
+        // Earlier versions marked URLs as seen before metadata fetch completed. Release
+        // this URL so a failed link can be retried on the next ntfy poll.
+        dedupeTracker.removeUrls([url]);
+        if (retryCursor === undefined) retryCursor = itemRetryCursor;
         const message = error instanceof Error ? error.message : String(error);
         failedEntries.push({ url, error: message });
         console.warn(`[ntfy] Failed to fetch metadata for ${url}:`, error);
@@ -299,7 +304,9 @@ export async function pollNtfy(
     ntfy_last_polled_at: String(lastPolledAt),
     ntfy_last_sync_summary: JSON.stringify(summary),
   };
-  if (lastProcessedId) {
+  if (retryCursor !== undefined) {
+    if (retryCursor) syncSettings.ntfy_last_message_id = retryCursor;
+  } else if (lastProcessedId) {
     syncSettings.ntfy_last_message_id = lastProcessedId;
   }
   writeSyncSettings(syncSettings);

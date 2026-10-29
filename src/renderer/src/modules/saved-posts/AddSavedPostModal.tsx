@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "../../components/ui/button";
 import {
@@ -50,6 +50,7 @@ export function AddSavedPostModal({
   const [urlValidation, setUrlValidation] = useState<
     "idle" | "valid" | "invalid"
   >("idle");
+  const previewRequest = useRef(0);
 
   useEffect(() => {
     if (!open) return;
@@ -113,6 +114,7 @@ export function AddSavedPostModal({
     }
 
     setPreviewLoading(true);
+    const requestId = ++previewRequest.current;
     try {
       const payload: PreviewSavedPostMetadataRequest = {
         url: trimmedUrl,
@@ -122,14 +124,14 @@ export function AddSavedPostModal({
         IPC.REDDIT_PREVIEW_SAVED_POST_METADATA,
         payload,
       );
-      setPreview(result as SavedPostMetadataPreview);
+      if (requestId === previewRequest.current) setPreview(result as SavedPostMetadataPreview);
     } catch (err) {
-      setPreview(null);
+      if (requestId === previewRequest.current) setPreview(null);
       toast.error(
         err instanceof Error ? err.message : "Failed to preview metadata.",
       );
     } finally {
-      setPreviewLoading(false);
+      if (requestId === previewRequest.current) setPreviewLoading(false);
     }
   };
 
@@ -140,6 +142,7 @@ export function AddSavedPostModal({
     setUrlValidation(nextState);
 
     if (!showPreview || nextState !== "valid") {
+      previewRequest.current += 1;
       setPreview(null);
       setPreviewLoading(false);
       return;
@@ -388,6 +391,7 @@ export function AddSavedPostModal({
                         {preview.title}
                       </p>
                     </div>
+                    {preview.description ? <p className="line-clamp-3">{preview.description}</p> : null}
                     <div className="flex flex-wrap gap-2 text-xs">
                       <span className="rounded-full bg-background px-2 py-1">
                         Source: {preview.source}

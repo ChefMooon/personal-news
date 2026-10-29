@@ -2339,6 +2339,7 @@ export function registerIpcHandlers(): void {
       if (!url) {
         return {
           title: "",
+          description: null,
           source: "generic",
           author: null,
           subreddit: null,

@@ -5,6 +5,8 @@ import type {
 } from "../../shared/ipc-types";
 import { fetchRedditPost } from "./reddit/metadata";
 import { isRedditPostUrl } from "./reddit/validation";
+import { createHash } from "node:crypto";
+import { fetchGenericLinkMetadata } from "./generic-link-metadata";
 
 // --- Source detection ---
 
@@ -150,8 +152,31 @@ export async function fetchMetadataForUrl(
   if (isRedditPostUrl(normalizedUrl)) {
     return SOURCE_DEFINITIONS[0].fetchMetadata(normalizedUrl, note);
   }
+  const parsed = new URL(normalizedUrl);
+  if (!parsed.hostname || parsed.username || parsed.password) throw new Error(`Unsupported URL: ${url}`);
+  const post = await fetchGenericLinkMetadata(parsed);
+  return {
+    postId: `link_${createHash("sha256").update(normalizeDedupeUrl(parsed)).digest("hex")}`,
+    title: post.title || note || parsed.hostname,
+    url: normalizedUrl,
+    permalink: normalizedUrl,
+    subreddit: null,
+    author: null,
+    score: null,
+    body: post.description,
+    source: "generic",
+    savedAt: Math.floor(Date.now() / 1000),
+    note,
+    tags: null,
+  };
+}
 
-  throw new Error(`Unsupported URL: ${url}`);
+function normalizeDedupeUrl(url: URL): string {
+  const copy = new URL(url.href);
+  copy.hash = "";
+  copy.hostname = copy.hostname.toLowerCase();
+  if ((copy.protocol === "https:" && copy.port === "443") || (copy.protocol === "http:" && copy.port === "80")) copy.port = "";
+  return copy.href;
 }
 
 export async function previewSavedPostMetadata(
@@ -164,6 +189,7 @@ export async function previewSavedPostMetadata(
     source: metadata.source,
     author: metadata.author,
     subreddit: metadata.subreddit,
+    description: metadata.body,
     tags: metadata.tags ?? [],
     note,
   };

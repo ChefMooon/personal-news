@@ -988,6 +988,7 @@ export interface PreviewSavedPostMetadataRequest {
 
 export interface SavedPostMetadataPreview {
   title: string;
+  description: string | null;
   source: LinkSource;
   author: string | null;
   subreddit: string | null;

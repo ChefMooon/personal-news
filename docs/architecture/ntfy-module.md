@@ -120,7 +120,7 @@ The `SourceDefinition` interface defines per-source behaviour: URL pattern, post
 | `reddit` | `reddit.com/...` | Resolve short links, fetch Reddit JSON API for full post metadata |
 | `x` | `x.com/...` or `twitter.com/...` | Extract handle and status ID from URL |
 | `bsky` | `bsky.app/...` | Extract handle and post ID from URL |
-| `generic` | _(fallback)_ | Use URL as title, hash URL for `post_id` |
+| `generic` | _(fallback)_ | Bounded best-effort HTML title/description, note/host fallback, SHA-256 normalized URL `post_id` |
 
 Public functions:
 

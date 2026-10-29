@@ -5,12 +5,15 @@ import {
   normalizeManualSavedPostInput,
 } from "../link-sources";
 import { fetchRedditPost } from "../reddit/metadata";
+import { fetchGenericLinkMetadata } from "../generic-link-metadata";
 
 vi.mock("../reddit/metadata", () => ({
   fetchRedditPost: vi.fn(),
 }));
+vi.mock("../generic-link-metadata", () => ({ fetchGenericLinkMetadata: vi.fn() }));
 
 const mockFetchRedditPost = vi.mocked(fetchRedditPost);
+const mockFetchGeneric = vi.mocked(fetchGenericLinkMetadata);
 
 describe("link source metadata", () => {
   it("adds a lowercased subreddit tag to Reddit posts", async () => {
@@ -70,16 +73,24 @@ describe("link source metadata", () => {
     expect(metadata.tags).toEqual(["user.example"]);
   });
 
-  it("rejects unsupported URLs instead of creating generic saved-post metadata", async () => {
-    await expect(
-      fetchMetadataForUrl("https://example.com", null),
-    ).rejects.toThrow("Unsupported URL: https://example.com");
+  it("saves arbitrary links with metadata and a stable SHA-256 identity", async () => {
+    mockFetchGeneric.mockResolvedValueOnce({ title: "An article", description: "Useful summary" });
+    const a = await fetchMetadataForUrl("https://example.com/story#top", null);
+    mockFetchGeneric.mockResolvedValueOnce({ title: "An article", description: "Useful summary" });
+    const b = await fetchMetadataForUrl("https://EXAMPLE.com/story", null);
+    expect(a).toMatchObject({ title: "An article", body: "Useful summary", source: "generic" });
+    expect(a.postId).toMatch(/^link_[a-f0-9]{64}$/);
+    expect(a.postId).toBe(b.postId);
   });
 
-  it("rejects unsupported URLs instead of creating generic saved-post metadata", async () => {
-    await expect(
-      fetchMetadataForUrl("https://example.invalid", null),
-    ).rejects.toThrow("Unsupported URL: https://example.invalid");
+  it("uses note and host fallbacks when metadata is unavailable and rejects credentialed URLs", async () => {
+    mockFetchGeneric.mockResolvedValueOnce({ title: null, description: null });
+    const withNote = await fetchMetadataForUrl("https://example.com/a", "Keep this");
+    expect(withNote.title).toBe("Keep this");
+    mockFetchGeneric.mockResolvedValueOnce({ title: null, description: null });
+    const fallback = await fetchMetadataForUrl("https://example.com/a", null);
+    expect(fallback.title).toBe("example.com");
+    await expect(fetchMetadataForUrl("https://user:pass@example.com", null)).rejects.toThrow();
   });
 
   it("normalizes manual saved-post input by trimming whitespace and preserving tags", () => {
