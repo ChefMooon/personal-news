@@ -4,6 +4,22 @@ All notable changes to this project are documented in this file.
 
 The format follows Keep a Changelog, and this project uses Semantic Versioning.
 
+## [1.5.2] - 2026-10-29
+
+### Added
+
+- Save links from across the web directly to Saved Posts, with previews where available.
+- Improved saving X and Bluesky posts, including clearer post previews and duplicate handling.
+
+### Fixed
+
+- Reddit links can now be saved without API access.
+- Fixed card header spacing and scrollbar shifts that could disrupt widget layouts.
+
+### Security
+
+- Strengthened app isolation and safeguards for requests made by content sources.
+
 ## [1.5.1] - 2026-10-26
 
 ### Changed
