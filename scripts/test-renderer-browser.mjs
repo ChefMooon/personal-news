@@ -539,8 +539,17 @@ try {
         exact: true,
       });
       if (await skipSetup.isVisible()) await skipSetup.click();
-      await page.getByText("Synthetic body text for saved-post search and preview coverage.", { exact: true }).waitFor({ state: "visible" });
-      await page.getByText("Note: Synthetic note: revisit this example.", { exact: true }).waitFor({ state: "visible" });
+      await page
+        .getByText(
+          "Synthetic body text for saved-post search and preview coverage.",
+          { exact: true },
+        )
+        .waitFor({ state: "visible" });
+      await page
+        .getByText("Note: Synthetic note: revisit this example.", {
+          exact: true,
+        })
+        .waitFor({ state: "visible" });
     }
     const screenshot = path.join(
       artifactDir,
@@ -1235,7 +1244,22 @@ try {
     .click();
   await chooseVisibleChannels(2);
   await youtubeLarge.getByRole("button", { name: "Close settings" }).click();
-  await page.waitForTimeout(150);
+  // The grid animates height changes. Measure only after the content height
+  // has stopped changing, rather than sampling during the transition.
+  await youtubeContent.evaluate(async (element) => {
+    let previousHeight = -1;
+    let stableSamples = 0;
+    const deadline = performance.now() + 5000;
+    while (performance.now() < deadline && stableSamples < 5) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      const height = element.getBoundingClientRect().height;
+      stableSamples =
+        Math.abs(height - previousHeight) < 0.1 ? stableSamples + 1 : 0;
+      previousHeight = height;
+    }
+    if (stableSamples < 5)
+      throw new Error("YouTube content height did not settle");
+  });
   const contentHeightAtTwo = await youtubeContent.evaluate(
     (element) => element.clientHeight,
   );
@@ -1540,6 +1564,15 @@ try {
   const gatedWeather = page.locator(
     `[data-widget-instance-id="${weatherWidgetIds.small}"]`,
   );
+  for (const size of ["medium", "large"]) {
+    const widget = page.locator(
+      `[data-widget-instance-id="${weatherWidgetIds[size]}"]`,
+    );
+    await widget.getByRole("region", { name: "Astronomy" }).waitFor();
+    await widget
+      .getByRole("link", { name: "Astronomy", exact: true })
+      .waitFor();
+  }
   assert(
     (await gatedWeather.getByRole("region", { name: "Astronomy" }).count()) ===
       0 &&
