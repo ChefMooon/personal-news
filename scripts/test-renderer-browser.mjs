@@ -1177,6 +1177,76 @@ try {
   };
   const youtubeLargeId = "pn_dev_fixture_widget_youtube_large";
   await openFixtureDashboard("youtube");
+  for (const width of [1600, 900, 620, 390]) {
+    await page.setViewportSize({ width, height: 1400 });
+    for (const size of ["small", "medium", "large"]) {
+      const widget = page.locator(
+        `[data-widget-instance-id="pn_dev_fixture_widget_youtube_${size}"]`,
+      );
+      const initialConfig = await page.evaluate(
+        (instanceId) =>
+          window.api.invoke("settings:getYouTubeViewConfig", instanceId),
+        `pn_dev_fixture_widget_youtube_${size}`,
+      );
+      await widget
+        .getByRole("button", { name: "YouTube widget settings" })
+        .click();
+      const panel = widget.locator(".youtube-card-edit__panel");
+      await panel.getByRole("button", { name: "Selected Only" }).click();
+      await panel
+        .getByRole("button", { name: "Per-channel filter overrides" })
+        .click();
+      const override = panel.getByRole("switch", {
+        name: /^(Enable|Disable) overrides for Synthetic Video Channel$/,
+      });
+      await override.click();
+      const geometry = await panel.evaluate((element) => {
+        const viewport = element.querySelector(
+          "[data-radix-scroll-area-viewport]",
+        );
+        if (!(viewport instanceof HTMLElement))
+          throw new Error("Missing settings viewport");
+        const viewportBounds = viewport.getBoundingClientRect();
+        const panelBounds = element.getBoundingClientRect();
+        const clippedButtons = [...viewport.querySelectorAll("button")]
+          .filter((button) => {
+            const rect = button.getBoundingClientRect();
+            return (
+              rect.width > 0 &&
+              (rect.left <
+                Math.max(viewportBounds.left, panelBounds.left) - 0.5 ||
+                rect.right >
+                  Math.min(viewportBounds.right, panelBounds.right) + 0.5)
+            );
+          })
+          .map(
+            (button) =>
+              button.getAttribute("aria-label") ?? button.textContent?.trim(),
+          );
+        return {
+          viewportWidth: viewport.clientWidth,
+          scrollWidth: viewport.scrollWidth,
+          clippedButtons,
+        };
+      });
+      assert(
+        geometry.scrollWidth <= geometry.viewportWidth + 1 &&
+          geometry.clippedButtons.length === 0,
+        `YouTube ${size} settings must fit horizontally at ${width}px: ${JSON.stringify(geometry)}`,
+      );
+      await override.click();
+      const selectedChannel = panel
+        .getByRole("button", { name: "Deselect channel" })
+        .first();
+      await selectedChannel.click();
+      await panel.getByRole("button", { name: "Select channel" }).first().click();
+      if (initialConfig.channelMode === "all") {
+        await panel.getByRole("button", { name: "All Channels" }).click();
+      }
+      await widget.getByRole("button", { name: "Close settings" }).click();
+    }
+  }
+  await page.setViewportSize({ width: 1600, height: 1400 });
   const youtubeLarge = page.locator(
     `[data-widget-instance-id="${youtubeLargeId}"]`,
   );
@@ -1428,6 +1498,103 @@ try {
     (isolatedMediumConfig.largeVisibleChannelCount ?? 2) === 2,
     "Changing the Large widget must not change another YouTube instance",
   );
+  const settleYouTubeHeight = async () => {
+    await youtubeContent.evaluate(async (element) => {
+      element.scrollTop = 0;
+      let previousHeight = -1;
+      let stableSamples = 0;
+      const deadline = performance.now() + 5000;
+      while (performance.now() < deadline && stableSamples < 5) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        const height = element.getBoundingClientRect().height;
+        stableSamples =
+          Math.abs(height - previousHeight) < 0.1 ? stableSamples + 1 : 0;
+        previousHeight = height;
+      }
+      if (stableSamples < 5)
+        throw new Error("YouTube content height did not settle");
+    });
+  };
+  const checkYouTubeVisibleRows = async (count) => {
+    await page.waitForFunction(
+      async ({ instanceId, expected }) => {
+        const config = await window.api.invoke(
+          "settings:getYouTubeViewConfig",
+          instanceId,
+        );
+        return config.largeVisibleChannelCount === expected;
+      },
+      { instanceId: youtubeLargeId, expected: count },
+    );
+    await settleYouTubeHeight();
+    const geometry = await youtubeContent.evaluate((element, expected) => {
+      const box = element.getBoundingClientRect();
+      const rows = [
+        ...element.querySelectorAll(":scope > div > div > div > div"),
+      ].filter((row) => row.getBoundingClientRect().height > 0);
+      const rowBounds = rows.map((row) => row.getBoundingClientRect());
+      return {
+        clientHeight: element.clientHeight,
+        scrollTop: element.scrollTop,
+        completeRequestedRows: rowBounds
+          .slice(0, expected)
+          .filter((rect) => rect.top >= box.top && rect.bottom <= box.bottom)
+          .length,
+        partialRows: rowBounds.filter(
+          (rect) => rect.top < box.bottom && rect.bottom > box.bottom,
+        ).length,
+        nextRowStartsBelowViewport:
+          !rowBounds[expected] || rowBounds[expected].top >= box.bottom,
+      };
+    }, count);
+    assert(
+      geometry.scrollTop === 0 &&
+        geometry.completeRequestedRows === count &&
+        geometry.partialRows === 0 &&
+        geometry.nextRowStartsBelowViewport,
+      `Large YouTube must fit exactly ${count} requested rows after navigation or reload: ${JSON.stringify(geometry)}`,
+    );
+    return await youtubeLarge.evaluate(
+      (element) => element.getBoundingClientRect().height,
+    );
+  };
+  await youtubeLarge
+    .getByRole("button", { name: "YouTube widget settings" })
+    .click();
+  await chooseVisibleChannels(2);
+  await youtubeLarge.getByRole("button", { name: "Close settings" }).click();
+  const countTwoHeights = [await checkYouTubeVisibleRows(2)];
+
+  await page
+    .locator('[data-dashboard-tab-id="pn_dev_fixture_dashboard_astronomy"]')
+    .click();
+  await page
+    .locator('[data-dashboard-tab-id="pn_dev_fixture_dashboard_youtube"]')
+    .click();
+  countTwoHeights.push(await checkYouTubeVisibleRows(2));
+
+  await page.getByRole("link", { name: "YouTube", exact: true }).click();
+  await page.getByRole("link", { name: "Dashboard", exact: true }).click();
+  await page
+    .locator('[data-dashboard-tab-id="pn_dev_fixture_dashboard_youtube"]')
+    .click();
+  countTwoHeights.push(await checkYouTubeVisibleRows(2));
+
+  await page.reload({ waitUntil: "networkidle" });
+  await page.getByRole("link", { name: "Dashboard", exact: true }).click();
+  await page
+    .locator('[data-dashboard-tab-id="pn_dev_fixture_dashboard_youtube"]')
+    .click();
+  countTwoHeights.push(await checkYouTubeVisibleRows(2));
+  assert(
+    countTwoHeights.every(
+      (height) => Math.abs(height - countTwoHeights[0]) < 1,
+    ),
+    `Large YouTube height must remain stable for two rows after tab remount, route navigation, and reload: ${JSON.stringify(countTwoHeights)}`,
+  );
+  await youtubeContent.locator('button[aria-expanded="true"]').first().click();
+  await youtubeContent.locator('button[aria-expanded="true"]').first().click();
+  await checkYouTubeVisibleRows(2);
 
   const assertDetailsDestination = async (
     expectedLocationId,

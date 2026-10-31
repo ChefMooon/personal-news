@@ -1113,6 +1113,8 @@ export default function Dashboard(): React.ReactElement {
                         value={{
                           ...instance,
                           editMode,
+                          baseGridRows:
+                            layout.widget_geometry?.[instanceId]?.h ?? 4,
                           runtimeRows: runtimeRows[instanceId] ?? 0,
                           onSizeChange: (size) =>
                             handleSizeChange(instanceId, size),

@@ -92,11 +92,10 @@ function YouTubeWidget(): React.ReactElement {
     label,
     size,
     editMode,
-    runtimeRows,
+    baseGridRows,
     onRuntimeRowsChange,
     onSizeChange,
-  } =
-    useWidgetInstance();
+  } = useWidgetInstance();
   const widgetTitle = label ?? "YouTube";
   const { channels, loading, refreshing, error, retry } = useYouTubeChannels();
   const { config: viewConfig, setConfig } = useYouTubeViewConfig(instanceId);
@@ -116,18 +115,12 @@ function YouTubeWidget(): React.ReactElement {
   const [expandedChannels, setExpandedChannels] = useState(false);
   const cardContentRef = useRef<HTMLDivElement | null>(null);
   const channelRowRefs = useRef<Array<HTMLDivElement | null>>([]);
-  const largeBaselineRef = useRef<{ size: typeof size; height: number } | null>(
-    null,
-  );
-  const runtimeRowsRef = useRef(runtimeRows);
   const onRuntimeRowsChangeRef = useRef(onRuntimeRowsChange);
-  runtimeRowsRef.current = runtimeRows;
   onRuntimeRowsChangeRef.current = onRuntimeRowsChange;
   const previousSizeRef = useRef(size);
   useLayoutEffect(() => {
     if (previousSizeRef.current === size) return;
     previousSizeRef.current = size;
-    largeBaselineRef.current = null;
     onRuntimeRowsChangeRef.current(0);
     if (isEditing) setEditContentHeight(null);
   }, [isEditing, size]);
@@ -188,20 +181,12 @@ function YouTubeWidget(): React.ReactElement {
     if (!content) return;
     const updateRows = (): void => {
       if (size !== "large") {
-        largeBaselineRef.current = null;
         onRuntimeRowsChangeRef.current(0);
         return;
       }
       const style = getComputedStyle(content);
       const paddingTop = parseFloat(style.paddingTop) || 0;
       const paddingBottom = parseFloat(style.paddingBottom) || 0;
-      if (!largeBaselineRef.current && runtimeRowsRef.current === 0) {
-        largeBaselineRef.current = { size, height: content.clientHeight };
-      }
-      if (!largeBaselineRef.current) {
-        onRuntimeRowsChangeRef.current(0);
-        return;
-      }
       if (isEditing || displayedChannels.length === 0) {
         onRuntimeRowsChangeRef.current(0);
         return;
@@ -224,9 +209,21 @@ function YouTubeWidget(): React.ReactElement {
           content.scrollTop -
           2
         : naturalTargetHeight + paddingTop + paddingBottom;
+      const card = content.parentElement;
+      if (!card) return;
+      const cardBounds = card.getBoundingClientRect();
+      const contentBounds = content.getBoundingClientRect();
+      // Base the adjustment on the target height, not the animated grid height.
+      const desiredCardHeight =
+        desiredViewportHeight +
+        (contentBounds.top - cardBounds.top) +
+        (cardBounds.bottom - contentBounds.bottom);
       const rowStride = DASHBOARD_GRID_ROW_HEIGHT + DASHBOARD_GRID_GAP;
-      const rows =
-        (desiredViewportHeight - largeBaselineRef.current.height) / rowStride;
+      const desiredGridRows = Math.max(
+        4,
+        (desiredCardHeight + DASHBOARD_GRID_GAP) / rowStride,
+      );
+      const rows = desiredGridRows - Math.max(4, baseGridRows);
       onRuntimeRowsChangeRef.current(rows);
     };
     const observer = new ResizeObserver(updateRows);
@@ -236,6 +233,7 @@ function YouTubeWidget(): React.ReactElement {
     return () => observer.disconnect();
   }, [
     size,
+    baseGridRows,
     isEditing,
     viewConfig.largeVisibleChannelCount,
     visibleChannels,

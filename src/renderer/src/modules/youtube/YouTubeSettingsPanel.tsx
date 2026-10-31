@@ -477,8 +477,8 @@ export function YouTubeSettingsPanel({
   }
 
   return (
-    <div className="flex flex-col h-full">
-      <ScrollArea className="h-full">
+    <div className="flex h-full w-full min-w-0 flex-col">
+      <ScrollArea className="h-full w-full">
         <div className="space-y-5 pb-2 pl-2 pr-4">
           {sizeControl}
           <div>
@@ -499,7 +499,7 @@ export function YouTubeSettingsPanel({
 
             {channelsExpanded && (
               <div id="youtube-settings-channels">
-                <div className="flex gap-2 mb-3">
+                <div className="mb-3 flex flex-wrap gap-2">
                   <Button
                     size="sm"
                     variant={
@@ -525,7 +525,7 @@ export function YouTubeSettingsPanel({
                 </div>
 
                 <SectionHeader title="Selection" />
-                <div className="flex items-center justify-between gap-3 mb-3">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                   <p className="text-xs text-muted-foreground">
                     {selectedChannelCount} of {channels.length} shown
                   </p>

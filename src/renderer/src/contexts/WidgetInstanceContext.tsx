@@ -7,6 +7,7 @@ export interface WidgetInstanceInfo {
   label: string | null;
   size: WidgetSize;
   editMode: boolean;
+  baseGridRows: number;
   runtimeRows: number;
   onSizeChange: (size: WidgetSize) => void;
   onRuntimeRowsChange: (rows: number) => void;
@@ -18,6 +19,7 @@ export const WidgetInstanceContext = createContext<WidgetInstanceInfo>({
   label: null,
   size: "medium",
   editMode: false,
+  baseGridRows: 4,
   runtimeRows: 0,
   onSizeChange: () => undefined,
   onRuntimeRowsChange: () => undefined,

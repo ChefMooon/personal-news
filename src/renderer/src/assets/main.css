@@ -178,7 +178,8 @@ main,
 
 .youtube-card-edit {
   display: grid;
-  grid-template-columns: 1fr 300px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 300px);
+  container-type: inline-size;
   gap: 1rem;
   height: 100%;
   max-height: 100%;
@@ -193,9 +194,27 @@ main,
 .youtube-card-edit__panel {
   display: flex;
   overflow: hidden;
+  min-width: 0;
   min-height: 0;
   border-left: 1px solid hsl(var(--border));
   padding-left: 1rem;
+}
+
+.youtube-card-edit__panel [data-radix-scroll-area-viewport] > div {
+  /* Radix's table wrapper otherwise expands to the settings' intrinsic width. */
+  display: block !important;
+}
+
+@container (max-width: 320px) {
+  .youtube-card-edit__preview {
+    display: none;
+  }
+
+  .youtube-card-edit__panel {
+    grid-column: 1 / -1;
+    border-left: 0;
+    padding-left: 0;
+  }
 }
 
 .saved-posts-card-edit {
