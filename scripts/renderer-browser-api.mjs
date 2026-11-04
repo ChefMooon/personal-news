@@ -522,6 +522,7 @@ export function installRendererBrowserApi(fixtures) {
   Object.defineProperty(window, "__rendererBrowserFixtures", {
     value: {
       views: fixtures.views,
+      savedPosts: fixtures.savedPosts,
       evidence: fixtures.fixtureEvidence,
       sportsEvents: fixtures.sports.todayEvents,
       astronomyDetailsSnapshots: fixtures.astronomyDetailsSnapshots,

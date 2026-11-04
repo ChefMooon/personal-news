@@ -559,6 +559,52 @@ try {
     routeMeasurements.push({ path: route.path, screenshot, evidence });
   }
 
+  const relativeTimePage = await context.newPage();
+  await relativeTimePage.goto(`http://127.0.0.1:${address.port}/`, {
+    waitUntil: "networkidle",
+  });
+  const relativeSavedAt = await relativeTimePage.evaluate(
+    () => window.__rendererBrowserFixtures.savedPosts[0].saved_at,
+  );
+  await relativeTimePage.clock.install({
+    time: new Date((relativeSavedAt + 59) * 1000),
+  });
+  await relativeTimePage.getByRole("link", { name: "Saved Posts", exact: true }).click();
+  const skipRelativeSetup = relativeTimePage.getByRole("button", {
+    name: "Skip Setup",
+    exact: true,
+  });
+  if (await skipRelativeSetup.isVisible()) await skipRelativeSetup.click();
+  await relativeTimePage.getByText("just now", { exact: true }).first().waitFor();
+  const savedPostCalls = () => relativeTimePage.evaluate(() =>
+    window.__rendererBrowserCalls.filter((call) =>
+      call.kind === "invoke" &&
+      ["reddit:getSavedPosts", "reddit:getSavedPostsSummary", "reddit:pollNtfy"].includes(call.channel),
+    ).length,
+  );
+  const pageCallsBefore = await savedPostCalls();
+  await relativeTimePage.clock.runFor(30_000);
+  await relativeTimePage.getByText("1m ago", { exact: true }).first().waitFor();
+  assert((await savedPostCalls()) === pageCallsBefore, "Saved Posts page clock tick caused a fetch or sync call");
+
+  await relativeTimePage.clock.setSystemTime(new Date((relativeSavedAt + 59) * 1000));
+  await relativeTimePage.goto(`http://127.0.0.1:${address.port}/`, {
+    waitUntil: "networkidle",
+  });
+  await relativeTimePage
+    .locator('[data-dashboard-tab-id="pn_dev_fixture_dashboard_saved_posts"]')
+    .click();
+  const relativeTimeWidget = relativeTimePage.locator(
+    '[data-widget-instance-id="pn_dev_fixture_widget_saved_posts_large"]',
+  );
+  await relativeTimeWidget.getByText("just now", { exact: true }).first().waitFor();
+  const widgetCallsBefore = await savedPostCalls();
+  await relativeTimePage.clock.runFor(30_000);
+  await relativeTimeWidget.getByText("1m ago", { exact: true }).first().waitFor();
+  assert((await savedPostCalls()) === widgetCallsBefore, "Saved Posts widget clock tick caused a fetch or sync call");
+  await relativeTimePage.close();
+  routeMeasurements.push({ path: "/saved-posts and dashboard widget", evidence: ["page and widget labels advanced from just now to 1m ago without fetch or sync calls"] });
+
   for (const settingsTab of settingsTabs) {
     await page
       .getByRole("tab", { name: settingsTab.name, exact: true })

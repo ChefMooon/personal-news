@@ -1,7 +1,7 @@
 import React from "react";
 import { Badge } from "../../components/ui/badge";
 import { ArrowUp, Clock } from "lucide-react";
-import { formatRelativeTime } from "../../lib/time";
+import { RelativeTime } from "../../components/RelativeTime";
 import { type SavedPost } from "../../../../shared/ipc-types";
 import { SavedPostItemActions } from "./SavedPostItemActions";
 import { SAVED_POST_SOURCE_LABELS } from "./saved-posts-constants";
@@ -152,7 +152,7 @@ export function SavedPostCard({
                 title={new Date(post.saved_at * 1000).toLocaleString()}
               >
                 <Clock className="h-3 w-3" />
-                <span>{formatRelativeTime(post.saved_at)}</span>
+                <span><RelativeTime unixTimestamp={post.saved_at} /></span>
               </div>
             </div>
           </button>

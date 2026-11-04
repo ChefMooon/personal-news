@@ -1,5 +1,5 @@
-export function formatRelativeTime(unixTs: number): string {
-  const now = Math.floor(Date.now() / 1000);
+export function formatRelativeTime(unixTs: number, nowMilliseconds = Date.now()): string {
+  const now = Math.floor(nowMilliseconds / 1000);
   const diff = now - unixTs;
 
   if (diff < 60) return "just now";

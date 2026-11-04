@@ -1,7 +1,7 @@
 import React from "react";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import { Button } from "../../components/ui/button";
-import { formatRelativeTime } from "../../lib/time";
+import { RelativeTime } from "../../components/RelativeTime";
 import type { NtfySyncSummary } from "../../../../shared/ipc-types";
 
 interface StaleWarningProps {
@@ -28,7 +28,7 @@ export function StaleWarning({
   if (!isStale && !hasFailures && duplicateCount === 0) return null;
 
   const lastSyncText = lastPolledAt
-    ? formatRelativeTime(lastPolledAt)
+    ? <RelativeTime unixTimestamp={lastPolledAt} />
     : "never";
 
   return (

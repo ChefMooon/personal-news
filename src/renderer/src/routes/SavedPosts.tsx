@@ -55,7 +55,7 @@ import {
   Eye,
   EyeOff,
 } from "lucide-react";
-import { formatRelativeTime } from "../lib/time";
+import { RelativeTime } from "../components/RelativeTime";
 import { toRedditPostUrl } from "../lib/utils";
 import {
   getNtfyWarningVisibilityState,
@@ -927,7 +927,7 @@ function SavedPostsContent(): React.ReactElement {
                           </span>
                         )}
                         <span className="text-xs text-muted-foreground">
-                          {formatRelativeTime(post.saved_at)}
+                          <RelativeTime unixTimestamp={post.saved_at} />
                         </span>
                       </div>
                       <button
