@@ -1437,6 +1437,8 @@ function GeneralTab(): React.ReactElement {
   const [currentVersion, setCurrentVersion] = useState<string | null>(null);
   const [resettingWindowLayout, setResettingWindowLayout] = useState(false);
   const [checkingForUpdates, setCheckingForUpdates] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatusEvent | null>(null);
+  const [installingUpdate, setInstallingUpdate] = useState(false);
   const [lastUpdateCheckOutcome, setLastUpdateCheckOutcome] = useState<
     string | null
   >(null);
@@ -1516,18 +1518,18 @@ function GeneralTab(): React.ReactElement {
   }, []);
 
   const getUpdateOutcomeLabel = (status: UpdateStatusEvent): string | null => {
-    if (status.state === "not-available") {
+    if (status.lastCheckResult === "not-available") {
       return `Up to date (${status.currentVersion})`;
     }
 
-    if (status.state === "available" || status.state === "downloaded") {
-      return status.version
-        ? `Update ${status.version} available`
+    if (status.lastCheckResult === "available") {
+      return status.lastCheckVersion
+        ? `Update ${status.lastCheckVersion} available`
         : "Update available";
     }
 
-    if (status.state === "error") {
-      return status.friendlyMessage || status.message || "Update check failed.";
+    if (status.lastCheckResult === "error" && status.failedDuring === "checking") {
+      return "Update check failed.";
     }
 
     if (status.state === "disabled") {
@@ -1538,6 +1540,7 @@ function GeneralTab(): React.ReactElement {
   };
 
   const applyUpdateStatus = (status: UpdateStatusEvent): void => {
+    setUpdateStatus(status);
     setUpdatesSupported(status.supported);
     setCurrentVersion(status.currentVersion);
     const outcome = getUpdateOutcomeLabel(status);
@@ -1545,7 +1548,9 @@ function GeneralTab(): React.ReactElement {
       return;
     }
     setLastUpdateCheckOutcome(outcome);
-    setLastUpdateCheckAt(Date.now());
+    if (status.lastCheckAt !== undefined) {
+      setLastUpdateCheckAt(status.lastCheckAt);
+    }
   };
 
   useEffect(() => {
@@ -1654,13 +1659,27 @@ function GeneralTab(): React.ReactElement {
         // Global update-status listener in App handles user-facing updater errors.
         return;
       }
-      toast.info("Checking for updates...");
     } catch (err) {
       toast.error(
         err instanceof Error ? err.message : "Failed to check for updates.",
       );
     } finally {
       setCheckingForUpdates(false);
+    }
+  };
+
+  const installUpdate = async (): Promise<void> => {
+    if (installingUpdate || updateStatus?.installRequested) return;
+    setInstallingUpdate(true);
+    try {
+      const result = (await window.api.invoke(IPC.UPDATES_INSTALL_UPDATE)) as IpcMutationResult;
+      if (!result.ok) return;
+      setUpdateStatus((current) => current ? { ...current, installRequested: true } : current);
+      toast.info("Install and restart requested.", { description: "The app will restart if the installer starts successfully. If it remains open, restart manually and check for updates again." });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to request update installation.");
+    } finally {
+      setInstallingUpdate(false);
     }
   };
 
@@ -2051,15 +2070,32 @@ function GeneralTab(): React.ReactElement {
           </div>
 
           <div className="rounded-md border px-3 py-2">
-            <p className="text-sm">Last update check</p>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+            <p className="text-sm">Update status</p>
             <p className="text-xs text-muted-foreground">
-              {lastUpdateCheckOutcome ??
-                "No completed checks yet in this session."}
+              {updateStatus?.friendlyMessage || updateStatus?.message || lastUpdateCheckOutcome || "No update checks yet in this session."}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Last check: {lastUpdateCheckOutcome ?? "No completed checks yet in this session."}
             </p>
             {lastUpdateCheckAtLabel ? (
               <p className="text-xs text-muted-foreground">
                 Updated: {lastUpdateCheckAtLabel}
               </p>
+            ) : null}
+              </div>
+              {updateStatus?.downloadedReady ? (
+                <div className="flex flex-col items-end gap-1">
+                  <span className="text-xs text-muted-foreground">Downloaded update {updateStatus.downloadedVersion}</span>
+                  <Button onClick={() => void installUpdate()} disabled={installingUpdate || updateStatus.installRequested}>
+                    {updateStatus.installRequested ? "Restart requested" : installingUpdate ? "Requesting..." : "Install and restart"}
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+            {updateStatus?.state === "downloading" && updateStatus.downloadPercent !== undefined ? (
+              <progress className="mt-2 w-full" max={100} value={updateStatus.downloadPercent} aria-label="Update download progress" />
             ) : null}
           </div>
         </div>

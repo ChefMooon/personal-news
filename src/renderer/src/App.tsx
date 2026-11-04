@@ -73,6 +73,8 @@ function AppShell(): React.ReactElement {
 
 export default function App(): React.ReactElement {
   const lastUpdateToastKeyRef = React.useRef<string | null>(null);
+  const updateReadyToastIdRef = React.useRef<string | number | null>(null);
+  const updateReadyToastVersionRef = React.useRef<string | null>(null);
   const navigate = useNavigate();
 
   React.useEffect(() => {
@@ -116,19 +118,38 @@ export default function App(): React.ReactElement {
 
       lastUpdateToastKeyRef.current = toastKey;
 
+      if (event.installRequested && updateReadyToastIdRef.current !== null) {
+        toast.dismiss(updateReadyToastIdRef.current);
+        updateReadyToastIdRef.current = null;
+        updateReadyToastVersionRef.current = null;
+      }
+
       const versionLabel = event.version ? ` ${event.version}` : "";
 
       if (event.state === "available") {
+        if (
+          updateReadyToastIdRef.current !== null &&
+          updateReadyToastVersionRef.current !== event.version
+        ) {
+          toast.dismiss(updateReadyToastIdRef.current);
+          updateReadyToastIdRef.current = null;
+          updateReadyToastVersionRef.current = null;
+        }
         toast.info(`Update${versionLabel} is available.`, {
           description: "Downloading in the background.",
+          className: "update-toast",
         });
         return;
       }
 
       if (event.state === "downloaded") {
-        toast.success(`Update${versionLabel} is ready.`, {
+        if (event.installRequested) return;
+        updateReadyToastVersionRef.current = event.version ?? null;
+        updateReadyToastIdRef.current = toast.success(`Update${versionLabel} is ready.`, {
           description: "Install now to restart on the latest version.",
           duration: Infinity,
+          className: "update-toast",
+          classNames: { actionButton: "update-toast__action" },
           action: {
             label: "Install and restart",
             onClick: () => {
@@ -137,17 +158,21 @@ export default function App(): React.ReactElement {
                 .then((result) => {
                   const mutation = result as IpcMutationResult;
                   if (!mutation.ok) {
-                    throw new Error(
-                      mutation.error ?? "Unable to install update.",
-                    );
+                    return;
                   }
+                  if (updateReadyToastIdRef.current !== null) {
+                    toast.dismiss(updateReadyToastIdRef.current);
+                    updateReadyToastIdRef.current = null;
+                    updateReadyToastVersionRef.current = null;
+                  }
+                  toast.info("Install and restart requested.", { description: "The app will restart if the installer starts successfully. If it remains open, restart manually and check for updates again.", className: "update-toast" });
                 })
                 .catch((error: unknown) => {
                   const message =
                     error instanceof Error
                       ? error.message
                       : "Unable to install update.";
-                  toast.error(message);
+                  toast.error(message, { className: "update-toast" });
                 });
             },
           },
@@ -156,8 +181,10 @@ export default function App(): React.ReactElement {
       }
 
       if (event.state === "not-available") {
+        if (event.operationOrigin !== "manual") return;
         toast.success("You are already on the latest version.", {
           description: `Current version: ${event.currentVersion}`,
+          className: "update-toast",
         });
         return;
       }
@@ -167,6 +194,7 @@ export default function App(): React.ReactElement {
           event.friendlyMessage ||
             event.message ||
             "Auto-update encountered an error.",
+          { className: "update-toast" },
         );
       }
     };

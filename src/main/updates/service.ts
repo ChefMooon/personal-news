@@ -47,6 +47,8 @@ let latestStatus: UpdateStatusEvent = {
   message: "Updater not initialized yet.",
   currentVersion: app.getVersion(),
   supported: process.platform === "win32",
+  downloadedReady: false,
+  operationOrigin: "automatic",
 };
 
 let statusListener: ((status: UpdateStatusEvent) => void) | null = null;
@@ -80,10 +82,15 @@ function emitStatus(
   partial: Omit<UpdateStatusEvent, "currentVersion" | "supported">,
 ): void {
   latestStatus = {
+    ...latestStatus,
     ...partial,
     currentVersion: app.getVersion(),
     supported: process.platform === "win32",
   };
+
+  if (partial.state !== "error" && !Object.hasOwn(partial, "friendlyMessage")) {
+    delete latestStatus.friendlyMessage;
+  }
 
   if (statusListener) {
     statusListener(latestStatus);
@@ -146,16 +153,31 @@ export async function initializeAutoUpdates(): Promise<void> {
   autoUpdater.autoInstallOnAppQuit = false;
 
   autoUpdater.on("checking-for-update", () => {
-    emitStatus({ state: "checking", message: "Checking for updates..." });
+    emitStatus({ state: "checking", message: "Checking for updates...", operationOrigin: activeCheckOrigin, operationPhase: "checking" });
   });
 
   autoUpdater.on("update-available", (info) => {
+    const keepDownloadedCandidate =
+      latestStatus.downloadedReady && latestStatus.downloadedVersion === info.version;
     emitStatus({
       state: "available",
       message: `Update ${info.version} is available. Downloading in the background.`,
       version: info.version,
       releaseDate: info.releaseDate,
       releaseNotes: normalizeReleaseNotes(info.releaseNotes),
+      operationOrigin: activeCheckOrigin,
+      operationPhase: "downloading",
+      lastCheckAt: Date.now(),
+      lastCheckResult: "available",
+      lastCheckVersion: info.version,
+      downloadedReady: keepDownloadedCandidate,
+      ...(keepDownloadedCandidate
+        ? {}
+        : {
+            downloadedVersion: undefined,
+            downloadedReleaseDate: undefined,
+            downloadedReleaseNotes: undefined,
+          }),
     });
   });
 
@@ -163,6 +185,11 @@ export async function initializeAutoUpdates(): Promise<void> {
     emitStatus({
       state: "not-available",
       message: "You are on the latest version.",
+      operationOrigin: activeCheckOrigin,
+      operationPhase: undefined,
+      lastCheckAt: Date.now(),
+      lastCheckResult: "not-available",
+      lastCheckVersion: undefined,
     });
   });
 
@@ -171,6 +198,7 @@ export async function initializeAutoUpdates(): Promise<void> {
       state: "downloading",
       message: `Downloading update: ${Math.round(progress.percent)}%`,
       downloadPercent: progress.percent,
+      operationPhase: "downloading",
     });
   });
 
@@ -181,15 +209,50 @@ export async function initializeAutoUpdates(): Promise<void> {
       version: info.version,
       releaseDate: info.releaseDate,
       releaseNotes: normalizeReleaseNotes(info.releaseNotes),
+      downloadedReady: true,
+      ...(latestStatus.installRequested ? {} : { installRequested: false }),
+      operationPhase: latestStatus.installRequested ? "install-requested" : "ready",
+      downloadedVersion: info.version,
+      downloadedReleaseDate: info.releaseDate,
+      downloadedReleaseNotes: normalizeReleaseNotes(info.releaseNotes),
     });
   });
 
   autoUpdater.on("error", (error) => {
     const message = error?.message ?? "An unknown auto-update error occurred.";
+    const failedDuring: NonNullable<UpdateStatusEvent["failedDuring"]> =
+      latestStatus.state === "error"
+        ? latestStatus.failedDuring ?? "checking"
+        : latestStatus.operationPhase === "error" ||
+            latestStatus.operationPhase === undefined
+          ? "checking"
+          : latestStatus.operationPhase;
+    const friendlyMessage = failedDuring === "install-requested"
+      ? installCallInProgress
+        ? "The updater rejected the install request. The downloaded update remains ready; you can try again."
+        : "The install request was accepted, but the updater reported an error. The app may remain open; restart it manually and check for updates again. This process will not send another install request."
+      : failedDuring === "checking"
+        ? normalizeUpdaterErrorMessage(message)
+        : `The update operation failed: ${message}`;
+    if (failedDuring === "checking" && checkRequestInFlight) {
+      lastErrorEventDuringCheck = message;
+    }
+    if (failedDuring === "install-requested" && installCallInProgress) {
+      synchronousInstallError = message;
+    }
     emitStatus({
       state: "error",
       message,
-      friendlyMessage: normalizeUpdaterErrorMessage(message),
+      friendlyMessage,
+      operationOrigin: activeCheckOrigin,
+      operationPhase: "error",
+      failedDuring,
+      ...(failedDuring === "install-requested" && installCallInProgress
+        ? { installRequested: false }
+        : {}),
+      ...(failedDuring === "checking"
+        ? { lastCheckAt: Date.now(), lastCheckResult: "error", lastCheckVersion: undefined }
+        : {}),
     });
   });
 
@@ -203,6 +266,13 @@ export async function initializeAutoUpdates(): Promise<void> {
 
   await checkForAppUpdates();
 }
+
+let activeCheckOrigin: "manual" | "automatic" = "automatic";
+let installRequestInFlight = false;
+let checkRequestInFlight = false;
+let lastErrorEventDuringCheck: string | null = null;
+let installCallInProgress = false;
+let synchronousInstallError: string | null = null;
 
 export async function checkForAppUpdates(options?: {
   manual?: boolean;
@@ -237,15 +307,27 @@ export async function checkForAppUpdates(options?: {
     return { ok: true, error: null };
   }
 
+  if (checkRequestInFlight) {
+    return { ok: false, error: "An update check is already in progress." };
+  }
+
   try {
+    checkRequestInFlight = true;
+    lastErrorEventDuringCheck = null;
+    activeCheckOrigin = options?.manual ? "manual" : "automatic";
     await autoUpdater.checkForUpdates();
     return { ok: true, error: null };
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Failed to check for updates.";
     const friendlyMessage = normalizeUpdaterErrorMessage(message);
-    emitStatus({ state: "error", message, friendlyMessage });
+    if (lastErrorEventDuringCheck !== message) {
+      emitStatus({ state: "error", message, friendlyMessage, operationOrigin: activeCheckOrigin, operationPhase: "error", failedDuring: "checking", lastCheckAt: Date.now(), lastCheckResult: "error", lastCheckVersion: undefined });
+    }
     return { ok: false, error: friendlyMessage };
+  } finally {
+    checkRequestInFlight = false;
+    lastErrorEventDuringCheck = null;
   }
 }
 
@@ -257,13 +339,36 @@ export function installDownloadedUpdate(): IpcMutationResult {
     };
   }
 
-  if (latestStatus.state !== "downloaded") {
+  if (!latestStatus.downloadedReady) {
     return { ok: false, error: "No downloaded update is ready to install." };
   }
-
-  setTimeout(() => {
+  if (installRequestInFlight || latestStatus.installRequested) {
+    return { ok: true, error: null };
+  }
+  try {
+    installRequestInFlight = true;
+    synchronousInstallError = null;
+    emitStatus({
+      state: latestStatus.state,
+      message: "Sending install and restart request...",
+      installRequested: true,
+      operationPhase: "install-requested",
+    });
+    installCallInProgress = true;
     autoUpdater.quitAndInstall();
-  }, 150);
-
-  return { ok: true, error: null };
+    installCallInProgress = false;
+    if (synchronousInstallError) {
+      installRequestInFlight = false;
+      return { ok: false, error: latestStatus.friendlyMessage ?? synchronousInstallError };
+    }
+    emitStatus({ state: latestStatus.state, message: "Install and restart requested. If the app remains open, restart it manually and check for updates again.", installRequested: true, operationPhase: "install-requested" });
+    return { ok: true, error: null };
+  } catch (error) {
+    installCallInProgress = false;
+    installRequestInFlight = false;
+    const message = error instanceof Error ? error.message : "Unable to request update installation.";
+    const friendlyMessage = `The update is downloaded and remains ready, but the installer could not be started: ${message}`;
+    emitStatus({ state: "error", message, friendlyMessage, downloadedReady: true, installRequested: false, operationPhase: "error", failedDuring: "ready" });
+    return { ok: false, error: friendlyMessage };
+  }
 }

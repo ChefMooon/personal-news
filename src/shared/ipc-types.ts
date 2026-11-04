@@ -828,6 +828,18 @@ export interface UpdateStatusEvent {
   releaseDate?: string;
   releaseNotes?: string | null;
   downloadPercent?: number;
+  /** True only after this process has received electron-updater's downloaded event. */
+  downloadedReady?: boolean;
+  operationOrigin?: "manual" | "automatic";
+  operationPhase?: "checking" | "downloading" | "ready" | "install-requested" | "error";
+  failedDuring?: "checking" | "downloading" | "ready" | "install-requested";
+  downloadedVersion?: string;
+  downloadedReleaseDate?: string;
+  downloadedReleaseNotes?: string | null;
+  lastCheckResult?: "available" | "not-available" | "error";
+  lastCheckVersion?: string;
+  lastCheckAt?: number;
+  installRequested?: boolean;
 }
 
 export interface YouTubeCacheClearResult extends IpcMutationResult {

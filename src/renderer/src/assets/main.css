@@ -75,6 +75,70 @@
   }
 }
 
+/* Keep update notices visually distinct without changing other Sonner toasts. */
+[data-sonner-toast].update-toast {
+  width: min(420px, calc(100vw - 24px));
+  align-items: flex-start;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.75rem;
+  box-shadow: 0 12px 32px rgb(0 0 0 / 18%);
+  color: hsl(var(--card-foreground));
+  overflow-wrap: anywhere;
+  padding: 1rem;
+}
+
+[data-rich-colors="true"][data-sonner-toast].update-toast {
+  background: hsl(var(--card));
+  border-color: hsl(var(--border));
+  color: hsl(var(--card-foreground));
+}
+
+[data-sonner-toast].update-toast [data-content] {
+  min-width: 0;
+  gap: 0.25rem;
+}
+
+[data-sonner-toast].update-toast [data-title] {
+  font-size: 0.875rem;
+  font-weight: 650;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+[data-sonner-toast].update-toast [data-description] {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+[data-sonner-toast].update-toast [data-button].update-toast__action {
+  align-self: flex-start;
+  background: hsl(var(--primary));
+  border: 1px solid hsl(var(--primary));
+  border-radius: 0.5rem;
+  color: hsl(var(--primary-foreground));
+  flex-shrink: 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  height: auto;
+  justify-content: center;
+  line-height: 1.25;
+  margin: 0.625rem 0 0 0;
+  min-height: 2.25rem;
+  padding: 0.5rem 0.75rem;
+  white-space: normal;
+}
+
+[data-sonner-toast].update-toast [data-button].update-toast__action:hover {
+  filter: brightness(0.92);
+}
+
+[data-sonner-toast].update-toast [data-button].update-toast__action:focus-visible {
+  box-shadow: 0 0 0 3px hsl(var(--background)), 0 0 0 5px hsl(var(--ring));
+}
+
 .dashboard-grid [data-widget-instance-id] > .rounded-lg.border {
   flex: 1 1 0%;
   min-height: 0;
