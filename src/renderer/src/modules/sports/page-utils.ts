@@ -1,6 +1,7 @@
 import type {
   SportEvent,
   SportStandingRow,
+  TrackedTeam,
 } from "../../../../shared/ipc-types";
 import {
   getLocalDateKey,
@@ -8,6 +9,7 @@ import {
   parseSportEventTimestamp,
 } from "../../../../shared/sports-event-utils";
 import { getGamePhase, isLiveStatus } from "./utils";
+import { resolveTrackedTeamSide } from "./side-resolution";
 
 export type TeamOutcome = "W" | "L" | "D";
 
@@ -162,9 +164,21 @@ export function getTeamInitials(name: string): string {
 
 export function getOutcomeForTeam(
   event: SportEvent,
-  teamId: string,
+  team: Pick<TrackedTeam, "teamId" | "name" | "leagueId">,
 ): TeamOutcome | null {
-  const isHome = event.homeTeamId === teamId;
+  if (event.leagueId !== team.leagueId) {
+    return null;
+  }
+  const side = resolveTrackedTeamSide(
+    event,
+    team.teamId,
+    team.name,
+    team.leagueId,
+  );
+  if (!side) {
+    return null;
+  }
+  const isHome = side === "home";
   const teamScore = Number.parseInt(
     isHome ? (event.homeScore ?? "") : (event.awayScore ?? ""),
     10,
@@ -186,11 +200,11 @@ export function getOutcomeForTeam(
 
 export function getRecentOutcomes(
   events: SportEvent[],
-  teamId: string,
+  team: Pick<TrackedTeam, "teamId" | "name" | "leagueId">,
 ): TeamOutcome[] {
   return [...events]
     .sort((left, right) => getEventStartAt(right) - getEventStartAt(left))
-    .map((event) => getOutcomeForTeam(event, teamId))
+    .map((event) => getOutcomeForTeam(event, team))
     .filter((outcome): outcome is TeamOutcome => outcome !== null)
     .slice(0, 5);
 }

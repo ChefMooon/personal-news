@@ -47,19 +47,28 @@ export function TeamCardsView({
     >
       {teams.map((team) => {
         const events = teamEventsById[team.teamId];
-        const todayGame = getTodayGame(events, today);
+        const todayGame = getTodayGame(
+          events,
+          today,
+          team.teamId,
+          team.name,
+          team.leagueId,
+        );
         const lastGame = getFirstDifferentGame(
           events?.last,
           todayGame?.eventId ?? null,
+          team,
         );
         const nextGame = getFirstDifferentGame(
           events?.next,
           todayGame?.eventId ?? null,
+          team,
         );
         const streak = computeStreak(
           events?.last ?? [],
           team.teamId,
           team.name,
+          team.leagueId,
         );
         if (viewMode === "summarized")
           return (

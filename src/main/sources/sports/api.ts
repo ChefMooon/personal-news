@@ -593,6 +593,14 @@ function resolveEspnStandingsLeague(
   const normalizedName = leagueName?.trim() ?? "";
 
   if (
+    sport === "Basketball" &&
+    (leagueId === "4516" ||
+      /\bwnba\b|women.s national basketball association/i.test(normalizedName))
+  ) {
+    return { sportPath: "basketball", leaguePath: "wnba" };
+  }
+
+  if (
     sport === "Baseball" &&
     (leagueId === "4424" ||
       /major league baseball|\bmlb\b/i.test(normalizedName))
@@ -698,8 +706,10 @@ function mapEspnScoreboardEvent(
     eventId: `espn:${row.id}`,
     leagueId,
     sport,
-    homeTeamId: home?.team?.id == null ? null : String(home.team.id),
-    awayTeamId: away?.team?.id == null ? null : String(away.team.id),
+    homeTeamId:
+      home?.team?.id == null ? null : `espn:${leagueId}:${home.team.id}`,
+    awayTeamId:
+      away?.team?.id == null ? null : `espn:${leagueId}:${away.team.id}`,
     homeTeam: homeName,
     awayTeam: awayName,
     homeTeamBadgeUrl: null,
@@ -738,12 +748,12 @@ async function fetchEspnLeagueEventsForDate(
     .filter((item): item is SportEvent => item !== null);
 }
 
-function supportsLeagueFallback(sport: string, leagueId: string): boolean {
-  return (
-    (sport === "Baseball" && leagueId === "4424") ||
-    (sport === "Basketball" && leagueId === "4387") ||
-    (sport === "Ice Hockey" && leagueId === "4380")
-  );
+function supportsLeagueFallback(
+  sport: string,
+  leagueId: string,
+  leagueName: string,
+): boolean {
+  return resolveEspnStandingsLeague(leagueId, sport, leagueName) !== null;
 }
 
 async function fetchEspnTeam(teamRef: string): Promise<EspnTeam | null> {
@@ -835,7 +845,7 @@ async function fetchEspnStandings(
             "position",
             "rank",
           ]) ?? index + 1,
-        teamId,
+        teamId: `espn:${leagueId}:${teamId}`,
         teamName,
         played: getEspnStatInteger(primaryRecord, ["gamesPlayed"]) ?? 0,
         win: getEspnStatInteger(primaryRecord, ["wins"]) ?? 0,
@@ -1051,7 +1061,7 @@ export async function fetchLeagueEventsForDateWithFallback(
 ): Promise<SportEvent[]> {
   const forceMergeEspn = options?.forceMergeEspn === true;
   const supportsFallback =
-    forceMergeEspn || supportsLeagueFallback(sport, leagueId);
+    forceMergeEspn || supportsLeagueFallback(sport, leagueId, leagueName);
   const [sportsDbResult, espnResult] = await Promise.allSettled([
     fetchLeagueEventsForDate(date, leagueName),
     supportsFallback
@@ -1075,6 +1085,9 @@ export async function fetchLeagueEventsForDateWithFallback(
   }
   const espnEvents =
     espnResult.status === "fulfilled" ? espnResult.value : null;
+  if (sportsDbResult.status === "rejected" && espnEvents === null) {
+    throw sportsDbResult.reason;
+  }
   if (!espnEvents || espnEvents.length === 0) {
     return sportsDbEvents;
   }
@@ -1112,12 +1125,14 @@ export async function fetchEventDetails(
 
 export async function fetchEspnEventDetails(
   event: SportEvent,
+  leagueName?: string,
 ): Promise<SportEventDetail | null> {
   if (!event.eventId.startsWith("espn:")) return null;
   const events = await fetchEspnLeagueEventsForDate(
     event.eventDate,
     event.leagueId,
     event.sport,
+    leagueName,
   );
   const match = events?.find((item) => item.eventId === event.eventId);
   return match ? { ...match, progress: null, descriptionEN: null } : null;

@@ -27,7 +27,7 @@ import {
 import { getSetting, setSetting } from "../../settings/store";
 import { isElectronHarnessRun } from "../../harness-mode";
 import { isDevTestDataActive } from "../../dev-test-data";
-import { getSportsFixtureEventDetail } from "../../dev-test-data/definitions/sports";
+import { getSportsFixtureEventDetail, SPORTS_FIXTURE_LEAGUES } from "../../dev-test-data/definitions/sports";
 import type { DataSourceModule } from "../registry";
 import {
   fetchEventById,
@@ -86,8 +86,11 @@ const DEFAULT_ENABLED_LEAGUE_PATTERNS: Partial<
   Record<SupportedSport, RegExp[]>
 > = {
   Baseball: [/major league baseball|\bmlb\b/i],
-  Basketball: [/national basketball association|\bnba\b/i],
-  "Ice Hockey": [/national hockey league|\bnhl\b/i],
+  Basketball: [/national basketball association|\bnba\b/i, /\bwnba\b/i],
+  "Ice Hockey": [
+    /national hockey league|\bnhl\b/i,
+    /\bpwhl\b|professional women['’]s hockey league/i,
+  ],
 };
 
 let dbRef: Database.Database | null = null;
@@ -245,7 +248,10 @@ function normalizeMatchKey(value: string): string {
 }
 
 function isSameMatch(left: SportEvent, right: SportEvent): boolean {
-  const sameDate = left.eventDate === right.eventDate;
+  const sameDate =
+    left.eventDate === right.eventDate &&
+    left.sport === right.sport &&
+    left.leagueId === right.leagueId;
   if (!sameDate) {
     return false;
   }
@@ -953,24 +959,9 @@ async function doRefreshSport(
         for (const event of eventsForDate) eventsById.set(event.eventId, event);
       }
 
-      const dedupedByMatch = new Map<string, SportEvent>();
-      for (const event of eventsById.values()) {
-        const signature = [
-          event.sport,
-          event.leagueId,
-          event.eventDate,
-          event.eventTime ?? "",
-          event.homeTeam.toLowerCase(),
-          event.awayTeam.toLowerCase(),
-        ].join("|");
-
-        const existing = dedupedByMatch.get(signature);
-        if (!existing || !existing.eventId.startsWith("espn:")) {
-          dedupedByMatch.set(signature, event);
-        }
-      }
-
-      const events = Array.from(dedupedByMatch.values());
+      // Retain both providers' rows for team identity inference. Cache readers
+      // deduplicate matchups before returning events to the renderer.
+      const events = Array.from(eventsById.values());
       try {
         await backfillEventTeamBadges(db, events, sport, league.name, trigger);
       } catch (error) {
@@ -1109,7 +1100,12 @@ export async function getSportsEventDetails(
   }
   if (eventId.startsWith("espn:")) {
     const event = getCachedEvent(ensureDb(), eventId);
-    return event ? fetchEspnEventDetails(event) : null;
+    return event
+      ? fetchEspnEventDetails(
+          event,
+          getLeagueById(ensureDb(), event.leagueId)?.name,
+        )
+      : null;
   }
   return fetchEventDetails(eventId);
 }
@@ -1156,6 +1152,15 @@ export async function addSportsTeam(
   },
 ): Promise<TrackedTeam> {
   const db = ensureDb();
+  const fixtureLeague = isDevTestDataActive(db)
+    ? SPORTS_FIXTURE_LEAGUES.find((item) => item.leagueId === leagueId && item.sport === sport)
+    : undefined;
+  const fixtureTeam = fixtureLeague && [fixtureLeague.home, fixtureLeague.away].find((item) => item.teamId === teamId);
+  if (fixtureTeam) {
+    const team = upsertTrackedTeam(db, { ...fixtureTeam, leagueId, sport, badgeUrl: null });
+    emitSportsUpdated({ sport, ok: true, error: null });
+    return team;
+  }
   const leagues = await ensureLeagueCatalogLoaded(sport);
   const league = leagues.find((item) => item.leagueId === leagueId);
   const details = league
@@ -1289,6 +1294,13 @@ export async function addSportsLeague(
   sport: string,
 ): Promise<SportLeague> {
   const db = ensureDb();
+  if (leagueId.startsWith("pn_dev_fixture_") && isDevTestDataActive(db)) {
+    const existing = getLeagueById(db, leagueId);
+    if (!existing || existing.sport !== sport) throw new Error("League not found.");
+    setLeagueEnabled(db, leagueId, true);
+    emitSportsUpdated({ sport, ok: true, error: null });
+    return getLeagueById(db, leagueId) as SportLeague;
+  }
   const existing = (await ensureLeagueCatalogLoaded(sport)).find(
     (league) => league.leagueId === leagueId,
   );
@@ -1327,6 +1339,15 @@ export async function searchSportsTeams(
   query: string,
   sport: string,
 ): Promise<TeamSearchResult[]> {
+  if (isDevTestDataActive(ensureDb()) && query.trim().toLowerCase().startsWith("fixture")) {
+    const needle = query.trim().toLowerCase();
+    return SPORTS_FIXTURE_LEAGUES.filter((league) => league.sport === sport).flatMap((league) =>
+      [league.home, league.away].filter((team) => team.name.toLowerCase().includes(needle)).map((team) => ({
+        teamId: team.teamId, name: team.name, leagueId: league.leagueId,
+        leagueName: league.name, sport: league.sport, badgeUrl: null,
+      })),
+    );
+  }
   return searchTeamsFromApi(query, sport);
 }
 

@@ -59,7 +59,50 @@ const basketball: FixtureLeague = {
   liveProgress: "End of 3rd quarter",
 };
 
-export const SPORTS_FIXTURE_LEAGUES = [baseball, basketball] as const;
+const wnba: FixtureLeague = {
+  sport: "Basketball",
+  leagueId: "pn_dev_fixture_sports_wnba_league",
+  name: "Synthetic WNBA",
+  home: {
+    teamId: "pn_dev_fixture_sports_wnba_home",
+    name: "Fixture Sparks",
+    shortName: "SPK",
+  },
+  away: {
+    teamId: "pn_dev_fixture_sports_wnba_away",
+    name: "Fixture Waves",
+    shortName: "WAV",
+  },
+  venue: "Synthetic Court",
+  liveDescription: "Synthetic WNBA game for the Development fixture league.",
+  liveProgress: "End of 2nd quarter",
+};
+
+const pwhl: FixtureLeague = {
+  sport: "Ice Hockey",
+  leagueId: "pn_dev_fixture_sports_pwhl_league",
+  name: "Synthetic PWHL",
+  home: {
+    teamId: "pn_dev_fixture_sports_pwhl_home",
+    name: "Fixture Frost",
+    shortName: "FRS",
+  },
+  away: {
+    teamId: "pn_dev_fixture_sports_pwhl_away",
+    name: "Fixture Aurora",
+    shortName: "AUR",
+  },
+  venue: "Synthetic Rink",
+  liveDescription: "Synthetic PWHL game for the Development fixture league.",
+  liveProgress: "End of 2nd period",
+};
+
+export const SPORTS_FIXTURE_LEAGUES = [
+  baseball,
+  basketball,
+  wnba,
+  pwhl,
+] as const;
 export const SPORTS_FIXTURE_SPORTS = [
   ...new Set(SPORTS_FIXTURE_LEAGUES.map((league) => league.sport)),
 ];
@@ -74,6 +117,8 @@ export const SPORTS_FIXTURE_EVENT_IDS = [
   "pn_dev_fixture_sports_live",
   "pn_dev_fixture_sports_upcoming",
   "pn_dev_fixture_sports_basketball_live",
+  "pn_dev_fixture_sports_wnba_live",
+  "pn_dev_fixture_sports_pwhl_live",
 ] as const;
 
 // Preserve the original Baseball exports for existing consumers.
@@ -178,6 +223,24 @@ export function buildSportsFixture(context: FixtureContext): SportEvent[] {
       "LIVE",
       "62",
       "58",
+    ),
+    makeEvent(
+      wnba,
+      SPORTS_FIXTURE_EVENT_IDS[4],
+      today.eventDate,
+      today.eventTime,
+      "LIVE",
+      "44",
+      "40",
+    ),
+    makeEvent(
+      pwhl,
+      SPORTS_FIXTURE_EVENT_IDS[5],
+      today.eventDate,
+      today.eventTime,
+      "LIVE",
+      "2",
+      "1",
     ),
   ];
 }

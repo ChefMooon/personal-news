@@ -178,10 +178,13 @@ function getEventQualityScore(event: SportEvent): number {
   return stateScore + scoreBonus + providerBonus;
 }
 
-function dedupeEventsByMatch(events: SportEvent[]): SportEvent[] {
+function dedupeEventsByMatch(
+  events: SportEvent[],
+  signatureForEvent: (event: SportEvent) => string = getMatchSignature,
+): SportEvent[] {
   const bySignature = new Map<string, SportEvent>();
   for (const event of events) {
-    const signature = getMatchSignature(event);
+    const signature = signatureForEvent(event);
     const existing = bySignature.get(signature);
     if (!existing) {
       bySignature.set(signature, event);
@@ -598,7 +601,211 @@ export function getTodayEvents(
       (event) =>
         getSportEventLocalDateKey(event.eventDate, event.eventTime) === date,
     );
-  return dedupeEventsByMatch(filtered);
+  const identitiesByLeague = new Map(
+    [...new Set(filtered.map((event) => event.leagueId))].map((leagueId) => [
+      leagueId, getLeagueSnapshot(db, sport, leagueId).identities,
+    ]),
+  );
+  const deduped = [...new Set(filtered.map((event) => event.leagueId))].flatMap((leagueId) => {
+    const identities = identitiesByLeague.get(leagueId) ?? new Map<string, string>();
+    return dedupeProviderEvents(filtered.filter((event) => event.leagueId === leagueId), identities)
+      .map((event) => withProviderIdentities(event, identities));
+  });
+  const order = new Map(filtered.map((event, index) => [event.eventId, index]));
+  return deduped.sort((a, b) => order.get(a.eventId)! - order.get(b.eventId)!);
+}
+
+function withProviderIdentities(event: SportEvent, identities: Map<string, string>): SportEvent {
+  const home = event.homeTeamId ? identities.get(event.homeTeamId) : undefined;
+  const away = event.awayTeamId ? identities.get(event.awayTeamId) : undefined;
+  if (home && home === away) return { ...event };
+  const trackedTeamIdentities: NonNullable<SportEvent["trackedTeamIdentities"]> = [];
+  if (home) trackedTeamIdentities.push({ teamId: home, side: "home" });
+  if (away) trackedTeamIdentities.push({ teamId: away, side: "away" });
+  return trackedTeamIdentities.length ? { ...event, trackedTeamIdentities } : { ...event };
+}
+
+// Infer provider identities only from uniquely paired games with the same kickoff
+// and opponent. A name fragment alone is not a reliable team identity.
+function getProviderTeamIds(events: SportEvent[]): Map<string, string> {
+  const sportsDbEvents = events.filter(
+    (event) => !event.eventId.startsWith("espn:"),
+  );
+  const espnEvents = events.filter((event) =>
+    event.eventId.startsWith("espn:"),
+  );
+  // Index by kickoff and exact side name; inspect at most two distinct matches
+  // because any additional match makes the pairing ambiguous.
+  const indexEvents = (items: SportEvent[]): Map<string, SportEvent[]> => {
+    const index = new Map<string, SportEvent[]>();
+    for (const event of items) {
+      if (!event.eventTime) continue;
+      for (const side of ["home", "away"] as const) {
+        const name = normalizeTeamLookupKey(side === "home" ? event.homeTeam : event.awayTeam);
+        if (!name) continue;
+        const key = JSON.stringify([event.sport, event.leagueId, event.eventDate, event.eventTime, side, name]);
+        const matches = index.get(key) ?? [];
+        // Two entries are enough to establish ambiguity.
+        if (matches.length < 2) matches.push(event);
+        index.set(key, matches);
+      }
+    }
+    return index;
+  };
+  const sourceIndex = indexEvents(sportsDbEvents);
+  const espnIndex = indexEvents(espnEvents);
+  const findMatches = (event: SportEvent, index: Map<string, SportEvent[]>): SportEvent[] => {
+    if (!event.eventTime) return [];
+    const matches = new Set<SportEvent>();
+    for (const side of ["home", "away"] as const) {
+      const name = normalizeTeamLookupKey(side === "home" ? event.homeTeam : event.awayTeam);
+      if (!name) continue;
+      const key = JSON.stringify([event.sport, event.leagueId, event.eventDate, event.eventTime, side, name]);
+      for (const match of index.get(key) ?? []) matches.add(match);
+    }
+    return [...matches];
+  };
+
+  const sourceToEspn = new Map<string, Set<string>>();
+  const espnToSource = new Map<string, Set<string>>();
+  for (const source of sportsDbEvents) {
+    const matches = findMatches(source, espnIndex);
+    if (matches.length !== 1 || findMatches(matches[0], sourceIndex).length !== 1) continue;
+    const espn = matches[0];
+    for (const [sourceId, espnId] of [
+      [source.homeTeamId, espn.homeTeamId],
+      [source.awayTeamId, espn.awayTeamId],
+    ]) {
+      if (!sourceId || !espnId) continue;
+      const targets = sourceToEspn.get(sourceId) ?? new Set<string>();
+      targets.add(espnId);
+      sourceToEspn.set(sourceId, targets);
+      const sources = espnToSource.get(espnId) ?? new Set<string>();
+      sources.add(sourceId);
+      espnToSource.set(espnId, sources);
+    }
+  }
+  const identities = new Map<string, string>();
+  for (const [sourceId, matches] of sourceToEspn) {
+    if (matches.size !== 1) continue;
+    const espnId = [...matches][0];
+    if (espnToSource.get(espnId)?.size === 1) identities.set(espnId, sourceId);
+  }
+  return identities;
+}
+
+// Pair different provider rows only when their kickoff and at least one side
+// agree, and neither row has another possible partner. Known identities can
+// establish both sides even when both display names differ.
+function dedupeProviderEvents(events: SportEvent[], identities: Map<string, string>): SportEvent[] {
+  const exact = dedupeEventsByMatch(events);
+  const sources = exact.filter((event) => !event.eventId.startsWith("espn:"));
+  const espn = exact.filter((event) => event.eventId.startsWith("espn:"));
+  const kickoffKey = (event: SportEvent): string =>
+    JSON.stringify([event.sport, event.leagueId, event.eventDate, event.eventTime]);
+  const groupByKickoff = (items: SportEvent[]): Map<string, SportEvent[]> => {
+    const groups = new Map<string, SportEvent[]>();
+    for (const event of items) {
+      if (!event.eventTime) continue;
+      const key = kickoffKey(event);
+      const group = groups.get(key) ?? [];
+      group.push(event);
+      groups.set(key, group);
+    }
+    return groups;
+  };
+  const sourcesByKickoff = groupByKickoff(sources);
+  const espnByKickoff = groupByKickoff(espn);
+  const matches = (a: SportEvent, b: SportEvent): boolean => {
+    if (!a.eventTime || a.eventTime !== b.eventTime || a.eventDate !== b.eventDate ||
+        a.sport !== b.sport || a.leagueId !== b.leagueId) return false;
+    const sideMatches = (sourceId: string | null, providerId: string | null, sourceName: string, providerName: string): boolean => {
+      const mapped = providerId ? identities.get(providerId) : undefined;
+      if (mapped && sourceId) return mapped === sourceId;
+      const name = normalizeTeamLookupKey(sourceName);
+      return !!name && name === normalizeTeamLookupKey(providerName);
+    };
+    const conflicts = (sourceId: string | null, providerId: string | null): boolean => {
+      const mapped = providerId ? identities.get(providerId) : undefined;
+      return !!mapped && !!sourceId && mapped !== sourceId;
+    };
+    if (conflicts(a.homeTeamId, b.homeTeamId) || conflicts(a.awayTeamId, b.awayTeamId)) return false;
+    return sideMatches(a.homeTeamId, b.homeTeamId, a.homeTeam, b.homeTeam) ||
+      sideMatches(a.awayTeamId, b.awayTeamId, a.awayTeam, b.awayTeam);
+  };
+  const removed = new Set<SportEvent>();
+  for (const source of sources) {
+    if (!source.eventTime) continue;
+    const key = kickoffKey(source);
+    const candidates = (espnByKickoff.get(key) ?? []).filter((event) => matches(source, event));
+    if (candidates.length !== 1 || (sourcesByKickoff.get(key) ?? []).filter((event) => matches(event, candidates[0])).length !== 1) continue;
+    const candidate = candidates[0];
+    removed.add(getEventQualityScore(candidate) >= getEventQualityScore(source) ? source : candidate);
+  }
+  return exact.filter((event) => !removed.has(event));
+}
+
+type LeagueSnapshot = {
+  identities: Map<string, string>;
+  byTeam: Map<string, SportEvent[]>;
+  byName: Map<string, SportEvent[]>;
+  order: Map<SportEvent, number>;
+};
+
+type SnapshotCache = {
+  totalChanges: number;
+  dataVersion: number;
+  leagues: Map<string, LeagueSnapshot>;
+};
+
+// Database objects are profile-specific; weak keys also avoid retaining closed profiles.
+const leagueSnapshots = new WeakMap<Database.Database, SnapshotCache>();
+
+function getLeagueSnapshot(db: Database.Database, sport: string, leagueId: string): LeagueSnapshot {
+  const totalChanges = (db.prepare("SELECT total_changes() AS count").get() as { count: number }).count;
+  const dataVersion = db.pragma("data_version", { simple: true }) as number;
+  let cache = leagueSnapshots.get(db);
+  // A snapshot read inside a transaction must not survive a rollback.
+  if (db.inTransaction || !cache || cache.totalChanges !== totalChanges || cache.dataVersion !== dataVersion) {
+    cache = { totalChanges, dataVersion, leagues: new Map() };
+    if (db.inTransaction) leagueSnapshots.delete(db);
+    else leagueSnapshots.set(db, cache);
+  }
+  const key = JSON.stringify([sport, leagueId]);
+  const existing = cache.leagues.get(key);
+  if (existing) return existing;
+
+  const rows = db.prepare(
+    `SELECT se.event_id, se.league_id, se.sport, se.home_team_id, se.away_team_id,
+            se.home_team, se.away_team,
+            COALESCE(ht.badge_url, hoc.badge_url) AS home_team_badge_url,
+            COALESCE(at.badge_url, aoc.badge_url) AS away_team_badge_url,
+            se.home_score, se.away_score, se.event_date, se.event_time, se.status, se.venue
+       FROM sports_events se
+       LEFT JOIN sports_teams ht ON ht.team_id = se.home_team_id
+       LEFT JOIN sports_teams at ON at.team_id = se.away_team_id
+       LEFT JOIN sports_opponent_cache hoc ON hoc.team_id = se.home_team_id
+       LEFT JOIN sports_opponent_cache aoc ON aoc.team_id = se.away_team_id
+      WHERE se.league_id = ? AND se.sport = ?`,
+  ).all(leagueId, sport) as EventRow[];
+  const events = rows.map(mapEvent);
+  const byTeam = new Map<string, SportEvent[]>();
+  const byName = new Map<string, SportEvent[]>();
+  const add = (index: Map<string, SportEvent[]>, key: string | null, event: SportEvent): void => {
+    if (!key) return;
+    const matches = index.get(key) ?? [];
+    if (matches[matches.length - 1] !== event) matches.push(event);
+    index.set(key, matches);
+  };
+  for (const event of events) {
+    add(byTeam, event.homeTeamId, event);
+    add(byTeam, event.awayTeamId, event);
+    add(byName, normalizeTeamLookupKey(event.homeTeam), event);
+    add(byName, normalizeTeamLookupKey(event.awayTeam), event);
+  }
+  const snapshot = { identities: getProviderTeamIds(events), byTeam, byName, order: new Map(events.map((event, index) => [event, index])) };
+  cache.leagues.set(key, snapshot);
+  return snapshot;
 }
 
 export function getTeamEvents(
@@ -610,31 +817,20 @@ export function getTeamEvents(
   const teamName = trackedTeam?.name ?? null;
   const normalizedTeamName = teamName ? normalizeTeamLookupKey(teamName) : null;
 
-  const rows = db
-    .prepare(
-      `SELECT se.event_id, se.league_id, se.sport, se.home_team_id, se.away_team_id,
-              se.home_team, se.away_team,
-              COALESCE(ht.badge_url, hoc.badge_url) AS home_team_badge_url,
-              COALESCE(at.badge_url, aoc.badge_url) AS away_team_badge_url,
-              se.home_score, se.away_score, se.event_date, se.event_time, se.status, se.venue
-         FROM sports_events se
-         LEFT JOIN sports_teams ht ON ht.team_id = se.home_team_id
-         LEFT JOIN sports_teams at ON at.team_id = se.away_team_id
-         LEFT JOIN sports_opponent_cache hoc ON hoc.team_id = se.home_team_id
-         LEFT JOIN sports_opponent_cache aoc ON aoc.team_id = se.away_team_id
-        WHERE se.home_team_id = ?
-           OR se.away_team_id = ?
-           OR (? IS NOT NULL AND (se.home_team_normalized = ? OR se.away_team_normalized = ?))`,
-    )
-    .all(
-      teamId,
-      teamId,
-      normalizedTeamName,
-      normalizedTeamName,
-      normalizedTeamName,
-    ) as EventRow[];
-
-  const events = dedupeEventsByMatch(rows.map(mapEvent));
+  if (!trackedTeam) return { last: [], next: [] };
+  const snapshot = getLeagueSnapshot(db, trackedTeam.sport, trackedTeam.leagueId);
+  const identities = snapshot.identities;
+  const selectedEvents = new Set(snapshot.byTeam.get(teamId) ?? []);
+  for (const [espnId, sourceId] of identities) {
+    if (sourceId === teamId) {
+      for (const event of snapshot.byTeam.get(espnId) ?? []) selectedEvents.add(event);
+    }
+  }
+  if (normalizedTeamName != null) {
+    for (const event of snapshot.byName.get(normalizedTeamName) ?? []) selectedEvents.add(event);
+  }
+  const events = dedupeProviderEvents([...selectedEvents].sort((a, b) => snapshot.order.get(a)! - snapshot.order.get(b)!), identities);
+  const teamEvents = events.map((event) => withProviderIdentities(event, identities));
   const getEventLocalDate = (event: SportEvent): string => {
     return (
       getSportEventLocalDateKey(event.eventDate, event.eventTime) ??
@@ -642,8 +838,8 @@ export function getTeamEvents(
     );
   };
 
-  const last = getLastTeamEvents(events, today);
-  const next = events
+  const last = getLastTeamEvents(teamEvents, today);
+  const next = teamEvents
     .filter((event) => {
       const eventLocalDate = getEventLocalDate(event);
       return (

@@ -218,7 +218,12 @@ export function useSportsWidgetData(selectedSports: string[]) {
     const tracked = events.filter((event) =>
       enabledTeams.some(
         (team) =>
-          resolveTrackedTeamSide(event, team.teamId, team.name) !== null,
+          resolveTrackedTeamSide(
+            event,
+            team.teamId,
+            team.name,
+            team.leagueId,
+          ) !== null,
       ),
     );
     return dedupeEvents(tracked);

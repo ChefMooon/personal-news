@@ -223,6 +223,78 @@ describe("sports API request reuse", () => {
     ).rejects.toThrow("Both sports providers failed");
   });
 
+  it("uses WNBA ESPN data and resolves details for a league identified by name", async () => {
+    vi.resetModules();
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      if (String(input).includes("thesportsdb.com"))
+        return new Response("unavailable", { status: 404 });
+      return new Response(
+        JSON.stringify({
+          events: [
+            {
+              id: "42",
+              date: "2026-08-01T17:00:00Z",
+              competitions: [
+                {
+                  competitors: [
+                    {
+                      homeAway: "home",
+                      team: { id: "1", displayName: "Home" },
+                    },
+                    {
+                      homeAway: "away",
+                      team: { id: "2", displayName: "Away" },
+                    },
+                  ],
+                  status: { type: { state: "pre" } },
+                },
+              ],
+            },
+          ],
+        }),
+        { status: 200 },
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const api = await import("../api");
+    const events = await api.fetchLeagueEventsForDateWithFallback(
+      "2026-08-01",
+      "custom",
+      "Basketball",
+      "WNBA",
+    );
+    expect(events[0]).toMatchObject({
+      homeTeamId: "espn:custom:1",
+      awayTeamId: "espn:custom:2",
+    });
+    await expect(
+      api.fetchEspnEventDetails(events[0], "WNBA"),
+    ).resolves.toMatchObject({ eventId: "espn:42" });
+    expect(
+      fetchMock.mock.calls.some(([url]) =>
+        String(url).includes("/basketball/wnba/scoreboard"),
+      ),
+    ).toBe(true);
+  });
+
+  it("propagates SportsDB errors when a forced ESPN fallback is unsupported", async () => {
+    vi.resetModules();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("unavailable", { status: 404 })),
+    );
+    const api = await import("../api");
+    await expect(
+      api.fetchLeagueEventsForDateWithFallback(
+        "2026-08-01",
+        "unknown",
+        "Ice Hockey",
+        "American PWHL",
+        { forceMergeEspn: true },
+      ),
+    ).rejects.toThrow();
+  });
+
   it("reuses SportsDB event details briefly, then refetches after the 10 second TTL", async () => {
     vi.resetModules();
     vi.useFakeTimers();

@@ -9,7 +9,15 @@ export function resolveTrackedTeamSide(
   game: SportEvent,
   teamId: string,
   teamName?: string | null,
+  leagueId?: string,
 ): "home" | "away" | null {
+  if (leagueId && leagueId !== game.leagueId) return null;
+
+  const identity = game.trackedTeamIdentities?.find((item) => item.teamId === teamId);
+  if (leagueId === game.leagueId && identity) {
+    return identity.side;
+  }
+
   const normalizedTeamName = normalizeTeamKey(teamName);
   const homeMatches = normalizedTeamName
     ? normalizeTeamKey(game.homeTeam) === normalizedTeamName
@@ -24,7 +32,14 @@ export function resolveTrackedTeamSide(
         ? "away"
         : null;
 
-  if (idSide && !normalizedTeamName) {
+  // ESPN IDs include the league; TheSportsDB uses numeric IDs for both
+  // teams and events. Only trust these IDs when the league is also known.
+  const trustedProviderId =
+    leagueId === game.leagueId &&
+    ((teamId.startsWith(`espn:${leagueId}:`) &&
+      game.eventId.startsWith("espn:")) ||
+      (/^\d+$/.test(teamId) && /^\d+$/.test(game.eventId)));
+  if (idSide && (!normalizedTeamName || trustedProviderId)) {
     return idSide;
   }
 
@@ -40,11 +55,13 @@ export function getTodayGame(
   today: string,
   teamId?: string,
   teamName?: string | null,
+  leagueId?: string,
 ): SportEvent | null {
   const nextToday = events?.next.find(
     (event) =>
       isSportEventOnLocalDate(event.eventDate, event.eventTime, today) &&
-      (!teamId || resolveTrackedTeamSide(event, teamId, teamName) !== null),
+      (!teamId ||
+        resolveTrackedTeamSide(event, teamId, teamName, leagueId) !== null),
   );
   if (nextToday) {
     return nextToday;
@@ -54,7 +71,8 @@ export function getTodayGame(
     events?.last.find(
       (event) =>
         isSportEventOnLocalDate(event.eventDate, event.eventTime, today) &&
-        (!teamId || resolveTrackedTeamSide(event, teamId, teamName) !== null),
+        (!teamId ||
+          resolveTrackedTeamSide(event, teamId, teamName, leagueId) !== null),
     ) ?? null
   );
 }
@@ -64,12 +82,13 @@ export function getPreviousGame(
   teamId: string,
   teamName: string | null | undefined,
   currentEventId: string,
+  leagueId?: string,
 ): SportEvent | null {
   return (
     events?.last.find(
       (event) =>
         event.eventId !== currentEventId &&
-        resolveTrackedTeamSide(event, teamId, teamName) !== null,
+        resolveTrackedTeamSide(event, teamId, teamName, leagueId) !== null,
     ) ?? null
   );
 }

@@ -9,7 +9,7 @@ import { ScrollArea } from "../../components/ui/scroll-area";
 import { TeamAvatar } from "./TeamAvatar";
 import { UpdatedScore } from "./UpdatedScore";
 import { cn } from "../../lib/utils";
-import { resolveTrackedTeamSide } from "./side-resolution";
+import { getPreviousGame, resolveTrackedTeamSide } from "./side-resolution";
 import {
   getGameOutcome,
   getGamePhase,
@@ -32,12 +32,11 @@ function getTeamForSide(
   teams: TrackedTeam[],
   side: "home" | "away",
 ): TrackedTeam | null {
-  const teamId = side === "home" ? game.homeTeamId : game.awayTeamId;
   return (
     teams.find(
       (team) =>
-        (teamId && team.teamId === teamId) ||
-        resolveTrackedTeamSide(game, team.teamId, team.name) === side,
+        resolveTrackedTeamSide(game, team.teamId, team.name, team.leagueId) ===
+        side,
     ) ?? null
   );
 }
@@ -123,13 +122,19 @@ export function MediumLiveGameView({
   const isFinished = phase === "finished";
   const selectedTeam =
     teams.find((team) =>
-      resolveTrackedTeamSide(selectedGame, team.teamId, team.name),
+      resolveTrackedTeamSide(
+        selectedGame,
+        team.teamId,
+        team.name,
+        team.leagueId,
+      ),
     ) ?? null;
   const trackedSide = selectedTeam
     ? resolveTrackedTeamSide(
         selectedGame,
         selectedTeam.teamId,
         selectedTeam.name,
+        selectedTeam.leagueId,
       )
     : null;
   const leftSide = trackedSide ?? "away";
@@ -137,9 +142,13 @@ export function MediumLiveGameView({
   const leftTeam = leftSide === "home" ? homeTeam : awayTeam;
   const rightTeam = rightSide === "home" ? homeTeam : awayTeam;
   const previousGame = selectedTeam
-    ? (teamEventsById[selectedTeam.teamId]?.last.find(
-        (event) => event.eventId !== selectedGame.eventId,
-      ) ?? null)
+    ? getPreviousGame(
+        teamEventsById[selectedTeam.teamId],
+        selectedTeam.teamId,
+        selectedTeam.name,
+        selectedGame.eventId,
+        selectedTeam.leagueId,
+      )
     : null;
   const status = isLive
     ? (selectedGame.status ?? "Live")

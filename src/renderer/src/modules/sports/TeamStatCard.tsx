@@ -183,8 +183,8 @@ export function TeamStatCard({
   leaguesById: Record<string, SportLeague>;
 }): React.ReactElement {
   const recentOutcomes = React.useMemo(
-    () => getRecentOutcomes(events?.last ?? [], team.teamId),
-    [events?.last, team.teamId],
+    () => getRecentOutcomes(events?.last ?? [], team),
+    [events?.last, team.teamId, team.name, team.leagueId],
   );
   const streak = React.useMemo(
     () => getStreakLabel(recentOutcomes),

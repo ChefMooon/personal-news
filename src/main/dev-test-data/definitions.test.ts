@@ -41,7 +41,7 @@ describe("development fixture definitions", () => {
     }
     expect(buildSavedPostFixtures(context)).toHaveLength(6);
     const sports = buildSportsFixture(context);
-    expect(sports).toHaveLength(4);
+    expect(sports).toHaveLength(6);
     const liveBaseball = sports.find(
       (event) => event.sport === "Baseball" && event.status === "LIVE",
     )!;
@@ -55,9 +55,9 @@ describe("development fixture definitions", () => {
       homeScore: "62",
       awayScore: "58",
     });
-    expect(SPORTS_FIXTURE_EVENT_IDS).toHaveLength(4);
-    expect(SPORTS_FIXTURE_LEAGUE_IDS).toHaveLength(2);
-    expect(SPORTS_FIXTURE_TEAM_IDS).toHaveLength(4);
+    expect(SPORTS_FIXTURE_EVENT_IDS).toHaveLength(6);
+    expect(SPORTS_FIXTURE_LEAGUE_IDS).toHaveLength(4);
+    expect(SPORTS_FIXTURE_TEAM_IDS).toHaveLength(8);
     expect(buildWeatherFixture(context).snapshot.fetchedAt).toBe(
       fixtureTimestamp(context),
     );

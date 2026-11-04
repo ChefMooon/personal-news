@@ -48,16 +48,22 @@ function TodayGameCard({
   const priorGame =
     lastGame && lastGame.eventId !== todayGame?.eventId ? lastGame : null;
   const outcome = todayGame
-    ? getOutcome(todayGame, team.teamId, team.name)
+    ? getOutcome(todayGame, team.teamId, team.name, team.leagueId)
     : null;
   const classes = outcomeClasses(outcome);
   const todayGameDisplay = todayGame
-    ? getTodayGameDisplayData(todayGame, team.teamId, team.name, showTime)
+    ? getTodayGameDisplayData(
+        todayGame,
+        team.teamId,
+        team.name,
+        showTime,
+        team.leagueId,
+      )
     : null;
   const phase = todayGameDisplay?.phase ?? getGamePhase(todayGame);
   const opponent = todayGameDisplay?.opponent ?? null;
   const opponentBadgeUrl = todayGameDisplay?.opponentBadgeUrl ?? null;
-  const isHome = todayGameDisplay?.isHome ?? false;
+  const side = todayGameDisplay?.side ?? null;
   const startTimeText = getLiveStartTimeText(todayGame, showLiveStartTime);
   const hasStartTime = Boolean(startTimeText);
   const hasVenue = showVenue && Boolean(todayGame?.venue);
@@ -103,7 +109,7 @@ function TodayGameCard({
               {team.shortName ?? team.name}
             </p>
             <p className="text-[10px] text-muted-foreground">
-              {isHome ? "Home" : "Away"}
+              {side === "home" ? "Home" : side === "away" ? "Away" : "Unknown"}
             </p>
           </div>
           <div>
@@ -116,7 +122,7 @@ function TodayGameCard({
               <>
                 <p className="mt-1 text-base font-extrabold tracking-tight tabular-nums">
                   {todayGameDisplay?.primaryText ??
-                    getScore(todayGame, team.teamId, team.name)}
+                    getScore(todayGame, team.teamId, team.name, team.leagueId)}
                 </p>
                 <p className="text-[10px] text-red-500">
                   {todayGameDisplay?.secondaryText ??
@@ -133,7 +139,7 @@ function TodayGameCard({
                   )}
                 >
                   {todayGameDisplay?.primaryText ??
-                    getScore(todayGame, team.teamId, team.name)}
+                    getScore(todayGame, team.teamId, team.name, team.leagueId)}
                 </p>
                 <p className={cn("text-[10px]", classes.text)}>
                   {todayGameDisplay?.secondaryText ??
@@ -167,7 +173,7 @@ function TodayGameCard({
             </div>
             <p className="mt-1 text-xs font-semibold">{opponent}</p>
             <p className="text-[10px] text-muted-foreground">
-              {isHome ? "Opponent" : "At"}
+              {side === "away" ? "At" : "Opponent"}
             </p>
           </div>
         </div>
@@ -209,23 +215,48 @@ function TodayGameCard({
               <div className="mt-0.5 flex items-center gap-1.5">
                 {priorGame ? (
                   <>
-                    {getOutcome(priorGame, team.teamId, team.name) ? (
+                    {getOutcome(
+                      priorGame,
+                      team.teamId,
+                      team.name,
+                      team.leagueId,
+                    ) ? (
                       <span
                         className={cn(
                           "rounded-full px-1.5 py-0.5 text-[10px] font-bold",
                           outcomeClasses(
-                            getOutcome(priorGame, team.teamId, team.name),
+                            getOutcome(
+                              priorGame,
+                              team.teamId,
+                              team.name,
+                              team.leagueId,
+                            ),
                           ).text,
                           outcomeClasses(
-                            getOutcome(priorGame, team.teamId, team.name),
+                            getOutcome(
+                              priorGame,
+                              team.teamId,
+                              team.name,
+                              team.leagueId,
+                            ),
                           ).bg,
                         )}
                       >
-                        {getOutcome(priorGame, team.teamId, team.name)}
+                        {getOutcome(
+                          priorGame,
+                          team.teamId,
+                          team.name,
+                          team.leagueId,
+                        )}
                       </span>
                     ) : null}
                     <span className="text-foreground/80">
-                      {getScore(priorGame, team.teamId, team.name)}
+                      {getScore(
+                        priorGame,
+                        team.teamId,
+                        team.name,
+                        team.leagueId,
+                      )}
                     </span>
                   </>
                 ) : null}
@@ -264,7 +295,8 @@ function TodayRestingRow({
         <p className="text-xs text-muted-foreground">
           {nextGame ? (
             <>
-              Next: {getOpponent(nextGame, team.teamId, team.name)} ·{" "}
+              Next:{" "}
+              {getOpponent(nextGame, team.teamId, team.name, team.leagueId)} ·{" "}
               {formatDateTime(nextGame, showTime)}
             </>
           ) : (
@@ -365,10 +397,24 @@ export function TodayView({
   hideTodayGameCards: boolean;
 }): React.ReactElement {
   const playing = teams.filter(
-    (team) => getTodayGame(teamEventsById[team.teamId], today) !== null,
+    (team) =>
+      getTodayGame(
+        teamEventsById[team.teamId],
+        today,
+        team.teamId,
+        team.name,
+        team.leagueId,
+      ) !== null,
   );
   const resting = teams.filter(
-    (team) => getTodayGame(teamEventsById[team.teamId], today) === null,
+    (team) =>
+      getTodayGame(
+        teamEventsById[team.teamId],
+        today,
+        team.teamId,
+        team.name,
+        team.leagueId,
+      ) === null,
   );
 
   if (playing.length === 0) {
@@ -387,7 +433,9 @@ export function TodayView({
           ) : (
             <div className="space-y-1.5">
               {resting.map((team) => {
-                const nextGame = teamEventsById[team.teamId]?.next?.[0] ?? null;
+                const nextGame = getFirstDifferentGame(
+                  teamEventsById[team.teamId]?.next, null, team,
+                );
                 return (
                   <TodayRestingRow
                     key={team.teamId}
@@ -411,10 +459,17 @@ export function TodayView({
       {!hideTodayGameCards &&
         playing.map((team) => {
           const events = teamEventsById[team.teamId];
-          const todayGame = getTodayGame(events, today);
+          const todayGame = getTodayGame(
+            events,
+            today,
+            team.teamId,
+            team.name,
+            team.leagueId,
+          );
           const lastGame = getFirstDifferentGame(
             events?.last,
             todayGame?.eventId ?? null,
+            team,
           );
           return (
             <TodayGameCard
@@ -445,7 +500,9 @@ export function TodayView({
             </p>
             <div className="space-y-1.5">
               {resting.map((team) => {
-                const nextGame = teamEventsById[team.teamId]?.next?.[0] ?? null;
+                const nextGame = getFirstDifferentGame(
+                  teamEventsById[team.teamId]?.next, null, team,
+                );
                 return (
                   <TodayRestingRow
                     key={team.teamId}

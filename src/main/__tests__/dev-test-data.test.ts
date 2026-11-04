@@ -35,6 +35,12 @@ import {
   getSportsEventDetails,
   getSportsLeagues,
   getSportsStandings,
+  searchSportsTeams,
+  addSportsTeam,
+  removeSportsTeam,
+  addSportsLeague,
+  removeSportsLeague,
+  setSportsTeamEnabled,
 } from "../sources/sports";
 import {
   getLeagueById,
@@ -462,6 +468,56 @@ describe("development test data", () => {
     }
   });
 
+  it("supports fixture women's league and team controls without provider requests", async () => {
+    const fetch = vi.fn(() => {
+      throw new Error("Fixtures must stay offline");
+    });
+    vi.stubGlobal("fetch", fetch);
+    try {
+      seedDevTestData(database);
+      for (const [sport, teamName, leagueName, eventIndex, progress] of [
+        [
+          "Basketball",
+          "Fixture Sparks",
+          "Synthetic WNBA",
+          4,
+          "End of 2nd quarter",
+        ],
+        [
+          "Ice Hockey",
+          "Fixture Frost",
+          "Synthetic PWHL",
+          5,
+          "End of 2nd period",
+        ],
+      ] as const) {
+        const [team] = await searchSportsTeams(teamName, sport);
+        expect(team).toMatchObject({ name: teamName, leagueName, sport });
+        expect(removeSportsLeague(team.leagueId).ok).toBe(true);
+        expect((await addSportsLeague(team.leagueId, sport)).enabled).toBe(
+          true,
+        );
+        expect(setSportsTeamEnabled(team.teamId, false).ok).toBe(true);
+        expect(getTrackedTeam(database, team.teamId)?.enabled).toBe(false);
+        expect(removeSportsTeam(team.teamId).ok).toBe(true);
+        expect(
+          (await addSportsTeam(team.teamId, team.leagueId, sport)).name,
+        ).toBe(teamName);
+        expect(
+          await getSportsEventDetails(SPORTS_FIXTURE_EVENT_IDS[eventIndex]),
+        ).toMatchObject({ progress });
+        expect(getSportsTodayEvents(sport)).toContainEqual(
+          expect.objectContaining({
+            eventId: SPORTS_FIXTURE_EVENT_IDS[eventIndex],
+          }),
+        );
+      }
+      expect(fetch).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("reads all cached Astronomy groups through its API and Weather enrichment", () => {
     const context = createFixtureContext();
     seedDevTestData(database, context);
@@ -700,10 +756,10 @@ describe("development test data", () => {
     expect(
       database
         .prepare(
-          "SELECT status FROM sports_events WHERE event_id IN (?, ?, ?, ?) ORDER BY event_date",
+          `SELECT status FROM sports_events WHERE event_id IN (${SPORTS_FIXTURE_EVENT_IDS.map(() => "?").join(", ")}) ORDER BY event_date`,
         )
         .all(...SPORTS_FIXTURE_EVENT_IDS),
-    ).toHaveLength(4);
+    ).toHaveLength(SPORTS_FIXTURE_EVENT_IDS.length);
     expect(
       database
         .prepare("SELECT status FROM sports_events WHERE event_id = ?")

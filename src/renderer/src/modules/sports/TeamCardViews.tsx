@@ -49,12 +49,14 @@ function GameStateDisplay({
   game,
   teamId,
   teamName,
+  leagueId,
   showTime,
   scheduledFallback = "Today",
 }: {
   game: SportEvent;
   teamId: string;
   teamName?: string | null;
+  leagueId?: string;
   showTime: boolean;
   scheduledFallback?: string;
 }): React.ReactElement {
@@ -63,7 +65,7 @@ function GameStateDisplay({
       <div className="flex items-center gap-1.5">
         <span className="text-xs text-red-500 animate-pulse">●</span>
         <span className="text-sm font-semibold tabular-nums">
-          {getScore(game, teamId, teamName)}
+          {getScore(game, teamId, teamName, leagueId)}
         </span>
         <span className="text-xs text-muted-foreground">
           {game.status ?? "Live"}
@@ -73,12 +75,12 @@ function GameStateDisplay({
   }
 
   if (getGamePhase(game) === "finished") {
-    const outcome = getOutcome(game, teamId, teamName);
+    const outcome = getOutcome(game, teamId, teamName, leagueId);
     const classes = outcomeClasses(outcome);
 
     return (
       <div className={cn("text-sm font-semibold tabular-nums", classes.text)}>
-        {getScore(game, teamId, teamName)}
+        {getScore(game, teamId, teamName, leagueId)}
         {outcome ? ` · ${outcome}` : ""}
       </div>
     );
@@ -104,12 +106,12 @@ export function SummarizedTeamCard({
   const displayGame = todayGame ?? lastGame;
   const displayPhase = getGamePhase(displayGame);
   const outcome = displayGame
-    ? getOutcome(displayGame, team.teamId, team.name)
+    ? getOutcome(displayGame, team.teamId, team.name, team.leagueId)
     : null;
   const opponent = todayGame
-    ? getOpponent(todayGame, team.teamId, team.name)
+    ? getOpponent(todayGame, team.teamId, team.name, team.leagueId)
     : nextGame
-      ? getOpponent(nextGame, team.teamId, team.name)
+      ? getOpponent(nextGame, team.teamId, team.name, team.leagueId)
       : null;
 
   return (
@@ -148,9 +150,9 @@ export function SummarizedTeamCard({
             <>
               Today: <span className="text-foreground/80">{opponent}</span> ·{" "}
               {displayPhase === "live"
-                ? `${getScore(todayGame, team.teamId, team.name)} · ${todayGame.status ?? "Live"}`
+                ? `${getScore(todayGame, team.teamId, team.name, team.leagueId)} · ${todayGame.status ?? "Live"}`
                 : displayPhase === "finished"
-                  ? `Final score ${getScore(todayGame, team.teamId, team.name)}${outcome ? ` · ${outcome}` : ""}`
+                  ? `Final score ${getScore(todayGame, team.teamId, team.name, team.leagueId)}${outcome ? ` · ${outcome}` : ""}`
                   : showTime && todayGame.eventTime
                     ? `${formatTime(todayGame)} · Today`
                     : "Today"}
@@ -159,7 +161,7 @@ export function SummarizedTeamCard({
             <>
               Next:{" "}
               <span className="text-foreground/80">
-                {getOpponent(nextGame, team.teamId, team.name)}
+                {getOpponent(nextGame, team.teamId, team.name, team.leagueId)}
               </span>{" "}
               · {formatDateTime(nextGame, showTime)}
             </>
@@ -187,7 +189,7 @@ export function StandardTeamCard({
   const displayGame =
     todayGame && hasResolvedScore(todayGame) ? todayGame : lastGame;
   const outcome = displayGame
-    ? getOutcome(displayGame, team.teamId, team.name)
+    ? getOutcome(displayGame, team.teamId, team.name, team.leagueId)
     : null;
   const classes = outcomeClasses(outcome);
   const startTimeText = getLiveStartTimeText(todayGame, showLiveStartTime);
@@ -226,7 +228,7 @@ export function StandardTeamCard({
               {outcome}
             </span>
             <span className={cn("text-[10px] font-semibold", classes.text)}>
-              {getScore(displayGame, team.teamId, team.name)}
+              {getScore(displayGame, team.teamId, team.name, team.leagueId)}
             </span>
           </div>
         ) : null}
@@ -249,7 +251,8 @@ export function StandardTeamCard({
           {lastGame ? (
             <>
               <p className="mt-1 text-sm text-foreground/80">
-                vs. {getOpponent(lastGame, team.teamId, team.name)}
+                vs.{" "}
+                {getOpponent(lastGame, team.teamId, team.name, team.leagueId)}
               </p>
               <p className="text-muted-foreground">
                 {formatDateLabel(lastGame.eventDate)}
@@ -271,13 +274,15 @@ export function StandardTeamCard({
           {todayGame ? (
             <>
               <p className="mt-1 text-sm text-foreground/80">
-                vs. {getOpponent(todayGame, team.teamId, team.name)}
+                vs.{" "}
+                {getOpponent(todayGame, team.teamId, team.name, team.leagueId)}
               </p>
               <div className="mt-1">
                 <GameStateDisplay
                   game={todayGame}
                   teamId={team.teamId}
                   teamName={team.name}
+                  leagueId={team.leagueId}
                   showTime={showTime}
                 />
               </div>
@@ -285,7 +290,8 @@ export function StandardTeamCard({
           ) : nextGame ? (
             <>
               <p className="mt-1 text-sm text-foreground/80">
-                vs. {getOpponent(nextGame, team.teamId, team.name)}
+                vs.{" "}
+                {getOpponent(nextGame, team.teamId, team.name, team.leagueId)}
               </p>
               <p className="text-muted-foreground">
                 {formatDateTime(nextGame, showTime)}
@@ -342,7 +348,7 @@ export function DetailedTeamCard({
 }: DetailedTeamCardProps): React.ReactElement {
   const featuredGame = todayGame ?? lastGame;
   const outcome = featuredGame
-    ? getOutcome(featuredGame, team.teamId, team.name)
+    ? getOutcome(featuredGame, team.teamId, team.name, team.leagueId)
     : null;
   const classes = outcomeClasses(outcome);
   const streakIsWin = streak.startsWith("W");
@@ -407,7 +413,7 @@ export function DetailedTeamCard({
             </span>
             <span className={cn("text-[10px] font-semibold", classes.text)}>
               {featuredGame
-                ? getScore(featuredGame, team.teamId, team.name)
+                ? getScore(featuredGame, team.teamId, team.name, team.leagueId)
                 : ""}
             </span>
           </div>
@@ -422,7 +428,13 @@ export function DetailedTeamCard({
           {featuredGame ? (
             <>
               <p className="mt-0.5 text-sm font-medium">
-                vs. {getOpponent(featuredGame, team.teamId, team.name)}
+                vs.{" "}
+                {getOpponent(
+                  featuredGame,
+                  team.teamId,
+                  team.name,
+                  team.leagueId,
+                )}
               </p>
               {todayGame ? (
                 <div className="mt-1">
@@ -430,6 +442,7 @@ export function DetailedTeamCard({
                     game={todayGame}
                     teamId={team.teamId}
                     teamName={team.name}
+                    leagueId={team.leagueId}
                     showTime={showTime}
                   />
                 </div>
@@ -508,7 +521,8 @@ export function DetailedTeamCard({
           {nextGame ? (
             <>
               <p className="mt-0.5 text-sm font-medium">
-                vs. {getOpponent(nextGame, team.teamId, team.name)}
+                vs.{" "}
+                {getOpponent(nextGame, team.teamId, team.name, team.leagueId)}
               </p>
               <p className="mt-0.5 text-xs text-muted-foreground">
                 {formatDateTime(nextGame, showTime)}

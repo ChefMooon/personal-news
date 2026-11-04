@@ -79,8 +79,9 @@ export function getOpponent(
   game: SportEvent,
   teamId: string,
   teamName?: string | null,
+  leagueId?: string,
 ): string {
-  const side = resolveTrackedTeamSide(game, teamId, teamName);
+  const side = resolveTrackedTeamSide(game, teamId, teamName, leagueId);
   if (side === "home") {
     return game.awayTeam;
   }
@@ -88,15 +89,16 @@ export function getOpponent(
     return game.homeTeam;
   }
 
-  return game.awayTeam;
+  return "Unknown opponent";
 }
 
 export function getOpponentBadgeUrl(
   game: SportEvent,
   teamId: string,
   teamName?: string | null,
+  leagueId?: string,
 ): string | null {
-  const side = resolveTrackedTeamSide(game, teamId, teamName);
+  const side = resolveTrackedTeamSide(game, teamId, teamName, leagueId);
   if (side === "home") {
     return game.awayTeamBadgeUrl;
   }
@@ -104,15 +106,17 @@ export function getOpponentBadgeUrl(
     return game.homeTeamBadgeUrl;
   }
 
-  return game.awayTeamBadgeUrl;
+  return null;
 }
 
 export function getOutcome(
   game: SportEvent,
   teamId: string,
   teamName?: string | null,
+  leagueId?: string,
 ): "W" | "L" | "T" | null {
-  const side = resolveTrackedTeamSide(game, teamId, teamName);
+  const side = resolveTrackedTeamSide(game, teamId, teamName, leagueId);
+  if (!side) return null;
   const isHome = side === "home";
   const teamScore = Number.parseInt(
     isHome ? (game.homeScore ?? "") : (game.awayScore ?? ""),
@@ -141,8 +145,10 @@ export function getScore(
   game: SportEvent,
   teamId: string,
   teamName?: string | null,
+  leagueId?: string,
 ): string {
-  const side = resolveTrackedTeamSide(game, teamId, teamName);
+  const side = resolveTrackedTeamSide(game, teamId, teamName, leagueId);
+  if (!side) return "—";
   const isHome = side === "home";
   const teamScore = isHome ? game.homeScore : game.awayScore;
   const opponentScore = isHome ? game.awayScore : game.homeScore;
@@ -156,24 +162,32 @@ export function getScore(
 export function getFirstDifferentGame(
   events: SportEvent[] | undefined,
   excludedEventId: string | null,
+  team: Pick<TrackedTeam, "teamId" | "name" | "leagueId">,
 ): SportEvent | null {
   if (!events) {
     return null;
   }
 
-  return events.find((event) => event.eventId !== excludedEventId) ?? null;
+  return events.find(
+    (event) =>
+      event.eventId !== excludedEventId &&
+      resolveTrackedTeamSide(event, team.teamId, team.name, team.leagueId) !== null,
+  ) ?? null;
 }
 
 export function computeStreak(
   lastGames: SportEvent[],
   teamId: string,
   teamName: string,
+  leagueId?: string,
 ): string {
   if (!lastGames.length) {
     return "";
   }
 
-  const results = lastGames.map((game) => getOutcome(game, teamId, teamName));
+  const results = lastGames.map((game) =>
+    getOutcome(game, teamId, teamName, leagueId),
+  );
   const first = results[0];
   if (!first) {
     return "";
@@ -236,7 +250,7 @@ type TodayGameDisplayData = {
   phase: GamePhase;
   opponent: string;
   opponentBadgeUrl: string | null;
-  isHome: boolean;
+  side: "home" | "away" | null;
   outcome: "W" | "L" | "T" | null;
   score: string;
   primaryText: string;
@@ -248,21 +262,21 @@ export function getTodayGameDisplayData(
   teamId: string,
   teamName: string,
   showTime: boolean,
+  leagueId?: string,
 ): TodayGameDisplayData {
   const phase = getGamePhase(game);
-  const side = resolveTrackedTeamSide(game, teamId, teamName);
-  const isHome = side === "home";
-  const outcome = getOutcome(game, teamId, teamName);
+  const side = resolveTrackedTeamSide(game, teamId, teamName, leagueId);
+  const outcome = getOutcome(game, teamId, teamName, leagueId);
 
   if (phase === "live") {
     return {
       phase,
-      opponent: getOpponent(game, teamId, teamName),
-      opponentBadgeUrl: getOpponentBadgeUrl(game, teamId, teamName),
-      isHome,
+      opponent: getOpponent(game, teamId, teamName, leagueId),
+      opponentBadgeUrl: getOpponentBadgeUrl(game, teamId, teamName, leagueId),
+      side,
       outcome,
-      score: getScore(game, teamId, teamName),
-      primaryText: getScore(game, teamId, teamName),
+      score: getScore(game, teamId, teamName, leagueId),
+      primaryText: getScore(game, teamId, teamName, leagueId),
       secondaryText: game.status ?? "Live",
     };
   }
@@ -270,23 +284,23 @@ export function getTodayGameDisplayData(
   if (phase === "finished") {
     return {
       phase,
-      opponent: getOpponent(game, teamId, teamName),
-      opponentBadgeUrl: getOpponentBadgeUrl(game, teamId, teamName),
-      isHome,
+      opponent: getOpponent(game, teamId, teamName, leagueId),
+      opponentBadgeUrl: getOpponentBadgeUrl(game, teamId, teamName, leagueId),
+      side,
       outcome,
-      score: getScore(game, teamId, teamName),
-      primaryText: getScore(game, teamId, teamName),
+      score: getScore(game, teamId, teamName, leagueId),
+      primaryText: getScore(game, teamId, teamName, leagueId),
       secondaryText: outcome ? `${outcome} · Final score` : "Final score",
     };
   }
 
   return {
     phase,
-    opponent: getOpponent(game, teamId, teamName),
-    opponentBadgeUrl: getOpponentBadgeUrl(game, teamId, teamName),
-    isHome,
+    opponent: getOpponent(game, teamId, teamName, leagueId),
+    opponentBadgeUrl: getOpponentBadgeUrl(game, teamId, teamName, leagueId),
+    side,
     outcome,
-    score: getScore(game, teamId, teamName),
+    score: getScore(game, teamId, teamName, leagueId),
     primaryText: showTime && game.eventTime ? formatTime(game) : "Today",
     secondaryText: `${formatDateLabel(game.eventDate)} · Today`,
   };

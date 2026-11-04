@@ -49,6 +49,10 @@ const fixtures = {
     "pn_dev_fixture_sports_away",
     "pn_dev_fixture_sports_basketball_home",
     "pn_dev_fixture_sports_basketball_away",
+    "pn_dev_fixture_sports_wnba_home",
+    "pn_dev_fixture_sports_wnba_away",
+    "pn_dev_fixture_sports_pwhl_home",
+    "pn_dev_fixture_sports_pwhl_away",
   ],
   basketballEvent: "pn_dev_fixture_sports_basketball_live",
   youtubeChannels: youtubeChannelIds,
@@ -319,6 +323,108 @@ async function assertBasketballWidgets(page) {
         await widget.getByText(score, { exact: true }).first().isVisible(),
         `${label} did not visibly render the Basketball live score ${score}`,
       );
+    for (const fixture of [
+      { label: "Show Fixture Waves at Fixture Sparks", scores: ["44", "40"] },
+      { label: "Show Fixture Aurora at Fixture Frost", scores: ["2", "1"] },
+    ]) {
+      await widget
+        .getByRole("button", { name: fixture.label, exact: true })
+        .click();
+      for (const score of fixture.scores)
+        await widget.getByText(score, { exact: true }).first().waitFor();
+    }
+  }
+}
+
+async function assertWomensSportsIntegration(page) {
+  await page.getByRole("link", { name: "Settings", exact: true }).click();
+  await page.getByRole("tab", { name: "Sports", exact: true }).click();
+  for (const fixture of [
+    {
+      sport: "Basketball",
+      league: "Synthetic WNBA",
+      team: "Fixture Sparks",
+      other: "Fixture Waves",
+      progress: "End of 2nd quarter",
+    },
+    {
+      sport: "Hockey",
+      league: "Synthetic PWHL",
+      team: "Fixture Frost",
+      other: "Fixture Aurora",
+      progress: "End of 2nd period",
+    },
+  ]) {
+    await page.getByRole("combobox").first().click();
+    await page
+      .getByRole("option", { name: fixture.sport, exact: true })
+      .click();
+    const leagueSwitch = page
+      .getByRole("switch", { name: `Enable ${fixture.league}`, exact: true })
+      .first();
+    await leagueSwitch.waitFor();
+    await leagueSwitch.click();
+    await page.waitForFunction(
+      (name) =>
+        document
+          .querySelector(`button[role="switch"][aria-label="Enable ${name}"]`)
+          ?.getAttribute("aria-checked") === "false",
+      fixture.league,
+    );
+    await leagueSwitch.click();
+    await page.waitForFunction(
+      (name) =>
+        document
+          .querySelector(`button[role="switch"][aria-label="Enable ${name}"]`)
+          ?.getAttribute("aria-checked") === "true",
+      fixture.league,
+    );
+    const teamSwitch = page.getByRole("switch", {
+      name: `Enable ${fixture.team}`,
+      exact: true,
+    });
+    await teamSwitch.click();
+    await page.waitForFunction(
+      (name) =>
+        document
+          .querySelector(`button[role="switch"][aria-label="Enable ${name}"]`)
+          ?.getAttribute("aria-checked") === "false",
+      fixture.team,
+    );
+    await teamSwitch.click();
+    await page.waitForFunction(
+      (name) =>
+        document
+          .querySelector(`button[role="switch"][aria-label="Enable ${name}"]`)
+          ?.getAttribute("aria-checked") === "true",
+      fixture.team,
+    );
+    await page
+      .getByRole("button", { name: `Remove ${fixture.team}`, exact: true })
+      .click();
+    await page.getByPlaceholder("Search team name").fill(fixture.team);
+    await page.getByRole("button", { name: "Search", exact: true }).click();
+    const result = page
+      .locator("div")
+      .filter({ has: page.getByText(fixture.team, { exact: true }) })
+      .filter({ has: page.getByRole("button", { name: "Add", exact: true }) })
+      .last();
+    await result.getByRole("button", { name: "Add", exact: true }).click();
+    await page
+      .getByRole("switch", { name: `Enable ${fixture.team}`, exact: true })
+      .waitFor();
+  }
+  await page.getByRole("link", { name: "Sports", exact: true }).click();
+  for (const fixture of [
+    { team: "Fixture Sparks", progress: "End of 2nd quarter" },
+    { team: "Fixture Frost", progress: "End of 2nd period" },
+  ]) {
+    await page
+      .locator("button[aria-pressed]")
+      .filter({ hasText: fixture.team })
+      .first()
+      .click();
+    await page.getByText(fixture.progress, { exact: true }).first().waitFor();
   }
 }
 
@@ -1068,6 +1174,7 @@ await runElectronHarness({
       );
       if (cliOptions.widget === "sports") {
         await assertBasketballWidgets(page);
+        await assertWomensSportsIntegration(page);
       }
       record(
         "widget-focused",

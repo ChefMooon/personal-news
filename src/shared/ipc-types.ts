@@ -658,6 +658,8 @@ export interface SportEvent {
   eventTime: string | null;
   status: string | null;
   venue: string | null;
+  // Provider identities inferred from unambiguous cached matchups.
+  trackedTeamIdentities?: { teamId: string; side: "home" | "away" }[];
 }
 
 export interface SportStandingRow {

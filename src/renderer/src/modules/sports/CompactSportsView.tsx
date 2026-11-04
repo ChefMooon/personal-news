@@ -1,3 +1,4 @@
+import { getFirstDifferentGame } from "./team-display-utils";
 import React, { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { SportEvent, TrackedTeam } from "../../../../shared/ipc-types";
@@ -103,7 +104,12 @@ function CompactGameSummary({
   const live = getGamePhase(game) === "live";
   const finished = getGamePhase(game) === "finished";
   const trackedSide = trackedTeam
-    ? resolveTrackedTeamSide(game, trackedTeam.teamId, trackedTeam.name)
+    ? resolveTrackedTeamSide(
+        game,
+        trackedTeam.teamId,
+        trackedTeam.name,
+        trackedTeam.leagueId,
+      )
     : null;
   const outcome = getGameOutcome(game, trackedSide);
   const outcomeClass =
@@ -118,6 +124,7 @@ function CompactGameSummary({
           previousGame,
           trackedTeam.teamId,
           trackedTeam.name,
+          trackedTeam.leagueId,
         )
       : null;
   const previousTrackedTeam =
@@ -279,14 +286,24 @@ export function CompactSportsView({
   const selectedGame = getSelectedTodayGame(liveOrToday, selectedGameId);
   const selectedTeam = selectedGame
     ? (teams.find((team) =>
-        resolveTrackedTeamSide(selectedGame, team.teamId, team.name),
+        resolveTrackedTeamSide(
+          selectedGame,
+          team.teamId,
+          team.name,
+          team.leagueId,
+        ),
       ) ?? null)
     : null;
   const opponentTeam = selectedGame
     ? (teams.find(
         (team) =>
           team.teamId !== selectedTeam?.teamId &&
-          resolveTrackedTeamSide(selectedGame, team.teamId, team.name),
+          resolveTrackedTeamSide(
+            selectedGame,
+            team.teamId,
+            team.name,
+            team.leagueId,
+          ),
       ) ?? null)
     : null;
   const previousGame = selectedTeam
@@ -295,6 +312,7 @@ export function CompactSportsView({
         selectedTeam.teamId,
         selectedTeam.name,
         selectedGame?.eventId ?? "",
+        selectedTeam.leagueId,
       )
     : null;
   const secondaryEvents = liveOrToday
@@ -308,12 +326,13 @@ export function CompactSportsView({
           today,
           team.teamId,
           team.name,
+          team.leagueId,
         ),
     )
     .map((team) => ({
       type: "team" as const,
       team,
-      nextGame: teamEventsById[team.teamId]?.next?.[0] ?? null,
+      nextGame: getFirstDifferentGame(teamEventsById[team.teamId]?.next, null, team),
     }));
   const secondaryItems = [...secondaryEvents, ...restingTeams];
   const pageSize = 2;
