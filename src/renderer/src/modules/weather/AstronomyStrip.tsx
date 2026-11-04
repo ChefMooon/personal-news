@@ -236,7 +236,7 @@ function HorizonRow({
   return (
     <div className="flex items-center justify-between gap-3">
       <span className="flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
-        <HorizonEventIcon body={body} direction={direction} />
+        <HorizonEventIcon body={body} direction={direction} themeColors />
         <span>{label}</span>
       </span>
       <span
@@ -280,6 +280,7 @@ function MoonCard({
             illuminationPercent={null}
             label="Moon phase unavailable"
             size={36}
+            themeColors
           />
           <div className="min-w-0 space-y-1">
             <h4 className="text-xs font-semibold">Moon</h4>
@@ -328,6 +329,7 @@ function MoonCard({
           illuminationPercent={moon.illuminationPercent}
           label={glyphLabel}
           size={36}
+          themeColors
         />
         <div className="min-w-0 space-y-1">
           <h4 className="text-xs font-semibold">Moon</h4>
@@ -384,7 +386,7 @@ function HorizonCard({
       )}
     >
       <h4 className="flex items-center gap-2 text-xs font-semibold">
-        <SunGlyph />
+        <SunGlyph themeColors />
         <span>Sun</span>
       </h4>
       {horizon ? (
@@ -515,6 +517,7 @@ function CompactAstronomyRow({
           illuminationPercent={moon?.illuminationPercent ?? null}
           label={moonLabel}
           size={20}
+          themeColors
         />
         <div className="min-w-0">
           <p className="truncate text-muted-foreground">Moon</p>
