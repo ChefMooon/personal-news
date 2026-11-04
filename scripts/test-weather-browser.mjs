@@ -62,10 +62,19 @@ try {
           ...snapshot,
           // Test-only long timeline: repeat existing fixture values without changing
           // the shared fixture or app data. Distinct timestamps exercise all 24 slots.
-          hourly: Array.from({ length: 24 }, (_, index) => ({
-            ...snapshot.hourly[index % snapshot.hourly.length],
-            time: snapshot.hourly[0].time + index * 3600,
-          })),
+          hourly: Array.from(
+            { length: window.weatherTest.count ?? 24 },
+            (_, index) => ({
+              ...snapshot.hourly[index % snapshot.hourly.length],
+              time: snapshot.hourly[0].time + (index + (window.weatherTest.timeShift ?? 0)) * 3600,
+              temperature:
+                index === 2 && window.weatherTest.nullPoint
+                  ? null
+                  : (snapshot.hourly[index % snapshot.hourly.length]
+                      .temperature ?? 0) +
+                    (window.weatherTest.offset ?? 0) * (index % 3),
+            }),
+          ),
         }));
       }
       return invoke(channel, ...args);
@@ -342,6 +351,250 @@ try {
     window.weatherTest.longForecast = true;
   });
   await weatherTab.click();
+  const refreshTimeline = medium.getByRole("region", {
+    name: "Hourly forecast timeline",
+  });
+  await refreshTimeline.waitFor();
+  await refreshTimeline.evaluate((element) => {
+    element.scrollLeft = 100;
+  });
+  const scrollBefore = await refreshTimeline.evaluate(
+    (element) => element.scrollLeft,
+  );
+  const refreshChart = medium.getByRole("img", {
+    name: "Hourly temperature trend",
+  });
+  const oldPath = await refreshChart
+    .locator('path[fill="none"]')
+    .first()
+    .getAttribute("d");
+  await page.evaluate(() => {
+    window.weatherTest.offset = 12;
+    window.weatherTest.nullPoint = true;
+    window.weatherTest.listeners.forEach((fn) => fn({}));
+  });
+  await page.waitForFunction((old) => {
+    const widget = document.querySelector(
+      '[data-widget-instance-id="pn_dev_fixture_widget_weather_medium"]',
+    );
+    return (
+      widget
+        ?.querySelector('svg[role="img"] path[fill="none"]')
+        ?.getAttribute("d") !== old &&
+      !!widget.querySelector("[data-weather-outgoing-chart]")
+    );
+  }, oldPath);
+  assert(
+    (await refreshTimeline.evaluate((element) => element.scrollLeft)) ===
+      scrollBefore,
+    "Refresh changed timeline scroll position",
+  );
+  assert(
+    (await medium
+      .getByRole("img", { name: "Hourly temperature trend" })
+      .count()) === 1,
+    "Outgoing chart exposed duplicate accessible content",
+  );
+  // Freeze a real fade halfway through, then interrupt it with the same hours.
+  // The old paths and their rendered opacities must survive the interruption.
+  const beforeInterrupt = await medium.evaluate((widget) => {
+    const timeline = widget.querySelector('[aria-label="Hourly forecast timeline"]');
+    for (const animation of timeline.getAnimations({ subtree: true })) {
+      animation.pause();
+      animation.currentTime = 160;
+    }
+    return [...timeline.querySelectorAll('svg[role="img"], [data-weather-outgoing-chart] svg')].map((svg) => ({
+      paths: [...svg.querySelectorAll('path')].map((path) => path.getAttribute('d')),
+      axis: [...svg.querySelectorAll('text')].map((text) => text.textContent),
+      grid: svg.querySelectorAll('line').length,
+      firstLine: svg.querySelector('path[fill="none"]')?.getAttribute('d'),
+      opacity: Number(getComputedStyle(svg.parentElement).opacity),
+    }));
+  });
+  assert(beforeInterrupt.length === 2 && beforeInterrupt.every((layer) => layer.opacity > 0 && layer.opacity < 1),
+    "Expected two visible layers halfway through the fade");
+  await page.evaluate(() => {
+    window.weatherTest.offset = 16;
+    window.weatherTest.listeners.forEach((fn) => fn({}));
+  });
+  await page.waitForFunction(() =>
+    document.querySelectorAll('[data-widget-instance-id="pn_dev_fixture_widget_weather_medium"] [data-weather-outgoing-chart]').length === 2,
+  );
+  const afterInterrupt = await medium.evaluate((widget) => {
+    const timeline = widget.querySelector('[aria-label="Hourly forecast timeline"]');
+    for (const animation of timeline.getAnimations({ subtree: true })) {
+      animation.pause();
+      animation.currentTime = 0;
+    }
+    return [...timeline.querySelectorAll('svg[role="img"], [data-weather-outgoing-chart] svg')].map((svg) => ({
+      paths: [...svg.querySelectorAll('path')].map((path) => path.getAttribute('d')),
+      axis: [...svg.querySelectorAll('text')].map((text) => text.textContent),
+      grid: svg.querySelectorAll('line').length,
+      firstLine: svg.querySelector('path[fill="none"]')?.getAttribute('d'),
+      opacity: Number(getComputedStyle(svg.parentElement).opacity),
+    }));
+  });
+  assert(afterInterrupt[0].opacity === 0, "Latest chart did not start transparent");
+  assert(beforeInterrupt.every((layer, index) =>
+    JSON.stringify(layer.paths) === JSON.stringify(afterInterrupt[index + 1].paths) &&
+    JSON.stringify(layer.axis) === JSON.stringify(afterInterrupt[index + 1].axis) &&
+    layer.grid > 0 && layer.grid === afterInterrupt[index + 1].grid &&
+    Math.abs(layer.opacity - afterInterrupt[index + 1].opacity) < 0.01),
+    "Interrupted fade changed the visible composite: " + JSON.stringify({ beforeInterrupt, afterInterrupt }));
+  const latestValues = await medium.evaluate((widget) => {
+    const timeline = widget.querySelector('[aria-label="Hourly forecast timeline"]');
+    const values = [...timeline.firstElementChild.children]
+      .map((cell) => parseFloat(cell.querySelectorAll('span')[1].textContent))
+      .filter(Number.isFinite);
+    const axis = [...timeline.querySelector('svg[role="img"]').querySelectorAll('text')]
+      .map((item) => parseFloat(item.textContent));
+    return { min: Math.min(...values), max: Math.max(...values), axis };
+  });
+  assert(latestValues.axis[0] === latestValues.min && latestValues.axis.at(-1) === latestValues.max,
+    "Interrupted fade did not expose the latest chart values: " + JSON.stringify(latestValues));
+  await medium.evaluate((widget) =>
+    widget.querySelector('[aria-label="Hourly forecast timeline"]').getAnimations({ subtree: true }).forEach((animation) => animation.finish()),
+  );
+  await medium.locator("[data-weather-outgoing-chart]").first().waitFor({ state: "detached" });
+  assert((await refreshChart.locator('path[fill="none"]').first().getAttribute("d")) === afterInterrupt[0].firstLine,
+    "The latest forecast did not remain after the interrupted fade");
+  // Repeated interrupted fades are bounded, with an immediate latest-data
+  // fallback once the maximum number of layers is reached.
+  for (const offset of [17, 18, 19, 20]) {
+    const previousPath = await refreshChart.locator('path[fill="none"]').first().getAttribute("d");
+    await page.evaluate((value) => {
+      window.weatherTest.offset = value;
+      window.weatherTest.listeners.forEach((fn) => fn({}));
+    }, offset);
+    await page.waitForFunction((previous) =>
+      document.querySelector('[data-widget-instance-id="pn_dev_fixture_widget_weather_medium"] svg[role="img"] path[fill="none"]')?.getAttribute("d") !== previous,
+      previousPath,
+    );
+    const count = await medium.locator('[data-weather-outgoing-chart]').count();
+    assert(count <= 3, `Too many outgoing chart layers: ${count}`);
+    await medium.evaluate((widget) =>
+      widget.querySelector('[aria-label="Hourly forecast timeline"]').getAnimations({ subtree: true }).forEach((animation) => {
+        animation.pause();
+        animation.currentTime = 160;
+      }),
+    );
+  }
+  assert((await medium.locator('[data-weather-outgoing-chart]').count()) === 0,
+    'Layer limit did not fall back to the latest chart');
+  await page.evaluate(() => {
+    window.weatherTest.offset = 18;
+    window.weatherTest.listeners.forEach((fn) => fn({}));
+  });
+  await medium.locator("[data-weather-outgoing-chart]").first().waitFor();
+  await medium.evaluate((widget) =>
+    widget.querySelector('[aria-label="Hourly forecast timeline"]').getAnimations({ subtree: true }).forEach((animation) => animation.pause()),
+  );
+  const previousTimelineText = await refreshTimeline.textContent();
+  await page.evaluate(() => {
+    window.weatherTest.offset = 20;
+    window.weatherTest.count = 8;
+    window.weatherTest.listeners.forEach((fn) => fn({}));
+  });
+  await page.waitForFunction((previous) =>
+    document.querySelector('[data-widget-instance-id="pn_dev_fixture_widget_weather_medium"] [aria-label="Hourly forecast timeline"]')?.textContent !== previous,
+    previousTimelineText,
+  );
+  const currentChart = await medium.evaluate((widget) => {
+    const timeline = widget.querySelector('[aria-label="Hourly forecast timeline"]');
+    const cells = [...timeline.firstElementChild.children];
+    const svg = timeline.querySelector('svg[role="img"]');
+    const axis = [...svg.querySelectorAll('text')].map((item) => item.textContent);
+    const values = cells.map((cell) => cell.querySelectorAll('span')[1].textContent).filter((value) => value !== '-');
+    const numbers = values.map((value) => parseFloat(value));
+    const firstPoint = svg.querySelector('path[fill="none"]').getAttribute('d').match(/^M ([\d.]+)/);
+    const svgRect = svg.getBoundingClientRect();
+    const firstCell = cells[0].getBoundingClientRect();
+    return {
+      axis,
+      min: Math.min(...numbers),
+      max: Math.max(...numbers),
+      pointX: svgRect.left + Number(firstPoint[1]) / svg.viewBox.baseVal.width * svgRect.width,
+      cellX: firstCell.left + firstCell.width / 2,
+    };
+  });
+  assert(Math.abs(currentChart.pointX - currentChart.cellX) < 2, "Chart point no longer aligns with its hourly cell: " + JSON.stringify(currentChart));
+  assert(parseFloat(currentChart.axis[0]) === currentChart.min && parseFloat(currentChart.axis.at(-1)) === currentChart.max,
+    "Accessible chart axis does not reflect the latest hourly values: " + JSON.stringify(currentChart));
+  assert((await medium.locator("[data-weather-outgoing-chart]").count()) === 0,
+    "Incompatible point count retained a stale outgoing chart");
+  const queuedPath = await refreshChart.locator('path[fill="none"]').first().getAttribute("d");
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.evaluate(() => {
+    window.weatherTest.offset = 21;
+    window.weatherTest.listeners.forEach((fn) => fn({}));
+  });
+  await page.waitForTimeout(100);
+  await page.evaluate(() => {
+    window.weatherTest.offset = 20;
+    window.weatherTest.listeners.forEach((fn) => fn({}));
+  });
+  await page.waitForTimeout(100);
+  assert(
+    (await refreshChart.locator('path[fill="none"]').first().getAttribute("d")) === queuedPath,
+    "Reduced motion did not display the latest forecast data",
+  );
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  assert(
+    (await refreshTimeline.locator('[aria-current="time"]').count()) === 1,
+    "Changed point count lost the current hour",
+  );
+  assert(
+    (await refreshTimeline.evaluate(
+      (element) => element.firstElementChild.children.length,
+    )) === 8,
+    "Changed point count did not update the timeline",
+  );
+  assert(
+    (await medium.locator("[data-weather-outgoing-chart]").count()) === 0,
+    "Outgoing chart did not finish after rapid refresh",
+  );
+  await page.evaluate(() =>
+    window.weatherTest.listeners.forEach((fn) => fn({})),
+  );
+  await page.waitForTimeout(100);
+  assert(
+    (await medium.locator("[data-weather-outgoing-chart]").count()) === 0,
+    "Unchanged refresh animated",
+  );
+  await page.evaluate(() => {
+    window.weatherTest.offset = 22;
+    window.weatherTest.listeners.forEach((fn) => fn({}));
+  });
+  await medium.locator("[data-weather-outgoing-chart]").waitFor();
+  await medium.evaluate((widget) =>
+    widget.querySelector('[aria-label="Hourly forecast timeline"]').getAnimations({ subtree: true }).forEach((animation) => animation.pause()),
+  );
+  const labelsBeforeShift = await refreshTimeline.textContent();
+  await page.evaluate(() => {
+    window.weatherTest.timeShift = 1;
+    window.weatherTest.listeners.forEach((fn) => fn({}));
+  });
+  await page.waitForFunction((previous) =>
+    document.querySelector('[data-widget-instance-id="pn_dev_fixture_widget_weather_medium"] [aria-label="Hourly forecast timeline"]')?.textContent !== previous,
+    labelsBeforeShift,
+  );
+  assert((await medium.locator("[data-weather-outgoing-chart]").count()) === 0,
+    "Changed timestamps retained a stale outgoing chart");
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.evaluate(() => {
+    window.weatherTest.offset = 30;
+    window.weatherTest.listeners.forEach((fn) => fn({}));
+  });
+  await page.waitForTimeout(100);
+  assert(
+    (await medium.locator("[data-weather-outgoing-chart]").count()) === 0,
+    "Reduced motion refresh animated",
+  );
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.evaluate(() => {
+    window.weatherTest.count = 24;
+    window.weatherTest.listeners.forEach((fn) => fn({}));
+  });
   for (const theme of ["light", "dark"]) {
     for (const [columns, width] of [
       [12, 1240],

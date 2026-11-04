@@ -5,6 +5,7 @@ import { getLocalDateKey } from "../../../../shared/sports-event-utils";
 import { Badge } from "../../components/ui/badge";
 import { ScrollArea } from "../../components/ui/scroll-area";
 import { TeamAvatar } from "./TeamAvatar";
+import { UpdatedScore } from "./UpdatedScore";
 import {
   getGameOutcome,
   getGamePhase,
@@ -207,7 +208,7 @@ function CompactGameSummary({
             {primaryTeam.name}
           </p>
           <p className={`text-sm font-bold tabular-nums ${outcomeClass}`}>
-            {primaryTeam.score ?? "-"}
+            <UpdatedScore value={primaryTeam.score} gameId={game.eventId} />
           </p>
         </div>
         <span className="text-xs text-muted-foreground">
@@ -230,7 +231,7 @@ function CompactGameSummary({
             {opponent.name}
           </p>
           <p className="text-sm font-bold tabular-nums">
-            {opponent.score ?? "-"}
+            <UpdatedScore value={opponent.score} gameId={game.eventId} />
           </p>
         </div>
       </div>

@@ -196,9 +196,11 @@ function WeatherWidget(): React.ReactElement {
                 )}
                 <button
                   type="button"
-                  className="rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                  onClick={() => void refreshNow()}
-                  disabled={refreshing || snapshotRefreshing}
+                  className="rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground aria-disabled:opacity-50"
+                  onClick={() => {
+                    if (!refreshing && !snapshotRefreshing) void refreshNow();
+                  }}
+                  aria-disabled={refreshing || snapshotRefreshing}
                   aria-label="Refresh weather data"
                 >
                   <RefreshCcw

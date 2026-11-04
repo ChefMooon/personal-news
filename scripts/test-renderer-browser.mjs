@@ -1826,17 +1826,21 @@ try {
     .locator('[data-dashboard-tab-id="pn_dev_fixture_dashboard_astronomy"]')
     .click();
   for (const size of ["small", "medium"]) {
+    const detailsLink = page
+      .locator(`[data-widget-instance-id="${astronomyWidgetIds[size]}"]`)
+      .getByRole("link", { name: "Details", exact: true });
+    await detailsLink.waitFor({ state: "visible", timeout: 10000 });
     assert(
-      (await page
-        .locator(`[data-widget-instance-id="${astronomyWidgetIds[size]}"]`)
-        .getByRole("link", { name: "Details", exact: true })
-        .count()) === 1,
+      (await detailsLink.count()) === 1,
       `Weather instance setting incorrectly disabled Astronomy ${size} details`,
     );
   }
   const astronomyLargeWidget = page.locator(
     `[data-widget-instance-id="${astronomyWidgetIds.large}"]`,
   );
+  await astronomyLargeWidget
+    .getByRole("heading", { name: "Moon", exact: true })
+    .waitFor({ state: "visible", timeout: 10000 });
   assert(
     (await astronomyLargeWidget
       .getByRole("link", {

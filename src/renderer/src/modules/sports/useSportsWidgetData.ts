@@ -65,7 +65,12 @@ export function useSportsWidgetData(selectedSports: string[]) {
   >({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [refreshError, setRefreshError] = useState<string | null>(null);
+  const [loadError, setRefreshError] = useState<string | null>(null);
+  const [sportErrors, setSportErrors] = useState<Record<string, string>>({});
+  const refreshError =
+    loadError ??
+    selectedSports.map((sport) => sportErrors[sport]).find(Boolean) ??
+    null;
   const hasLoadedDataRef = useRef(false);
   const latestLoadIdRef = useRef(0);
 
@@ -145,12 +150,16 @@ export function useSportsWidgetData(selectedSports: string[]) {
       window.api.on(IPC.SPORTS_DATA_UPDATED, (event) => {
         const payload = event as SportsDataUpdatedEvent;
         if (!selectedSports.includes(payload.sport)) return;
-        void loadData({ preserveContent: true }).then(() => {
-          if (!payload.ok) {
-            setRefreshError(payload.error ?? "Sports data refresh failed.");
-            if (payload.error) toast.error(payload.error);
-          }
+        setSportErrors((previous) => {
+          const next = { ...previous };
+          if (payload.ok) delete next[payload.sport];
+          else
+            next[payload.sport] =
+              payload.error ?? "Sports data refresh failed.";
+          return next;
         });
+        if (!payload.ok && payload.error) toast.error(payload.error);
+        void loadData({ preserveContent: true });
       }),
     [loadData, selectedSports],
   );

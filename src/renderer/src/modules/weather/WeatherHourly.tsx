@@ -19,6 +19,7 @@ import {
   clampRainProbability,
   formatRainProbability,
   hourlyChartCoordinates,
+  hourlyMetricValue,
   hourlyTemperatureTrendColors,
   type HourlyChartCoordinate,
   type HourlyChartMetric,
@@ -122,6 +123,7 @@ function TemperatureAreaChart({
   gradientId,
   height,
   width,
+  decorative = false,
 }: {
   points: WeatherHourlyPoint[];
   metric: HourlyChartMetric;
@@ -129,6 +131,7 @@ function TemperatureAreaChart({
   gradientId: string;
   height: number;
   width: number;
+  decorative?: boolean;
 }): React.ReactElement {
   const chartTop = 7;
   const chartBottom = height - 3;
@@ -196,8 +199,11 @@ function TemperatureAreaChart({
       width="100%"
       height={height}
       viewBox={`0 0 ${width} ${height}`}
-      role="img"
-      aria-label={`Hourly ${chartMetricLabel(metric)} trend`}
+      role={decorative ? undefined : "img"}
+      aria-hidden={decorative || undefined}
+      aria-label={
+        decorative ? undefined : `Hourly ${chartMetricLabel(metric)} trend`
+      }
     >
       {metric !== "overview" ? (
         <defs>
@@ -244,43 +250,43 @@ function TemperatureAreaChart({
         </defs>
       )}
       {(height < 48
-        ? [chart.min, chart.max]
-        : [
-            chart.min,
-            chart.min != null && chart.max != null
-              ? (chart.min + chart.max) / 2
-              : null,
-            chart.max,
-          ]
-      ).map((value, index) => {
-        const y =
-          chartBottom -
-          ((value != null && chart.min != null ? value - chart.min : 0) /
-            (chart.min != null && chart.max != null
-              ? chart.max - chart.min || 1
-              : 1)) *
-            (chartBottom - chartTop);
-        return (
-          <g key={index}>
-            <line
-              x1={chartLeft}
-              x2={chartRight}
-              y1={y}
-              y2={y}
-              stroke="hsl(var(--border) / 0.35)"
-              strokeDasharray="2 3"
-            />
-            <text
-              x={0}
-              y={y + 3}
-              fill="hsl(var(--muted-foreground))"
-              fontSize="11"
-            >
-              {formatChartValue(value, metric, settings)}
-            </text>
-          </g>
-        );
-      })}
+          ? [chart.min, chart.max]
+          : [
+              chart.min,
+              chart.min != null && chart.max != null
+                ? (chart.min + chart.max) / 2
+                : null,
+              chart.max,
+            ]
+        ).map((value, index) => {
+          const y =
+            chartBottom -
+            ((value != null && chart.min != null ? value - chart.min : 0) /
+              (chart.min != null && chart.max != null
+                ? chart.max - chart.min || 1
+                : 1)) *
+              (chartBottom - chartTop);
+          return (
+            <g key={index}>
+              <line
+                x1={chartLeft}
+                x2={chartRight}
+                y1={y}
+                y2={y}
+                stroke="hsl(var(--border) / 0.35)"
+                strokeDasharray="2 3"
+              />
+              <text
+                x={0}
+                y={y + 3}
+                fill="hsl(var(--muted-foreground))"
+                fontSize="11"
+              >
+                {formatChartValue(value, metric, settings)}
+              </text>
+            </g>
+          );
+        })}
       {areaPaths.map((path, index) => (
         <path
           key={`area-${index}`}
@@ -389,8 +395,105 @@ export function WeatherHourly({
     });
     observer.observe(host);
     return () => observer.disconnect();
-  }, [chartHeight, fillAvailable, presentation]);
+  }, [chartHeight, fillAvailable, presentation, hourlyCount > 0]);
   const visible = points.slice(0, cap);
+  const chartWidth = measuredChartWidth;
+  const actualChartHeight = fillAvailable ? measuredChartHeight : chartHeight;
+  const chartSignature = JSON.stringify(
+    visible.map((point) => [
+      point.time,
+      hourlyMetricValue(point, config.hourlyMetric),
+    ]),
+  );
+  const chartSnapshot = {
+    points: visible,
+    signature: chartSignature,
+    metric: config.hourlyMetric,
+    width: chartWidth,
+    height: actualChartHeight,
+    presentation,
+  };
+  const nextLayerId = React.useRef(1);
+  const [chartLayers, setChartLayers] = React.useState([
+    { id: 0, chart: chartSnapshot, opacity: 1 },
+  ]);
+  const layersRef = React.useRef(chartLayers);
+  const layerElements = React.useRef(new Map<number, HTMLDivElement>());
+  React.useLayoutEffect(() => {
+    const previous = layersRef.current[0].chart;
+    const compatible =
+      previous.metric === chartSnapshot.metric &&
+      previous.presentation === chartSnapshot.presentation &&
+      presentation !== "compact" &&
+      visible.length > 0 &&
+      previous.points.length === visible.length &&
+      previous.points.every((point, index) => point.time === visible[index].time) &&
+      !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!compatible) {
+      const layers = [{ id: nextLayerId.current++, chart: chartSnapshot, opacity: 1 }];
+      layersRef.current = layers;
+      setChartLayers(layers);
+    } else if (previous.signature !== chartSignature && layersRef.current.length >= 4) {
+      // Snap to the latest chart if updates arrive faster than fades can finish.
+      const layers = [{ id: nextLayerId.current++, chart: chartSnapshot, opacity: 1 }];
+      layersRef.current = layers;
+      setChartLayers(layers);
+    } else if (previous.signature !== chartSignature) {
+      // Keep every currently visible layer at its rendered opacity when a
+      // refresh interrupts a fade, then fade that composite to the new data.
+      const outgoing = layersRef.current.map((layer) => ({
+        ...layer,
+        opacity: Number.parseFloat(
+          getComputedStyle(layerElements.current.get(layer.id)!).opacity,
+        ),
+      }));
+      const layers = [
+        { id: nextLayerId.current++, chart: chartSnapshot, opacity: 0 },
+        ...outgoing,
+      ];
+      layersRef.current = layers;
+      setChartLayers(layers);
+    } else if (previous.width !== chartSnapshot.width || previous.height !== chartSnapshot.height) {
+      const layers = [{ id: nextLayerId.current++, chart: chartSnapshot, opacity: 1 }];
+      layersRef.current = layers;
+      setChartLayers(layers);
+    }
+  }, [
+    chartSignature,
+    config.hourlyMetric,
+    chartWidth,
+    actualChartHeight,
+    presentation,
+  ]);
+  React.useLayoutEffect(() => {
+    if (chartLayers.length < 2) return;
+    const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const finish = (): void => {
+      const layers = [{ ...layersRef.current[0], opacity: 1 }];
+      layersRef.current = layers;
+      setChartLayers(layers);
+    };
+    if (motion.matches) {
+      finish();
+      return;
+    }
+    const options: KeyframeAnimationOptions = { duration: 320, easing: "ease-out" };
+    const animations = chartLayers.map((layer, index) =>
+      layerElements.current.get(layer.id)!.animate(
+        [{ opacity: layer.opacity }, { opacity: index === 0 ? 1 : 0 }],
+        options,
+      ),
+    );
+    animations[0].onfinish = finish;
+    const onMotionChange = (): void => {
+      if (motion.matches) finish();
+    };
+    motion.addEventListener("change", onMotionChange);
+    return () => {
+      animations.forEach((animation) => animation.cancel());
+      motion.removeEventListener("change", onMotionChange);
+    };
+  }, [chartLayers]);
   if (!visible.length)
     return (
       <p className="text-xs text-muted-foreground">
@@ -529,14 +632,29 @@ export function WeatherHourly({
                 height: fillAvailable ? undefined : chartHeight,
               }}
             >
-              <TemperatureAreaChart
-                points={visible}
-                metric={config.hourlyMetric}
-                settings={settings}
-                gradientId={`weather-hourly-${gradientId}`}
-                width={measuredChartWidth}
-                height={fillAvailable ? measuredChartHeight : chartHeight}
-              />
+              {chartLayers.map((layer, index) => (
+                <div
+                  key={layer.id}
+                  ref={(element) => {
+                    if (element) layerElements.current.set(layer.id, element);
+                    else layerElements.current.delete(layer.id);
+                  }}
+                  aria-hidden={index > 0 || undefined}
+                  data-weather-outgoing-chart={index > 0 ? "" : undefined}
+                  className={index > 0 ? "pointer-events-none absolute inset-0" : undefined}
+                  style={{ opacity: layer.opacity }}
+                >
+                  <TemperatureAreaChart
+                    points={layer.chart.points}
+                    metric={layer.chart.metric}
+                    settings={settings}
+                    gradientId={`weather-hourly-${gradientId}-${layer.id}`}
+                    width={layer.chart.width}
+                    height={layer.chart.height}
+                    decorative={index > 0}
+                  />
+                </div>
+              ))}
             </div>
           )}
           {presentation !== "compact" && (

@@ -7,6 +7,7 @@ import type {
 import { Badge } from "../../components/ui/badge";
 import { ScrollArea } from "../../components/ui/scroll-area";
 import { TeamAvatar } from "./TeamAvatar";
+import { UpdatedScore } from "./UpdatedScore";
 import { cn } from "../../lib/utils";
 import { resolveTrackedTeamSide } from "./side-resolution";
 import {
@@ -45,12 +46,14 @@ function GameSide({
   name,
   badgeUrl,
   score,
+  gameId,
   outcome,
   dense,
 }: {
   name: string;
   badgeUrl: string | null;
   score: string | null;
+  gameId: string;
   outcome: "win" | "loss" | "tie" | null;
   dense: boolean;
 }): React.ReactElement {
@@ -85,7 +88,7 @@ function GameSide({
           outcomeClass,
         )}
       >
-        {score ?? "-"}
+        <UpdatedScore value={score} gameId={gameId} />
       </p>
     </div>
   );
@@ -221,6 +224,7 @@ export function MediumLiveGameView({
           )}
         >
           <GameSide
+            gameId={selectedGame.eventId}
             name={
               leftTeam?.name ??
               (leftSide === "home"
@@ -255,6 +259,7 @@ export function MediumLiveGameView({
             <p>{selectedGame.eventDate}</p>
           </div>
           <GameSide
+            gameId={selectedGame.eventId}
             name={
               rightTeam?.name ??
               (rightSide === "home"
