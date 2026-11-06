@@ -111,8 +111,16 @@ export function installRendererBrowserApi(fixtures) {
     return Promise.reject(new Error(message));
   };
   const teamEvents = (teamId) => {
+    const noGamesToday = getScenario().sportsNoGamesToday;
+    const todayEventIds = new Set(
+      noGamesToday
+        ? fixtures.sports.todayEvents.map((event) => event.eventId)
+        : [],
+    );
     const matching = fixtures.sports.events.filter(
-      (event) => event.homeTeamId === teamId || event.awayTeamId === teamId,
+      (event) =>
+        (event.homeTeamId === teamId || event.awayTeamId === teamId) &&
+        !todayEventIds.has(event.eventId),
     );
     return {
       last: matching.filter((event) => event.status === "FT"),
@@ -390,6 +398,8 @@ export function installRendererBrowserApi(fixtures) {
         total,
       });
     }
+    if (channel === "sports:getTodayEvents" && getScenario().sportsNoGamesToday)
+      return Promise.resolve([]);
     if (channel === "sports:getTodayEvents")
       return Promise.resolve(
         fixtures.sports.todayEvents.filter(

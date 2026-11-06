@@ -1,2 +1,2 @@
 // Bump when the shipped developer fixture definitions change.
-export const DEV_TEST_DATA_VERSION = 5;
+export const DEV_TEST_DATA_VERSION = 6;

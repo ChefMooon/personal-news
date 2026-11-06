@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { IPC } from "../../../shared/ipc-types";
 import {
   DEFAULT_SPORTS_VIEW_CONFIG,
+  normalizeSportsViewConfig,
   useSportsViewConfig,
 } from "./useSportsViewConfig";
 
@@ -40,6 +41,13 @@ afterEach(() => {
 });
 
 describe("Sports config fixture update subscription", () => {
+  it("defaults new configs to showing venue and location but preserves saved false", () => {
+    expect(DEFAULT_SPORTS_VIEW_CONFIG.showVenue).toBe(true);
+    expect(normalizeSportsViewConfig({ showVenue: false }).showVenue).toBe(
+      false,
+    );
+  });
+
   it("reloads migrated/reset settings in a mounted widget and unsubscribes", async () => {
     invoke.mockResolvedValueOnce(JSON.stringify({ sport: "Baseball" }));
     useSportsViewConfig("fixture");

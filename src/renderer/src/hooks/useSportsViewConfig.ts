@@ -20,7 +20,7 @@ function isSportsViewMode(
 export const DEFAULT_SPORTS_VIEW_CONFIG: SportsViewConfig = {
   sport: DEFAULT_SPORT,
   viewMode: "today",
-  showVenue: false,
+  showVenue: true,
   showTime: true,
   showLiveStartTime: true,
 };

@@ -49,7 +49,7 @@ describe("sports refresh provider identity", () => {
       CREATE TABLE sports_leagues (league_id TEXT PRIMARY KEY, sport TEXT, name TEXT, country TEXT, logo_url TEXT, enabled INTEGER, sort_order INTEGER, added_at INTEGER);
       CREATE TABLE sports_teams (team_id TEXT PRIMARY KEY, league_id TEXT, sport TEXT, name TEXT, short_name TEXT, badge_url TEXT, enabled INTEGER, sort_order INTEGER, added_at INTEGER);
       CREATE TABLE sports_opponent_cache (team_id TEXT PRIMARY KEY, name TEXT, badge_url TEXT, fetched_at INTEGER);
-      CREATE TABLE sports_events (event_id TEXT PRIMARY KEY, league_id TEXT, sport TEXT, home_team_id TEXT, away_team_id TEXT, home_team TEXT, away_team TEXT, home_team_normalized TEXT, away_team_normalized TEXT, home_score TEXT, away_score TEXT, event_date TEXT, event_time TEXT, status TEXT, venue TEXT, fetched_date TEXT);
+      CREATE TABLE sports_events (event_id TEXT PRIMARY KEY, league_id TEXT, sport TEXT, home_team_id TEXT, away_team_id TEXT, home_team TEXT, away_team TEXT, home_team_normalized TEXT, away_team_normalized TEXT, home_score TEXT, away_score TEXT, event_date TEXT, event_time TEXT, status TEXT, venue TEXT, venue_city TEXT, venue_region TEXT, venue_country TEXT, fetched_date TEXT);
       CREATE TABLE sports_cache_meta (sport TEXT, fetch_date TEXT, fetched_at INTEGER, PRIMARY KEY (sport, fetch_date));
       INSERT INTO sports_leagues VALUES ('nba', 'Basketball', 'NBA', NULL, NULL, 1, 0, 0);
       INSERT INTO sports_teams VALUES ('team', 'nba', 'Basketball', 'Los Angeles Clippers', NULL, 'badge', 1, 0, 0);
@@ -91,7 +91,7 @@ describe("sports refresh provider identity", () => {
       { teamId: "opponent", leagueId: "nba", sport: "Basketball", name: "Toronto Raptors", shortName: null, badgeUrl: null, enabled: true, sortOrder: 1 },
     ];
     vi.setSystemTime(new Date("2026-08-03T12:00:00"));
-    const props = { events: [copies[0]], teams, teamEventsById: { team: result, opponent: opponentResult }, selectedGameId: "espn:2", onSelectGame: () => {} };
+    const props = { events: [copies[0]], teams, teamEventsById: { team: result, opponent: opponentResult }, selectedGameId: "espn:2", onSelectGame: () => {}, showTime: true };
     const compact = renderToStaticMarkup(React.createElement(CompactSportsView, props));
     const medium = renderToStaticMarkup(React.createElement(MediumLiveGameView, props));
     expect(compact).toContain("Toronto Raptors");

@@ -288,10 +288,14 @@ function SportsWidget(): React.ReactElement {
               ) : size === "small" ? (
                 <CompactSportsView
                   events={compactEvents}
+                  upcomingEvents={fallbackEvents}
                   teams={enabledTeams}
                   teamEventsById={teamEventsById}
                   selectedGameId={selectedGameId}
                   onSelectGame={setSelectedGameId}
+                  showTime={config.showTime}
+                  showVenue={config.showVenue}
+                  leaguesById={leaguesById}
                 />
               ) : size === "medium" || size === "large" ? (
                 <div className="space-y-3">
@@ -301,6 +305,8 @@ function SportsWidget(): React.ReactElement {
                     teamEventsById={teamEventsById}
                     selectedGameId={selectedGameId}
                     onSelectGame={setSelectedGameId}
+                    showVenue={config.showVenue}
+                    leaguesById={leaguesById}
                   />
                   {config.viewMode === "all_games" ? (
                     <AllGamesView
@@ -371,10 +377,14 @@ function SportsWidget(): React.ReactElement {
         ) : size === "small" ? (
           <CompactSportsView
             events={compactEvents}
+            upcomingEvents={fallbackEvents}
             teams={enabledTeams}
             teamEventsById={teamEventsById}
             selectedGameId={selectedGameId}
             onSelectGame={setSelectedGameId}
+            showTime={config.showTime}
+            showVenue={config.showVenue}
+            leaguesById={leaguesById}
             fillAvailable
           />
         ) : size === "medium" ? (
@@ -406,6 +416,8 @@ function SportsWidget(): React.ReactElement {
                 teamEventsById={teamEventsById}
                 selectedGameId={selectedGameId}
                 onSelectGame={setSelectedGameId}
+                showVenue={config.showVenue}
+                leaguesById={leaguesById}
               />
             </div>
             <div

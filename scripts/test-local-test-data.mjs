@@ -307,7 +307,7 @@ async function assertBasketballWidgets(page) {
       `${label} still exposes the mock live game toggle`,
     );
     assert(
-      (await widget.getByText(/mock/i).count()) === 0,
+      (await widget.getByText(/mock data/i).count()) === 0,
       `${label} still exposes mock data information`,
     );
     await widget
@@ -318,20 +318,30 @@ async function assertBasketballWidgets(page) {
       .click();
     for (const text of ["Fixture Pilots", "Fixture Foxes", "LIVE", "62", "58"])
       await widget.getByText(text, { exact: true }).first().waitFor();
+    await widget.getByText("Mockport, MP").first().waitFor();
     for (const score of ["62", "58"])
       assert(
         await widget.getByText(score, { exact: true }).first().isVisible(),
         `${label} did not visibly render the Basketball live score ${score}`,
       );
     for (const fixture of [
-      { label: "Show Fixture Waves at Fixture Sparks", scores: ["44", "40"] },
-      { label: "Show Fixture Aurora at Fixture Frost", scores: ["2", "1"] },
+      {
+        label: "Show Fixture Waves at Fixture Sparks",
+        scores: ["44", "40"],
+        location: "Testford, TF",
+      },
+      {
+        label: "Show Fixture Aurora at Fixture Frost",
+        scores: ["2", "1"],
+        location: "Faraway, Elsewhere",
+      },
     ]) {
       await widget
         .getByRole("button", { name: fixture.label, exact: true })
         .click();
       for (const score of fixture.scores)
         await widget.getByText(score, { exact: true }).first().waitFor();
+      await widget.getByText(fixture.location).first().waitFor();
     }
   }
 }

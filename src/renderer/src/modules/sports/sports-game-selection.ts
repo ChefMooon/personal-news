@@ -1,5 +1,6 @@
 import type { SportEvent } from "../../../../shared/ipc-types";
 import { isSportEventOnLocalDate } from "../../../../shared/sports-event-utils";
+import { getGamePhase } from "./utils";
 
 export function getEligibleTodayGames(
   events: SportEvent[],
@@ -16,5 +17,13 @@ export function getSelectedTodayGame(
 ): SportEvent | null {
   return (
     games.find((game) => game.eventId === selectedGameId) ?? games[0] ?? null
+  );
+}
+
+export function getFeaturedNextGame(
+  upcomingEvents: SportEvent[],
+): SportEvent | null {
+  return (
+    upcomingEvents.find((event) => getGamePhase(event) === "scheduled") ?? null
   );
 }

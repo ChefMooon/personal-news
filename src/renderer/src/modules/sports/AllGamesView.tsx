@@ -8,6 +8,7 @@ import {
 import { getSportLabel } from "../../../../shared/sports";
 import { GameCard } from "./GameCard";
 import { getLeagueLabel } from "./league-display";
+import { formatVenueLine, getLeagueCountry } from "./location-display";
 import { TeamAvatar } from "./TeamAvatar";
 import {
   getGamePhase,
@@ -148,13 +149,14 @@ export function AllGamesView({
               const isLive = getGamePhase(game) === "live";
               const showStartTime =
                 showLiveStartTime && isLive && !!game.eventTime;
+              const venueLine = showVenue
+                ? formatVenueLine(game, getLeagueCountry(game, leaguesById))
+                : null;
               const detailsLabel = showStartTime
-                ? showVenue && game.venue
-                  ? `${formatEventTime(game)} · ${game.venue}`
+                ? venueLine
+                  ? `${formatEventTime(game)} · ${venueLine}`
                   : formatEventTime(game)
-                : showVenue && game.venue
-                  ? game.venue
-                  : null;
+                : venueLine;
 
               return (
                 <GameCard
@@ -228,13 +230,14 @@ export function AllGamesView({
                 const isLive = getGamePhase(game) === "live";
                 const showStartTime =
                   showLiveStartTime && isLive && !!game.eventTime;
+                const venueLine = showVenue
+                  ? formatVenueLine(game, getLeagueCountry(game, leaguesById))
+                  : null;
                 const detailsLabel = showStartTime
-                  ? showVenue && game.venue
-                    ? `${formatEventTime(game)} · ${game.venue}`
+                  ? venueLine
+                    ? `${formatEventTime(game)} · ${venueLine}`
                     : formatEventTime(game)
-                  : showVenue && game.venue
-                    ? game.venue
-                    : null;
+                  : venueLine;
 
                 return (
                   <GameCard

@@ -8,7 +8,9 @@ import type {
 } from "../../../../shared/ipc-types";
 import { AllGamesView } from "./AllGamesView";
 import { MediumLiveGameView } from "./MediumLiveGameView";
+import { FeaturedNextGame } from "./FeaturedNextGame";
 import { MyTeamsView } from "./MyTeamsView";
+import { getFeaturedNextGame } from "./sports-game-selection";
 import {
   getMediumItemCount,
   getMediumTeamItems,
@@ -58,6 +60,10 @@ export function SportsMediumLayout({
   const teamPanel = viewMode !== "today" && viewMode !== "all_games";
   const disclosureLabel =
     viewMode === "all_games" ? "View all games" : "View all teams";
+  const featuredNextGame =
+    eligibleTodayEvents.length === 0
+      ? getFeaturedNextGame(fallbackEvents)
+      : null;
 
   return (
     <div
@@ -65,14 +71,27 @@ export function SportsMediumLayout({
       className="grid min-h-0 flex-1 grid-cols-[minmax(0,3fr)_minmax(0,2fr)] grid-rows-[minmax(0,1fr)] gap-2"
     >
       <div className="min-h-0 min-w-0">
-        <MediumLiveGameView
-          events={eligibleTodayEvents}
-          teams={teams}
-          teamEventsById={teamEventsById}
-          selectedGameId={selectedGameId}
-          onSelectGame={onSelectGame}
-          dense
-        />
+        {featuredNextGame ? (
+          <FeaturedNextGame
+            game={featuredNextGame}
+            teams={teams}
+            showTime={showTime}
+            showVenue={showVenue}
+            leaguesById={leaguesById}
+            dense
+          />
+        ) : (
+          <MediumLiveGameView
+            events={eligibleTodayEvents}
+            teams={teams}
+            teamEventsById={teamEventsById}
+            selectedGameId={selectedGameId}
+            onSelectGame={onSelectGame}
+            showVenue={showVenue}
+            leaguesById={leaguesById}
+            dense
+          />
+        )}
       </div>
       <div
         className={

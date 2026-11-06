@@ -69,6 +69,9 @@ type EventRow = {
   event_time: string | null;
   status: string | null;
   venue: string | null;
+  venue_city: string | null;
+  venue_region: string | null;
+  venue_country: string | null;
 };
 
 function mapLeague(row: LeagueRow): SportLeague {
@@ -113,6 +116,9 @@ function mapEvent(row: EventRow): SportEvent {
     eventTime: row.event_time,
     status: row.status,
     venue: row.venue,
+    venueCity: row.venue_city,
+    venueRegion: row.venue_region,
+    venueCountry: row.venue_country,
   };
 }
 
@@ -461,8 +467,8 @@ export function upsertEvents(
     `INSERT INTO sports_events (
        event_id, league_id, sport, home_team_id, away_team_id,
        home_team, away_team, home_team_normalized, away_team_normalized, home_score, away_score,
-       event_date, event_time, status, venue, fetched_date
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       event_date, event_time, status, venue, venue_city, venue_region, venue_country, fetched_date
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(event_id) DO UPDATE SET
        league_id = excluded.league_id,
        sport = excluded.sport,
@@ -478,6 +484,9 @@ export function upsertEvents(
        event_time = excluded.event_time,
        status = excluded.status,
        venue = excluded.venue,
+       venue_city = excluded.venue_city,
+       venue_region = excluded.venue_region,
+       venue_country = excluded.venue_country,
        fetched_date = excluded.fetched_date`,
   );
 
@@ -505,6 +514,9 @@ export function upsertEvents(
         event.eventTime,
         event.status,
         event.venue,
+        event.venueCity ?? null,
+        event.venueRegion ?? null,
+        event.venueCountry ?? null,
         fetchedDate,
       );
     }
@@ -553,7 +565,8 @@ export function getCachedEvent(
       `SELECT se.event_id, se.league_id, se.sport, se.home_team_id, se.away_team_id,
             se.home_team, se.away_team,
             ht.badge_url AS home_team_badge_url, at.badge_url AS away_team_badge_url,
-            se.home_score, se.away_score, se.event_date, se.event_time, se.status, se.venue
+            se.home_score, se.away_score, se.event_date, se.event_time, se.status, se.venue,
+            se.venue_city, se.venue_region, se.venue_country
        FROM sports_events se
        LEFT JOIN sports_teams ht ON ht.team_id = se.home_team_id
        LEFT JOIN sports_teams at ON at.team_id = se.away_team_id
@@ -576,7 +589,8 @@ export function getTodayEvents(
               COALESCE(ht.badge_url, hoc.badge_url) AS home_team_badge_url,
               COALESCE(at.badge_url, aoc.badge_url) AS away_team_badge_url,
               se.home_score, se.away_score,
-              se.event_date, se.event_time, se.status, se.venue
+              se.event_date, se.event_time, se.status, se.venue,
+              se.venue_city, se.venue_region, se.venue_country
          FROM sports_events se
          INNER JOIN sports_leagues sl ON sl.league_id = se.league_id
          LEFT JOIN sports_teams ht ON ht.team_id = se.home_team_id
@@ -780,7 +794,8 @@ function getLeagueSnapshot(db: Database.Database, sport: string, leagueId: strin
             se.home_team, se.away_team,
             COALESCE(ht.badge_url, hoc.badge_url) AS home_team_badge_url,
             COALESCE(at.badge_url, aoc.badge_url) AS away_team_badge_url,
-            se.home_score, se.away_score, se.event_date, se.event_time, se.status, se.venue
+            se.home_score, se.away_score, se.event_date, se.event_time, se.status, se.venue,
+            se.venue_city, se.venue_region, se.venue_country
        FROM sports_events se
        LEFT JOIN sports_teams ht ON ht.team_id = se.home_team_id
        LEFT JOIN sports_teams at ON at.team_id = se.away_team_id

@@ -89,9 +89,9 @@ export function SportsSettingsPanel({
 
       <div className="flex items-center justify-between rounded-md border px-3 py-2">
         <div>
-          <p className="text-sm">Show venue</p>
+          <p className="text-sm">Show venue &amp; location</p>
           <p className="text-xs text-muted-foreground">
-            Include venue names when available.
+            Include venue and city when available.
           </p>
         </div>
         <Switch

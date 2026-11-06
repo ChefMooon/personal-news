@@ -35,6 +35,9 @@ describe("sports event upsert foreign keys", () => {
         event_time TEXT,
         status TEXT,
         venue TEXT,
+        venue_city TEXT,
+        venue_region TEXT,
+        venue_country TEXT,
         fetched_date TEXT NOT NULL,
         FOREIGN KEY (league_id) REFERENCES sports_leagues(league_id) ON DELETE CASCADE
       );

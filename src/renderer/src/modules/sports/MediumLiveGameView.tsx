@@ -10,6 +10,8 @@ import { TeamAvatar } from "./TeamAvatar";
 import { UpdatedScore } from "./UpdatedScore";
 import { cn } from "../../lib/utils";
 import { getPreviousGame, resolveTrackedTeamSide } from "./side-resolution";
+import type { LeaguesById } from "./league-display";
+import { getLeagueCountry, formatVenueLine } from "./location-display";
 import {
   getGameOutcome,
   getGamePhase,
@@ -99,6 +101,8 @@ export function MediumLiveGameView({
   teamEventsById,
   selectedGameId,
   onSelectGame,
+  showVenue = true,
+  leaguesById = {},
   dense = false,
 }: {
   events: SportEvent[];
@@ -106,6 +110,8 @@ export function MediumLiveGameView({
   teamEventsById: Record<string, SportTeamEvents>;
   selectedGameId: string | null;
   onSelectGame: (eventId: string) => void;
+  showVenue?: boolean;
+  leaguesById?: LeaguesById;
   dense?: boolean;
 }): React.ReactElement | null {
   const selectedGame =
@@ -153,6 +159,11 @@ export function MediumLiveGameView({
   const status = isLive
     ? (selectedGame.status ?? "Live")
     : formatEventTime(selectedGame);
+  const venueLine =
+    formatVenueLine(
+      selectedGame,
+      getLeagueCountry(selectedGame, leaguesById),
+    ) ?? "Venue TBD";
 
   return (
     <section
@@ -295,17 +306,25 @@ export function MediumLiveGameView({
         </div>
         <div
           className={cn(
-            "grid grid-cols-2 divide-x border-t text-muted-foreground",
+            "grid border-t text-muted-foreground",
+            showVenue ? "grid-cols-2 divide-x" : "grid-cols-1",
             dense ? "mt-2 shrink-0 pt-1.5 text-[11px]" : "mt-3 pt-2 text-xs",
           )}
         >
-          <div className="min-w-0 pr-3 text-left">
-            <p className="font-semibold uppercase tracking-wide">Location</p>
-            <p className="truncate" title={selectedGame.venue ?? undefined}>
-              {selectedGame.venue ?? "Venue TBD"}
-            </p>
-          </div>
-          <div className="min-w-0 pl-3 text-right">
+          {showVenue ? (
+            <div className="min-w-0 pr-3 text-left">
+              <p className="font-semibold uppercase tracking-wide">Location</p>
+              <p className="truncate" title={venueLine}>
+                {venueLine}
+              </p>
+            </div>
+          ) : null}
+          <div
+            className={cn(
+              "min-w-0",
+              showVenue ? "pl-3 text-right" : "text-left",
+            )}
+          >
             <p className="font-semibold uppercase tracking-wide">Previous</p>
             <p className="truncate" title={previousGame?.eventDate}>
               {previousGame

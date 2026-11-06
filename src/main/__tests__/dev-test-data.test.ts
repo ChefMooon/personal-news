@@ -76,6 +76,7 @@ const MIGRATIONS = [
   "009_ingested_links.sql",
   "010_astronomy_cache.sql",
   "011_saved_post_metadata_status.sql",
+  "012_sports_event_location.sql",
 ];
 
 const FIXTURE_ID_PREFIX = "pn_dev_fixture_";

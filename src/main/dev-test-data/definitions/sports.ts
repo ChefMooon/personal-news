@@ -15,6 +15,9 @@ type FixtureLeague = {
   home: FixtureTeam;
   away: FixtureTeam;
   venue: string;
+  venueCity: string;
+  venueRegion: string | null;
+  venueCountry: string;
   liveDescription: string;
   liveProgress: string;
 };
@@ -34,6 +37,9 @@ const baseball: FixtureLeague = {
     shortName: "COM",
   },
   venue: "Synthetic Ballpark",
+  venueCity: "Fixtureville",
+  venueRegion: "FX",
+  venueCountry: "Synthetic",
   liveDescription:
     "Synthetic Baseball game for the Development fixture league.",
   liveProgress: "Top 5th inning",
@@ -54,6 +60,9 @@ const basketball: FixtureLeague = {
     shortName: "PIL",
   },
   venue: "Synthetic Arena",
+  venueCity: "Mockport",
+  venueRegion: "MP",
+  venueCountry: "Synthetic",
   liveDescription:
     "Synthetic Basketball game for the Development fixture league.",
   liveProgress: "End of 3rd quarter",
@@ -74,6 +83,9 @@ const wnba: FixtureLeague = {
     shortName: "WAV",
   },
   venue: "Synthetic Court",
+  venueCity: "Testford",
+  venueRegion: "TF",
+  venueCountry: "Synthetic",
   liveDescription: "Synthetic WNBA game for the Development fixture league.",
   liveProgress: "End of 2nd quarter",
 };
@@ -93,6 +105,9 @@ const pwhl: FixtureLeague = {
     shortName: "AUR",
   },
   venue: "Synthetic Rink",
+  venueCity: "Faraway",
+  venueRegion: null,
+  venueCountry: "Elsewhere",
   liveDescription: "Synthetic PWHL game for the Development fixture league.",
   liveProgress: "End of 2nd period",
 };
@@ -156,6 +171,9 @@ function makeEvent(
     eventTime,
     status,
     venue: league.venue,
+    venueCity: league.venueCity,
+    venueRegion: league.venueRegion,
+    venueCountry: league.venueCountry,
   };
 }
 

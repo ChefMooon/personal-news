@@ -18,11 +18,25 @@ export function getLeagueLabel({
   leaguesById: LeaguesById;
   fallbackLabel?: string | null;
 }): string {
-  return (
-    fallbackLabel?.trim() ||
-    leaguesById[getLeagueKey(sport, leagueId)]?.name ||
-    leagueId
-  );
+  const candidate = [
+    fallbackLabel,
+    leaguesById[getLeagueKey(sport, leagueId)]?.name,
+  ]
+    .map((label) => label?.trim())
+    .find(
+      (label) =>
+        label &&
+        label.toLowerCase() !== leagueId.toLowerCase() &&
+        !/^\d+$/.test(label),
+    );
+  if (
+    !candidate ||
+    candidate.toLowerCase() === leagueId.toLowerCase() ||
+    /^\d+$/.test(candidate)
+  ) {
+    return getSportLabel(sport);
+  }
+  return candidate;
 }
 
 export function getTrackedTeamMeta(
@@ -36,7 +50,9 @@ export function getTrackedTeamMeta(
     leaguesById,
   });
 
-  return showSportLabels
-    ? `${getSportLabel(team.sport)} · ${leagueLabel}`
-    : leagueLabel;
+  const sportLabel = getSportLabel(team.sport);
+  if (!showSportLabels || leagueLabel === sportLabel) {
+    return leagueLabel;
+  }
+  return `${sportLabel} · ${leagueLabel}`;
 }

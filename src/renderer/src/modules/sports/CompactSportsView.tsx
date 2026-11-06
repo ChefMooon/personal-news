@@ -19,9 +19,13 @@ import {
   resolveTrackedTeamSide,
 } from "./side-resolution";
 import {
+  getFeaturedNextGame,
   getEligibleTodayGames,
   getSelectedTodayGame,
 } from "./sports-game-selection";
+import type { LeaguesById } from "./league-display";
+import { getLeagueCountry, formatVenueLine } from "./location-display";
+import { FeaturedNextGame } from "./FeaturedNextGame";
 import { cn } from "../../lib/utils";
 
 function formatEventTime(game: SportEvent): string {
@@ -93,12 +97,16 @@ function CompactGameSummary({
   trackedTeam,
   opponentTeam,
   previousGame,
+  showVenue,
+  leaguesById,
   fillAvailable,
 }: {
   game: SportEvent;
   trackedTeam: TrackedTeam | null;
   opponentTeam: TrackedTeam | null;
   previousGame: SportEvent | null;
+  showVenue: boolean;
+  leaguesById: LeaguesById;
   fillAvailable: boolean;
 }): React.ReactElement {
   const live = getGamePhase(game) === "live";
@@ -151,6 +159,8 @@ function CompactGameSummary({
             score: previousGame.homeScore,
           }
       : null;
+  const venueLine =
+    formatVenueLine(game, getLeagueCountry(game, leaguesById)) ?? "Venue TBD";
   const trackedIsHome = trackedSide === "home";
   const primaryTeam = trackedTeam
     ? {
@@ -242,14 +252,23 @@ function CompactGameSummary({
           </p>
         </div>
       </div>
-      <div className="mt-2 grid min-w-0 grid-cols-2 divide-x border-t pt-1.5 text-[10px] text-muted-foreground">
-        <div className="min-w-0 pr-2 text-left">
-          <p className="font-semibold uppercase tracking-wide">Location</p>
-          <p className="truncate" title={game.venue ?? undefined}>
-            {game.venue ?? "Venue TBD"}
-          </p>
-        </div>
-        <div className="min-w-0 pl-2 text-right">
+      <div
+        className={cn(
+          "mt-2 grid min-w-0 border-t pt-1.5 text-[10px] text-muted-foreground",
+          showVenue ? "grid-cols-2 divide-x" : "grid-cols-1",
+        )}
+      >
+        {showVenue ? (
+          <div className="min-w-0 pr-2 text-left">
+            <p className="font-semibold uppercase tracking-wide">Location</p>
+            <p className="truncate" title={venueLine}>
+              {venueLine}
+            </p>
+          </div>
+        ) : null}
+        <div
+          className={cn("min-w-0", showVenue ? "pl-2 text-right" : "text-left")}
+        >
           <p className="font-semibold uppercase tracking-wide">Previous</p>
           <p className="truncate" title={previousGame?.awayTeam}>
             {previousTrackedTeam && previousOpponent
@@ -264,17 +283,25 @@ function CompactGameSummary({
 
 export function CompactSportsView({
   events,
+  upcomingEvents,
   teams,
   teamEventsById,
   selectedGameId,
   onSelectGame,
+  showTime,
+  showVenue = true,
+  leaguesById = {},
   fillAvailable = false,
 }: {
   events: SportEvent[];
+  upcomingEvents?: SportEvent[];
   teams: TrackedTeam[];
   teamEventsById: Record<string, { last: SportEvent[]; next: SportEvent[] }>;
   selectedGameId: string | null;
   onSelectGame: (eventId: string) => void;
+  showTime: boolean;
+  showVenue?: boolean;
+  leaguesById?: LeaguesById;
   fillAvailable?: boolean;
 }): React.ReactElement {
   const [secondaryPage, setSecondaryPage] = useState(0);
@@ -284,6 +311,9 @@ export function CompactSportsView({
     [events, today],
   );
   const selectedGame = getSelectedTodayGame(liveOrToday, selectedGameId);
+  const featured = selectedGame
+    ? null
+    : getFeaturedNextGame(upcomingEvents ?? []);
   const selectedTeam = selectedGame
     ? (teams.find((team) =>
         resolveTrackedTeamSide(
@@ -332,9 +362,18 @@ export function CompactSportsView({
     .map((team) => ({
       type: "team" as const,
       team,
-      nextGame: getFirstDifferentGame(teamEventsById[team.teamId]?.next, null, team),
+      nextGame: getFirstDifferentGame(
+        teamEventsById[team.teamId]?.next,
+        null,
+        team,
+      ),
     }));
-  const secondaryItems = [...secondaryEvents, ...restingTeams];
+  const visibleRestingTeams = featured
+    ? restingTeams.filter(
+        (item) => item.nextGame?.eventId !== featured.eventId,
+      )
+    : restingTeams;
+  const secondaryItems = [...secondaryEvents, ...visibleRestingTeams];
   const pageSize = 2;
   const pageCount = Math.max(1, Math.ceil(secondaryItems.length / pageSize));
   const currentPage = Math.min(secondaryPage, pageCount - 1);
@@ -347,7 +386,7 @@ export function CompactSportsView({
     <div className="flex h-full min-h-28 min-w-0 flex-col gap-1.5">
       <div className="min-h-0 flex-1 space-y-1.5">
         <p className="px-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-          Also today
+          {selectedGame ? "Also today" : "Other teams"}
         </p>
         {visibleSecondaryItems.map((item) =>
           item.type === "event" ? (
@@ -424,9 +463,22 @@ export function CompactSportsView({
           pageCount > 1 && !fillAvailable && "min-h-44",
         )}
       >
-        <div className="flex min-h-28 min-w-0 items-center justify-center rounded-lg border border-dashed px-3 text-center text-sm text-muted-foreground">
-          No games today
-        </div>
+        {featured ? (
+          <div className="min-h-28 min-w-0">
+            <FeaturedNextGame
+              game={featured}
+              teams={teams}
+              showTime={showTime}
+              showVenue={showVenue}
+              leaguesById={leaguesById}
+              dense
+            />
+          </div>
+        ) : (
+          <div className="flex min-h-28 min-w-0 items-center justify-center rounded-lg border border-dashed px-3 text-center text-sm text-muted-foreground">
+            No games today
+          </div>
+        )}
         {secondaryColumn}
       </div>
     );
@@ -484,6 +536,8 @@ export function CompactSportsView({
           trackedTeam={selectedTeam}
           opponentTeam={opponentTeam}
           previousGame={previousGame}
+          showVenue={showVenue}
+          leaguesById={leaguesById}
           fillAvailable={fillAvailable}
         />
         {secondaryColumn}

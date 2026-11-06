@@ -25,6 +25,7 @@ import {
   getTodayBadgeClasses,
   getTodayDotClasses,
 } from "./team-display-utils";
+import { formatVenueLine, getLeagueCountry } from "./location-display";
 
 function TodayGameCard({
   team,
@@ -66,7 +67,10 @@ function TodayGameCard({
   const side = todayGameDisplay?.side ?? null;
   const startTimeText = getLiveStartTimeText(todayGame, showLiveStartTime);
   const hasStartTime = Boolean(startTimeText);
-  const hasVenue = showVenue && Boolean(todayGame?.venue);
+  const venueLine = todayGame
+    ? formatVenueLine(todayGame, getLeagueCountry(todayGame, leaguesById))
+    : null;
+  const hasVenue = showVenue && Boolean(venueLine);
   const hasLastGame = Boolean(priorGame);
   const footerSectionCount =
     Number(hasStartTime) + Number(hasVenue) + Number(hasLastGame);
@@ -204,7 +208,7 @@ function TodayGameCard({
               <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                 Venue
               </p>
-              <p className="mt-0.5 text-foreground/80">{todayGame?.venue}</p>
+              <p className="mt-0.5 text-foreground/80">{venueLine}</p>
             </div>
           ) : null}
           {hasLastGame ? (
@@ -434,7 +438,9 @@ export function TodayView({
             <div className="space-y-1.5">
               {resting.map((team) => {
                 const nextGame = getFirstDifferentGame(
-                  teamEventsById[team.teamId]?.next, null, team,
+                  teamEventsById[team.teamId]?.next,
+                  null,
+                  team,
                 );
                 return (
                   <TodayRestingRow
@@ -501,7 +507,9 @@ export function TodayView({
             <div className="space-y-1.5">
               {resting.map((team) => {
                 const nextGame = getFirstDifferentGame(
-                  teamEventsById[team.teamId]?.next, null, team,
+                  teamEventsById[team.teamId]?.next,
+                  null,
+                  team,
                 );
                 return (
                   <TodayRestingRow

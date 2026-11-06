@@ -78,6 +78,8 @@ type SportsDbEvent = {
   strTime?: string | null;
   strStatus?: string | null;
   strVenue?: string | null;
+  strCity?: string | null;
+  strCountry?: string | null;
   strProgress?: string | null;
   strDescriptionEN?: string | null;
 };
@@ -165,6 +167,11 @@ type EspnScoreboardCompetition = {
   status?: EspnScoreboardCompetitionStatus;
   venue?: {
     fullName?: string;
+    address?: {
+      city?: string;
+      state?: string;
+      country?: string;
+    };
   };
 };
 
@@ -666,7 +673,16 @@ function toDatePartsFromIso(
   };
 }
 
-function mapEspnScoreboardEvent(
+function cleanLocationPart(value: string | null | undefined): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed || null;
+}
+
+export function mapEspnScoreboardEvent(
   row: EspnScoreboardEvent,
   leagueId: string,
   sport: string,
@@ -720,6 +736,9 @@ function mapEspnScoreboardEvent(
     eventTime: dateParts.eventTime,
     status: isPre ? "Scheduled" : statusText,
     venue: competition?.venue?.fullName ?? null,
+    venueCity: cleanLocationPart(competition?.venue?.address?.city),
+    venueRegion: cleanLocationPart(competition?.venue?.address?.state),
+    venueCountry: cleanLocationPart(competition?.venue?.address?.country),
   };
 }
 
@@ -907,7 +926,7 @@ function mapLeague(row: SportsDbLeague): SportLeague | null {
   };
 }
 
-function mapEvent(row: SportsDbEvent): SportEvent | null {
+export function mapEvent(row: SportsDbEvent): SportEvent | null {
   if (
     !row.idEvent ||
     !row.idLeague ||
@@ -935,6 +954,9 @@ function mapEvent(row: SportsDbEvent): SportEvent | null {
     eventTime: normalizeClockTime(row.strTime),
     status: normalizeEventStatus(row.strStatus, row.strProgress),
     venue: row.strVenue ?? null,
+    venueCity: cleanLocationPart(row.strCity),
+    venueRegion: null,
+    venueCountry: cleanLocationPart(row.strCountry),
   };
 }
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { SportEvent } from "../../../../shared/ipc-types";
 import {
+  getFeaturedNextGame,
   getEligibleTodayGames,
   getSelectedTodayGame,
 } from "./sports-game-selection";
@@ -57,5 +58,26 @@ describe("sports game selection", () => {
     expect(getSelectedTodayGame(games, "second")?.eventId).toBe("second");
     expect(getSelectedTodayGame(games, "removed")?.eventId).toBe("first");
     expect(getSelectedTodayGame([], "removed")).toBeNull();
+  });
+
+  it("returns the first scheduled game after live and finished events", () => {
+    const events = [
+      createEvent("live", "2026-08-27", "Live"),
+      createEvent("finished", "2026-08-27", "Final"),
+      createEvent("first-scheduled", "2026-08-28", "Scheduled"),
+      createEvent("later-scheduled", "2026-08-29", "Scheduled"),
+    ];
+
+    expect(getFeaturedNextGame(events)?.eventId).toBe("first-scheduled");
+  });
+
+  it("returns null when there are no scheduled events", () => {
+    expect(getFeaturedNextGame([])).toBeNull();
+    expect(
+      getFeaturedNextGame([
+        createEvent("live", "2026-08-27", "Live"),
+        createEvent("finished", "2026-08-27", "Final"),
+      ]),
+    ).toBeNull();
   });
 });

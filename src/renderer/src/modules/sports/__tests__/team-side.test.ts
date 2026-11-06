@@ -223,6 +223,7 @@ describe("team side resolution and today selection", () => {
         teamEventsById: {},
         selectedGameId: event.eventId,
         onSelectGame: () => {},
+        showTime: true,
       }),
     );
     expect(html).toContain("Toronto Raptors");

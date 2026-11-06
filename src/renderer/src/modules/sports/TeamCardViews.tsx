@@ -24,6 +24,7 @@ import {
   hasResolvedScore,
   isLiveStatus,
 } from "./utils";
+import { formatVenueLine, getLeagueCountry } from "./location-display";
 
 export interface SummarizedTeamCardProps {
   team: TrackedTeam;
@@ -194,7 +195,13 @@ export function StandardTeamCard({
   const classes = outcomeClasses(outcome);
   const startTimeText = getLiveStartTimeText(todayGame, showLiveStartTime);
   const hasStartTime = Boolean(startTimeText);
-  const hasVenue = showVenue && Boolean(todayGame?.venue);
+  const todayVenueLine = todayGame
+    ? formatVenueLine(todayGame, getLeagueCountry(todayGame, leaguesById))
+    : null;
+  const nextVenueLine = nextGame
+    ? formatVenueLine(nextGame, getLeagueCountry(nextGame, leaguesById))
+    : null;
+  const hasVenue = showVenue && Boolean(todayVenueLine);
   const footerSectionCount = Number(hasStartTime) + Number(hasVenue);
 
   return (
@@ -295,7 +302,7 @@ export function StandardTeamCard({
               </p>
               <p className="text-muted-foreground">
                 {formatDateTime(nextGame, showTime)}
-                {showVenue && nextGame.venue ? ` · ${nextGame.venue}` : ""}
+                {showVenue && nextVenueLine ? ` · ${nextVenueLine}` : ""}
               </p>
             </>
           ) : (
@@ -324,7 +331,7 @@ export function StandardTeamCard({
               <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                 Venue
               </p>
-              <p className="mt-0.5 text-foreground/80">{todayGame?.venue}</p>
+              <p className="mt-0.5 text-foreground/80">{todayVenueLine}</p>
             </div>
           ) : null}
         </div>
@@ -354,7 +361,13 @@ export function DetailedTeamCard({
   const streakIsWin = streak.startsWith("W");
   const startTimeText = getLiveStartTimeText(todayGame, showLiveStartTime);
   const hasStartTime = Boolean(startTimeText);
-  const hasVenue = showVenue && Boolean(todayGame?.venue);
+  const todayVenueLine = todayGame
+    ? formatVenueLine(todayGame, getLeagueCountry(todayGame, leaguesById))
+    : null;
+  const nextVenueLine = nextGame
+    ? formatVenueLine(nextGame, getLeagueCountry(nextGame, leaguesById))
+    : null;
+  const hasVenue = showVenue && Boolean(todayVenueLine);
   const middleSectionCount = Number(hasStartTime) + Number(hasVenue);
 
   return (
@@ -447,17 +460,6 @@ export function DetailedTeamCard({
                   />
                 </div>
               ) : null}
-              {!todayGame && outcome ? (
-                <span
-                  className={cn(
-                    "mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-bold",
-                    classes.text,
-                    classes.bg,
-                  )}
-                >
-                  {outcome === "W" ? "Win" : outcome === "L" ? "Loss" : "Tie"}
-                </span>
-              ) : null}
             </>
           ) : (
             <p className="mt-0.5 text-sm text-muted-foreground">
@@ -499,43 +501,43 @@ export function DetailedTeamCard({
               <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                 Venue
               </p>
-              <p className="mt-0.5 text-foreground/80">{todayGame?.venue}</p>
+              <p className="mt-0.5 text-foreground/80">{todayVenueLine}</p>
             </div>
           ) : null}
         </div>
       ) : null}
 
-      <div
-        className={cn(
-          "flex items-center gap-3 bg-muted/10 px-3 py-2.5",
-          fillAvailable ? "flex-1 justify-center" : null,
-        )}
-      >
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-muted bg-muted/30 text-[11px] font-semibold text-muted-foreground">
-          NEXT
+      {nextGame ? (
+        <div
+          className={cn(
+            "flex items-center gap-3 bg-muted/10 px-3 py-2.5",
+            fillAvailable ? "flex-1 justify-center" : null,
+          )}
+        >
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-muted bg-muted/30 text-[11px] font-semibold text-muted-foreground">
+            NEXT
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              {todayGame ? "Up Next" : "Next Game"}
+            </p>
+            <p className="mt-0.5 text-sm font-medium">
+              vs. {getOpponent(nextGame, team.teamId, team.name, team.leagueId)}
+            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {formatDateTime(nextGame, showTime)}
+              {showVenue && nextVenueLine ? ` · ${nextVenueLine}` : ""}
+            </p>
+          </div>
         </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+      ) : (
+        <div className="flex items-center gap-2 bg-muted/10 px-3 py-1.5 text-xs">
+          <p className="font-semibold uppercase tracking-wide text-muted-foreground">
             {todayGame ? "Up Next" : "Next Game"}
           </p>
-          {nextGame ? (
-            <>
-              <p className="mt-0.5 text-sm font-medium">
-                vs.{" "}
-                {getOpponent(nextGame, team.teamId, team.name, team.leagueId)}
-              </p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                {formatDateTime(nextGame, showTime)}
-                {showVenue && nextGame.venue ? ` · ${nextGame.venue}` : ""}
-              </p>
-            </>
-          ) : (
-            <p className="mt-0.5 text-sm text-muted-foreground">
-              No upcoming games scheduled
-            </p>
-          )}
+          <p className="text-muted-foreground">No upcoming games scheduled</p>
         </div>
-      </div>
+      )}
     </div>
   );
 }

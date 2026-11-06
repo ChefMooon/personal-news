@@ -1205,6 +1205,10 @@ try {
     medium: "pn_dev_fixture_widget_weather_medium",
     large: "pn_dev_fixture_widget_weather_large",
   };
+  const sportsWidgetIds = {
+    small: "pn_dev_fixture_widget_sports_small",
+    medium: "pn_dev_fixture_widget_sports_medium",
+  };
   const openFixtureDashboard = async (moduleId, scenario = {}) => {
     await page.evaluate(
       ({ key, value }) => sessionStorage.setItem(key, JSON.stringify(value)),
@@ -1964,6 +1968,23 @@ try {
         .getByRole("link", { name: "Details", exact: true })
         .count()) === 0,
       `Global Astronomy off left the Astronomy ${size} entry point visible`,
+    );
+  }
+
+  await openFixtureDashboard("sports", { sportsNoGamesToday: true });
+  for (const size of ["small", "medium"]) {
+    const sportsWidget = page.locator(
+      `[data-widget-instance-id="${sportsWidgetIds[size]}"]`,
+    );
+    await sportsWidget.getByText(/Next up/i).waitFor();
+    const widgetText = await sportsWidget.innerText();
+    assert(
+      /Next up/i.test(widgetText),
+      `Sports ${size} did not show a featured next game`,
+    );
+    assert(
+      !widgetText.includes("No games today"),
+      `Sports ${size} retained the no-games-today empty state`,
     );
   }
 
