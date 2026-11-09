@@ -67,9 +67,22 @@ git checkout main
 git pull origin main
 ```
 
-4. Confirm release notes are ready.
-- Ensure `CHANGELOG.md` contains the matching version section.
-- The release notes body must be sourced from that exact section (same headings/bullets style used in the `v1.3.1` release).
+4. Validate release notes before any version bump.
+- Ensure `CHANGELOG.md` contains the matching version section. The release notes body must be sourced from that exact section (same headings/bullets style used in the `v1.3.1` release).
+- Run the check:
+```bash
+npm run release:notes -- <version> --check
+```
+- Supported subset for the section:
+  - Only `### Heading` lines and plain-text `- bullet` lines (single `-`, no indentation, one line per bullet).
+  - No inline code (backticks), bold/italic, links, bare URLs, HTML, nested or numbered lists, other heading levels (`####`), or wrapped continuation lines.
+  - Every heading needs at least one bullet; no bullet before the first heading. Plain underscores inside words (for example `snake_case`) are fine.
+- The check also protects the in-app "What's new" dialog: the app bundles this section at build time and shows it after the update.
+- If the check fails (a missing or empty section also fails):
+  - Stop. Do not edit `CHANGELOG.md`, do not bump the version, and do not run later steps.
+  - Report the violation lines (`line N: ...`) to the user.
+  - Use `vscode/askQuestions` (header `changelog`) to ask the user to fix `CHANGELOG.md`, with options `Fixed, re-check` and `Stop release`.
+  - On `Fixed, re-check`, re-run the check; repeat after each fix until it passes or the user chooses `Stop release`.
 
 5. Update package versions.
 ```bash
@@ -159,6 +172,7 @@ git push origin <tagVersion>
 
 - Version in `package.json` and `package-lock.json` matches input version.
 - `CHANGELOG.md` has final notes for that version.
+- `npm run release:notes -- <version> --check` passes for the released version.
 - Release notes body for `<tagVersion>` matches the corresponding `CHANGELOG.md` section content and formatting.
 - Tag exists remotely with correct naming and message.
 - GitHub Action run succeeded for the tag.

@@ -10,9 +10,13 @@ export const MAIN_TO_RENDERER_CHANNELS = new Set<string>([
   IPC.SCRIPTS_OUTPUT, IPC.SCRIPTS_RUN_COMPLETE, IPC.SCRIPTS_UPDATED, IPC.DEV_TEST_DATA_UPDATED,
 ]);
 
-const rendererChannelPrefixes = /^(window:(minimize|toggleMaximize|close|getState)|updates:(getStatus|checkForUpdates|installUpdate)|weather:|astronomy:|settings:|sports:|youtube:|reddit:|scripts:|themes:|devTestData:|shell:|dialog:)/;
+const rendererChannelPrefixes = /^(window:(minimize|toggleMaximize|close|getState)|updates:(getStatus|checkForUpdates|installUpdate|getPendingWhatsNew|acknowledgeWhatsNew|simulateStatus)|weather:|astronomy:|settings:|sports:|youtube:|reddit:|scripts:|themes:|devTestData:|shell:|dialog:)/;
+// Test-only channel: only exposed when the app was launched by the Electron harness
+// (the main process additionally requires an unpackaged build before registering a handler).
+const harnessOnlyRendererChannels = new Set<string>([IPC.UPDATES_SIMULATE_STATUS]);
+const harnessLaunch = typeof process !== "undefined" && process.env?.PERSONAL_NEWS_ELECTRON_HARNESS === "1";
 export const RENDERER_TO_MAIN_CHANNELS = new Set<string>(
-  Object.values(IPC).filter((channel) => rendererChannelPrefixes.test(channel) && !MAIN_TO_RENDERER_CHANNELS.has(channel) && channel !== IPC.SETTINGS_GET_THEME_SYNC && channel !== IPC.SETTINGS_GET_SIDEBAR_CONFIG_SYNC),
+  Object.values(IPC).filter((channel) => rendererChannelPrefixes.test(channel) && !MAIN_TO_RENDERER_CHANNELS.has(channel) && channel !== IPC.SETTINGS_GET_THEME_SYNC && channel !== IPC.SETTINGS_GET_SIDEBAR_CONFIG_SYNC && (harnessLaunch || !harnessOnlyRendererChannels.has(channel))),
 );
 
 const genericSettingKeys = new Set([
@@ -27,7 +31,7 @@ const genericSettingKeys = new Set([
 ]);
 const harnessOnlyGenericSettingKeys = new Set([
   "local_test_data_sentinel", "astronomy_settings_json", "dev_test_data_applied_version",
-  "dev_test_data_sports_defaults_migration_version",
+  "dev_test_data_sports_defaults_migration_version", "whats_new_last_seen_version",
 ]);
 
 export function isAllowedGenericSettingKey(key: unknown, harnessMode = false): key is string {

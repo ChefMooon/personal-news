@@ -25,8 +25,11 @@ import {
   IPC,
   type IpcMutationResult,
   type NtfyIngestCompleteEvent,
+  type ReleaseNotesDocument,
   type UpdateStatusEvent,
+  type WhatsNewPayload,
 } from "../../shared/ipc-types";
+import { WhatsNewDialog } from "./components/WhatsNewDialog";
 import { buildNtfyFailureToastContent } from "./lib/ntfyNotifications";
 
 function AppShell(): React.ReactElement {
@@ -76,6 +79,52 @@ export default function App(): React.ReactElement {
   const updateReadyToastIdRef = React.useRef<string | number | null>(null);
   const updateReadyToastVersionRef = React.useRef<string | null>(null);
   const navigate = useNavigate();
+  const [whatsNew, setWhatsNew] = React.useState<{
+    version: string;
+    notes: ReleaseNotesDocument | null;
+    variant: "incoming" | "installed";
+    // Content stays after closing so the dialog can animate out.
+    open: boolean;
+  } | null>(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    window.api
+      .invoke(IPC.UPDATES_GET_PENDING_WHATS_NEW)
+      .then((result) => {
+        const payload = result as WhatsNewPayload | null;
+        if (!cancelled && payload) {
+          setWhatsNew((current) =>
+            current?.open
+              ? current
+              : {
+                  version: payload.version,
+                  notes: payload.notes,
+                  variant: "installed",
+                  open: true,
+                },
+          );
+        }
+      })
+      .catch((error: unknown) => {
+        console.error("Failed to load pending release notes", error);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleWhatsNewOpenChange = (open: boolean): void => {
+    if (open || !whatsNew?.open) return;
+    const dismissed = whatsNew;
+    setWhatsNew({ ...dismissed, open: false });
+    if (dismissed.variant !== "installed") return;
+    window.api
+      .invoke(IPC.UPDATES_ACKNOWLEDGE_WHATS_NEW, dismissed.version)
+      .catch((error: unknown) => {
+        console.error("Failed to acknowledge release notes", error);
+      });
+  };
 
   React.useEffect(() => {
     return window.api.on(IPC.APP_SHOW_TRAY_HINT, () => {
@@ -145,8 +194,40 @@ export default function App(): React.ReactElement {
       if (event.state === "downloaded") {
         if (event.installRequested) return;
         updateReadyToastVersionRef.current = event.version ?? null;
+        const readyNotes = event.downloadedReleaseNotes ?? event.releaseNotes;
+        const readyVersion = event.downloadedVersion ?? event.version ?? "";
+        const readyText = "Install now to restart on the latest version.";
         updateReadyToastIdRef.current = toast.success(`Update${versionLabel} is ready.`, {
-          description: "Install now to restart on the latest version.",
+          description:
+            readyNotes && readyNotes.sections.length > 0 ? (
+              <span>
+                {readyText}{" "}
+                <button
+                  type="button"
+                  className="underline underline-offset-2 hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+                  onClick={() =>
+                    setWhatsNew((current) =>
+                      // Never replace an open dialog: swapping out the installed
+                      // one would skip its acknowledgement.
+                      current?.open &&
+                      (current.variant === "installed" ||
+                        current.version === readyVersion)
+                        ? current
+                        : {
+                            version: readyVersion,
+                            notes: readyNotes,
+                            variant: "incoming",
+                            open: true,
+                          },
+                    )
+                  }
+                >
+                  See what's new
+                </button>
+              </span>
+            ) : (
+              readyText
+            ),
           duration: Infinity,
           className: "update-toast",
           classNames: { actionButton: "update-toast__action" },
@@ -212,18 +293,29 @@ export default function App(): React.ReactElement {
   }, []);
 
   return (
-    <RedditDigestEnabledProvider>
-      <SavedPostsEnabledProvider>
-        <SportsEnabledProvider>
-          <AstronomyEnabledProvider>
-            <WeatherEnabledProvider>
-              <SidebarConfigProvider>
-                <AppShell />
-              </SidebarConfigProvider>
-            </WeatherEnabledProvider>
-          </AstronomyEnabledProvider>
-        </SportsEnabledProvider>
-      </SavedPostsEnabledProvider>
-    </RedditDigestEnabledProvider>
+    <>
+      <RedditDigestEnabledProvider>
+        <SavedPostsEnabledProvider>
+          <SportsEnabledProvider>
+            <AstronomyEnabledProvider>
+              <WeatherEnabledProvider>
+                <SidebarConfigProvider>
+                  <AppShell />
+                </SidebarConfigProvider>
+              </WeatherEnabledProvider>
+            </AstronomyEnabledProvider>
+          </SportsEnabledProvider>
+        </SavedPostsEnabledProvider>
+      </RedditDigestEnabledProvider>
+      {whatsNew ? (
+        <WhatsNewDialog
+          open={whatsNew.open}
+          onOpenChange={handleWhatsNewOpenChange}
+          version={whatsNew.version}
+          notes={whatsNew.notes}
+          variant={whatsNew.variant}
+        />
+      ) : null}
+    </>
   );
 }

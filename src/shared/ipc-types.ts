@@ -11,6 +11,9 @@ export const IPC = {
   UPDATES_GET_STATUS: "updates:getStatus",
   UPDATES_CHECK_FOR_UPDATES: "updates:checkForUpdates",
   UPDATES_INSTALL_UPDATE: "updates:installUpdate",
+  UPDATES_GET_PENDING_WHATS_NEW: "updates:getPendingWhatsNew",
+  UPDATES_ACKNOWLEDGE_WHATS_NEW: "updates:acknowledgeWhatsNew",
+  UPDATES_SIMULATE_STATUS: "updates:simulateStatus",
   WEATHER_SEARCH_LOCATIONS: "weather:searchLocations",
   WEATHER_GET_LOCATIONS: "weather:getLocations",
   WEATHER_SAVE_LOCATION: "weather:saveLocation",
@@ -832,7 +835,7 @@ export interface UpdateStatusEvent {
   currentVersion: string;
   version?: string;
   releaseDate?: string;
-  releaseNotes?: string | null;
+  releaseNotes?: ReleaseNotesDocument | null;
   downloadPercent?: number;
   /** True only after this process has received electron-updater's downloaded event. */
   downloadedReady?: boolean;
@@ -841,7 +844,7 @@ export interface UpdateStatusEvent {
   failedDuring?: "checking" | "downloading" | "ready" | "install-requested";
   downloadedVersion?: string;
   downloadedReleaseDate?: string;
-  downloadedReleaseNotes?: string | null;
+  downloadedReleaseNotes?: ReleaseNotesDocument | null;
   lastCheckResult?: "available" | "not-available" | "error";
   lastCheckVersion?: string;
   lastCheckAt?: number;
@@ -1272,3 +1275,27 @@ export interface AstronomyUpdatedEvent {
   locationIds: string[];
   ok: boolean;
 }
+
+export interface ReleaseNotesSection {
+  /** null = bullets that appear before any heading */
+  heading: string | null;
+  items: string[];
+}
+
+export interface ReleaseNotesDocument {
+  /** Never contains empty sections. */
+  sections: ReleaseNotesSection[];
+}
+
+export interface WhatsNewPayload {
+  version: string;
+  notes: ReleaseNotesDocument;
+}
+
+export interface SimulateUpdateStatusRequest {
+  version: string;
+  releaseNotesHtml: string;
+}
+
+export const FULL_CHANGELOG_URL =
+  "https://github.com/ChefMooon/personal-news/blob/main/CHANGELOG.md";

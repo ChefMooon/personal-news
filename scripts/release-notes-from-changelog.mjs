@@ -2,10 +2,15 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import {
+  extractChangelogSection,
+  getChangelogSectionLineOffset,
+  validateReleaseNotesMarkdown,
+} from "../src/shared/changelog-notes.mjs";
 
 function printUsage() {
   console.log(
-    "Usage: node scripts/release-notes-from-changelog.mjs <version> [channel] [--dry-run]",
+    "Usage: node scripts/release-notes-from-changelog.mjs <version> [channel] [--dry-run | --check]",
   );
   console.log("");
   console.log("Arguments:");
@@ -14,6 +19,9 @@ function printUsage() {
   console.log("");
   console.log("Options:");
   console.log("  --dry-run   Print extracted notes and skip gh release edit");
+  console.log(
+    "  --check     Validate the CHANGELOG section for <version> (channel ignored)",
+  );
   console.log("  --help      Show this help message");
 }
 
@@ -25,12 +33,15 @@ function parseArgs(argv) {
   }
 
   const dryRun = args.includes("--dry-run");
-  const positional = args.filter((arg) => arg !== "--dry-run");
+  const check = args.includes("--check");
+  const positional = args.filter(
+    (arg) => arg !== "--dry-run" && arg !== "--check",
+  );
 
   const [version, channelRaw] = positional;
   const channel = channelRaw ?? "release";
 
-  return { help: false, dryRun, version, channel };
+  return { help: false, dryRun, check, version, channel };
 }
 
 function assertSemver(version) {
@@ -61,33 +72,6 @@ function computeTagVersion(version, channel) {
   return `v${version}`;
 }
 
-function extractChangelogNotes(changelogContent, version) {
-  const lines = changelogContent.split(/\r?\n/);
-  const sectionHeaderPattern = new RegExp(
-    `^## \\[${version.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\] - `,
-  );
-  const startIndex = lines.findIndex((line) => sectionHeaderPattern.test(line));
-
-  if (startIndex < 0) {
-    throw new Error(`CHANGELOG section for ${version} not found.`);
-  }
-
-  const endIndex = lines.findIndex(
-    (line, index) => index > startIndex && /^## \[/.test(line),
-  );
-  const sectionLines = lines.slice(
-    startIndex + 1,
-    endIndex >= 0 ? endIndex : lines.length,
-  );
-  const notes = sectionLines.join("\n").trim();
-
-  if (!notes) {
-    throw new Error(`CHANGELOG section for ${version} is empty.`);
-  }
-
-  return notes;
-}
-
 function runGhReleaseEdit(tagVersion, notesFilePath) {
   const result = spawnSync(
     "gh",
@@ -109,8 +93,37 @@ function runGhReleaseEdit(tagVersion, notesFilePath) {
   }
 }
 
+function runCheck(version) {
+  let notes;
+  let lineOffset = 0;
+  try {
+    const changelogPath = path.join(process.cwd(), "CHANGELOG.md");
+    const changelog = readFileSync(changelogPath, "utf8");
+    notes = extractChangelogSection(changelog, version);
+    lineOffset = getChangelogSectionLineOffset(changelog, version);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  }
+
+  const violations = validateReleaseNotesMarkdown(notes, lineOffset);
+  if (violations.length > 0) {
+    for (const violation of violations) {
+      console.error(violation);
+    }
+    process.exit(1);
+  }
+
+  const lines = notes.split(/\r?\n/);
+  const headings = lines.filter((line) => line.startsWith("### ")).length;
+  const bullets = lines.filter((line) => line.startsWith("- ")).length;
+  console.log(
+    `CHANGELOG section for ${version} is valid (${headings} headings, ${bullets} bullets).`,
+  );
+}
+
 function main() {
-  const { help, dryRun, version, channel } = parseArgs(process.argv);
+  const { help, dryRun, check, version, channel } = parseArgs(process.argv);
 
   if (help) {
     printUsage();
@@ -127,12 +140,17 @@ function main() {
     );
   }
 
+  if (check) {
+    runCheck(version);
+    return;
+  }
+
   const normalizedChannel = normalizeChannel(channel);
   const tagVersion = computeTagVersion(version, normalizedChannel);
 
   const changelogPath = path.join(process.cwd(), "CHANGELOG.md");
   const changelogContent = readFileSync(changelogPath, "utf8");
-  const notes = extractChangelogNotes(changelogContent, version);
+  const notes = extractChangelogSection(changelogContent, version);
 
   if (dryRun) {
     console.log(`Tag: ${tagVersion}`);

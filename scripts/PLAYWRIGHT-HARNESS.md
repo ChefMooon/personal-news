@@ -37,6 +37,34 @@ scenario before considering the change validated. The live preview lets an agent
 interact with the UI; it does not by itself provide automated coverage for
 behavior outside the matrix.
 
+### What's new notes
+
+Run the release-notes browser scenario with:
+
+```powershell
+npm run test:whats-new-browser
+```
+
+Each scenario uses a fresh browser context. It covers the update-ready toast
+"See what's new" action (the toast stays after the dialog closes), the Settings
+"Downloaded update" notes button, the hidden button for null or empty notes, the
+post-update dialog being acknowledged once (via "Got it" and Escape), the
+"View full changelog" `shell:openExternal` call, an HTML-shaped note item
+rendering as text, and a dark-theme dialog screenshot under
+`artifacts/renderer-browser/whats-new-*/`.
+
+To preview the post-update dialog manually in `npm run dev:renderer-browser`,
+run this in the browser console and reload:
+
+```js
+sessionStorage.setItem("__rendererBrowserScenario", JSON.stringify({
+  whatsNewPending: { version: "99.2.0", notes: { sections: [{ heading: "Added", items: ["Example item"] }] } },
+}));
+```
+
+Dismissing the dialog stores an acknowledgement in
+`sessionStorage["__rendererBrowserWhatsNewAck"]`; remove that key to see it again.
+
 Follow up with an Electron scenario when the changed behavior crosses an
 integration boundary such as IPC, persistence, preload or security, or main
 process behavior. Electron is also appropriate for materially broader or
@@ -119,6 +147,42 @@ confirms the Electron process tree has exited before deleting the isolated
 profile. If it cannot confirm termination, it fails and preserves that profile
 for diagnosis; run logs and failure screenshots remain in
 `artifacts/electron-harness/<scenario>-<uuid>/` outside the profile.
+
+## What's new scenario
+
+Run the Electron release-notes scenario with:
+
+```powershell
+npm run test:whats-new
+```
+
+It covers IPC, persistence, and gating end to end in a fresh harness profile:
+the first launch seeds `whats_new_last_seen_version` silently with no dialog;
+a simulated downloaded update (9.9.9) shows the "Update 9.9.9 is ready." toast,
+whose "See what's new" action opens the "What's new in 9.9.9" dialog with
+decoded section headings and items; Settings > General shows "Downloaded update
+9.9.9" with a "See what's new" button for the same dialog; after the stored
+version is set to `0.0.1` and the page reloads, the post-update dialog shows the
+real `CHANGELOG.md` entry for the `package.json` version (and nothing from
+earlier releases), "Got it" stores the current version, and a further reload
+shows no dialog. It does not click "View full changelog" (that opens the system
+browser; the browser-preview scenario covers it) or "Install and restart".
+
+Two hooks exist only for this harness (`PERSONAL_NEWS_ELECTRON_HARNESS=1` in an
+unpackaged build) and are rejected or not registered otherwise:
+
+- `updates:simulateStatus` takes `{ version, releaseNotesHtml }` and emits a
+  normal `downloaded` update status with parsed notes. The simulated update
+  cannot be installed.
+- `settings:get` and `settings:set` accept the key `whats_new_last_seen_version`.
+
+To inspect the dialog design manually, launch the unpackaged app with
+`PERSONAL_NEWS_WHATS_NEW_PREVIEW=1 npm run dev`. Per `resolveWhatsNewMode` in
+`src/main/updates/whats-new.ts`, this preview mode applies only when the app is
+unpackaged and not a harness run. The dialog then shows the current version's
+bundled changelog entry on every launch and never writes
+`whats_new_last_seen_version`. Without the variable, unpackaged `npm run dev`
+shows no post-update dialog.
 
 ## Add a scenario
 

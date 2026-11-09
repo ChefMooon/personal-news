@@ -2,8 +2,12 @@ import { app } from "electron";
 import { autoUpdater } from "electron-updater";
 import type {
   IpcMutationResult,
+  ReleaseNotesDocument,
+  SimulateUpdateStatusRequest,
   UpdateStatusEvent,
 } from "../../shared/ipc-types";
+import { isElectronHarnessRun } from "../harness-mode";
+import { parseUpdaterReleaseNotes } from "./release-notes";
 import { getSetting } from "../settings/store";
 
 const AUTO_UPDATE_CHECK_ENABLED_KEY = "app_auto_update_check_enabled";
@@ -51,31 +55,12 @@ let latestStatus: UpdateStatusEvent = {
   operationOrigin: "automatic",
 };
 
+let simulatedDownload = false;
+
 let statusListener: ((status: UpdateStatusEvent) => void) | null = null;
 
-function normalizeReleaseNotes(input: unknown): string | null {
-  if (typeof input === "string") {
-    const trimmed = input.trim();
-    return trimmed.length > 0 ? trimmed : null;
-  }
-
-  if (Array.isArray(input)) {
-    const joined = input
-      .map((entry) => {
-        if (!entry || typeof entry !== "object") {
-          return "";
-        }
-        const note = (entry as { note?: unknown }).note;
-        return typeof note === "string" ? note.trim() : "";
-      })
-      .filter(Boolean)
-      .join("\n\n")
-      .trim();
-
-    return joined.length > 0 ? joined : null;
-  }
-
-  return null;
+function normalizeReleaseNotes(input: unknown): ReleaseNotesDocument | null {
+  return parseUpdaterReleaseNotes(input);
 }
 
 function emitStatus(
@@ -203,6 +188,7 @@ export async function initializeAutoUpdates(): Promise<void> {
   });
 
   autoUpdater.on("update-downloaded", (info) => {
+    simulatedDownload = false;
     emitStatus({
       state: "downloaded",
       message: `Update ${info.version} has been downloaded and is ready to install.`,
@@ -331,7 +317,46 @@ export async function checkForAppUpdates(options?: {
   }
 }
 
+const SIMULATED_VERSION_PATTERN = /^\d+\.\d+\.\d+$/;
+const MAX_SIMULATED_RELEASE_NOTES_LENGTH = 100_000;
+
+/** Harness-only: injects a fake downloaded update so the real toast and Settings paths can run. */
+export function simulateDownloadedUpdateForHarness(
+  request: SimulateUpdateStatusRequest,
+): IpcMutationResult {
+  if (!isElectronHarnessRun()) {
+    return { ok: false, error: "Update simulation is only available in harness runs." };
+  }
+  const version = request?.version;
+  const html = request?.releaseNotesHtml;
+  if (typeof version !== "string" || !SIMULATED_VERSION_PATTERN.test(version)) {
+    return { ok: false, error: "Invalid simulated update version." };
+  }
+  if (typeof html !== "string" || html.length > MAX_SIMULATED_RELEASE_NOTES_LENGTH) {
+    return { ok: false, error: "Invalid simulated release notes." };
+  }
+
+  const notes = parseUpdaterReleaseNotes(html);
+  simulatedDownload = true;
+  emitStatus({
+    state: "downloaded",
+    message: `Update ${version} has been downloaded and is ready to install.`,
+    version,
+    releaseNotes: notes,
+    downloadedReady: true,
+    installRequested: false,
+    operationPhase: "ready",
+    downloadedVersion: version,
+    downloadedReleaseNotes: notes,
+  });
+  return { ok: true, error: null };
+}
+
 export function installDownloadedUpdate(): IpcMutationResult {
+  if (simulatedDownload) {
+    return { ok: false, error: "Simulated update cannot be installed." };
+  }
+
   if (!isWindowsAutoUpdateSupported()) {
     return {
       ok: false,

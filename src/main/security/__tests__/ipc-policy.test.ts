@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { IPC } from "../../../shared/ipc-types";
 import {
   isAllowedGenericSettingKey,
@@ -21,6 +22,45 @@ describe("IPC policy", () => {
     expect(RENDERER_TO_MAIN_CHANNELS.has(IPC.SPORTS_DATA_UPDATED)).toBe(false);
     expect(MAIN_TO_RENDERER_CHANNELS.has(IPC.SETTINGS_SET)).toBe(false);
     expect(RENDERER_TO_MAIN_CHANNELS.has(IPC.SETTINGS_GET_THEME_SYNC)).toBe(false);
+  });
+
+  it("exposes the what's-new channels to the renderer only", () => {
+    for (const channel of [IPC.UPDATES_GET_PENDING_WHATS_NEW, IPC.UPDATES_ACKNOWLEDGE_WHATS_NEW]) {
+      expect(RENDERER_TO_MAIN_CHANNELS.has(channel)).toBe(true);
+      expect(MAIN_TO_RENDERER_CHANNELS.has(channel)).toBe(false);
+    }
+  });
+
+  it("exposes the simulate-status channel only to harness launches", async () => {
+    expect(RENDERER_TO_MAIN_CHANNELS.has(IPC.UPDATES_SIMULATE_STATUS)).toBe(false);
+    expect(MAIN_TO_RENDERER_CHANNELS.has(IPC.UPDATES_SIMULATE_STATUS)).toBe(false);
+
+    const previous = process.env.PERSONAL_NEWS_ELECTRON_HARNESS;
+    process.env.PERSONAL_NEWS_ELECTRON_HARNESS = "1";
+    try {
+      vi.resetModules();
+      const harnessPolicy = await import("../ipc-policy");
+      expect(harnessPolicy.RENDERER_TO_MAIN_CHANNELS.has(IPC.UPDATES_SIMULATE_STATUS)).toBe(true);
+    } finally {
+      if (previous === undefined) delete process.env.PERSONAL_NEWS_ELECTRON_HARNESS;
+      else process.env.PERSONAL_NEWS_ELECTRON_HARNESS = previous;
+      vi.resetModules();
+    }
+  });
+
+  it("keeps the simulate handler and generic settings gating wired to the harness check", () => {
+    // Source-level guard: registerIpcHandlers is too large to execute in a unit test,
+    // so assert the gating structure cannot be hoisted or dropped unnoticed.
+    const source = readFileSync(fileURLToPath(new URL("../../ipc/index.ts", import.meta.url)), "utf8");
+    expect(source.match(/IPC\.UPDATES_SIMULATE_STATUS/g)).toHaveLength(1);
+    expect(source).toMatch(/if \(isElectronHarnessRun\(\)\) \{\s*ipcMain\.handle\(\s*IPC\.UPDATES_SIMULATE_STATUS/);
+    expect(source.match(/isAllowedGenericSettingKey\(key, isElectronHarnessRun\(\)\)/g)?.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("gates the what's-new last-seen setting to harness mode", () => {
+    expect(isAllowedGenericSettingKey("whats_new_last_seen_version")).toBe(false);
+    expect(isAllowedGenericSettingKey("whats_new_last_seen_version", false)).toBe(false);
+    expect(isAllowedGenericSettingKey("whats_new_last_seen_version", true)).toBe(true);
   });
 
   it("accepts only explicitly supported generic settings", () => {

@@ -27,6 +27,7 @@ import { SportsModule } from "./sources/sports/index";
 import { attachWindowListeners } from "./notifications/notification-service";
 import { getSetting, setSetting } from "./settings/store";
 import { initializeAutoUpdates } from "./updates/service";
+import { hasBundledWhatsNewEntry } from "./updates/whats-new";
 import { initializeDevTestDataForStartup } from "./dev-test-data";
 import {
   DatabaseProfileError,
@@ -103,6 +104,7 @@ type SmokeReportPayload = {
   timestamp: string;
   dbPath?: string | null;
   schemaVersion?: string | null;
+  whatsNewEntryPresent?: boolean;
   error?: string | null;
 };
 
@@ -726,6 +728,7 @@ app.whenReady().then(() => {
         packaged: app.isPackaged,
         dbPath,
         schemaVersion: schemaVersionRow?.value ?? null,
+        whatsNewEntryPresent: hasBundledWhatsNewEntry(app.getVersion()),
         timestamp: new Date().toISOString(),
       });
       app.exit(0);

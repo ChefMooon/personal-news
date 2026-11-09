@@ -27,6 +27,7 @@ import {
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import { Switch } from "../components/ui/switch";
+import { WhatsNewDialog } from "../components/WhatsNewDialog";
 import { useTheme } from "../providers/ThemeProvider";
 import { useYouTubeChannels } from "../hooks/useYouTubeChannels";
 import { useSidebarConfig } from "../hooks/useSidebarConfig";
@@ -1439,6 +1440,7 @@ function GeneralTab(): React.ReactElement {
   const [checkingForUpdates, setCheckingForUpdates] = useState(false);
   const [updateStatus, setUpdateStatus] = useState<UpdateStatusEvent | null>(null);
   const [installingUpdate, setInstallingUpdate] = useState(false);
+  const [whatsNewOpen, setWhatsNewOpen] = useState(false);
   const [lastUpdateCheckOutcome, setLastUpdateCheckOutcome] = useState<
     string | null
   >(null);
@@ -1597,6 +1599,15 @@ function GeneralTab(): React.ReactElement {
       applyUpdateStatus(event as UpdateStatusEvent);
     });
   }, []);
+
+  // The dialog unmounts without onOpenChange when the downloaded update goes
+  // away; reset the flag so it cannot reopen on its own for a later update.
+  const downloadedUpdateAvailable = Boolean(
+    updateStatus?.downloadedReady && updateStatus.downloadedVersion,
+  );
+  useEffect(() => {
+    if (!downloadedUpdateAvailable) setWhatsNewOpen(false);
+  }, [downloadedUpdateAvailable]);
 
   const saveFlag = async (
     key: string,
@@ -2088,9 +2099,25 @@ function GeneralTab(): React.ReactElement {
               {updateStatus?.downloadedReady ? (
                 <div className="flex flex-col items-end gap-1">
                   <span className="text-xs text-muted-foreground">Downloaded update {updateStatus.downloadedVersion}</span>
-                  <Button onClick={() => void installUpdate()} disabled={installingUpdate || updateStatus.installRequested}>
-                    {updateStatus.installRequested ? "Restart requested" : installingUpdate ? "Requesting..." : "Install and restart"}
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    {updateStatus.downloadedReleaseNotes?.sections.length ? (
+                      <Button variant="outline" size="sm" onClick={() => setWhatsNewOpen(true)}>
+                        See what's new
+                      </Button>
+                    ) : null}
+                    <Button onClick={() => void installUpdate()} disabled={installingUpdate || updateStatus.installRequested}>
+                      {updateStatus.installRequested ? "Restart requested" : installingUpdate ? "Requesting..." : "Install and restart"}
+                    </Button>
+                  </div>
+                  {updateStatus.downloadedVersion ? (
+                    <WhatsNewDialog
+                      open={whatsNewOpen}
+                      onOpenChange={setWhatsNewOpen}
+                      version={updateStatus.downloadedVersion}
+                      notes={updateStatus.downloadedReleaseNotes ?? null}
+                      variant="incoming"
+                    />
+                  ) : null}
                 </div>
               ) : null}
             </div>

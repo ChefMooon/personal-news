@@ -93,6 +93,8 @@ import type {
   DigestViewedChangedEvent,
   YoutubeVideoWatchedChangedEvent,
   UpdateStatusEvent,
+  WhatsNewPayload,
+  SimulateUpdateStatusRequest,
   DevTestDataStatus,
   WindowState,
 } from "../../shared/ipc-types";
@@ -151,7 +153,9 @@ import {
   getCurrentUpdateStatus,
   installDownloadedUpdate,
   setUpdateStatusListener,
+  simulateDownloadedUpdateForHarness,
 } from "../updates/service";
+import { acknowledgeWhatsNew, getPendingWhatsNew } from "../updates/whats-new";
 
 const YOUTUBE_API_KEY_SETTING = "youtube_api_key_encrypted";
 const YOUTUBE_VIEW_CONFIG_KEY_PREFIX = "youtube_view_config:";
@@ -3587,6 +3591,36 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC.UPDATES_INSTALL_UPDATE, (): IpcMutationResult => {
     return installDownloadedUpdate();
   });
+
+  // updates:getPendingWhatsNew
+  ipcMain.handle(IPC.UPDATES_GET_PENDING_WHATS_NEW, (): WhatsNewPayload | null => {
+    return getPendingWhatsNew();
+  });
+
+  // updates:acknowledgeWhatsNew
+  ipcMain.handle(
+    IPC.UPDATES_ACKNOWLEDGE_WHATS_NEW,
+    (_event, version: unknown): IpcMutationResult => {
+      return acknowledgeWhatsNew(version);
+    },
+  );
+
+  // updates:simulateStatus (harness only; never registered in normal runs)
+  if (isElectronHarnessRun()) {
+    ipcMain.handle(
+      IPC.UPDATES_SIMULATE_STATUS,
+      (_event, request: unknown): IpcMutationResult => {
+        if (!request || typeof request !== "object") {
+          return { ok: false, error: "Invalid simulated update request." };
+        }
+        const { version, releaseNotesHtml } = request as Partial<SimulateUpdateStatusRequest>;
+        if (typeof version !== "string" || typeof releaseNotesHtml !== "string") {
+          return { ok: false, error: "Invalid simulated update request." };
+        }
+        return simulateDownloadedUpdateForHarness({ version, releaseNotesHtml });
+      },
+    );
+  }
 
   // settings:set (generic)
   ipcMain.handle(

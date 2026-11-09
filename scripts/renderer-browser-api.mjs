@@ -434,6 +434,29 @@ export function installRendererBrowserApi(fixtures) {
         : Promise.resolve(snapshot);
     }
 
+    const whatsNewAckKey = "__rendererBrowserWhatsNewAck";
+    if (channel === "updates:getPendingWhatsNew") {
+      const pending = getScenario().whatsNewPending ?? null;
+      let acknowledged = null;
+      try {
+        acknowledged = sessionStorage.getItem(whatsNewAckKey);
+      } catch {
+        acknowledged = null;
+      }
+      return Promise.resolve(
+        pending && pending.version !== acknowledged ? pending : null,
+      );
+    }
+    if (channel === "updates:acknowledgeWhatsNew") {
+      try {
+        sessionStorage.setItem(whatsNewAckKey, String(args[0] ?? ""));
+      } catch {
+        // Acknowledgement persistence is best-effort in the preview.
+      }
+      return Promise.resolve({ ok: true, error: null });
+    }
+    if (channel === "shell:openExternal") return Promise.resolve(undefined);
+
     const defaults = {
       "window:getState": { isMaximized: false },
       "updates:getStatus": {

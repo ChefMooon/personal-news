@@ -66,6 +66,8 @@
     "test:sports-provider-resilience": "node scripts/test-sports-provider-resilience.mjs",
     "test:renderer-browser": "node scripts/test-renderer-browser.mjs",
     "test:update-notifications": "node scripts/test-update-notifications-browser.mjs",
+    "test:whats-new-browser": "node scripts/test-whats-new-browser.mjs",
+    "test:whats-new": "node scripts/test-whats-new.mjs",
     "dev:renderer-browser": "vite --config vite.renderer-browser.config.mts --host 127.0.0.1 --port 4175 --strictPort",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",

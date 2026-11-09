@@ -155,6 +155,14 @@ function verifySmokeReport() {
       `Schema version check failed. Expected ${expectedSchemaVersion}, got ${String(report.schemaVersion)}.`,
     );
   }
+
+  if (report.whatsNewEntryPresent !== true) {
+    throw new Error(
+      "The packaged build does not contain a readable CHANGELOG entry for the app version. " +
+        "Check that the version's '## [x.y.z] - date' section exists in CHANGELOG.md and uses only '### ' headings and '- ' bullets, " +
+        "then run 'npm run release:notes -- <version> --check'.",
+    );
+  }
 }
 
 function tryReadSmokeReport() {
