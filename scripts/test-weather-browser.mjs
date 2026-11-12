@@ -322,6 +322,52 @@ try {
   await small
     .getByRole("button", { name: "Weather widget settings", exact: true })
     .waitFor();
+  await small
+    .getByRole("button", { name: "Weather widget settings", exact: true })
+    .click();
+  await small.getByRole("combobox").first().click();
+  const locationListbox = page.getByRole("listbox");
+  await locationListbox.waitFor();
+  await page.keyboard.press("Escape");
+  await locationListbox.waitFor({ state: "hidden" });
+  assert(
+    await small
+      .getByRole("button", { name: "Close settings", exact: true })
+      .isVisible(),
+    "Weather editor closed when dismissing the displayed location select",
+  );
+  await page.keyboard.press("Escape");
+  await small
+    .getByRole("button", { name: "Weather widget settings", exact: true })
+    .waitFor();
+
+  await small
+    .getByRole("button", { name: "Weather widget settings", exact: true })
+    .click();
+  await small.getByRole("button", { name: "Restore default settings" }).click();
+  const restoreDialog = page.getByRole("alertdialog");
+  await restoreDialog.waitFor();
+  await page.keyboard.press("Escape");
+  await restoreDialog.waitFor({ state: "hidden" });
+  assert(
+    await small
+      .getByRole("button", { name: "Close settings", exact: true })
+      .isVisible(),
+    "Weather editor closed when dismissing the restore defaults dialog",
+  );
+  await page.keyboard.press("Escape");
+  await small
+    .getByRole("button", { name: "Weather widget settings", exact: true })
+    .waitFor();
+
+  await small
+    .getByRole("button", { name: "Weather widget settings", exact: true })
+    .click();
+  await small.locator("#weather-location-search").focus();
+  await page.keyboard.press("Escape");
+  await small
+    .getByRole("button", { name: "Weather widget settings", exact: true })
+    .waitFor();
   // Manual refresh failures stay in each widget after the toast has expired.
   await page.evaluate(() => (window.weatherTest.mode = "manual-failure"));
   for (const widget of await widgets.all()) {

@@ -7,6 +7,7 @@ import React, {
 } from "react";
 import { Link } from "react-router-dom";
 import { useYouTubeChannels } from "../../hooks/useYouTubeChannels";
+import { useEditorEscape } from "../../hooks/useEditorEscape";
 import {
   useYouTubeViewConfig,
   DEFAULT_YOUTUBE_VIEW_CONFIG,
@@ -131,15 +132,7 @@ function YouTubeWidget(): React.ReactElement {
     setCollapsedChannels({});
   }, [viewConfig.collapseChannelsByDefault]);
 
-  // Close on Escape key
-  useEffect(() => {
-    if (!isEditing) return;
-    const handler = (e: KeyboardEvent): void => {
-      if (e.key === "Escape") handleClose();
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [isEditing]);
+  useEditorEscape(isEditing, () => handleClose());
 
   const displayedChannels = useMemo(
     () =>

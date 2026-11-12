@@ -12,6 +12,7 @@ import {
   type AstronomyViewConfig,
 } from "../../hooks/useAstronomyConfig";
 import { useAstronomySnapshot } from "../../hooks/useAstronomySnapshot";
+import { useEditorEscape } from "../../hooks/useEditorEscape";
 import { useAstronomyStatus } from "../../hooks/useAstronomyStatus";
 import { useNowMilliseconds } from "../../hooks/useNowMilliseconds";
 import { useWeatherLocations } from "../../hooks/useWeatherLocations";
@@ -174,16 +175,7 @@ function AstronomyWidget(): React.ReactElement {
     weatherSettings.defaultLocationId,
   ]);
 
-  useEffect(() => {
-    if (!isEditing) return;
-    const handler = (event: KeyboardEvent): void => {
-      if (event.key === "Escape") {
-        handleClose();
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [isEditing]);
+  useEditorEscape(isEditing, () => handleClose());
 
   const calculatedLabel = formatCalculatedAt(
     snapshot?.calculatedAt ?? null,

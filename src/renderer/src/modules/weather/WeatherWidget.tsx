@@ -6,6 +6,7 @@ import {
   DEFAULT_WEATHER_VIEW_CONFIG,
   useWeatherConfig,
 } from "../../hooks/useWeatherConfig";
+import { useEditorEscape } from "../../hooks/useEditorEscape";
 import { useWeatherLocations } from "../../hooks/useWeatherLocations";
 import { useWeatherSettings } from "../../hooks/useWeatherSettings";
 import { useWeatherSnapshot } from "../../hooks/useWeatherSnapshot";
@@ -94,14 +95,7 @@ function WeatherWidget(): React.ReactElement {
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
-  useEffect(() => {
-    if (!isEditing) return;
-    const handler = (event: KeyboardEvent): void => {
-      if (event.key === "Escape") handleClose();
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [isEditing]);
+  useEditorEscape(isEditing, () => handleClose());
   const astronomyVisible = astronomyFeatureEnabled && config.showAstronomy;
   const alertsEnabled = Boolean(
     settings.showAlertsInWidgets && config.showAlerts,

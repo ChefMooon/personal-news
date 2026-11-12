@@ -8,6 +8,7 @@ import React, {
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useSavedPosts } from "../../hooks/useSavedPosts";
+import { useEditorEscape } from "../../hooks/useEditorEscape";
 import {
   useSavedPostsConfig,
   DEFAULT_SAVED_POSTS_VIEW_CONFIG,
@@ -119,14 +120,7 @@ function SavedPostsWidget(): React.ReactElement {
     return window.api.on(IPC.REDDIT_NTFY_INGEST_COMPLETE, listener);
   }, [refetch]);
 
-  useEffect(() => {
-    if (!isEditing) return;
-    const handler = (e: KeyboardEvent): void => {
-      if (e.key === "Escape") handleClose();
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [isEditing]);
+  useEditorEscape(isEditing, () => handleClose());
 
   // Group posts by source when configured
   const groupedPosts = useMemo(() => {

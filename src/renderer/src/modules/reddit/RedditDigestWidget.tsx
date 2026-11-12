@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useRedditDigest } from "../../hooks/useRedditDigest";
+import { useEditorEscape } from "../../hooks/useEditorEscape";
 import {
   DEFAULT_DIGEST_VIEW_CONFIG,
   useRedditDigestConfig,
@@ -107,18 +108,7 @@ function RedditDigestWidget(): React.ReactElement {
     return () => observer.disconnect();
   }, []);
 
-  useEffect(() => {
-    if (!isEditing) {
-      return;
-    }
-    const handler = (event: KeyboardEvent): void => {
-      if (event.key === "Escape") {
-        handleClose();
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [isEditing]);
+  useEditorEscape(isEditing, () => handleClose());
 
   const latestWeek = weeks[0]?.week_start_date ?? null;
   const selectedSpecificWeek = config.selected_week ?? latestWeek;

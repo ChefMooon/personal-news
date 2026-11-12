@@ -19,6 +19,7 @@ import {
 } from "../../components/ui/alert-dialog";
 import { Button } from "../../components/ui/button";
 import { useWidgetInstance } from "../../contexts/WidgetInstanceContext";
+import { useEditorEscape } from "../../hooks/useEditorEscape";
 import {
   DEFAULT_SPORTS_VIEW_CONFIG,
   useSportsViewConfig,
@@ -93,20 +94,7 @@ function SportsWidget(): React.ReactElement {
     if (isEditing) setEditContentHeight(null);
   }, [isEditing, size]);
 
-  useEffect(() => {
-    if (!isEditing) {
-      return;
-    }
-
-    const handler = (event: KeyboardEvent): void => {
-      if (event.key === "Escape") {
-        handleClose();
-      }
-    };
-
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [isEditing]);
+  useEditorEscape(isEditing, () => handleClose());
 
   const liveTodayCount = eligibleTodayEvents.filter(
     (event) =>
