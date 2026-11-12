@@ -1139,7 +1139,7 @@ if (cliOptions.help) {
 await runElectronHarness({
   name: "local-test-data",
   scenario: async ({ page, record, artifacts }) => {
-    await page.getByRole("link", { name: "Settings" }).click();
+    await page.getByRole("link", { name: "Settings", exact: true }).click();
     await page.getByRole("heading", { name: "Settings" }).waitFor();
     await page.getByRole("heading", { name: "Developer Test Data" }).waitFor();
 

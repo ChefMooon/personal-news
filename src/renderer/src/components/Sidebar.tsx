@@ -19,6 +19,7 @@ import { useRedditDigestEnabled } from "../contexts/RedditDigestEnabledContext";
 import { useSavedPostsEnabled } from "../contexts/SavedPostsEnabledContext";
 import { useSportsEnabled } from "../contexts/SportsEnabledContext";
 import { useAstronomyEnabled } from "../contexts/AstronomyEnabledContext";
+import { useYouTubeEnabled } from "../contexts/YouTubeEnabledContext";
 import {
   Tooltip,
   TooltipContent,
@@ -107,6 +108,8 @@ export function Sidebar(): React.ReactElement {
   const { enabled: redditDigestEnabled } = useRedditDigestEnabled();
   const { enabled: savedPostsEnabled } = useSavedPostsEnabled();
   const { enabled: sportsEnabled } = useSportsEnabled();
+  const { enabled: youtubeEnabled, loading: youtubeLoading } =
+    useYouTubeEnabled();
   const { enabled: astronomyEnabled, loading: astronomyLoading } =
     useAstronomyEnabled();
 
@@ -158,7 +161,7 @@ export function Sidebar(): React.ReactElement {
 
   const availableItemIds = new Set<SidebarItemId>([
     "dashboard",
-    "youtube",
+    ...(!youtubeLoading && youtubeEnabled ? ["youtube" as const] : []),
     "scripts",
     ...(redditDigestEnabled ? ["reddit-digest" as const] : []),
     ...(savedPostsEnabled ? ["saved-posts" as const] : []),

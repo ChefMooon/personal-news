@@ -12,6 +12,7 @@ export const IPC = {
   UPDATES_CHECK_FOR_UPDATES: "updates:checkForUpdates",
   UPDATES_INSTALL_UPDATE: "updates:installUpdate",
   UPDATES_GET_PENDING_WHATS_NEW: "updates:getPendingWhatsNew",
+  UPDATES_GET_CURRENT_RELEASE_NOTES: "updates:getCurrentReleaseNotes",
   UPDATES_ACKNOWLEDGE_WHATS_NEW: "updates:acknowledgeWhatsNew",
   UPDATES_SIMULATE_STATUS: "updates:simulateStatus",
   WEATHER_SEARCH_LOCATIONS: "weather:searchLocations",
@@ -131,6 +132,9 @@ export const IPC = {
   SETTINGS_GET_YOUTUBE_VIEW_CONFIG: "settings:getYouTubeViewConfig",
   SETTINGS_SET_YOUTUBE_VIEW_CONFIG: "settings:setYouTubeViewConfig",
   SETTINGS_GET: "settings:get",
+  SETTINGS_GET_ONBOARDING_STATE: "settings:getOnboardingState",
+  SETTINGS_COMPLETE_ONBOARDING: "settings:completeOnboarding",
+  SETTINGS_MARK_FEATURES_SEEN: "settings:markFeaturesSeen",
   SETTINGS_SET: "settings:set",
   DEV_TEST_DATA_GET_STATUS: "devTestData:getStatus",
   DEV_TEST_DATA_SEED: "devTestData:seed",
@@ -807,6 +811,11 @@ export interface YouTubeViewConfig {
 export interface IpcMutationResult {
   ok: boolean;
   error: string | null;
+}
+
+export interface OnboardingState {
+  required: boolean;
+  unseenFeatureIds: string[];
 }
 
 export interface DevTestDataStatus {

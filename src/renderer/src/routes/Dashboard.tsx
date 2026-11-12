@@ -35,11 +35,7 @@ import {
   AddWidgetModal,
   type AddWidgetConfig,
 } from "../components/AddWidgetModal";
-import { useSavedPostsEnabled } from "../contexts/SavedPostsEnabledContext";
-import { useRedditDigestEnabled } from "../contexts/RedditDigestEnabledContext";
-import { useSportsEnabled } from "../contexts/SportsEnabledContext";
-import { useWeatherEnabled } from "../contexts/WeatherEnabledContext";
-import { useAstronomyEnabled } from "../contexts/AstronomyEnabledContext";
+import { useFeatureEnablement } from "../hooks/useFeatureEnablement";
 import { normalizeSportsViewConfig } from "../hooks/useSportsViewConfig";
 import { Tabs, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { DashboardGlyph } from "../lib/dashboard-icons";
@@ -65,6 +61,7 @@ import {
   type WidgetInstance,
   type WidgetLayout,
 } from "../../../shared/ipc-types";
+import { isFeatureId } from "../../../shared/feature-manifest";
 import {
   ALL_SPORTS_ID,
   DEFAULT_SPORTS_STARTUP_REFRESH_STALE_MINUTES,
@@ -79,8 +76,10 @@ import {
   DASHBOARD_GRID_COLUMNS_BY_BREAKPOINT,
   DASHBOARD_GRID_GAP,
   DASHBOARD_GRID_ROW_HEIGHT,
+  applyToVisibleWidgets,
   getWidgetFootprint,
   getWidgetInsertionY,
+  getVisibleWidgetLayout,
   moveWidget,
   normalizeWidgetLayout,
   projectWidgetLayout,
@@ -90,6 +89,7 @@ import {
 
 interface DashboardGridSurfaceProps {
   layout: WidgetLayout;
+  hiddenIds: ReadonlySet<string>;
   runtimeRows: Record<string, number>;
   children: React.ReactNode;
   onLayoutCommit: (geometry: Record<string, WidgetGeometry>) => void;
@@ -98,6 +98,7 @@ interface DashboardGridSurfaceProps {
 
 function DashboardGridSurface({
   layout,
+  hiddenIds,
   runtimeRows,
   children,
   onLayoutCommit,
@@ -115,6 +116,7 @@ function DashboardGridSurface({
     );
   }
 
+  const visibleLayout = getVisibleWidgetLayout(layout, hiddenIds);
   return (
     <div
       ref={containerRef as React.Ref<HTMLDivElement>}
@@ -134,8 +136,8 @@ function DashboardGridSurface({
         }}
         resizeConfig={{ enabled: false }}
         layout={toGridLayout(
-          projectWidgetLayout(layout, getGridColumns(width)),
-          layout,
+          projectWidgetLayout(visibleLayout, getGridColumns(width)),
+          visibleLayout,
           runtimeRows,
         )}
         onDragStop={(
@@ -390,11 +392,8 @@ export default function Dashboard(): React.ReactElement {
     copyWidgetToView,
     loading,
   } = useWidgetLayout();
-  const { enabled: redditDigestEnabled } = useRedditDigestEnabled();
-  const { enabled: savedPostsEnabled } = useSavedPostsEnabled();
-  const { enabled: sportsEnabled } = useSportsEnabled();
-  const { enabled: weatherEnabled } = useWeatherEnabled();
-  const { enabled: astronomyEnabled } = useAstronomyEnabled();
+  const { isEnabled } = useFeatureEnablement();
+  const sportsEnabled = isEnabled("sports");
   const [editMode, setEditMode] = useState(false);
   const [runtimeRows, setRuntimeRows] = useState<Record<string, number>>({});
   const [showAddModal, setShowAddModal] = useState(false);
@@ -413,6 +412,14 @@ export default function Dashboard(): React.ReactElement {
   const startupSportsRefreshHandledRef = useRef(false);
 
   const layout = activeView.layout;
+  const hiddenFeatureInstanceIds = new Set(
+    Object.entries(layout.widget_instances)
+      .filter(
+        ([, instance]) =>
+          isFeatureId(instance.moduleId) && !isEnabled(instance.moduleId),
+      )
+      .map(([instanceId]) => instanceId),
+  );
   const activeViewIndex = dashboardViews.findIndex(
     (view) => view.id === activeViewId,
   );
@@ -461,14 +468,16 @@ export default function Dashboard(): React.ReactElement {
 
     startupSportsRefreshHandledRef.current = true;
 
-    if (!sportsEnabled) {
+    if (!isEnabled("sports")) {
       return;
     }
 
     const sportsWidgetInstanceIds = Object.values(
       activeView.layout.widget_instances,
     )
-      .filter((instance) => instance.moduleId === "sports")
+      .filter(
+        (instance) => instance.moduleId === "sports",
+      )
       .map((instance) => instance.instanceId);
 
     if (sportsWidgetInstanceIds.length === 0) {
@@ -705,29 +714,45 @@ export default function Dashboard(): React.ReactElement {
 
   function handleMoveUp(instanceId: string): void {
     setActiveLayout((currentLayout) =>
-      moveWidget(currentLayout, instanceId, "up"),
+      applyToVisibleWidgets(currentLayout, hiddenFeatureInstanceIds, (visible) =>
+        moveWidget(visible, instanceId, "up"),
+      ),
     );
   }
 
   function handleMoveDown(instanceId: string): void {
     setActiveLayout((currentLayout) =>
-      moveWidget(currentLayout, instanceId, "down"),
+      applyToVisibleWidgets(currentLayout, hiddenFeatureInstanceIds, (visible) =>
+        moveWidget(visible, instanceId, "down"),
+      ),
     );
   }
 
   function handleMoveLeft(instanceId: string): void {
-    setActiveLayout(moveWidget(layout, instanceId, "left"));
+    setActiveLayout(
+      applyToVisibleWidgets(layout, hiddenFeatureInstanceIds, (visible) =>
+        moveWidget(visible, instanceId, "left"),
+      ),
+    );
   }
 
   function handleMoveRight(instanceId: string): void {
-    setActiveLayout(moveWidget(layout, instanceId, "right"));
+    setActiveLayout(
+      applyToVisibleWidgets(layout, hiddenFeatureInstanceIds, (visible) =>
+        moveWidget(visible, instanceId, "right"),
+      ),
+    );
   }
 
   function handleSizeChange(
     instanceId: string,
     size: WidgetInstance["size"],
   ): void {
-    setActiveLayout(setWidgetSize(layout, instanceId, size));
+    setActiveLayout(
+      applyToVisibleWidgets(layout, hiddenFeatureInstanceIds, (visible) =>
+        setWidgetSize(visible, instanceId, size),
+      ),
+    );
   }
 
   function handleAddFromModal(config: AddWidgetConfig): void {
@@ -883,9 +908,9 @@ export default function Dashboard(): React.ReactElement {
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
       >
-        <div className="min-h-full flex flex-col">
-          <div className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-            <div className="flex min-w-0 items-center gap-2 px-6 py-1">
+        <div className="min-h-full grid grid-cols-[minmax(0,1fr)_auto] grid-rows-[auto_1fr]">
+          <div className="sticky top-0 z-10 col-start-1 row-start-1 min-w-0 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+            <div className="flex min-w-0 items-center gap-2 py-1 pl-6 pr-1">
               <h1 className="sr-only">Dashboard</h1>
 
               <Tabs
@@ -930,35 +955,10 @@ export default function Dashboard(): React.ReactElement {
                 </ScrollArea>
               </Tabs>
 
-              <div className="flex shrink-0 items-center gap-2">
-                <DashboardToolbarActions
-                  editMode={editMode}
-                  canMoveLeft={canMoveViewLeft}
-                  canMoveRight={canMoveViewRight}
-                  canDelete={canDeleteView}
-                  onToggleEditMode={() => setEditMode((value) => !value)}
-                  onNewDashboard={() => setDashboardDialogMode("create")}
-                  onAddWidget={() => {
-                    setEditMode(true);
-                    setShowAddModal(true);
-                  }}
-                  onEditDashboard={() => setDashboardDialogMode("edit")}
-                  onDuplicateDashboard={() =>
-                    duplicateDashboardView(activeView.id)
-                  }
-                  onMoveDashboardLeft={() =>
-                    moveDashboardView(activeView.id, "left")
-                  }
-                  onMoveDashboardRight={() =>
-                    moveDashboardView(activeView.id, "right")
-                  }
-                  onDeleteDashboard={() => setDeleteDialogOpen(true)}
-                />
-              </div>
             </div>
           </div>
 
-          <div className="flex-1 p-6 w-full">
+          <div className="col-span-2 row-start-2 p-6 w-full">
             {layout.widget_order.length === 0 ? (
               <div className="rounded-xl border border-dashed bg-card/70 px-6 py-10 text-center">
                 <h2 className="text-lg font-semibold">
@@ -996,6 +996,7 @@ export default function Dashboard(): React.ReactElement {
             ) : (
               <DashboardGridSurface
                 layout={layout}
+                hiddenIds={hiddenFeatureInstanceIds}
                 runtimeRows={runtimeRows}
                 onTabDrop={(instanceId, targetViewId) => {
                   if (targetViewId !== activeViewId) {
@@ -1008,11 +1009,16 @@ export default function Dashboard(): React.ReactElement {
                   }
                 }}
                 onLayoutCommit={(nextGeometry) =>
-                  setActiveLayout(
-                    normalizeWidgetLayout({
-                      ...layout,
-                      widget_geometry: nextGeometry,
-                    }),
+                  setActiveLayout((currentLayout) =>
+                    applyToVisibleWidgets(
+                      currentLayout,
+                      hiddenFeatureInstanceIds,
+                      (visible) =>
+                        normalizeWidgetLayout({
+                          ...visible,
+                          widget_geometry: nextGeometry,
+                        }),
+                    ),
                   )
                 }
               >
@@ -1020,17 +1026,9 @@ export default function Dashboard(): React.ReactElement {
                   const instance = layout.widget_instances[instanceId];
                   if (!instance) return null;
                   if (
-                    instance.moduleId === "reddit_digest" &&
-                    !redditDigestEnabled
+                    isFeatureId(instance.moduleId) &&
+                    !isEnabled(instance.moduleId)
                   )
-                    return null;
-                  if (instance.moduleId === "saved_posts" && !savedPostsEnabled)
-                    return null;
-                  if (instance.moduleId === "sports" && !sportsEnabled)
-                    return null;
-                  if (instance.moduleId === "weather" && !weatherEnabled)
-                    return null;
-                  if (instance.moduleId === "astronomy" && !astronomyEnabled)
                     return null;
                   const mod = getModule(instance.moduleId);
                   if (!mod) return null;
@@ -1078,34 +1076,44 @@ export default function Dashboard(): React.ReactElement {
                         const cellWidth =
                           (gridWidth - DASHBOARD_GRID_GAP * (columns - 1)) /
                           columns;
-                        const current = layout.widget_geometry?.[instanceId];
-                        if (!current) return;
-                        const nextX =
-                          current.x +
-                          Math.round(deltaX / (cellWidth + DASHBOARD_GRID_GAP));
-                        const nextY =
-                          current.y +
-                          Math.round(
-                            deltaY /
-                              (DASHBOARD_GRID_ROW_HEIGHT + DASHBOARD_GRID_GAP),
-                          );
-                        const reorderedLayout = reorderWidgetByY(
-                          layout,
-                          instanceId,
-                          nextY,
-                        );
-                        setActiveLayout(
-                          normalizeWidgetLayout({
-                            ...reorderedLayout,
-                            widget_geometry: {
-                              ...reorderedLayout.widget_geometry,
-                              [instanceId]: {
-                                ...current,
-                                x: nextX,
-                                y: nextY,
-                              },
+                        setActiveLayout((currentLayout) =>
+                          applyToVisibleWidgets(
+                            currentLayout,
+                            hiddenFeatureInstanceIds,
+                            (visible) => {
+                              const current =
+                                visible.widget_geometry?.[instanceId];
+                              if (!current) return visible;
+                              const nextX =
+                                current.x +
+                                Math.round(
+                                  deltaX / (cellWidth + DASHBOARD_GRID_GAP),
+                                );
+                              const nextY =
+                                current.y +
+                                Math.round(
+                                  deltaY /
+                                    (DASHBOARD_GRID_ROW_HEIGHT +
+                                      DASHBOARD_GRID_GAP),
+                                );
+                              const reorderedLayout = reorderWidgetByY(
+                                visible,
+                                instanceId,
+                                nextY,
+                              );
+                              return normalizeWidgetLayout({
+                                ...reorderedLayout,
+                                widget_geometry: {
+                                  ...reorderedLayout.widget_geometry,
+                                  [instanceId]: {
+                                    ...current,
+                                    x: nextX,
+                                    y: nextY,
+                                  },
+                                },
+                              });
                             },
-                          }),
+                          ),
                         );
                       }}
                     >
@@ -1144,6 +1152,32 @@ export default function Dashboard(): React.ReactElement {
                 })}
               </DashboardGridSurface>
             )}
+          </div>
+
+          <div className="sticky top-0 z-10 col-start-2 row-start-1 flex shrink-0 items-center gap-2 border-b bg-background/95 py-1 pl-1 pr-6 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+            <DashboardToolbarActions
+              editMode={editMode}
+              canMoveLeft={canMoveViewLeft}
+              canMoveRight={canMoveViewRight}
+              canDelete={canDeleteView}
+              onToggleEditMode={() => setEditMode((value) => !value)}
+              onNewDashboard={() => setDashboardDialogMode("create")}
+              onAddWidget={() => {
+                setEditMode(true);
+                setShowAddModal(true);
+              }}
+              onEditDashboard={() => setDashboardDialogMode("edit")}
+              onDuplicateDashboard={() =>
+                duplicateDashboardView(activeView.id)
+              }
+              onMoveDashboardLeft={() =>
+                moveDashboardView(activeView.id, "left")
+              }
+              onMoveDashboardRight={() =>
+                moveDashboardView(activeView.id, "right")
+              }
+              onDeleteDashboard={() => setDeleteDialogOpen(true)}
+            />
           </div>
 
           {showAddModal && (

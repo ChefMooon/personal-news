@@ -16,6 +16,7 @@ import { SavedPostsEnabledProvider } from "./contexts/SavedPostsEnabledContext";
 import { SidebarConfigProvider } from "./contexts/SidebarConfigContext";
 import { SportsEnabledProvider } from "./contexts/SportsEnabledContext";
 import { WeatherEnabledProvider } from "./contexts/WeatherEnabledContext";
+import { YouTubeEnabledProvider } from "./contexts/YouTubeEnabledContext";
 import { useSidebarConfig } from "./hooks/useSidebarConfig";
 import { RadioPlayer } from "./components/RadioPlayer";
 import { WindowTitleBar } from "./components/WindowTitleBar";
@@ -31,6 +32,7 @@ import {
 } from "../../shared/ipc-types";
 import { WhatsNewDialog } from "./components/WhatsNewDialog";
 import { buildNtfyFailureToastContent } from "./lib/ntfyNotifications";
+import { OnboardingGate } from "./components/onboarding/OnboardingGate";
 
 function AppShell(): React.ReactElement {
   const { loading } = useSidebarConfig();
@@ -294,19 +296,24 @@ export default function App(): React.ReactElement {
 
   return (
     <>
-      <RedditDigestEnabledProvider>
-        <SavedPostsEnabledProvider>
-          <SportsEnabledProvider>
-            <AstronomyEnabledProvider>
-              <WeatherEnabledProvider>
-                <SidebarConfigProvider>
-                  <AppShell />
-                </SidebarConfigProvider>
-              </WeatherEnabledProvider>
-            </AstronomyEnabledProvider>
-          </SportsEnabledProvider>
-        </SavedPostsEnabledProvider>
-      </RedditDigestEnabledProvider>
+      <YouTubeEnabledProvider>
+        <RedditDigestEnabledProvider>
+          <SavedPostsEnabledProvider>
+            <SportsEnabledProvider>
+              <AstronomyEnabledProvider>
+                <WeatherEnabledProvider>
+                  <SidebarConfigProvider>
+                    <>
+                      <AppShell />
+                      <OnboardingGate />
+                    </>
+                  </SidebarConfigProvider>
+                </WeatherEnabledProvider>
+              </AstronomyEnabledProvider>
+            </SportsEnabledProvider>
+          </SavedPostsEnabledProvider>
+        </RedditDigestEnabledProvider>
+      </YouTubeEnabledProvider>
       {whatsNew ? (
         <WhatsNewDialog
           open={whatsNew.open}

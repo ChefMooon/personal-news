@@ -4,8 +4,13 @@ import { join } from "path";
 import { existsSync, mkdirSync, readFileSync } from "fs";
 import { ensureRequiredSchemaMigrations } from "./schema";
 import { resolveDatabaseProfile } from "./database-profile";
+import {
+  isFreshDatabase,
+  recordOnboardingBaseline,
+} from "./onboarding-baseline";
 
 let db: Database.Database;
+let freshProfileAtOpen = false;
 
 export function resolveDatabasePath(): string {
   return resolveDatabaseProfile({
@@ -26,6 +31,10 @@ export function getDb(): Database.Database {
     throw new Error("Database not initialized. Call openDatabase() first.");
   }
   return db;
+}
+
+export function wasFreshProfileAtOpen(): boolean {
+  return freshProfileAtOpen;
 }
 
 export function openDatabase(): Database.Database {
@@ -76,6 +85,7 @@ function runMigrations(database: Database.Database): void {
     .prepare("SELECT value FROM meta WHERE key = ?")
     .get("schema_version") as { value: string } | undefined;
   const currentVersion = versionRow ? parseInt(versionRow.value, 10) : 0;
+  const wasFresh = isFreshDatabase(database);
 
   let nextVersion = currentVersion + 1;
   let appliedAny = false;
@@ -191,6 +201,9 @@ function runMigrations(database: Database.Database): void {
       return join(__dirname, `../../src/main/db/migrations/${migrationFile}`);
     },
   );
+
+  recordOnboardingBaseline(database, wasFresh);
+  freshProfileAtOpen = wasFresh;
 
   appliedAny = appliedAny || ensuredRequiredTables;
 

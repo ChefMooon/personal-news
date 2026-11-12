@@ -27,6 +27,7 @@ import {
 import { getSetting, setSetting } from "../../settings/store";
 import { isElectronHarnessRun } from "../../harness-mode";
 import { isDevTestDataActive } from "../../dev-test-data";
+import { isFeatureEnabled } from "../../features/feature-state";
 import { getSportsFixtureEventDetail, SPORTS_FIXTURE_LEAGUES } from "../../dev-test-data/definitions/sports";
 import type { DataSourceModule } from "../registry";
 import {
@@ -71,7 +72,6 @@ import {
 } from "./cache";
 import { isLiveSportEvent } from "./status";
 
-const SPORTS_ENABLED_KEY = "sports_enabled";
 const SPORTS_POLL_INTERVAL_KEY = "sports_poll_interval_minutes";
 const SPORTS_STARTUP_REFRESH_STALE_MINUTES_KEY =
   "sports_startup_refresh_stale_minutes";
@@ -127,7 +127,7 @@ function ensureDb(): Database.Database {
 }
 
 function isSportsEnabled(): boolean {
-  return getSetting(SPORTS_ENABLED_KEY) !== "false";
+  return isFeatureEnabled("sports");
 }
 
 function getLiveRefreshIntervalMs(): number {
@@ -195,7 +195,7 @@ function startPollTimer(): void {
 
   pollTimer = setInterval(
     () => {
-      if (!dbRef || isDevTestDataActive(dbRef)) {
+      if (!dbRef || !isSportsEnabled() || isDevTestDataActive(dbRef)) {
         return;
       }
       for (const sport of SUPPORTED_SPORTS) {
@@ -715,6 +715,10 @@ async function refreshTrackedTeam(
 }
 
 function scheduleLiveRefreshIfNeeded(sport: string): void {
+  if (!isSportsEnabled()) {
+    clearLiveRefreshTimer(sport);
+    return;
+  }
   const db = ensureDb();
   if (isDevTestDataActive(db)) {
     clearLiveRefreshTimer(sport);
@@ -734,6 +738,7 @@ function scheduleLiveRefreshIfNeeded(sport: string): void {
   }
 
   const timer = setTimeout(() => {
+    if (!isSportsEnabled()) return;
     liveRefreshTimers.delete(sport);
     if (!isDevTestDataActive(db)) {
       void runLiveRefresh(sport, "automatic")
@@ -1355,6 +1360,9 @@ export async function refreshSportsData(
   sport: string,
   force = true,
 ): Promise<void> {
+  if (!isSportsEnabled()) {
+    throw new Error("Sports is disabled.");
+  }
   await refreshSportInternal(sport, force, "manual");
 }
 
@@ -1362,7 +1370,30 @@ export async function refreshSportsBadges(
   sport: string,
   force = true,
 ): Promise<void> {
+  if (!isSportsEnabled()) {
+    throw new Error("Sports is disabled.");
+  }
   await refreshSportsBadgesInternal(sport, force, "manual");
+}
+
+export function applySportsEnabled(enabled: boolean): void {
+  if (!enabled) {
+    stopPollTimer();
+    clearLiveRefreshTimers();
+    return;
+  }
+  if (isElectronHarnessRun()) {
+    return;
+  }
+
+  if (dbRef && !isDevTestDataActive(dbRef)) {
+    for (const sport of SUPPORTED_SPORTS) {
+      void refreshSportInternal(sport, false, "automatic").catch((error) => {
+        console.error(`[Sports] Initial refresh failed for ${sport}:`, error);
+      });
+    }
+  }
+  startPollTimer();
 }
 
 export function getSportsStatus(): SportSyncStatus[] {

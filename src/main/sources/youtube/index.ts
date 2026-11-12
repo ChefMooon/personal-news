@@ -12,6 +12,7 @@ import type { DataSourceModule } from "../registry";
 import { getSetting, setSetting } from "../../settings/store";
 import { isElectronHarnessRun } from "../../harness-mode";
 import { isDevTestDataActive } from "../../dev-test-data";
+import { isFeatureEnabled } from "../../features/feature-state";
 import {
   notifyYoutubeNewVideos,
   notifyYoutubeLiveStart,
@@ -675,6 +676,9 @@ async function pollAllEnabledChannels(
   trigger: YouTubePollTrigger,
 ): Promise<void> {
   if (!dbRef) {
+    return;
+  }
+  if (!isFeatureEnabled("youtube")) {
     return;
   }
   if (trigger === "automatic" && isDevTestDataActive(dbRef)) {
@@ -1446,10 +1450,17 @@ async function pollAllEnabledChannels(
 }
 
 function startPollScheduler(): void {
-  if (!dbRef) {
+  stopPollScheduler();
+  if (!dbRef || !isFeatureEnabled("youtube")) {
     return;
   }
 
+  pollTask = cron.schedule(getCronExpression(activePollIntervalMinutes), () => {
+    void pollAllEnabledChannels("automatic");
+  });
+}
+
+function stopPollScheduler(): void {
   if (pollTask) {
     pollTask.stop();
     const taskWithDestroy = pollTask as ScheduledTask & {
@@ -1458,11 +1469,8 @@ function startPollScheduler(): void {
     if (typeof taskWithDestroy.destroy === "function") {
       taskWithDestroy.destroy();
     }
+    pollTask = null;
   }
-
-  pollTask = cron.schedule(getCronExpression(activePollIntervalMinutes), () => {
-    void pollAllEnabledChannels("automatic");
-  });
 }
 
 export function applyYouTubePollInterval(minutes: number): void {
@@ -1471,7 +1479,25 @@ export function applyYouTubePollInterval(minutes: number): void {
 }
 
 export async function triggerYouTubePollNow(): Promise<void> {
+  if (!isFeatureEnabled("youtube")) {
+    throw new Error("YouTube is disabled.");
+  }
   await pollAllEnabledChannels("manual");
+}
+
+export function applyYouTubeEnabled(enabled: boolean): void {
+  if (!enabled) {
+    stopPollScheduler();
+    return;
+  }
+  if (isElectronHarnessRun()) {
+    return;
+  }
+
+  startPollScheduler();
+  if (dbRef && !isDevTestDataActive(dbRef)) {
+    void pollAllEnabledChannels("automatic");
+  }
 }
 
 export function getYouTubePollDebug(): Array<Record<string, unknown>> {
@@ -1501,6 +1527,11 @@ export const YouTubeModule: DataSourceModule = {
       activePollIntervalMinutes = parsedInterval;
     }
 
+    if (!isFeatureEnabled("youtube")) {
+      console.log("[YouTube] Feature disabled, skipping polling");
+      return;
+    }
+
     startPollScheduler();
     if (isDevTestDataActive(db)) {
       return;
@@ -1509,16 +1540,7 @@ export const YouTubeModule: DataSourceModule = {
     void pollAllEnabledChannels("automatic");
   },
   shutdown(): void {
-    if (pollTask) {
-      pollTask.stop();
-      const taskWithDestroy = pollTask as ScheduledTask & {
-        destroy?: () => void;
-      };
-      if (typeof taskWithDestroy.destroy === "function") {
-        taskWithDestroy.destroy();
-      }
-      pollTask = null;
-    }
+    stopPollScheduler();
     dbRef = null;
   },
 };

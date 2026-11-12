@@ -160,6 +160,45 @@ function compactGeometry(
   );
 }
 
+function getHiddenOnlyBands(
+  hiddenGeometry: WidgetGeometry[],
+  visibleGeometry: WidgetGeometry[],
+): Array<{ start: number; end: number }> {
+  const verticalBoundaries = [
+    ...hiddenGeometry.flatMap(({ y, h }) => [y, y + h]),
+    ...visibleGeometry.flatMap(({ y, h }) => [y, y + h]),
+  ].sort((left, right) => left - right);
+  const hiddenOnlyBands: Array<{ start: number; end: number }> = [];
+  for (let index = 1; index < verticalBoundaries.length; index += 1) {
+    const start = verticalBoundaries[index - 1];
+    const end = verticalBoundaries[index];
+    const hasHidden = hiddenGeometry.some(
+      (geometry) => geometry.y < end && geometry.y + geometry.h > start,
+    );
+    const hasVisible = visibleGeometry.some(
+      (geometry) => geometry.y < end && geometry.y + geometry.h > start,
+    );
+    if (hasHidden && !hasVisible) {
+      hiddenOnlyBands.push({ start, end });
+    }
+  }
+  return hiddenOnlyBands;
+}
+
+function restoreHiddenRows(
+  geometry: WidgetGeometry,
+  hiddenOnlyBands: Array<{ start: number; end: number }>,
+): WidgetGeometry {
+  let removedRows = 0;
+  for (const band of hiddenOnlyBands) {
+    const projectedStart = band.start - removedRows;
+    if (projectedStart <= geometry.y) {
+      removedRows += band.end - band.start;
+    }
+  }
+  return { ...geometry, y: geometry.y + removedRows };
+}
+
 function getRawInstance(
   rawInstances: Record<string, Partial<WidgetInstance>>,
   id: string,
@@ -269,6 +308,144 @@ export function projectWidgetLayout(
     }),
     columns,
   );
+}
+
+export function getVisibleWidgetLayout(
+  layout: WidgetLayout,
+  hiddenIds: ReadonlySet<string>,
+): WidgetLayout {
+  const canonical = normalizeWidgetLayout(layout);
+  const matchingHiddenIds = new Set(
+    canonical.widget_order.filter((id) => hiddenIds.has(id)),
+  );
+  if (matchingHiddenIds.size === 0) {
+    return canonical;
+  }
+
+  const {
+    widget_order: _widgetOrder,
+    widget_instances: _widgetInstances,
+    widget_visibility: _widgetVisibility,
+    widget_geometry: _widgetGeometry,
+    ...remainingLayout
+  } = canonical;
+  const visibleOrder = canonical.widget_order.filter(
+    (id) => !matchingHiddenIds.has(id),
+  );
+  const originalGeometry = canonical.widget_geometry ?? {};
+  const hiddenGeometry = [...matchingHiddenIds]
+    .map((id) => originalGeometry[id])
+    .filter((geometry): geometry is WidgetGeometry => geometry != null);
+  const visibleGeometry = visibleOrder
+    .map((id) => originalGeometry[id])
+    .filter((geometry): geometry is WidgetGeometry => geometry != null);
+  const hiddenOnlyBands = getHiddenOnlyBands(
+    hiddenGeometry,
+    visibleGeometry,
+  );
+  const adjustedGeometry = Object.fromEntries(
+    visibleOrder.flatMap((id) => {
+      const geometry = originalGeometry[id];
+      if (!geometry) return [];
+      const removedRows = hiddenOnlyBands.reduce(
+        (total, band) =>
+          band.end <= geometry.y ? total + band.end - band.start : total,
+        0,
+      );
+      return [[id, { ...geometry, y: geometry.y - removedRows }]];
+    }),
+  );
+
+  return normalizeWidgetLayout({
+    ...remainingLayout,
+    widget_order: visibleOrder,
+    widget_instances: Object.fromEntries(
+      Object.entries(canonical.widget_instances).filter(
+        ([id]) => !matchingHiddenIds.has(id),
+      ),
+    ),
+    widget_visibility: Object.fromEntries(
+      Object.entries(canonical.widget_visibility).filter(
+        ([id]) => !matchingHiddenIds.has(id),
+      ),
+    ),
+    widget_geometry: adjustedGeometry,
+  });
+}
+
+export function applyToVisibleWidgets(
+  layout: WidgetLayout,
+  hiddenIds: ReadonlySet<string>,
+  transform: (visible: WidgetLayout) => WidgetLayout,
+): WidgetLayout {
+  const canonical = normalizeWidgetLayout(layout);
+  const matchingHiddenIds = new Set(
+    canonical.widget_order.filter((id) => hiddenIds.has(id)),
+  );
+  const visibleLayout =
+    matchingHiddenIds.size === 0
+      ? canonical
+      : getVisibleWidgetLayout(canonical, matchingHiddenIds);
+  const transformed = transform(visibleLayout);
+  const visibleIds = new Set(visibleLayout.widget_order);
+  const transformedIds = new Set(transformed.widget_order);
+  if (
+    transformedIds.size !== visibleIds.size ||
+    transformed.widget_order.length !== visibleIds.size ||
+    [...visibleIds].some((id) => !transformedIds.has(id))
+  ) {
+    console.warn(
+      "Visible widget transforms must preserve the widget IDs; keeping the original layout.",
+    );
+    return canonical;
+  }
+
+  if (matchingHiddenIds.size === 0) {
+    return transformed;
+  }
+
+  let visibleIndex = 0;
+  const widgetOrder = canonical.widget_order.map((id) =>
+    matchingHiddenIds.has(id)
+      ? id
+      : transformed.widget_order[visibleIndex++],
+  );
+  const hiddenInstances = Object.fromEntries(
+    Object.entries(canonical.widget_instances).filter(([id]) =>
+      matchingHiddenIds.has(id),
+    ),
+  );
+  const hiddenVisibility = Object.fromEntries(
+    Object.entries(canonical.widget_visibility).filter(([id]) =>
+      matchingHiddenIds.has(id),
+    ),
+  );
+  const hiddenGeometry = Object.fromEntries(
+    Object.entries(canonical.widget_geometry ?? {}).filter(([id]) =>
+      matchingHiddenIds.has(id),
+    ),
+  );
+  const hiddenOnlyBands = getHiddenOnlyBands(
+    Object.values(hiddenGeometry),
+    visibleLayout.widget_order
+      .map((id) => canonical.widget_geometry?.[id])
+      .filter((geometry): geometry is WidgetGeometry => geometry != null),
+  );
+  const restoredVisibleGeometry = Object.fromEntries(
+    Object.entries(transformed.widget_geometry ?? {}).map(([id, geometry]) => [
+      id,
+      restoreHiddenRows(geometry, hiddenOnlyBands),
+    ]),
+  );
+
+  return {
+    ...canonical,
+    ...transformed,
+    widget_order: widgetOrder,
+    widget_instances: { ...hiddenInstances, ...transformed.widget_instances },
+    widget_visibility: { ...hiddenVisibility, ...transformed.widget_visibility },
+    widget_geometry: { ...hiddenGeometry, ...restoredVisibleGeometry },
+  };
 }
 
 export function moveWidget(

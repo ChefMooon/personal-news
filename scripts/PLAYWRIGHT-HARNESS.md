@@ -150,6 +150,10 @@ for diagnosis; run logs and failure screenshots remain in
 
 ## What's new scenario
 
+For first-run onboarding coverage, run `npm run test:onboarding` with
+`PERSONAL_NEWS_ONBOARDING=1`; see
+[HOW-TO-MAINTAIN-ONBOARDING.md](../docs/HOW-TO-MAINTAIN-ONBOARDING.md).
+
 Run the Electron release-notes scenario with:
 
 ```powershell

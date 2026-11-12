@@ -889,6 +889,15 @@ export function applyWeatherPollSettings(): void {
   schedulePolling();
 }
 
+export function applyWeatherEnabled(enabled: boolean): void {
+  schedulePolling();
+  if (enabled) {
+    void triggerWeatherRefresh().catch((error) => {
+      console.error("[Weather] Failed to refresh after enabling feature:", error);
+    });
+  }
+}
+
 export function getWeatherLocations(): WeatherLocation[] {
   return listLocations();
 }
@@ -920,6 +929,10 @@ export async function triggerWeatherRefresh(
   locationId?: string,
   trigger: WeatherRefreshTrigger = "manual",
 ): Promise<number> {
+  if (trigger === "manual" && !isWeatherEnabled()) {
+    throw new Error("Weather is disabled.");
+  }
+
   const existing = refreshPromises.get(trigger);
   if (existing) {
     return existing;

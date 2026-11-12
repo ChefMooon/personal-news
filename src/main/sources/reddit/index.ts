@@ -6,6 +6,7 @@ import type { DataSourceModule } from "../registry";
 import { getSetting } from "../../settings/store";
 import { isElectronHarnessRun } from "../../harness-mode";
 import { isDevTestDataActive } from "../../dev-test-data";
+import { isFeatureEnabled } from "../../features/feature-state";
 import { pollNtfy } from "./ntfy";
 import { notifySavedPostsSync } from "../../notifications/notification-service";
 
@@ -37,6 +38,9 @@ export async function triggerNtfyPoll(): Promise<{
   messagesReceived: number;
   linkOnlyCount: number;
 }> {
+  if (!isFeatureEnabled("saved_posts")) {
+    throw new Error("Saved Posts is disabled.");
+  }
   return runNtfyPoll({ throwOnError: true, trigger: "manual" });
 }
 
@@ -70,13 +74,39 @@ function startPollScheduler(): void {
 
 export function applyNtfyPollInterval(minutes: number): void {
   activePollIntervalMinutes = minutes;
+  if (!isFeatureEnabled("saved_posts")) {
+    stopPollScheduler();
+    return;
+  }
   startPollScheduler();
+}
+
+function loadConfiguredPollInterval(): void {
+  const configuredInterval = getSetting("ntfy_poll_interval_minutes");
+  const parsedInterval = configuredInterval
+    ? parseInt(configuredInterval, 10)
+    : NaN;
+  if (
+    Number.isInteger(parsedInterval) &&
+    parsedInterval >= 1 &&
+    parsedInterval <= 1440
+  ) {
+    activePollIntervalMinutes = parsedInterval;
+  } else {
+    activePollIntervalMinutes = DEFAULT_NTFY_POLL_INTERVAL_MINUTES;
+  }
 }
 
 async function runNtfyPoll(options: {
   throwOnError: boolean;
   trigger: "automatic" | "manual";
 }): Promise<{ postsIngested: number; messagesReceived: number; linkOnlyCount: number }> {
+  if (
+    options.trigger === "automatic" &&
+    !isFeatureEnabled("saved_posts")
+  ) {
+    return { postsIngested: 0, messagesReceived: 0, linkOnlyCount: 0 };
+  }
   if (!dbRef) {
     throw new Error("Reddit module not initialized");
   }
@@ -110,6 +140,22 @@ async function runNtfyPoll(options: {
   }
 }
 
+export function applySavedPostsEnabled(enabled: boolean): void {
+  if (!enabled) {
+    stopPollScheduler();
+    return;
+  }
+  if (isElectronHarnessRun()) {
+    return;
+  }
+
+  loadConfiguredPollInterval();
+  startPollScheduler();
+  if (getSetting("ntfy_topic")) {
+    void pollNtfyStartup();
+  }
+}
+
 export const RedditModule: DataSourceModule = {
   id: "reddit",
   displayName: "Reddit",
@@ -121,29 +167,14 @@ export const RedditModule: DataSourceModule = {
       return;
     }
 
-    // Check if Saved Posts feature is enabled
-    const savedPostsEnabled = getSetting("saved_posts_enabled") !== "false";
-
-    if (!savedPostsEnabled) {
+    if (!isFeatureEnabled("saved_posts")) {
       console.log(
         "[Reddit] Saved Posts feature is disabled, skipping ntfy polling",
       );
       return;
     }
 
-    const configuredInterval = getSetting("ntfy_poll_interval_minutes");
-    const parsedInterval = configuredInterval
-      ? parseInt(configuredInterval, 10)
-      : NaN;
-    if (
-      Number.isInteger(parsedInterval) &&
-      parsedInterval >= 1 &&
-      parsedInterval <= 1440
-    ) {
-      activePollIntervalMinutes = parsedInterval;
-    } else {
-      activePollIntervalMinutes = DEFAULT_NTFY_POLL_INTERVAL_MINUTES;
-    }
+    loadConfiguredPollInterval();
 
     startPollScheduler();
 

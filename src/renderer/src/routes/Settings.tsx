@@ -28,6 +28,7 @@ import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import { Switch } from "../components/ui/switch";
 import { WhatsNewDialog } from "../components/WhatsNewDialog";
+import { FeaturesSettingsTab } from "../components/FeaturesSettingsTab";
 import { useTheme } from "../providers/ThemeProvider";
 import { useYouTubeChannels } from "../hooks/useYouTubeChannels";
 import { useSidebarConfig } from "../hooks/useSidebarConfig";
@@ -36,6 +37,8 @@ import { useAstronomyEnabled } from "../contexts/AstronomyEnabledContext";
 import { useSavedPostsEnabled } from "../contexts/SavedPostsEnabledContext";
 import { useSportsEnabled } from "../contexts/SportsEnabledContext";
 import { useWeatherEnabled } from "../contexts/WeatherEnabledContext";
+import { useFeatureEnablement } from "../hooks/useFeatureEnablement";
+import { FEATURE_MANIFEST } from "../../../shared/feature-manifest";
 import {
   ArrowDown,
   ArrowUp,
@@ -50,6 +53,7 @@ import {
   Upload,
 } from "lucide-react";
 import { cn } from "../lib/utils";
+import { normalizeSubredditInput } from "../lib/subreddits";
 import {
   ThemeCreatorDialog,
   readThemeTokensFromDocument,
@@ -838,17 +842,6 @@ function AppearanceTab(): React.ReactElement {
   );
 }
 
-function normalizeSubredditInput(value: string): string | null {
-  const normalized = value.trim().replace(/^r\//i, "").toLowerCase();
-  if (!normalized) {
-    return null;
-  }
-  if (!/^[a-z0-9_]+$/i.test(normalized)) {
-    return null;
-  }
-  return normalized;
-}
-
 function RedditDigestTab(): React.ReactElement {
   const [subreddits, setSubreddits] = useState<string[]>([]);
   const [weekStart, setWeekStart] = useState<"0" | "1">("1");
@@ -1418,15 +1411,6 @@ function AstronomyTab(): React.ReactElement {
 }
 
 function GeneralTab(): React.ReactElement {
-  const { enabled, setEnabled } = useRedditDigestEnabled();
-  const { enabled: astronomyEnabled, setEnabled: setAstronomyEnabled } =
-    useAstronomyEnabled();
-  const { enabled: savedPostsEnabled, setEnabled: setSavedPostsEnabled } =
-    useSavedPostsEnabled();
-  const { enabled: sportsEnabled, setEnabled: setSportsEnabled } =
-    useSportsEnabled();
-  const { enabled: weatherEnabled, setEnabled: setWeatherEnabled } =
-    useWeatherEnabled();
   const [closeToTray, setCloseToTray] = useState(true);
   const [startMinimized, setStartMinimized] = useState(false);
   const [minimizeToTray, setMinimizeToTray] = useState(false);
@@ -1717,96 +1701,6 @@ function GeneralTab(): React.ReactElement {
           <p className="text-xs text-muted-foreground">
             Version {currentVersion ?? "—"}
           </p>
-        </div>
-      </div>
-
-      <div>
-        <h3 className="text-sm font-medium mb-1">Features</h3>
-        <p className="text-xs text-muted-foreground mb-3">
-          Enable or disable optional modules in the app.
-        </p>
-        <div className="space-y-2 max-w-md">
-          <div className="rounded-md border px-3 py-2">
-            <p className="text-sm font-medium">Reddit Digest</p>
-            <p className="text-xs text-muted-foreground mb-3">
-              Enable or disable the Reddit Digest feature. When disabled, the
-              dashboard widget, dedicated page, and associated scripts are
-              hidden.
-            </p>
-            <div className="flex items-center justify-between rounded-md border px-3 py-2 max-w-sm">
-              <span className="text-sm">Enable Reddit Digest</span>
-              <Switch
-                checked={enabled}
-                onCheckedChange={setEnabled}
-                aria-label="Enable Reddit Digest"
-              />
-            </div>
-          </div>
-
-          <div className="rounded-md border px-3 py-2">
-            <p className="text-sm font-medium">Saved Posts</p>
-            <p className="text-xs text-muted-foreground mb-3">
-              Enable or disable the Saved Posts feature. When disabled, the
-              dashboard widget, dedicated page, and settings tab are hidden.
-            </p>
-            <div className="flex items-center justify-between rounded-md border px-3 py-2 max-w-sm">
-              <span className="text-sm">Enable Saved Posts</span>
-              <Switch
-                checked={savedPostsEnabled}
-                onCheckedChange={setSavedPostsEnabled}
-                aria-label="Enable Saved Posts"
-              />
-            </div>
-          </div>
-
-          <div className="rounded-md border px-3 py-2">
-            <p className="text-sm font-medium">Sports</p>
-            <p className="text-xs text-muted-foreground mb-3">
-              Enable or disable the Sports feature. When disabled, the dashboard
-              widget and settings tab are hidden.
-            </p>
-            <div className="flex items-center justify-between rounded-md border px-3 py-2 max-w-sm">
-              <span className="text-sm">Enable Sports</span>
-              <Switch
-                checked={sportsEnabled}
-                onCheckedChange={setSportsEnabled}
-                aria-label="Enable Sports"
-              />
-            </div>
-          </div>
-
-          <div className="rounded-md border px-3 py-2">
-            <p className="text-sm font-medium">Weather</p>
-            <p className="text-xs text-muted-foreground mb-3">
-              Enable or disable the Weather feature. When disabled, the
-              dashboard widget and settings tab are hidden.
-            </p>
-            <div className="flex items-center justify-between rounded-md border px-3 py-2 max-w-sm">
-              <span className="text-sm">Enable Weather</span>
-              <Switch
-                checked={weatherEnabled}
-                onCheckedChange={setWeatherEnabled}
-                aria-label="Enable Weather"
-              />
-            </div>
-          </div>
-
-          <div className="rounded-md border px-3 py-2">
-            <p className="text-sm font-medium">Astronomy</p>
-            <p className="text-xs text-muted-foreground mb-3">
-              Enable or disable the Astronomy feature. When disabled, astronomy
-              data is hidden and calculations stop, but cached data and widget
-              settings are retained.
-            </p>
-            <div className="flex items-center justify-between rounded-md border px-3 py-2 max-w-sm">
-              <span className="text-sm">Enable Astronomy</span>
-              <Switch
-                checked={astronomyEnabled}
-                onCheckedChange={setAstronomyEnabled}
-                aria-label="Enable Astronomy"
-              />
-            </div>
-          </div>
         </div>
       </div>
 
@@ -3257,6 +3151,8 @@ function SidebarTab(): React.ReactElement {
   const { enabled: redditDigestEnabled } = useRedditDigestEnabled();
   const { enabled: savedPostsEnabled } = useSavedPostsEnabled();
   const { enabled: sportsEnabled } = useSportsEnabled();
+  const { isEnabled } = useFeatureEnablement();
+  const youtubeEnabled = isEnabled("youtube");
   const { enabled: astronomyEnabled, loading: astronomyLoading } =
     useAstronomyEnabled();
   const sensors = useSensors(
@@ -3284,7 +3180,7 @@ function SidebarTab(): React.ReactElement {
       label: "YouTube",
       description:
         "Dedicated page for subscribed channel videos and livestreams.",
-      available: true,
+      available: youtubeEnabled,
     },
     {
       id: "reddit-digest",
@@ -3389,7 +3285,7 @@ function SidebarTab(): React.ReactElement {
                   ? "Visible in sidebar"
                   : "Hidden from sidebar"
                 : visible
-                  ? "Feature disabled in General settings; will stay hidden until re-enabled"
+                  ? "Feature disabled in Features settings; will stay hidden until re-enabled"
                   : "Hidden from sidebar and feature currently disabled";
 
               return (
@@ -3429,27 +3325,44 @@ function SidebarTab(): React.ReactElement {
 
 export default function Settings(): React.ReactElement {
   const [searchParams] = useSearchParams();
+  const { isEnabled } = useFeatureEnablement();
   const { enabled: redditDigestEnabled } = useRedditDigestEnabled();
   const { enabled: savedPostsEnabled } = useSavedPostsEnabled();
   const { enabled: sportsEnabled } = useSportsEnabled();
   const { enabled: weatherEnabled } = useWeatherEnabled();
   const { enabled: astronomyEnabled } = useAstronomyEnabled();
+  const youtubeEnabled = isEnabled("youtube");
   const requestedTab = searchParams.get("tab");
   const requestedSection = searchParams.get("section");
+  const requestedFeature = FEATURE_MANIFEST.find(
+    (feature) => feature.settingsTabId === requestedTab,
+  );
   const selectedTab =
-    requestedTab === "features" || requestedTab === "app-behavior"
+    requestedTab === "app-behavior"
       ? "general"
-      : (requestedTab ?? "general");
+      : requestedFeature != null && !isEnabled(requestedFeature.id)
+        ? "features"
+        : (requestedTab ?? "general");
+  const [activeTab, setActiveTab] = useState(selectedTab);
+
+  useEffect(() => {
+    setActiveTab(selectedTab);
+  }, [selectedTab]);
 
   return (
     <div className="flex flex-col h-full px-6 py-4">
       <h1 className="text-xl font-semibold mb-4">Settings</h1>
-      <Tabs defaultValue={selectedTab} className="flex-1">
+      <Tabs
+        value={activeTab}
+        onValueChange={setActiveTab}
+        className="flex-1"
+      >
         <TabsList>
           <TabsTrigger value="general">General</TabsTrigger>
+          <TabsTrigger value="features">Features</TabsTrigger>
           <TabsTrigger value="sidebar">Sidebar</TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
-          <TabsTrigger value="youtube">YouTube</TabsTrigger>
+          {youtubeEnabled && <TabsTrigger value="youtube">YouTube</TabsTrigger>}
           {sportsEnabled && <TabsTrigger value="sports">Sports</TabsTrigger>}
           {weatherEnabled && <TabsTrigger value="weather">Weather</TabsTrigger>}
           {astronomyEnabled && (
@@ -3467,15 +3380,20 @@ export default function Settings(): React.ReactElement {
         <TabsContent value="general" className="mt-4">
           <GeneralTab />
         </TabsContent>
+        <TabsContent value="features" className="mt-4">
+          <FeaturesSettingsTab />
+        </TabsContent>
         <TabsContent value="sidebar" className="mt-4">
           <SidebarTab />
         </TabsContent>
         <TabsContent value="notifications" className="mt-4">
           <NotificationsTab />
         </TabsContent>
-        <TabsContent value="youtube" className="mt-4">
-          <YouTubeTab />
-        </TabsContent>
+        {youtubeEnabled && (
+          <TabsContent value="youtube" className="mt-4">
+            <YouTubeTab />
+          </TabsContent>
+        )}
         {sportsEnabled && (
           <TabsContent value="sports" className="mt-4">
             <SportsSettingsTab />

@@ -54,6 +54,12 @@ export function hasBundledWhatsNewEntry(version: string): boolean {
   return readBundledNotes(version) !== null;
 }
 
+export function getCurrentReleaseNotes(): WhatsNewPayload | null {
+  const version = app.getVersion();
+  const notes = readBundledNotes(version);
+  return notes ? { version, notes } : null;
+}
+
 export function getPendingWhatsNew(): WhatsNewPayload | null {
   const mode = currentMode();
   if (mode === "off") {

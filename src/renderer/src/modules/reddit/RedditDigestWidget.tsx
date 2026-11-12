@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import { useRedditDigest } from "../../hooks/useRedditDigest";
 import {
   DEFAULT_DIGEST_VIEW_CONFIG,
@@ -47,8 +48,9 @@ import {
   X,
 } from "lucide-react";
 import { formatRelativeTime } from "../../lib/time";
+import { parseRedditSubreddits } from "../../lib/onboardingReadiness";
 import { registerRendererModule } from "../registry";
-import type { DigestViewConfig } from "../../../../shared/ipc-types";
+import { IPC, type DigestViewConfig } from "../../../../shared/ipc-types";
 
 function RedditDigestWidget(): React.ReactElement {
   const { instanceId, label, size, editMode, onSizeChange } =
@@ -65,9 +67,25 @@ function RedditDigestWidget(): React.ReactElement {
   const [smallGroupIndex, setSmallGroupIndex] = useState(0);
   const [columnGroupPage, setColumnGroupPage] = useState(0);
   const [contentWidth, setContentWidth] = useState(0);
+  const [configuredSubreddits, setConfiguredSubreddits] = useState<
+    string[] | null
+  >(null);
   const cardContentRef = useRef<HTMLDivElement | null>(null);
   const previousSizeRef = useRef(size);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    window.api
+      .invoke(IPC.SETTINGS_GET, "reddit_digest_subreddits")
+      .then((raw) => setConfiguredSubreddits(parseRedditSubreddits(raw)))
+      .catch((error: unknown) => {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Failed to load Reddit Digest settings.",
+        );
+      });
+  }, []);
 
   useEffect(() => {
     if (previousSizeRef.current === size) return;
@@ -269,9 +287,25 @@ function RedditDigestWidget(): React.ReactElement {
   const digestContent = effectiveLoading ? (
     <p className="text-sm text-muted-foreground">Loading posts...</p>
   ) : visiblePosts.length === 0 ? (
-    <p className="text-sm text-muted-foreground">
-      No digest posts yet. Run the Reddit Digest script to populate.
-    </p>
+    configuredSubreddits !== null && configuredSubreddits.length === 0 ? (
+      <div className="space-y-2 text-sm text-muted-foreground">
+        <p>
+          Finish Reddit Digest setup: add subreddits in Settings → Reddit
+          Digest.
+        </p>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => navigate("/settings?tab=reddit-digest")}
+        >
+          Finish setup
+        </Button>
+      </div>
+    ) : (
+      <p className="text-sm text-muted-foreground">
+        No digest posts yet. Run the Reddit Digest script to populate.
+      </p>
+    )
   ) : sortedPosts.length === 0 ? (
     <p className="text-sm text-muted-foreground">
       No posts match the current filter.

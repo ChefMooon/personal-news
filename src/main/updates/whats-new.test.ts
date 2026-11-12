@@ -50,6 +50,7 @@ vi.mock("./bundled-changelog", () => ({
 import {
   WHATS_NEW_LAST_SEEN_KEY,
   acknowledgeWhatsNew,
+  getCurrentReleaseNotes,
   getPendingWhatsNew,
   hasBundledWhatsNewEntry,
   resolveWhatsNewMode,
@@ -185,5 +186,28 @@ describe("hasBundledWhatsNewEntry", () => {
     expect(hasBundledWhatsNewEntry("1.9.0")).toBe(true);
     expect(hasBundledWhatsNewEntry("9.9.9")).toBe(false);
     expect(hasBundledWhatsNewEntry("not-a-version")).toBe(false);
+  });
+});
+
+describe("getCurrentReleaseNotes", () => {
+  it("returns notes for the current version regardless of onboarding mode", () => {
+    state.isPackaged = false;
+    state.harness = false;
+
+    expect(getCurrentReleaseNotes()).toEqual({
+      version: "2.0.0",
+      notes: { sections: [{ heading: "Added", items: ["Two point oh feature"] }] },
+    });
+  });
+
+  it("returns null when the current version has no bundled entry", () => {
+    state.version = "9.9.9";
+    expect(getCurrentReleaseNotes()).toBeNull();
+  });
+
+  it("does not read or write settings", () => {
+    getCurrentReleaseNotes();
+    expect(state.getSetting).not.toHaveBeenCalled();
+    expect(state.setSetting).not.toHaveBeenCalled();
   });
 });

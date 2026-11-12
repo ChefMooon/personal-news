@@ -111,6 +111,8 @@ harness debugging configuration. Harness mode suppresses automatic source
 polling and user-script startup so scenarios do not rely on live credentials or
 uncontrolled polling. Normal dev/preview and packaged startup are unchanged.
 
+To exercise the first-run wizard in a harness or dev run see [HOW-TO-MAINTAIN-ONBOARDING.md](HOW-TO-MAINTAIN-ONBOARDING.md).
+
 ### Developer Test Data
 
 The first normal unpackaged `dev` or `start` session automatically seeds

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock electron before importing the module under test.
 vi.mock("electron", () => ({
@@ -21,6 +21,7 @@ vi.mock("../../../settings/store", () => ({
 
 import Database from "better-sqlite3";
 import {
+  applyAstronomyEnabled,
   AstronomyModule,
   getAstronomySettings,
   getAstronomySnapshot,
@@ -75,6 +76,12 @@ beforeEach(() => {
   AstronomyModule.initialize(db);
 });
 
+afterEach(() => {
+  AstronomyModule.shutdown();
+  db.close();
+  vi.useRealTimers();
+});
+
 describe("astronomy module lifecycle", () => {
   it("returns null snapshot for unknown location", () => {
     expect(getAstronomySnapshot("nope")).toBeNull();
@@ -106,6 +113,17 @@ describe("astronomy module lifecycle", () => {
     const result = await triggerAstronomyRefresh();
     expect(result.ok).toBe(false);
     expect(result.refreshedCount).toBe(0);
+  });
+
+  it("clears the polling timer when Astronomy is disabled", () => {
+    vi.useFakeTimers();
+    updateAstronomySettings({ enabled: true });
+    const clearIntervalSpy = vi.spyOn(globalThis, "clearInterval");
+    updateAstronomySettings({ enabled: false });
+    applyAstronomyEnabled(false);
+
+    expect(vi.getTimerCount()).toBe(0);
+    expect(clearIntervalSpy).toHaveBeenCalledTimes(1);
   });
 
   it("refreshes a known location and caches a snapshot", async () => {

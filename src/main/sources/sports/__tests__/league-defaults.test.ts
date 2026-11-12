@@ -5,6 +5,10 @@ import type { SportLeague } from "../../../../shared/ipc-types";
 vi.mock("electron", () => ({ BrowserWindow: { getAllWindows: () => [] } }));
 vi.mock("../../../harness-mode", () => ({ isElectronHarnessRun: () => true }));
 vi.mock("../../../dev-test-data", () => ({ isDevTestDataActive: () => false }));
+vi.mock("../../../settings/store", () => ({
+  getSetting: (): null => null,
+  setSetting: vi.fn(),
+}));
 vi.mock("../api", () => ({
   fetchLeaguesForSport: vi.fn(),
   fetchTeamBadgesForLeague: vi.fn().mockResolvedValue([]),

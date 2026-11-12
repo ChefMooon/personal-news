@@ -31,14 +31,29 @@ export function installRendererBrowserApi(fixtures) {
       group_by: "subreddit",
       layout_mode: "columns",
     }),
+    ...getScenario().settingsOverrides,
   };
   for (const [key, value] of Object.entries(fixtures.widgetConfigs)) {
     settings[key] = JSON.stringify(value);
   }
-  let dashboardViews = {
-    view_order: fixtures.views.map((view) => view.id),
-    views: Object.fromEntries(fixtures.views.map((view) => [view.id, view])),
-  };
+  const initialScenario = getScenario();
+  let onboardingCompletionFailures =
+    Math.max(0, Number(initialScenario.onboardingCompletionFailures) || 0);
+  let weatherLocations = initialScenario.weatherLocations ?? [
+    ...(fixtures.astronomyLocations ?? [fixtures.weather.snapshot.location]),
+  ];
+  let trackedTeams = initialScenario.sportsTeamsOverride ?? [
+    ...fixtures.sports.teams,
+  ];
+  let youtubeChannels = initialScenario.youtubeChannelsOverride ?? [
+    ...fixtures.youtube.channels,
+  ];
+  let youtubeApiKeySet = initialScenario.youtubeApiKeySet === true;
+  let dashboardViews =
+    initialScenario.dashboardViewsOverride ?? {
+      view_order: fixtures.views.map((view) => view.id),
+      views: Object.fromEntries(fixtures.views.map((view) => [view.id, view])),
+    };
   const defaultSidebarConfig = {
     itemOrder: [
       "dashboard",
@@ -210,14 +225,140 @@ export function installRendererBrowserApi(fixtures) {
           }),
         );
       }
+      if (
+        args[0] === "youtube_enabled" &&
+        Number(scenario.youtubeEnabledLoadDelayMs) > 0
+      ) {
+        return new Promise((resolve) => {
+          setTimeout(
+            () =>
+              resolve(
+                Object.hasOwn(settings, args[0]) ? settings[args[0]] : null,
+              ),
+            Number(scenario.youtubeEnabledLoadDelayMs),
+          );
+        });
+      }
       if (Object.hasOwn(settings, args[0]))
         return Promise.resolve(settings[args[0]]);
       // The production settings:get handler returns null for absent keys.
       return Promise.resolve(null);
     }
+    if (channel === "settings:getOnboardingState") {
+      const scenario = getScenario();
+      return Promise.resolve({
+        required:
+          scenario.onboardingRequired === true &&
+          sessionStorage.getItem("__rendererBrowserOnboardingComplete") !==
+            "1",
+        unseenFeatureIds: scenario.unseenFeatureIds ?? [],
+      });
+    }
+    if (channel === "settings:completeOnboarding") {
+      if (onboardingCompletionFailures > 0) {
+        onboardingCompletionFailures -= 1;
+        return Promise.resolve({
+          ok: false,
+          error: "Unable to complete onboarding.",
+        });
+      }
+      sessionStorage.setItem("__rendererBrowserOnboardingComplete", "1");
+      return Promise.resolve({ ok: true, error: null });
+    }
+    if (channel === "settings:markFeaturesSeen") {
+      return Promise.resolve({ ok: true, error: null });
+    }
     if (channel === "settings:set") {
       settings[args[0]] = args[1];
       return Promise.resolve(true);
+    }
+    if (channel === "settings:setYouTubeApiKey") {
+      youtubeApiKeySet = true;
+      return Promise.resolve({ ok: true, error: null });
+    }
+    if (channel === "youtube:addChannel") {
+      if (!youtubeChannels.some((channel) => channel.channel_id === "browser-test-channel")) {
+        youtubeChannels = [
+          ...youtubeChannels,
+          {
+            channel_id: "browser-test-channel",
+            name: "Test Channel",
+            thumbnail_url: null,
+            added_at: Math.floor(fixtures.now / 1000),
+            enabled: 1,
+            sort_order: youtubeChannels.length,
+            notify_new_videos: 1,
+            notify_live_start: 1,
+          },
+        ];
+      }
+      for (const callback of listeners.get("youtube:updated") ?? []) callback();
+      return Promise.resolve({ ok: true, error: null });
+    }
+    if (channel === "weather:searchLocations") {
+      return Promise.resolve([
+        {
+          id: "browser-testville",
+          name: "Testville",
+          admin1: "Test County",
+          country: "Testland",
+          countryCode: "TT",
+          latitude: 40.1,
+          longitude: -73.2,
+          timezone: "UTC",
+        },
+      ]);
+    }
+    if (channel === "weather:saveLocation") {
+      const location = {
+        ...args[0],
+        createdAt: Math.floor(fixtures.now / 1000),
+        lastFetchedAt: null,
+      };
+      weatherLocations = [
+        ...weatherLocations.filter((saved) => saved.id !== location.id),
+        location,
+      ];
+      const scenario = getScenario();
+      if (Object.hasOwn(scenario, "weatherLocations")) {
+        scenario.weatherLocations = weatherLocations;
+        sessionStorage.setItem(scenarioKey, JSON.stringify(scenario));
+      }
+      return Promise.resolve(location);
+    }
+    if (channel === "sports:searchTeams") {
+      return Promise.resolve([
+        {
+          teamId: "browser-test-team",
+          name: "Testville Tigers",
+          leagueId: "browser-test-league",
+          leagueName: "Test League",
+          sport: args[0]?.sport ?? "Baseball",
+          badgeUrl: null,
+        },
+      ]);
+    }
+    if (channel === "sports:addTeam") {
+      const team = args[0] ?? {};
+      if (!trackedTeams.some((tracked) => tracked.teamId === team.teamId)) {
+        trackedTeams = [
+          ...trackedTeams,
+          {
+            teamId: team.teamId,
+            leagueId: team.leagueId,
+            sport: team.sport,
+            name: team.teamName,
+            shortName: null,
+            badgeUrl: team.badgeUrl ?? null,
+            enabled: true,
+            sortOrder: trackedTeams.length,
+          },
+        ];
+      }
+      return Promise.resolve({ ok: true, error: null });
+    }
+    if (channel === "reddit:validateDigestSubreddit") {
+      return Promise.resolve({ ok: true, error: null });
     }
     if (channel === "settings:setDashboardViews") {
       dashboardViews = args[0]?.state ?? args[0] ?? dashboardViews;
@@ -435,6 +576,9 @@ export function installRendererBrowserApi(fixtures) {
     }
 
     const whatsNewAckKey = "__rendererBrowserWhatsNewAck";
+    if (channel === "updates:getCurrentReleaseNotes") {
+      return Promise.resolve(getScenario().currentReleaseNotes ?? null);
+    }
     if (channel === "updates:getPendingWhatsNew") {
       const pending = getScenario().whatsNewPending ?? null;
       let acknowledged = null;
@@ -489,7 +633,10 @@ export function installRendererBrowserApi(fixtures) {
         pollIntervalMinutes: 60,
         startupRefreshStaleMinutes: 60,
       },
-      "settings:getYouTubeApiKeyStatus": { configured: false },
+      "settings:getYouTubeApiKeyStatus": {
+        isSet: youtubeApiKeySet,
+        suffix: null,
+      },
       "themes:list": [],
       "reddit:getDigestWeeks": fixtures.weeks,
       "reddit:getSavedPostsSummary": fixtures.savedPosts.map((post) => ({
@@ -508,11 +655,10 @@ export function installRendererBrowserApi(fixtures) {
         topicConfigured: false,
         summary: null,
       },
-      "youtube:getChannels": fixtures.youtube.channels,
-      "sports:getTrackedTeams": fixtures.sports.teams,
+      "youtube:getChannels": youtubeChannels,
+      "sports:getTrackedTeams": trackedTeams,
       "sports:getStatus": fixtures.sports.status,
-      "weather:getLocations": getScenario().weatherLocations ??
-        fixtures.astronomyLocations ?? [fixtures.weather.snapshot.location],
+      "weather:getLocations": getScenario().weatherLocations ?? weatherLocations,
       "weather:getSettings": {
         pollIntervalMinutes: 30,
         defaultLocationId: Object.hasOwn(getScenario(), "defaultLocationId")

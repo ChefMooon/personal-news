@@ -247,6 +247,14 @@ function schedulePolling(): void {
   );
 }
 
+export function applyAstronomyEnabled(enabled: boolean): void {
+  if (enabled && !isElectronHarnessRun()) {
+    void triggerAstronomyRefresh().catch((error) => {
+      console.error("[Astronomy] Refresh after enabling failed:", error);
+    });
+  }
+}
+
 // --- Location lifecycle hooks (called by Weather module) -------------------
 
 export function onLocationSaved(locationId: string): void {

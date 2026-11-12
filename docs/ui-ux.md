@@ -536,6 +536,8 @@ The flow is presented as a **multi-step modal or full-pane wizard** with forward
 - Completing Step 4 with "Done" is the only action that persists the configuration.
 - The flow is re-enterable from Settings at any time — it does not require unconfiguring first.
 
+The first-run setup wizard for new installs is described in [HOW-TO-MAINTAIN-ONBOARDING.md](HOW-TO-MAINTAIN-ONBOARDING.md); this section describes only the Saved Posts ntfy flow that the wizard embeds.
+
 ### 8.5 YouTube Settings Section
 
 The YouTube settings section contains:

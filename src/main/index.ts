@@ -14,7 +14,11 @@ import { existsSync, writeFileSync } from "fs";
 import { join } from "path";
 import { electronApp, optimizer, is } from "@electron-toolkit/utils";
 import { IPC } from "../shared/ipc-types";
-import { openDatabase, resolveDatabasePath } from "./db/database";
+import {
+  openDatabase,
+  resolveDatabasePath,
+  wasFreshProfileAtOpen,
+} from "./db/database";
 import { registerIpcHandlers, setTrustedIpcWebContents } from "./ipc/index";
 import { registerModule, initializeAll, shutdownAll } from "./sources/registry";
 import { YouTubeModule } from "./sources/youtube/index";
@@ -29,6 +33,12 @@ import { getSetting, setSetting } from "./settings/store";
 import { initializeAutoUpdates } from "./updates/service";
 import { hasBundledWhatsNewEntry } from "./updates/whats-new";
 import { initializeDevTestDataForStartup } from "./dev-test-data";
+import { registerFeatureHooks } from "./features/register-feature-hooks";
+import {
+  initializeOnboardingState,
+  isOnboardingRequired,
+  resolveOnboardingMode,
+} from "./onboarding/onboarding-state";
 import {
   DatabaseProfileError,
   resolveDatabaseProfile,
@@ -735,10 +745,19 @@ app.whenReady().then(() => {
       return;
     }
 
-    initializeDevTestDataForStartup(db, {
-      isPackaged: app.isPackaged,
-      harnessMode: process.env[HARNESS_MODE_ENV] === "1",
+    initializeOnboardingState({
+      mode: resolveOnboardingMode({
+        isPackaged: app.isPackaged,
+        optIn: process.env.PERSONAL_NEWS_ONBOARDING,
+      }),
+      wasFreshProfile: wasFreshProfileAtOpen(),
     });
+    if (!isOnboardingRequired()) {
+      initializeDevTestDataForStartup(db, {
+        isPackaged: app.isPackaged,
+        harnessMode: process.env[HARNESS_MODE_ENV] === "1",
+      });
+    }
 
     ensureBooleanSetting("app_close_to_tray", true);
     ensureBooleanSetting("app_start_minimized", false);
@@ -751,6 +770,7 @@ app.whenReady().then(() => {
       openAtLogin: getBooleanSetting("app_launch_at_login", false),
     });
 
+    registerFeatureHooks();
     registerModule(YouTubeModule);
     registerModule(RedditModule);
     registerModule(ScriptManagerModule);

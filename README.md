@@ -83,6 +83,7 @@ All settings are stored locally in the app. To reconfigure:
 - [Data Sources Reference](docs/data-sources.md) — Detailed configuration for each source
 - [How to Run, Package, and Release](docs/HOW-TO-RUN.md) — Source setup, packaging, and the verified Windows pre-release workflow
 - [How to Release](docs/HOW-TO-RELEASE.md) — Tag-triggered GitHub release process for Windows builds
+- [How to Maintain Onboarding](docs/HOW-TO-MAINTAIN-ONBOARDING.md) — First-run wizard, feature manifest, and per-feature enablement
 - [Product Specification](docs/PRD.md) — Current product scope and requirements
 
 ## Asset Maintenance

@@ -27,6 +27,7 @@ import {
   notifyRedditDigest,
   notifyScriptAutoRun,
 } from "../../notifications/notification-service";
+import { isFeatureEnabled } from "../../features/feature-state";
 import { isPathWithinDirectory, isPythonScriptFilePath } from "./policy";
 
 export const activeRuns = new Map<number, ActiveRun>();
@@ -570,8 +571,20 @@ function findBundledRedditDigestScript(db: Database.Database):
 
 export function ensureBundledRedditDigestScript(
   db: Database.Database,
+  featureEnabled = isFeatureEnabled("reddit_digest"),
 ): number | null {
   const existing = findBundledRedditDigestScript(db);
+  if (!featureEnabled) {
+    if (existing && existing.enabled === 1) {
+      db.prepare("UPDATE scripts SET enabled = 0 WHERE id = ?").run(
+        existing.id,
+      );
+      setSetting(REDDIT_DIGEST_AUTO_DISABLED_SETTING, "1");
+      setSetting(REDDIT_DIGEST_SCRIPT_ID_SETTING, String(existing.id));
+    }
+    return existing?.id ?? null;
+  }
+
   const subreddits = getConfiguredDigestSubreddits();
   const filePath = getBundledRedditDigestScriptPath();
   const interpreter = process.platform === "win32" ? "python" : "python3";
@@ -642,6 +655,17 @@ export function ensureBundledRedditDigestScript(
   setSetting(REDDIT_DIGEST_SCRIPT_ID_SETTING, String(result.lastInsertRowid));
   deleteSetting(REDDIT_DIGEST_AUTO_DISABLED_SETTING);
   return result.lastInsertRowid as number;
+}
+
+export function applyRedditDigestEnabled(
+  db: Database.Database,
+  enabled: boolean,
+): void {
+  const scriptId = ensureBundledRedditDigestScript(db, enabled);
+  if (scriptId !== null) {
+    refreshScriptSchedule(db, scriptId, { runOnAppStart: false });
+  }
+  emitUpdated?.();
 }
 
 export function syncScriptsFromHomeDir(db: Database.Database): void {
@@ -728,6 +752,12 @@ export function runScriptById(
     redditDigest?: RedditDigestRunOptions;
   },
 ): Promise<void> {
+  if (
+    isBundledRedditDigestScript(script) &&
+    !isFeatureEnabled("reddit_digest")
+  ) {
+    return Promise.reject(new Error("Reddit Digest is disabled."));
+  }
   if (!isScriptExecutionPathAllowed(script)) {
     return Promise.reject(new Error("Script file must be an existing Python file in the configured script directory."));
   }

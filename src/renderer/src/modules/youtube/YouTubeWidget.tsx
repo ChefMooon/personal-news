@@ -5,6 +5,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { Link } from "react-router-dom";
 import { useYouTubeChannels } from "../../hooks/useYouTubeChannels";
 import {
   useYouTubeViewConfig,
@@ -312,7 +313,18 @@ function YouTubeWidget(): React.ReactElement {
       ) : displayedChannels.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           {enabledCount === 0
-            ? "No channels configured."
+            ? (
+                <>
+                  Finish YouTube setup: add your API key and channels in{" "}
+                  <Link
+                    className="text-primary underline-offset-4 hover:underline"
+                    to="/settings?tab=youtube"
+                  >
+                    Settings → YouTube
+                  </Link>
+                  .
+                </>
+              )
             : "No channels selected. Open settings to choose channels."}
         </p>
       ) : (

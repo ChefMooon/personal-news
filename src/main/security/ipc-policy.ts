@@ -1,4 +1,5 @@
 import { IPC } from "../../shared/ipc-types";
+import { getFeatureIdForSettingKey } from "../../shared/feature-manifest";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -10,7 +11,7 @@ export const MAIN_TO_RENDERER_CHANNELS = new Set<string>([
   IPC.SCRIPTS_OUTPUT, IPC.SCRIPTS_RUN_COMPLETE, IPC.SCRIPTS_UPDATED, IPC.DEV_TEST_DATA_UPDATED,
 ]);
 
-const rendererChannelPrefixes = /^(window:(minimize|toggleMaximize|close|getState)|updates:(getStatus|checkForUpdates|installUpdate|getPendingWhatsNew|acknowledgeWhatsNew|simulateStatus)|weather:|astronomy:|settings:|sports:|youtube:|reddit:|scripts:|themes:|devTestData:|shell:|dialog:)/;
+const rendererChannelPrefixes = /^(window:(minimize|toggleMaximize|close|getState)|updates:(getStatus|checkForUpdates|installUpdate|getPendingWhatsNew|getCurrentReleaseNotes|acknowledgeWhatsNew|simulateStatus)|weather:|astronomy:|settings:|sports:|youtube:|reddit:|scripts:|themes:|devTestData:|shell:|dialog:)/;
 // Test-only channel: only exposed when the app was launched by the Electron harness
 // (the main process additionally requires an unpackaged build before registering a handler).
 const harnessOnlyRendererChannels = new Set<string>([IPC.UPDATES_SIMULATE_STATUS]);
@@ -24,7 +25,7 @@ const genericSettingKeys = new Set([
   "app_restore_window_bounds", "app_start_maximized", "app_auto_update_check_enabled", "app_window_bounds",
   "reddit_digest_enabled", "reddit_digest_page_view_mode", "reddit_digest_view_config", "reddit_digest_subreddits", "reddit_digest_week_start",
   "youtube_view_config", "saved_posts_view_config",
-  "saved_posts_enabled", "sports_enabled", "weather_enabled", "ntfy_topic", "ntfy_server_url",
+  "saved_posts_enabled", "sports_enabled", "weather_enabled", "youtube_enabled", "ntfy_topic", "ntfy_server_url",
   "youtube_page_view_mode", "youtube_page_density", "youtube_page_density_by_mode", "youtube_page_hide_watched", "script_home_dir",
   "rss_poll_interval_minutes", "ntfy_poll_interval_minutes", "saved_posts_ingest_delay_seconds",
   "sports_page_sport_order",
@@ -40,6 +41,21 @@ export function isAllowedGenericSettingKey(key: unknown, harnessMode = false): k
   if (genericSettingKeys.has(key)) return true;
   const dynamicPrefixes = ["astronomy_view_config:", "weather_view_config:", "sports_view_config:", "youtube_view_config:", "saved_posts_view_config:", "reddit_digest_view_config:"];
   return dynamicPrefixes.some((prefix) => key.startsWith(prefix) && /^[A-Za-z0-9_-]{1,80}$/.test(key.slice(prefix.length)));
+}
+
+export function isValidGenericSettingValue(key: string, value: string): boolean {
+  if (getFeatureIdForSettingKey(key) !== null) {
+    return value === "true" || value === "false";
+  }
+
+  const isLegacyBooleanSetting =
+    key.endsWith("_enabled") ||
+    key === "app_launch_at_login" ||
+    (key.startsWith("app_") && key !== "app_window_bounds");
+  return (
+    !isLegacyBooleanSetting ||
+    ["0", "1", "true", "false", ""].includes(value)
+  );
 }
 
 export function parseExternalHttpUrl(value: unknown): URL | null {

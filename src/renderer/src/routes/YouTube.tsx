@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { Link } from "react-router-dom";
 import {
   IPC,
   type MediaType,
@@ -18,6 +19,7 @@ import {
 import { useYouTubeChannels } from "../hooks/useYouTubeChannels";
 import { useYouTubeVideos } from "../hooks/useYouTubeVideos";
 import { useYouTubeVideosFiltered } from "../hooks/useYouTubeVideosFiltered";
+import { useYouTubeEnabled } from "../contexts/YouTubeEnabledContext";
 import { StreamPanel } from "../modules/youtube/StreamPanel";
 import { VideoCard } from "../modules/youtube/VideoCard";
 import { VideoCarousel } from "../modules/youtube/VideoCarousel";
@@ -302,7 +304,7 @@ function ChannelGroupedSection({
   );
 }
 
-export default function YouTubePage(): React.ReactElement {
+function YouTubePageContent(): React.ReactElement {
   const { channels, loading: loadingChannels } = useYouTubeChannels();
   const [viewMode, setViewMode] = useState<PageViewMode>("flat");
   const [densityByMode, setDensityByMode] = useState<DensityByMode>(
@@ -730,4 +732,45 @@ export default function YouTubePage(): React.ReactElement {
       </div>
     </div>
   );
+}
+
+export default function YouTubePage(): React.ReactElement {
+  const { enabled, loading } = useYouTubeEnabled();
+
+  if (loading) {
+    return (
+      <div className="flex h-full flex-col px-6 py-4">
+        <h1 className="mb-4 text-xl font-semibold">YouTube</h1>
+        <div className="flex flex-1 items-center justify-center">
+          <p className="text-sm text-muted-foreground">
+            Loading YouTube settings...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!enabled) {
+    return (
+      <div className="flex flex-col h-full px-6 py-4">
+        <h1 className="text-xl font-semibold mb-4">YouTube</h1>
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center space-y-3 max-w-sm">
+            <p className="text-muted-foreground">YouTube is disabled.</p>
+            <p className="text-sm text-muted-foreground">
+              Enable it in{" "}
+              <Link
+                to="/settings?tab=features"
+                className="underline hover:text-foreground"
+              >
+                Settings → Features
+              </Link>
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return <YouTubePageContent />;
 }

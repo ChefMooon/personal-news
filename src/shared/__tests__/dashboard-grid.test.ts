@@ -1,9 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   DASHBOARD_GRID_COLUMNS,
   DASHBOARD_GRID_LAYOUT_VERSION,
+  applyToVisibleWidgets,
   getWidgetFootprint,
   getWidgetInsertionY,
+  getVisibleWidgetLayout,
   isWidgetGeometry,
   isWidgetSize,
   moveWidget,
@@ -290,5 +292,174 @@ describe("dashboard grid contract", () => {
     expect(getWidgetInsertionY(layout, "top")).toBe(0);
     expect(getWidgetInsertionY(layout, { afterId: "youtube_1" })).toBe(10);
     expect(getWidgetInsertionY(layout, "bottom")).toBe(32);
+  });
+
+  it("projects visible widgets without gaps from hidden widgets", () => {
+    const layout = normalizeWidgetLayout({
+      widget_order: ["weather_1", "sports_1", "saved_posts_1"],
+      widget_instances: {
+        weather_1: { moduleId: "weather", size: "small" },
+        sports_1: { moduleId: "sports", size: "small" },
+        saved_posts_1: { moduleId: "saved_posts", size: "small" },
+      },
+    });
+    const visible = getVisibleWidgetLayout(layout, new Set(["sports_1"]));
+
+    expect(visible.widget_order).toEqual(["weather_1", "saved_posts_1"]);
+    expect(visible.widget_instances).not.toHaveProperty("sports_1");
+    expect(visible.widget_visibility).not.toHaveProperty("sports_1");
+    expect(visible.widget_geometry).not.toHaveProperty("sports_1");
+    for (const columns of [12, 8, 4, 1]) {
+      const projection = projectWidgetLayout(visible, columns);
+      expect(projection.weather_1.y).toBe(0);
+      expect(projection.saved_posts_1.y).toBe(
+        projection.weather_1.y + projection.weather_1.h,
+      );
+    }
+  });
+
+  it("moves through visible neighbors without swapping hidden order slots", () => {
+    const layout = normalizeWidgetLayout({
+      widget_order: ["weather_1", "sports_1", "saved_posts_1"],
+      widget_instances: {
+        weather_1: { moduleId: "weather", size: "small" },
+        sports_1: { moduleId: "sports", size: "small" },
+        saved_posts_1: { moduleId: "saved_posts", size: "small" },
+      },
+    });
+
+    const moved = applyToVisibleWidgets(
+      layout,
+      new Set(["sports_1"]),
+      (visible) => moveWidget(visible, "saved_posts_1", "up"),
+    );
+
+    expect(moved.widget_order).toEqual([
+      "saved_posts_1",
+      "sports_1",
+      "weather_1",
+    ]);
+  });
+
+  it("preserves hidden widget data through horizontal and drag-style commits", () => {
+    const layout = normalizeWidgetLayout({
+      widget_order: ["weather_1", "sports_1", "saved_posts_1"],
+      widget_visibility: { sports_1: false },
+      widget_instances: {
+        weather_1: { moduleId: "weather", size: "small" },
+        sports_1: { moduleId: "sports", label: "Scores", size: "medium" },
+        saved_posts_1: { moduleId: "saved_posts", size: "small" },
+      },
+    });
+    const hiddenId = "sports_1";
+    const hiddenSnapshot = {
+      instance: layout.widget_instances[hiddenId],
+      visibility: layout.widget_visibility[hiddenId],
+      orderIndex: layout.widget_order.indexOf(hiddenId),
+      geometry: layout.widget_geometry?.[hiddenId],
+    };
+    const moved = applyToVisibleWidgets(
+      layout,
+      new Set([hiddenId]),
+      (visible) => moveWidget(visible, "weather_1", "right"),
+    );
+    const dragged = applyToVisibleWidgets(
+      moved,
+      new Set([hiddenId]),
+      (visible) =>
+        normalizeWidgetLayout({
+          ...visible,
+          widget_geometry: {
+            ...visible.widget_geometry,
+            saved_posts_1: {
+              ...visible.widget_geometry?.saved_posts_1,
+              x: 2,
+              y: 12,
+            },
+          },
+        }),
+    );
+
+    for (const result of [moved, dragged]) {
+      expect(result.widget_instances[hiddenId]).toEqual(hiddenSnapshot.instance);
+      expect(result.widget_visibility[hiddenId]).toBe(
+        hiddenSnapshot.visibility,
+      );
+      expect(result.widget_order.indexOf(hiddenId)).toBe(
+        hiddenSnapshot.orderIndex,
+      );
+      expect(result.widget_geometry?.[hiddenId]).toEqual(
+        hiddenSnapshot.geometry,
+      );
+    }
+    expect(dragged.widget_geometry?.saved_posts_1).toMatchObject({
+      x: 2,
+      y: 21,
+    });
+  });
+
+  it("restores hidden-only rows when committing a visible layout", () => {
+    const layout = normalizeWidgetLayout({
+      widget_order: ["sports_1", "weather_1"],
+      widget_instances: {
+        sports_1: { moduleId: "sports", size: "small" },
+        weather_1: { moduleId: "weather", size: "small" },
+      },
+      widget_geometry: {
+        sports_1: { x: 0, y: 0, w: 6, h: 6 },
+        weather_1: { x: 0, y: 6, w: 6, h: 6 },
+      },
+    });
+
+    const committed = applyToVisibleWidgets(
+      layout,
+      new Set(["sports_1"]),
+      (visible) => visible,
+    );
+
+    expect(committed.widget_geometry?.sports_1?.y).toBe(0);
+    expect(committed.widget_geometry?.weather_1?.y).toBe(6);
+  });
+
+  it("matches the existing transform behavior when no widgets are hidden", () => {
+    const layout = normalizeWidgetLayout({
+      widget_order: ["weather_1", "sports_1"],
+      widget_instances: {
+        weather_1: { moduleId: "weather", size: "small" },
+        sports_1: { moduleId: "sports", size: "small" },
+      },
+    });
+
+    expect(
+      applyToVisibleWidgets(layout, new Set(), (visible) =>
+        moveWidget(visible, "sports_1", "up"),
+      ),
+    ).toEqual(moveWidget(layout, "sports_1", "up"));
+  });
+
+  it("warns and keeps the original layout when a visible transform drops an instance", () => {
+    const layout = normalizeWidgetLayout({
+      widget_order: ["weather_1", "sports_1", "saved_posts_1"],
+      widget_visibility: { sports_1: false },
+      widget_instances: {
+        weather_1: { moduleId: "weather", size: "small" },
+        sports_1: { moduleId: "sports", size: "small" },
+        saved_posts_1: { moduleId: "saved_posts", size: "small" },
+      },
+    });
+    const consoleWarn = vi
+      .spyOn(console, "warn")
+      .mockImplementation(() => {});
+
+    expect(
+      applyToVisibleWidgets(layout, new Set(["sports_1"]), (visible) => ({
+        ...visible,
+        widget_order: ["weather_1"],
+      })),
+    ).toEqual(layout);
+    expect(consoleWarn).toHaveBeenCalledWith(
+      "Visible widget transforms must preserve the widget IDs; keeping the original layout.",
+    );
+    consoleWarn.mockRestore();
   });
 });

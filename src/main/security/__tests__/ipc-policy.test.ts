@@ -8,6 +8,7 @@ import {
   isExactHttpsHost,
   isTrustedIpcSenderIdentity,
   isTrustedRendererUrl,
+  isValidGenericSettingValue,
   MAIN_TO_RENDERER_CHANNELS,
   parseExternalHttpUrl,
   RENDERER_TO_MAIN_CHANNELS,
@@ -25,7 +26,14 @@ describe("IPC policy", () => {
   });
 
   it("exposes the what's-new channels to the renderer only", () => {
-    for (const channel of [IPC.UPDATES_GET_PENDING_WHATS_NEW, IPC.UPDATES_ACKNOWLEDGE_WHATS_NEW]) {
+    for (const channel of [
+      IPC.UPDATES_GET_PENDING_WHATS_NEW,
+      IPC.UPDATES_GET_CURRENT_RELEASE_NOTES,
+      IPC.UPDATES_ACKNOWLEDGE_WHATS_NEW,
+      IPC.SETTINGS_GET_ONBOARDING_STATE,
+      IPC.SETTINGS_COMPLETE_ONBOARDING,
+      IPC.SETTINGS_MARK_FEATURES_SEEN,
+    ]) {
       expect(RENDERER_TO_MAIN_CHANNELS.has(channel)).toBe(true);
       expect(MAIN_TO_RENDERER_CHANNELS.has(channel)).toBe(false);
     }
@@ -55,6 +63,7 @@ describe("IPC policy", () => {
     expect(source.match(/IPC\.UPDATES_SIMULATE_STATUS/g)).toHaveLength(1);
     expect(source).toMatch(/if \(isElectronHarnessRun\(\)\) \{\s*ipcMain\.handle\(\s*IPC\.UPDATES_SIMULATE_STATUS/);
     expect(source.match(/isAllowedGenericSettingKey\(key, isElectronHarnessRun\(\)\)/g)?.length).toBeGreaterThanOrEqual(2);
+    expect(source).toMatch(/isValidGenericSettingValue\(key, value\)/);
   });
 
   it("gates the what's-new last-seen setting to harness mode", () => {
@@ -66,6 +75,9 @@ describe("IPC policy", () => {
   it("accepts only explicitly supported generic settings", () => {
     expect(isAllowedGenericSettingKey("script_home_dir")).toBe(true);
     expect(isAllowedGenericSettingKey("youtube_page_density")).toBe(true);
+    expect(isAllowedGenericSettingKey("youtube_enabled")).toBe(true);
+    expect(isAllowedGenericSettingKey("onboarding_completed")).toBe(false);
+    expect(isAllowedGenericSettingKey("features_seen_ids")).toBe(false);
     expect(isAllowedGenericSettingKey("sports_view_config:widget-1")).toBe(true);
     expect(isAllowedGenericSettingKey("weather_view_config:widget-1")).toBe(true);
     expect(isAllowedGenericSettingKey("astronomy_view_config:widget-1")).toBe(true);
@@ -82,6 +94,26 @@ describe("IPC policy", () => {
     expect(isAllowedGenericSettingKey("youtube_api_key_encrypted")).toBe(false);
     expect(isAllowedGenericSettingKey("arbitrary_setting")).toBe(false);
     expect(isAllowedGenericSettingKey({})).toBe(false);
+  });
+
+  it("requires canonical boolean values for feature settings", () => {
+    for (const key of [
+      "reddit_digest_enabled",
+      "saved_posts_enabled",
+      "sports_enabled",
+      "weather_enabled",
+      "youtube_enabled",
+    ]) {
+      expect(isValidGenericSettingValue(key, "true")).toBe(true);
+      expect(isValidGenericSettingValue(key, "false")).toBe(true);
+      expect(isValidGenericSettingValue(key, "0")).toBe(false);
+      expect(isValidGenericSettingValue(key, "1")).toBe(false);
+      expect(isValidGenericSettingValue(key, "")).toBe(false);
+    }
+
+    expect(isValidGenericSettingValue("app_auto_update_check_enabled", "1")).toBe(true);
+    expect(isValidGenericSettingValue("app_auto_update_check_enabled", "")).toBe(true);
+    expect(isValidGenericSettingValue("app_auto_update_check_enabled", "yes")).toBe(false);
   });
 
   it("allows only HTTP(S) external links", () => {

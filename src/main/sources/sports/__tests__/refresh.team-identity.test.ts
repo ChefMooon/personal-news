@@ -11,6 +11,10 @@ import { MediumLiveGameView } from "../../../../renderer/src/modules/sports/Medi
 vi.mock("electron", () => ({ BrowserWindow: { getAllWindows: () => [] } }));
 vi.mock("../../../harness-mode", () => ({ isElectronHarnessRun: () => true }));
 vi.mock("../../../dev-test-data", () => ({ isDevTestDataActive: () => false }));
+vi.mock("../../../settings/store", () => ({
+  getSetting: (): null => null,
+  setSetting: vi.fn(),
+}));
 vi.mock("../api", () => ({
   fetchLeagueEventsForDateWithFallback: vi.fn(),
   fetchTeamDetailsInLeague: vi.fn().mockResolvedValue({ badgeUrl: "badge" }),

@@ -41,6 +41,7 @@ const routePages = [
 ];
 const settingsTabs = [
   { name: "General", evidence: "Developer Test Data" },
+  { name: "Features", evidence: "Enable Astronomy" },
   { name: "Sidebar", evidence: "Sidebar layout" },
   { name: "Notifications", evidence: "Enable Desktop Notifications" },
   { name: "YouTube", evidence: "YouTube Data API v3 Key" },
@@ -1030,7 +1031,7 @@ try {
     "Settings did not persist the custom Astronomy sidebar order",
   );
 
-  await page.getByRole("tab", { name: "General", exact: true }).click();
+  await page.getByRole("tab", { name: "Features", exact: true }).click();
   await page.getByRole("switch", { name: "Enable Astronomy" }).click();
   await page
     .getByRole("link", { name: "Astronomy", exact: true })
@@ -1038,11 +1039,11 @@ try {
   await page.getByRole("tab", { name: "Sidebar", exact: true }).click();
   await page
     .getByText(
-      "Feature disabled in General settings; will stay hidden until re-enabled",
+      "Feature disabled in Features settings; will stay hidden until re-enabled",
       { exact: true },
     )
     .waitFor({ state: "visible", timeout: 10000 });
-  await page.getByRole("tab", { name: "General", exact: true }).click();
+  await page.getByRole("tab", { name: "Features", exact: true }).click();
   await page.getByRole("switch", { name: "Enable Astronomy" }).click();
   await page
     .getByRole("link", { name: "Astronomy", exact: true })
@@ -1066,7 +1067,7 @@ try {
   const hiddenAstronomyConfig = await page.evaluate(() =>
     window.__rendererBrowserGetSidebarConfig(),
   );
-  await page.getByRole("tab", { name: "General", exact: true }).click();
+  await page.getByRole("tab", { name: "Features", exact: true }).click();
   await page.getByRole("switch", { name: "Enable Astronomy" }).click();
   await page.getByRole("switch", { name: "Enable Astronomy" }).click();
   const hiddenConfigAfterToggle = await page.evaluate(() =>

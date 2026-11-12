@@ -11,8 +11,15 @@ import { realpathSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { XMLParser } from "fast-xml-parser";
 import { getDb } from "../db/database";
+import {
+  completeOnboarding,
+  getOnboardingState,
+  markFeaturesSeen,
+} from "../onboarding/onboarding-state";
 import { isElectronHarnessRun } from "../harness-mode";
-import { isAllowedGenericSettingKey, isExactHttpsHost, isTrustedIpcSenderIdentity, isTrustedRendererUrl, parseExternalHttpUrl, sameCanonicalPath, setSyncIpcRejectionResult } from "../security/ipc-policy";
+import { dispatchFeatureEnabledChangeWithRollback } from "../features/feature-dispatcher";
+import { isFeatureEnabled } from "../features/feature-state";
+import { isAllowedGenericSettingKey, isExactHttpsHost, isTrustedIpcSenderIdentity, isTrustedRendererUrl, isValidGenericSettingValue, parseExternalHttpUrl, sameCanonicalPath, setSyncIpcRejectionResult } from "../security/ipc-policy";
 import { fetchBoundedText } from "../security/network";
 import {
   clearDevTestData,
@@ -30,6 +37,7 @@ import {
   DEFAULT_SIDEBAR_CONFIG,
   normalizeSidebarConfig,
 } from "../../shared/ipc-types";
+import { getFeatureIdForSettingKey } from "../../shared/feature-manifest";
 import {
   DEFAULT_LARGE_VISIBLE_CHANNEL_COUNT,
   normalizeLargeVisibleChannelCount,
@@ -80,6 +88,7 @@ import type {
   ThemeRow,
   ThemeImportResult,
   IpcMutationResult,
+  OnboardingState,
   YouTubeCacheClearResult,
   YouTubeApiKeyStatus,
   YouTubeViewConfig,
@@ -114,7 +123,6 @@ import {
 import { createNtfyDedupeTracker } from "../sources/reddit/dedupe";
 import { persistSavedPost } from "../sources/saved-post-persistence";
 import {
-  applyWeatherPollSettings,
   deleteWeatherLocation,
   getWeatherLocations,
   getWeatherSettings,
@@ -155,7 +163,11 @@ import {
   setUpdateStatusListener,
   simulateDownloadedUpdateForHarness,
 } from "../updates/service";
-import { acknowledgeWhatsNew, getPendingWhatsNew } from "../updates/whats-new";
+import {
+  acknowledgeWhatsNew,
+  getCurrentReleaseNotes,
+  getPendingWhatsNew,
+} from "../updates/whats-new";
 
 const YOUTUBE_API_KEY_SETTING = "youtube_api_key_encrypted";
 const YOUTUBE_VIEW_CONFIG_KEY_PREFIX = "youtube_view_config:";
@@ -3258,6 +3270,9 @@ export function registerIpcHandlers(): void {
       _event,
       requestedSubreddits: unknown,
     ): Promise<IpcMutationResult> => {
+      if (!isFeatureEnabled("reddit_digest")) {
+        return { ok: false, error: "Reddit Digest is disabled." };
+      }
       const subreddits = normalizeDigestSubredditList(requestedSubreddits);
       if (subreddits.length === 0) {
         return {
@@ -3558,7 +3573,15 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(
     IPC.ASTRONOMY_SET_SETTINGS,
     (_event, settings: Partial<AstronomySettings>): AstronomySettings => {
-      return updateAstronomySettings(settings);
+      const before = getAstronomySettings().enabled;
+      const result = updateAstronomySettings(settings);
+      dispatchFeatureEnabledChangeWithRollback(
+        "astronomy",
+        result.enabled,
+        before,
+        () => updateAstronomySettings({ enabled: before }),
+      );
+      return result;
     },
   );
 
@@ -3573,6 +3596,19 @@ export function registerIpcHandlers(): void {
     }
     return getSetting(key);
   });
+
+  ipcMain.handle(
+    IPC.SETTINGS_GET_ONBOARDING_STATE,
+    (): OnboardingState => getOnboardingState(),
+  );
+  ipcMain.handle(
+    IPC.SETTINGS_COMPLETE_ONBOARDING,
+    (): IpcMutationResult => completeOnboarding(),
+  );
+  ipcMain.handle(
+    IPC.SETTINGS_MARK_FEATURES_SEEN,
+    (_event, ids: unknown): IpcMutationResult => markFeaturesSeen(ids),
+  );
 
   // updates:getStatus
   ipcMain.handle(IPC.UPDATES_GET_STATUS, (): UpdateStatusEvent => {
@@ -3596,6 +3632,12 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC.UPDATES_GET_PENDING_WHATS_NEW, (): WhatsNewPayload | null => {
     return getPendingWhatsNew();
   });
+
+  // updates:getCurrentReleaseNotes
+  ipcMain.handle(
+    IPC.UPDATES_GET_CURRENT_RELEASE_NOTES,
+    (): WhatsNewPayload | null => getCurrentReleaseNotes(),
+  );
 
   // updates:acknowledgeWhatsNew
   ipcMain.handle(
@@ -3630,7 +3672,7 @@ export function registerIpcHandlers(): void {
         throw new Error("Invalid generic setting update.");
       }
       if (!isAllowedGenericSettingKey(key, isElectronHarnessRun())) throw new Error("Setting is not available through the generic settings channel.");
-      if ((key.endsWith("_enabled") || key === "app_launch_at_login" || key.startsWith("app_") && key !== "app_window_bounds") && !["0", "1", "true", "false", ""].includes(value)) {
+      if (!isValidGenericSettingValue(key, value)) {
         throw new Error("Invalid boolean setting value.");
       }
       if (key === "ntfy_server_url") {
@@ -3658,6 +3700,10 @@ export function registerIpcHandlers(): void {
         key === "script_home_dir" || key === REDDIT_DIGEST_SUBREDDITS_SETTING
           ? getSetting(key)
           : null;
+      const featureId = getFeatureIdForSettingKey(key);
+      const previousFeatureValue =
+        featureId !== null ? getSetting(key) : null;
+      const wasEnabled = featureId ? isFeatureEnabled(featureId) : null;
       setSetting(key, persistedValue);
       if (key === "script_home_dir" && previousValue !== persistedValue) {
         const db = getDb();
@@ -3683,16 +3729,16 @@ export function registerIpcHandlers(): void {
         });
       }
 
-      if (key === "weather_enabled") {
-        applyWeatherPollSettings();
-        if (value === "true" || value === "1") {
-          void triggerWeatherRefresh().catch((error) => {
-            console.error(
-              "[Weather] Failed to refresh after enabling feature:",
-              error,
-            );
-          });
-        }
+      if (featureId !== null && wasEnabled !== null) {
+        dispatchFeatureEnabledChangeWithRollback(
+          featureId,
+          isFeatureEnabled(featureId),
+          wasEnabled,
+          () => {
+            if (previousFeatureValue === null) deleteSetting(key);
+            else setSetting(key, previousFeatureValue);
+          },
+        );
       }
     },
   );

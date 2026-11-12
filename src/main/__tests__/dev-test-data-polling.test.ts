@@ -464,6 +464,7 @@ describe("automatic polling with development fixtures", () => {
     addEnabledSportsLeague("force-semantics");
     setSetting("sports_enabled", "false");
     SportsModule.initialize(database);
+    setSetting("sports_enabled", "true");
     let releaseFirst!: (events: never[]) => void;
     mockedState.sportsApi.fetchLeagueEventsForDateWithFallback
       .mockImplementationOnce(
@@ -494,6 +495,7 @@ describe("automatic polling with development fixtures", () => {
     addEnabledSportsLeague("league-succeeds");
     setSetting("sports_enabled", "false");
     SportsModule.initialize(database);
+    setSetting("sports_enabled", "true");
     mockedState.sportsApi.fetchLeagueEventsForDateWithFallback.mockImplementation(
       async (_date, leagueId) => {
         if (leagueId === "league-fails")
@@ -518,6 +520,7 @@ describe("automatic polling with development fixtures", () => {
     addEnabledSportsLeague("all-fail");
     setSetting("sports_enabled", "false");
     SportsModule.initialize(database);
+    setSetting("sports_enabled", "true");
     mockedState.sportsApi.fetchLeagueEventsForDateWithFallback.mockRejectedValue(
       new Error("simulated provider outage"),
     );
@@ -537,6 +540,7 @@ describe("automatic polling with development fixtures", () => {
     addLiveSportsEvent("live-resilience");
     setSetting("sports_enabled", "false");
     SportsModule.initialize(database);
+    setSetting("sports_enabled", "true");
     await refreshSportsData("Basketball", true);
     const metadataBefore = database
       .prepare(
@@ -576,6 +580,7 @@ describe("automatic polling with development fixtures", () => {
     addLiveSportsEvent("live-batch", "Basketball", "batch-two");
     setSetting("sports_enabled", "false");
     SportsModule.initialize(database);
+    setSetting("sports_enabled", "true");
     await refreshSportsData("Basketball", true);
     mockedState.sportsApi.fetchEventById.mockResolvedValue(null);
     const today = [
@@ -644,6 +649,7 @@ describe("automatic polling with development fixtures", () => {
     addLiveSportsEvent("event-isolation", "Basketball", "good-event");
     setSetting("sports_enabled", "false");
     SportsModule.initialize(database);
+    setSetting("sports_enabled", "true");
     await refreshSportsData("Basketball", true);
     mockedState.sportsApi.fetchLeagueEventsForDateWithFallback.mockRejectedValue(
       new Error("fallback unavailable"),
@@ -700,6 +706,7 @@ describe("automatic polling with development fixtures", () => {
     addLiveSportsEvent("refresh-order");
     setSetting("sports_enabled", "false");
     SportsModule.initialize(database);
+    setSetting("sports_enabled", "true");
     await refreshSportsData("Basketball", true);
     let releaseLive!: (value: unknown) => void;
     mockedState.sportsApi.fetchEventById.mockImplementation(

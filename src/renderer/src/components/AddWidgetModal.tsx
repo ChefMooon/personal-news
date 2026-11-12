@@ -21,10 +21,8 @@ import {
 } from "./ui/select";
 import { moduleRegistry } from "../modules/registry";
 import { useRedditDigest } from "../hooks/useRedditDigest";
-import { useSavedPostsEnabled } from "../contexts/SavedPostsEnabledContext";
-import { useSportsEnabled } from "../contexts/SportsEnabledContext";
-import { useWeatherEnabled } from "../contexts/WeatherEnabledContext";
-import { useAstronomyEnabled } from "../contexts/AstronomyEnabledContext";
+import { useFeatureEnablement } from "../hooks/useFeatureEnablement";
+import { isFeatureId, type FeatureId } from "../../../shared/feature-manifest";
 import type { WidgetLayout } from "../../../shared/ipc-types";
 import { cn } from "../lib/utils";
 
@@ -35,6 +33,30 @@ export interface AddWidgetConfig {
   label: string | null;
   subredditFilter: string[] | null;
   position: "top" | "bottom" | { afterId: string };
+}
+
+export function getWidgetPositionOptions(
+  layout: WidgetLayout,
+  isEnabled: (id: FeatureId) => boolean,
+): { value: string; label: string }[] {
+  const options: { value: string; label: string }[] = [
+    { value: "top", label: "Top of dashboard" },
+  ];
+  for (const instanceId of layout.widget_order) {
+    if (layout.widget_visibility[instanceId] === false) continue;
+    const instance = layout.widget_instances[instanceId];
+    if (!instance) continue;
+    if (isFeatureId(instance.moduleId) && !isEnabled(instance.moduleId))
+      continue;
+    const mod = moduleRegistry.find((m) => m.id === instance.moduleId);
+    const widgetLabel = instance.label ?? mod?.displayName ?? instanceId;
+    options.push({
+      value: `after:${instanceId}`,
+      label: `After "${widgetLabel}"`,
+    });
+  }
+  options.push({ value: "bottom", label: "Bottom of dashboard" });
+  return options;
 }
 
 interface AddWidgetModalProps {
@@ -93,10 +115,7 @@ export function AddWidgetModal({
   const [subredditFilter, setSubredditFilter] = useState<string[] | null>(null);
 
   const { posts } = useRedditDigest();
-  const { enabled: savedPostsEnabled } = useSavedPostsEnabled();
-  const { enabled: sportsEnabled } = useSportsEnabled();
-  const { enabled: weatherEnabled } = useWeatherEnabled();
-  const { enabled: astronomyEnabled } = useAstronomyEnabled();
+  const { isEnabled } = useFeatureEnablement();
   const availableSubreddits = useMemo(
     () => [...new Set(posts.map((p) => p.subreddit))].sort(),
     [posts],
@@ -111,25 +130,11 @@ export function AddWidgetModal({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
 
-  // Build position options from current layout — skip hidden widgets
-  const positionOptions = useMemo(() => {
-    const options: { value: string; label: string }[] = [
-      { value: "top", label: "Top of dashboard" },
-    ];
-    for (const instanceId of layout.widget_order) {
-      if (layout.widget_visibility[instanceId] === false) continue;
-      const instance = layout.widget_instances[instanceId];
-      if (!instance) continue;
-      const mod = moduleRegistry.find((m) => m.id === instance.moduleId);
-      const widgetLabel = instance.label ?? mod?.displayName ?? instanceId;
-      options.push({
-        value: `after:${instanceId}`,
-        label: `After "${widgetLabel}"`,
-      });
-    }
-    options.push({ value: "bottom", label: "Bottom of dashboard" });
-    return options;
-  }, [layout]);
+  // Build position options from visible widgets, excluding disabled features.
+  const positionOptions = useMemo(
+    () => getWidgetPositionOptions(layout, isEnabled),
+    [isEnabled, layout],
+  );
 
   const selectedMod = moduleRegistry.find((m) => m.id === selectedModuleId);
 
@@ -218,10 +223,7 @@ export function AddWidgetModal({
           {phase === "pick" ? (
             <WidgetPicker
               onSelect={selectModule}
-              savedPostsEnabled={savedPostsEnabled}
-              sportsEnabled={sportsEnabled}
-              weatherEnabled={weatherEnabled}
-              astronomyEnabled={astronomyEnabled}
+              isEnabled={isEnabled}
             />
           ) : (
             <ConfigureForm
@@ -261,33 +263,15 @@ export function AddWidgetModal({
 
 function WidgetPicker({
   onSelect,
-  savedPostsEnabled,
-  sportsEnabled,
-  weatherEnabled,
-  astronomyEnabled,
+  isEnabled,
 }: {
   onSelect: (id: string) => void;
-  savedPostsEnabled: boolean;
-  sportsEnabled: boolean;
-  weatherEnabled: boolean;
-  astronomyEnabled: boolean;
+  isEnabled: (id: FeatureId) => boolean;
 }): React.ReactElement {
   return (
     <div className="grid grid-cols-1 gap-3">
       {moduleRegistry.map((mod) => {
-        // Skip saved_posts widget if feature is disabled
-        if (mod.id === "saved_posts" && !savedPostsEnabled) {
-          return null;
-        }
-        if (mod.id === "sports" && !sportsEnabled) {
-          return null;
-        }
-        if (mod.id === "weather" && !weatherEnabled) {
-          return null;
-        }
-        if (mod.id === "astronomy" && !astronomyEnabled) {
-          return null;
-        }
+        if (isFeatureId(mod.id) && !isEnabled(mod.id)) return null;
         const meta = MODULE_META[mod.id];
         return (
           <button

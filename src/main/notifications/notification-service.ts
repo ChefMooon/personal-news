@@ -1,5 +1,6 @@
 import { BrowserWindow, Notification } from "electron";
 import { getSetting, setSetting } from "../settings/store";
+import { isFeatureEnabled } from "../features/feature-state";
 import type {
   NotificationPreferences,
   ScriptRunTrigger,
@@ -105,6 +106,7 @@ export interface YoutubeVideoEntry {
  * Groups multiple new videos into a single compact notification.
  */
 export function notifyYoutubeNewVideos(entries: YoutubeVideoEntry[]): void {
+  if (!isFeatureEnabled("youtube")) return;
   if (!canNotify()) return;
   const prefs = getNotificationPreferences();
   if (!prefs.youtube.newVideo) return;
@@ -141,6 +143,7 @@ export function notifyYoutubeNewVideos(entries: YoutubeVideoEntry[]): void {
  * Fires one notification per live start so they are individually actionable.
  */
 export function notifyYoutubeLiveStart(entries: YoutubeVideoEntry[]): void {
+  if (!isFeatureEnabled("youtube")) return;
   if (!canNotify()) return;
   const prefs = getNotificationPreferences();
   if (!prefs.youtube.liveStart) return;
@@ -155,6 +158,7 @@ export function notifyYoutubeLiveStart(entries: YoutubeVideoEntry[]): void {
  * Emit a desktop notification when an ntfy.sh poll ingests at least one new saved post.
  */
 export function notifySavedPostsSync(postsIngested: number): void {
+  if (!isFeatureEnabled("saved_posts")) return;
   if (!canNotify()) return;
   const prefs = getNotificationPreferences();
   if (!prefs.savedPosts.syncSuccess) return;
@@ -171,6 +175,7 @@ export function notifyWeatherAlerts(
   locationName: string,
   alerts: WeatherAlert[],
 ): void {
+  if (!isFeatureEnabled("weather")) return;
   if (!canNotify()) return;
   const prefs = getNotificationPreferences();
   if (!prefs.weather.badWeather) return;
@@ -194,6 +199,7 @@ export function notifyRedditDigest(
   severity: "info" | "error" | "warning",
   message: string,
 ): void {
+  if (!isFeatureEnabled("reddit_digest")) return;
   if (!canNotify()) return;
   const prefs = getNotificationPreferences();
   if (severity === "info" && !prefs.redditDigest.runSuccess) return;
