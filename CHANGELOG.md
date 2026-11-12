@@ -4,6 +4,25 @@ All notable changes to this project are documented in this file.
 
 The format follows Keep a Changelog, and this project uses Semantic Versioning.
 
+## [1.6.0] - 2026-11-12
+
+### Added
+
+- Added a first-run setup experience with controls for enabling app features.
+- Added PWHL and WNBA tracking, plus team locations and featured next-up games in Sports.
+- Added What's New notes around app updates.
+
+### Changed
+
+- Improved Weather and Sports updates, including clearer astronomy glyph colors.
+
+### Fixed
+
+- Improved update installation recovery and notifications.
+- Kept Saved Posts relative-time labels current.
+- Stabilized YouTube widget layouts and settings.
+- Updated widget editors so Escape closes only the innermost open layer.
+
 ## [1.5.2] - 2026-10-29
 
 ### Added
