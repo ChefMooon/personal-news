@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 The format follows Keep a Changelog, and this project uses Semantic Versioning.
 
+## [1.6.1] - 2026-11-13
+
+### Fixed
+
+- Fixed a startup issue that could prevent Sports event locations from being available on existing installations.
+
 ## [1.6.0] - 2026-11-12
 
 ### Added
