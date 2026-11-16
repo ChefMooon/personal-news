@@ -19,15 +19,16 @@ export function formatDateLabel(date: string): string {
   });
 }
 
+export function formatWeekdayDate(game: SportEvent): string {
+  return new Date(`${game.eventDate}T12:00:00`).toLocaleDateString([], {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+}
+
 export function formatDateTime(game: SportEvent, showTime: boolean): string {
-  const dateLabel = new Date(`${game.eventDate}T12:00:00`).toLocaleDateString(
-    [],
-    {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-    },
-  );
+  const dateLabel = formatWeekdayDate(game);
   if (!showTime || !game.eventTime) {
     return dateLabel;
   }

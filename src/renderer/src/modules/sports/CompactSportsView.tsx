@@ -464,7 +464,7 @@ export function CompactSportsView({
         )}
       >
         {featured ? (
-          <div className="min-h-28 min-w-0">
+          <div className="h-full min-h-28 min-w-0">
             <FeaturedNextGame
               game={featured}
               teams={teams}
@@ -472,6 +472,7 @@ export function CompactSportsView({
               showVenue={showVenue}
               leaguesById={leaguesById}
               dense
+              compact
             />
           </div>
         ) : (

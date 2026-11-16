@@ -1209,6 +1209,7 @@ try {
   const sportsWidgetIds = {
     small: "pn_dev_fixture_widget_sports_small",
     medium: "pn_dev_fixture_widget_sports_medium",
+    large: "pn_dev_fixture_widget_sports_large",
   };
   const openFixtureDashboard = async (moduleId, scenario = {}) => {
     await page.evaluate(
@@ -1973,11 +1974,86 @@ try {
   }
 
   await openFixtureDashboard("sports", { sportsNoGamesToday: true });
-  for (const size of ["small", "medium"]) {
+  const LARGE_NEXT_UP_MIN_HEIGHT = 120;
+  for (const size of ["small", "medium", "large"]) {
     const sportsWidget = page.locator(
       `[data-widget-instance-id="${sportsWidgetIds[size]}"]`,
     );
     await sportsWidget.getByText(/Next up/i).waitFor();
+    const nextUpCard = sportsWidget.locator("[data-sports-next-up]");
+    await nextUpCard.waitFor();
+    const fill = await nextUpCard.evaluate((card, widgetSize) => {
+      const parent = card.parentElement;
+      const body = card.querySelector("[data-sports-next-up-body]");
+      const regionSelector =
+        widgetSize === "medium"
+          ? '[data-sports-layout="medium"]'
+          : widgetSize === "small"
+            ? '[data-sports-content-viewport="small"]'
+            : null;
+      const region = regionSelector
+        ? card.closest(regionSelector)
+        : null;
+      const viewport =
+        widgetSize === "small"
+          ? card.closest('[data-sports-content-viewport="small"]')
+          : null;
+      const layout =
+        widgetSize === "large"
+          ? card.closest('[data-sports-layout="large"]')
+          : null;
+      const layoutRect = layout ? layout.getBoundingClientRect() : null;
+      const cardRect = card.getBoundingClientRect();
+      const parentRect = parent.getBoundingClientRect();
+      const bodyRect = body.getBoundingClientRect();
+      const first = body.firstElementChild.getBoundingClientRect();
+      const last = body.lastElementChild.getBoundingClientRect();
+      return {
+        cardH: cardRect.height,
+        cardTop: cardRect.top,
+        cardBottom: cardRect.bottom,
+        layoutTop: layoutRect ? layoutRect.top : null,
+        layoutBottom: layoutRect ? layoutRect.bottom : null,
+        parentH: parentRect.height,
+        scrollHeight: card.scrollHeight,
+        clientHeight: card.clientHeight,
+        topGap: first.top - bodyRect.top,
+        bottomGap: bodyRect.bottom - last.bottom,
+        regionH: region ? region.getBoundingClientRect().height : null,
+        viewportScrollH: viewport ? viewport.scrollHeight : null,
+        viewportClientH: viewport ? viewport.clientHeight : null,
+      };
+    }, size);
+    assert(
+      Math.abs(fill.cardH - fill.parentH) <= 2,
+      `Sports ${size} Next up card does not fill its container: ${JSON.stringify(fill)}`,
+    );
+    assert(
+      fill.regionH === null || Math.abs(fill.parentH - fill.regionH) <= 2,
+      `Sports ${size} Next up container does not fill its region: ${JSON.stringify(fill)}`,
+    );
+    assert(
+      fill.scrollHeight <= fill.clientHeight + 1,
+      `Sports ${size} Next up card content overflows: ${JSON.stringify(fill)}`,
+    );
+    assert(
+      Math.abs(fill.topGap - fill.bottomGap) <= 2,
+      `Sports ${size} Next up content is not vertically centered: ${JSON.stringify(fill)}`,
+    );
+    // Large's card sits in a content-sized wrapper, so the checks above hold
+    // trivially; compare against the fixed layout container instead.
+    assert(
+      fill.layoutTop === null ||
+        (fill.cardH >= LARGE_NEXT_UP_MIN_HEIGHT &&
+          fill.cardTop >= fill.layoutTop - 1 &&
+          fill.cardBottom <= fill.layoutBottom + 1),
+      `Sports ${size} Next up card is collapsed or overflows the Large layout: ${JSON.stringify(fill)}`,
+    );
+    assert(
+      fill.viewportScrollH === null ||
+        fill.viewportScrollH <= fill.viewportClientH + 1,
+      `Sports ${size} viewport overflows: ${JSON.stringify(fill)}`,
+    );
     const widgetText = await sportsWidget.innerText();
     assert(
       /Next up/i.test(widgetText),

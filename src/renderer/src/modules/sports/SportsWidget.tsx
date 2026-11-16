@@ -31,11 +31,13 @@ import {
 } from "../../../../shared/sports";
 import { AllGamesView } from "./AllGamesView";
 import { CompactSportsView } from "./CompactSportsView";
+import { FeaturedNextGame } from "./FeaturedNextGame";
 import { MediumLiveGameView } from "./MediumLiveGameView";
 import { MyTeamsView } from "./MyTeamsView";
 import { SportsSettingsPanel } from "./SportsSettingsPanel";
 import { WidgetSizeControl } from "../../components/WidgetSizeControl";
 import { getSportsContentPolicy } from "./sports-content-policy";
+import { getFeaturedNextGame } from "./sports-game-selection";
 import { SportsMediumLayout } from "./SportsMediumLayout";
 import { useSportsWidgetData } from "./useSportsWidgetData";
 import { getGamePhase } from "./utils";
@@ -398,15 +400,32 @@ function SportsWidget(): React.ReactElement {
             className="flex min-h-0 flex-1 flex-col gap-3"
           >
             <div className="shrink-0">
-              <MediumLiveGameView
-                events={eligibleTodayEvents}
-                teams={enabledTeams}
-                teamEventsById={teamEventsById}
-                selectedGameId={selectedGameId}
-                onSelectGame={setSelectedGameId}
-                showVenue={config.showVenue}
-                leaguesById={leaguesById}
-              />
+              {(() => {
+                const largeFeaturedNextGame =
+                  eligibleTodayEvents.length === 0
+                    ? getFeaturedNextGame(fallbackEvents)
+                    : null;
+                return largeFeaturedNextGame ? (
+                  <FeaturedNextGame
+                    game={largeFeaturedNextGame}
+                    teams={enabledTeams}
+                    showTime={config.showTime}
+                    showVenue={config.showVenue}
+                    leaguesById={leaguesById}
+                    dense={false}
+                  />
+                ) : (
+                  <MediumLiveGameView
+                    events={eligibleTodayEvents}
+                    teams={enabledTeams}
+                    teamEventsById={teamEventsById}
+                    selectedGameId={selectedGameId}
+                    onSelectGame={setSelectedGameId}
+                    showVenue={config.showVenue}
+                    leaguesById={leaguesById}
+                  />
+                );
+              })()}
             </div>
             <div
               data-sports-content-viewport="large"
