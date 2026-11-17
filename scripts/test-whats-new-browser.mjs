@@ -370,7 +370,10 @@ scenario("link open failure keeps dialog open", async (url) => {
     await page.getByRole("button", { name: "See what's new" }).click();
     const dialog = page.getByRole("dialog");
     await dialog.getByRole("link", { name: "a link" }).click();
-    await page.getByText("blocked", { exact: true }).waitFor();
+    await page.getByText("The link could not be opened.", { exact: true }).waitFor();
+    if (await page.getByText("blocked", { exact: true }).count()) {
+      throw new Error("Link-open error text must not be shown in the toast");
+    }
     await dialog.waitFor();
     await checkClean(page, errors);
   } finally { await context.close(); }

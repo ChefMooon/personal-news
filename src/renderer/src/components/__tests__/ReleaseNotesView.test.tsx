@@ -263,14 +263,22 @@ describe("ReleaseNotesView safety and interaction", () => {
     await Promise.resolve();
 
     const { toast } = await import("sonner");
-    invoke.mockRejectedValueOnce(new Error("Could not open"));
+    // The error text (which may contain the URL) is never echoed.
+    invoke.mockRejectedValueOnce(
+      new Error("Could not open https://example.com"),
+    );
     anchor.props.onClick({ preventDefault: vi.fn() });
     await Promise.resolve();
-    expect(toast.error).toHaveBeenCalledWith("Could not open");
+    expect(toast.error).toHaveBeenLastCalledWith(
+      "The link could not be opened.",
+    );
 
     invoke.mockRejectedValueOnce("nope");
     anchor.props.onClick({ preventDefault: vi.fn() });
     await Promise.resolve();
-    expect(toast.error).toHaveBeenCalledWith("Unable to open the link.");
+    expect(toast.error).toHaveBeenCalledTimes(2);
+    expect(toast.error).toHaveBeenLastCalledWith(
+      "The link could not be opened.",
+    );
   });
 });

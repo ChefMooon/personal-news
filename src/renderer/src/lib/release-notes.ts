@@ -45,9 +45,8 @@ export function hasReleaseNotesContent(
 }
 
 export function openReleaseNotesLink(href: string): void {
-  window.api.invoke(IPC.SHELL_OPEN_EXTERNAL, href).catch((err: unknown) => {
-    toast.error(
-      err instanceof Error ? err.message : "Unable to open the link.",
-    );
+  // Fixed message on purpose: the main-process error text can include the URL.
+  window.api.invoke(IPC.SHELL_OPEN_EXTERNAL, href).catch(() => {
+    toast.error("The link could not be opened.");
   });
 }
