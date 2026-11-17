@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { inlineToText } from "../../shared/release-notes-markdown.mjs";
 
 const state = vi.hoisted(() => ({
   version: "2.0.0",
@@ -33,6 +34,24 @@ vi.mock("./bundled-changelog", () => ({
 
 - Two point oh feature
 
+## [2.1.0] - 2026-03-05
+
+### Added
+
+- Invalid <b> entry
+
+## [2.2.0] - Unreleased
+
+### Added
+
+- Not released
+
+## [2.3.0] - 2026-04-01
+
+### Added
+
+- [Link](https://example.com) with \`code\`
+
 ## [1.9.0] - 2026-02-01
 
 ### Fixed
@@ -57,7 +76,11 @@ import {
 } from "./whats-new";
 
 function allItems(payload: ReturnType<typeof getPendingWhatsNew>): string[] {
-  return payload?.notes.sections.flatMap((section) => section.items) ?? [];
+  return payload?.notes.sections.flatMap((section) =>
+    section.blocks.flatMap((block) => block.type === "list"
+      ? block.items.flatMap((item) => [inlineToText(item.inline), ...item.children.map((child) => inlineToText(child.inline))])
+      : []),
+  ) ?? [];
 }
 
 beforeEach(() => {
@@ -112,6 +135,17 @@ describe("getPendingWhatsNew (normal mode)", () => {
     expect(state.setSetting).not.toHaveBeenCalled();
   });
 
+  it("shows invalid bundled notes as fallback without marking them seen", () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    state.version = "2.1.0";
+    state.store.set(WHATS_NEW_LAST_SEEN_KEY, "2.0.0");
+    expect(getPendingWhatsNew()).toEqual({
+      version: "2.1.0",
+      notes: { sections: [], fallbackText: "### Added\n\n- Invalid <b> entry" },
+    });
+    expect(state.setSetting).not.toHaveBeenCalled();
+  });
+
   it("shows only the newest entry when versions were skipped", () => {
     state.store.set(WHATS_NEW_LAST_SEEN_KEY, "1.8.0");
     expect(allItems(getPendingWhatsNew())).toEqual(["Two point oh feature"]);
@@ -125,10 +159,10 @@ describe("getPendingWhatsNew (normal mode)", () => {
 
   it("writes current and returns null when the section is missing", () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
-    state.version = "2.1.0";
+    state.version = "9.9.9";
     state.store.set(WHATS_NEW_LAST_SEEN_KEY, "2.0.0");
     expect(getPendingWhatsNew()).toBeNull();
-    expect(state.store.get(WHATS_NEW_LAST_SEEN_KEY)).toBe("2.1.0");
+    expect(state.store.get(WHATS_NEW_LAST_SEEN_KEY)).toBe("9.9.9");
   });
 });
 
@@ -196,13 +230,47 @@ describe("getCurrentReleaseNotes", () => {
 
     expect(getCurrentReleaseNotes()).toEqual({
       version: "2.0.0",
-      notes: { sections: [{ heading: "Added", items: ["Two point oh feature"] }] },
+      notes: { sections: [{ heading: "Added", blocks: [{ type: "list", items: [{ inline: [{ type: "text", value: "Two point oh feature" }], children: [] }] }] }] },
     });
   });
 
   it("returns null when the current version has no bundled entry", () => {
     state.version = "9.9.9";
     expect(getCurrentReleaseNotes()).toBeNull();
+  });
+
+  it("returns plain-text fallback for an invalid bundled entry", () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    state.version = "2.1.0";
+    expect(getCurrentReleaseNotes()).toEqual({
+      version: "2.1.0",
+      notes: { sections: [], fallbackText: "### Added\n\n- Invalid <b> entry" },
+    });
+    expect(hasBundledWhatsNewEntry("2.1.0")).toBe(false);
+  });
+
+  it("returns null for an Unreleased heading", () => {
+    state.version = "2.2.0";
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+    expect(getCurrentReleaseNotes()).toBeNull();
+    expect(warning).toHaveBeenCalledWith(
+      expect.stringContaining('CHANGELOG.md:15: the entry for [2.2.0] is still marked "Unreleased"'),
+    );
+  });
+
+  it("preserves link and code nodes in bundled notes", () => {
+    state.version = "2.3.0";
+    expect(getCurrentReleaseNotes()?.notes.sections[0].blocks).toEqual([{
+      type: "list",
+      items: [{
+        inline: [
+          { type: "link", href: "https://example.com", children: [{ type: "text", value: "Link" }] },
+          { type: "text", value: " with " },
+          { type: "code", value: "code" },
+        ],
+        children: [],
+      }],
+    }]);
   });
 
   it("does not read or write settings", () => {

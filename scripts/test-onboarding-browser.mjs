@@ -66,7 +66,15 @@ async function verifyWizardFlow(url) {
     onboardingCompletionFailures: 1,
     currentReleaseNotes: {
       version: "99.0.0",
-      notes: { sections: [{ heading: "Added", items: ["Example item"] }] },
+      notes: {
+        sections: [{
+          heading: "Added",
+          blocks: [{
+            type: "list",
+            items: [{ inline: [{ type: "text", value: "Example item" }], children: [] }],
+          }],
+        }],
+      },
     },
     settingsOverrides: {
       reddit_digest_subreddits: "[]",

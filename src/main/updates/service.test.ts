@@ -17,6 +17,22 @@ vi.mock("electron-updater", () => ({ autoUpdater: {
   quitAndInstall: updater.quitAndInstall,
 } }));
 vi.mock("../settings/store", () => ({ getSetting: () => "1" }));
+vi.mock("./bundled-changelog", () => ({
+  BUNDLED_CHANGELOG: `# Changelog
+
+## [2.5.0] - 2026-03-01
+
+### Added
+
+- Bundled feature
+
+## [2.6.0] - 2026-03-02
+
+### Added
+
+- Invalid <b> bundled entry
+`,
+}));
 const harness = vi.hoisted(() => ({ active: false }));
 vi.mock("../harness-mode", () => ({ isElectronHarnessRun: () => harness.active }));
 
@@ -31,7 +47,7 @@ describe("update service readiness", () => {
 
   describe("harness update simulation", () => {
     const html = "<h3>Fixed</h3><ul><li>x</li></ul>";
-    const expected = { sections: [{ heading: "Fixed", items: ["x"] }] };
+    const expected = { sections: [{ heading: "Fixed", blocks: [{ type: "list", items: [{ inline: [{ type: "text", value: "x" }], children: [] }] }] }] };
 
     it("refuses and emits nothing outside harness mode", async () => {
       const service = await import("./service");
@@ -124,11 +140,38 @@ describe("update service readiness", () => {
       releaseNotes: "<h3>Fixed</h3><ul><li>x &amp; y</li></ul>",
     });
     const status = service.getCurrentUpdateStatus();
-    const expected = { sections: [{ heading: "Fixed", items: ["x & y"] }] };
+    const expected = { sections: [{ heading: "Fixed", blocks: [{ type: "list", items: [{ inline: [{ type: "text", value: "x & y" }], children: [] }] }] }] };
     expect(status.downloadedReleaseNotes).toEqual(expected);
     expect(status.releaseNotes).toEqual(expected);
     expect(typeof status.downloadedReleaseNotes).toBe("object");
     expect(typeof status.releaseNotes).toBe("object");
+  });
+
+  it("prefers a valid bundled entry for the incoming update version", async () => {
+    const service = await import("./service");
+    await service.initializeAutoUpdates();
+    updater.listeners.get("update-downloaded")?.({ version: "2.5.0", releaseNotes: "<h3>Other</h3><ul><li>HTML feature</li></ul>" });
+    expect(service.getCurrentUpdateStatus().downloadedReleaseNotes).toEqual({
+      sections: [{ heading: "Added", blocks: [{ type: "list", items: [{ inline: [{ type: "text", value: "Bundled feature" }], children: [] }] }] }],
+    });
+  });
+
+  it("uses HTML notes when no valid bundled entry exists", async () => {
+    const service = await import("./service");
+    await service.initializeAutoUpdates();
+    updater.listeners.get("update-downloaded")?.({ version: "2.0.0", releaseNotes: "<h3>Fixed</h3><ul><li>HTML feature</li></ul>" });
+    expect(service.getCurrentUpdateStatus().downloadedReleaseNotes).toEqual({
+      sections: [{ heading: "Fixed", blocks: [{ type: "list", items: [{ inline: [{ type: "text", value: "HTML feature" }], children: [] }] }] }],
+    });
+  });
+
+  it("falls through to HTML when the bundled entry is invalid", async () => {
+    const service = await import("./service");
+    await service.initializeAutoUpdates();
+    updater.listeners.get("update-downloaded")?.({ version: "2.6.0", releaseNotes: "<h3>Fixed</h3><ul><li>HTML fallback</li></ul>" });
+    expect(service.getCurrentUpdateStatus().downloadedReleaseNotes).toEqual({
+      sections: [{ heading: "Fixed", blocks: [{ type: "list", items: [{ inline: [{ type: "text", value: "HTML fallback" }], children: [] }] }] }],
+    });
   });
 
   it("reports synchronous install errors while keeping the downloaded update ready", async () => {

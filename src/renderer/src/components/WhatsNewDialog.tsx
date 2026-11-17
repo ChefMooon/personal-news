@@ -1,6 +1,7 @@
 import React from "react";
 import { toast } from "sonner";
 import { Button } from "./ui/button";
+import { ReleaseNotesView } from "./ReleaseNotesView";
 import {
   Dialog,
   DialogContent,
@@ -14,6 +15,7 @@ import {
   IPC,
   type ReleaseNotesDocument,
 } from "../../../shared/ipc-types";
+import { hasReleaseNotesContent } from "../lib/release-notes";
 
 interface WhatsNewDialogProps {
   open: boolean;
@@ -30,8 +32,6 @@ export function WhatsNewDialog({
   notes,
   variant,
 }: WhatsNewDialogProps): React.ReactElement {
-  const sections = notes?.sections ?? [];
-
   const openFullChangelog = (): void => {
     window.api
       .invoke(IPC.SHELL_OPEN_EXTERNAL, FULL_CHANGELOG_URL)
@@ -53,24 +53,13 @@ export function WhatsNewDialog({
               : `You are now on version ${version}.`}
           </DialogDescription>
         </DialogHeader>
-        <div className="max-h-[60vh] space-y-4 overflow-y-auto pr-1 text-sm">
-          {sections.length === 0 ? (
+        <div className="max-h-[60vh] overflow-y-auto pr-1 text-sm">
+          {hasReleaseNotesContent(notes) ? (
+            <ReleaseNotesView notes={notes!} />
+          ) : (
             <p className="text-muted-foreground">
               Release notes are not available for this update.
             </p>
-          ) : (
-            sections.map((section, index) => (
-              <div key={`${section.heading ?? ""}-${index}`}>
-                {section.heading ? (
-                  <h4 className="mb-1 font-medium">{section.heading}</h4>
-                ) : null}
-                <ul className="list-disc space-y-1 pl-5">
-                  {section.items.map((item, itemIndex) => (
-                    <li key={itemIndex}>{item}</li>
-                  ))}
-                </ul>
-              </div>
-            ))
           )}
         </div>
         <DialogFooter className="gap-2 sm:gap-0">

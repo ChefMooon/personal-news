@@ -16,6 +16,7 @@ import {
 } from "../../lib/onboardingReadiness";
 import { Button } from "../ui/button";
 import { WhatsNewDialog } from "../WhatsNewDialog";
+import { hasReleaseNotesContent } from "../../lib/release-notes";
 
 interface FinishStepProps {
   selected: readonly FeatureId[];
@@ -172,7 +173,7 @@ export function FinishStep({
         )}
       </section>
       <div className="sticky bottom-0 z-10 flex flex-wrap justify-end gap-2 bg-background py-2">
-        {releaseNotes?.notes.sections.length ? (
+        {hasReleaseNotesContent(releaseNotes?.notes) ? (
           <Button
             variant="outline"
             onClick={() => setWhatsNewOpen(true)}

@@ -1,16 +1,11 @@
 import { app } from "electron";
 import type {
   IpcMutationResult,
-  ReleaseNotesDocument,
   WhatsNewPayload,
 } from "../../shared/ipc-types";
-import {
-  extractChangelogSection,
-  parseReleaseNotesMarkdown,
-} from "../../shared/changelog-notes.mjs";
 import { isElectronHarnessRun } from "../harness-mode";
 import { getSetting, setSetting } from "../settings/store";
-import { BUNDLED_CHANGELOG } from "./bundled-changelog";
+import { lookupBundledNotes, readBundledNotes } from "./bundled-notes";
 import { decideWhatsNew } from "./release-notes";
 
 export const WHATS_NEW_LAST_SEEN_KEY = "whats_new_last_seen_version";
@@ -36,22 +31,8 @@ function currentMode(): WhatsNewMode {
   });
 }
 
-function readBundledNotes(version: string): ReleaseNotesDocument | null {
-  try {
-    const section = extractChangelogSection(BUNDLED_CHANGELOG, version);
-    const notes = parseReleaseNotesMarkdown(section);
-    return notes.sections.length > 0 ? notes : null;
-  } catch (error) {
-    console.warn(
-      `[WhatsNew] No usable changelog entry for ${version}:`,
-      error instanceof Error ? error.message : error,
-    );
-    return null;
-  }
-}
-
 export function hasBundledWhatsNewEntry(version: string): boolean {
-  return readBundledNotes(version) !== null;
+  return lookupBundledNotes(version).kind === "valid";
 }
 
 export function getCurrentReleaseNotes(): WhatsNewPayload | null {

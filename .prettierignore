@@ -1,0 +1,4 @@
+src/shared/release-notes-markdown.mjs
+src/shared/release-notes-markdown.d.mts
+src/shared/release-notes-markdown.corpus.mjs
+src/shared/__tests__/fixtures/

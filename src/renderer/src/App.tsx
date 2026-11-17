@@ -32,6 +32,7 @@ import {
 } from "../../shared/ipc-types";
 import { WhatsNewDialog } from "./components/WhatsNewDialog";
 import { buildNtfyFailureToastContent } from "./lib/ntfyNotifications";
+import { hasReleaseNotesContent } from "./lib/release-notes";
 import { OnboardingGate } from "./components/onboarding/OnboardingGate";
 
 function AppShell(): React.ReactElement {
@@ -201,7 +202,7 @@ export default function App(): React.ReactElement {
         const readyText = "Install now to restart on the latest version.";
         updateReadyToastIdRef.current = toast.success(`Update${versionLabel} is ready.`, {
           description:
-            readyNotes && readyNotes.sections.length > 0 ? (
+            readyNotes && hasReleaseNotesContent(readyNotes) ? (
               <span>
                 {readyText}{" "}
                 <button

@@ -3,10 +3,11 @@ import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
-  extractChangelogSection,
-  getChangelogSectionLineOffset,
-  validateReleaseNotesMarkdown,
-} from "../src/shared/changelog-notes.mjs";
+  findVersionSection,
+  formatViolations,
+  inlineToText,
+  parseReleaseNotes,
+} from "../src/shared/release-notes-markdown.mjs";
 
 function printUsage() {
   console.log(
@@ -94,19 +95,21 @@ function runGhReleaseEdit(tagVersion, notesFilePath) {
 }
 
 function runCheck(version) {
-  let notes;
-  let lineOffset = 0;
+  let section;
+  let parsed;
   try {
     const changelogPath = path.join(process.cwd(), "CHANGELOG.md");
     const changelog = readFileSync(changelogPath, "utf8");
-    notes = extractChangelogSection(changelog, version);
-    lineOffset = getChangelogSectionLineOffset(changelog, version);
+    section = findVersionSection(changelog, version);
+    parsed = parseReleaseNotes(section.body, {
+      lineOffset: section.bodyStartLine - 1,
+    });
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
     process.exit(1);
   }
 
-  const violations = validateReleaseNotesMarkdown(notes, lineOffset);
+  const violations = formatViolations(parsed.violations);
   if (violations.length > 0) {
     for (const violation of violations) {
       console.error(violation);
@@ -114,9 +117,20 @@ function runCheck(version) {
     process.exit(1);
   }
 
-  const lines = notes.split(/\r?\n/);
-  const headings = lines.filter((line) => line.startsWith("### ")).length;
-  const bullets = lines.filter((line) => line.startsWith("- ")).length;
+  const headings = parsed.notes.sections.filter(
+    (sectionNote) => sectionNote.heading,
+  ).length;
+  const bulletTexts = parsed.notes.sections.flatMap((sectionNote) =>
+    sectionNote.blocks.flatMap((block) =>
+      block.type === "list"
+        ? block.items.flatMap((item) => [
+            inlineToText(item.inline),
+            ...item.children.map((child) => inlineToText(child.inline)),
+          ])
+        : [],
+    ),
+  );
+  const bullets = bulletTexts.length;
   console.log(
     `CHANGELOG section for ${version} is valid (${headings} headings, ${bullets} bullets).`,
   );
@@ -150,7 +164,7 @@ function main() {
 
   const changelogPath = path.join(process.cwd(), "CHANGELOG.md");
   const changelogContent = readFileSync(changelogPath, "utf8");
-  const notes = extractChangelogSection(changelogContent, version);
+  const notes = findVersionSection(changelogContent, version).body.trim();
 
   if (dryRun) {
     console.log(`Tag: ${tagVersion}`);

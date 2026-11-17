@@ -2,32 +2,44 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { runElectronHarness } from "./electron-playwright-harness.mjs";
 import {
-  extractChangelogSection,
-  parseReleaseNotesMarkdown,
-} from "../src/shared/changelog-notes.mjs";
+  findVersionSection,
+  inlineToText,
+  parseReleaseNotes,
+} from "../src/shared/release-notes-markdown.mjs";
 
 const SEEN_KEY = "whats_new_last_seen_version";
 const packageVersion = JSON.parse(readFileSync("package.json", "utf8")).version;
 const changelog = readFileSync("CHANGELOG.md", "utf8");
-const currentNotes = parseReleaseNotesMarkdown(
-  extractChangelogSection(changelog, packageVersion),
-);
+const currentNotes = parseReleaseNotes(
+  findVersionSection(changelog, packageVersion).body,
+).notes;
 assert(currentNotes.sections.length > 0, "CHANGELOG has no entry for package version");
 
 // Items from the most recent earlier release that the current entry lacks.
-const earlierVersion = [...changelog.matchAll(/^## \[(\d+\.\d+\.\d+)\]/gm)]
-  .map((match) => match[1])
-  .find((version) => version !== packageVersion);
-const currentItems = new Set(currentNotes.sections.flatMap((s) => s.items));
+const changelogVersions = [...changelog.matchAll(/^## \[(\d+\.\d+\.\d+)\] - /gm)]
+  .map((match) => match[1]);
+const currentVersionIndex = changelogVersions.indexOf(packageVersion);
+const earlierVersion = changelogVersions[currentVersionIndex + 1];
+const bulletTexts = (notes) =>
+  notes.sections.flatMap((section) =>
+    section.blocks.flatMap((block) =>
+      block.type === "list"
+        ? block.items.flatMap((item) => [
+            inlineToText(item.inline),
+            ...item.children.map((child) => inlineToText(child.inline)),
+          ])
+        : [],
+    ),
+  );
+const currentItems = new Set(bulletTexts(currentNotes));
 const earlierOnlyItems = earlierVersion
-  ? parseReleaseNotesMarkdown(extractChangelogSection(changelog, earlierVersion))
-      .sections.flatMap((s) => s.items)
+  ? bulletTexts(parseReleaseNotes(findVersionSection(changelog, earlierVersion).body).notes)
       .filter((item) => !currentItems.has(item))
   : [];
 
 const SIMULATED_VERSION = "9.9.9";
 const SIMULATED_HTML =
-  "<h3>Added</h3>\n<ul>\n<li>Simulated feature Alpha</li>\n<li>Fish &amp; chips support</li>\n</ul>\n" +
+  '<h3>Added</h3>\n<ul>\n<li>Simulated feature <code>Alpha</code> with <a href="https://example.com/a" rel="nofollow">a link</a></li>\n<li>Fish &amp; chips support<ul><li>Nested note</li></ul></li>\n</ul>\n' +
   "<h3>Fixed</h3>\n<ul>\n<li>Simulated fix Beta</li>\n</ul>";
 
 const invoke = (page, channel, ...args) =>
@@ -86,13 +98,28 @@ try {
       for (const heading of ["Added", "Fixed"]) {
         await incoming.getByRole("heading", { name: heading, exact: true }).waitFor();
       }
-      for (const item of [
-        "Simulated feature Alpha",
-        "Fish & chips support",
-        "Simulated fix Beta",
-      ]) {
+      for (const item of ["Nested note", "Simulated fix Beta"]) {
         await incoming.getByText(item, { exact: true }).waitFor();
       }
+      const featureItem = incoming
+        .getByRole("listitem")
+        .filter({ hasText: "Simulated feature" })
+        .first();
+      assert(
+        (await featureItem.innerText()).includes("Simulated feature Alpha with a link"),
+        "Simulated feature list item text is missing",
+      );
+      const fishItem = incoming
+        .getByRole("listitem")
+        .filter({ hasText: "Fish & chips support" })
+        .first();
+      assert(
+        (await fishItem.innerText()).includes("Fish & chips support"),
+        "Fish and chips parent list item text is missing",
+      );
+      const simulatedLink = incoming.getByRole("link", { name: "a link" });
+      await simulatedLink.waitFor();
+      assert.equal(await simulatedLink.getAttribute("href"), "https://example.com/a");
       await incoming.getByRole("button", { name: "Got it", exact: true }).click();
       await incoming.waitFor({ state: "hidden" });
       record("toast", "Toast opened and closed the incoming-update dialog");
@@ -130,13 +157,22 @@ try {
             .getByRole("heading", { name: section.heading, exact: true })
             .waitFor();
         }
-        for (const item of section.items) {
-          assert(dialogText.includes(item), `Dialog is missing item: ${item}`);
+        for (const block of section.blocks) {
+          if (block.type === "list") {
+            for (const item of block.items) {
+              const itemText = inlineToText(item.inline);
+              assert(dialogText.includes(itemText), `Dialog is missing item: ${itemText}`);
+              for (const child of item.children) {
+                const childText = inlineToText(child.inline);
+                assert(dialogText.includes(childText), `Dialog is missing item: ${childText}`);
+              }
+            }
+          }
         }
       }
       assert.equal(
         await installed.getByRole("listitem").count(),
-        currentNotes.sections.reduce((n, s) => n + s.items.length, 0),
+        bulletTexts(currentNotes).length,
         "Dialog item count differs from CHANGELOG",
       );
       for (const item of earlierOnlyItems) {

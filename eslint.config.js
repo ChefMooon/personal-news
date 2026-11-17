@@ -33,6 +33,9 @@ module.exports = [
       "*.pyc",
       "*.pyo",
       "resources/scripts/__pycache__/**",
+      "src/shared/release-notes-markdown.mjs",
+      "src/shared/release-notes-markdown.d.mts",
+      "src/shared/release-notes-markdown.corpus.mjs",
     ],
   },
   ...compat.config({

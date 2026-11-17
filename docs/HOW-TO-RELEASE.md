@@ -33,7 +33,7 @@ Example in this guide: `1.3.1` and tag `v1.3.1`.
 npm run release:notes -- 1.3.1 --check
 ```
 
-The section may only use `###` headings and plain-text `-` bullets (one line each, each heading with at least one bullet). The app bundles this section at build time and the in-app "What's new" dialog parses it, so the check fails on anything else.
+The section may use `### Heading`, one-line paragraphs, `-` bullets with one nested level, inline `code`, **bold**, *italic*, and `[text](https://...)` links. Raw HTML, images, tables, numbered lists, blockquotes, fenced code, other heading levels, bare URLs, non-HTTPS links, wrapped lines, and deeper nesting are forbidden. Limits are 500 characters per line, 2,048 per URL, 8,000 per entry, and 60 bullets. The app bundles this section at build time and the in-app "What's new" dialog parses it, so the check fails on anything else.
 
 4. Update app version in `package.json` and `package-lock.json` to the release version.
 
@@ -111,7 +111,7 @@ This repository's release automation is currently centered on Windows artifacts.
 - Pushing commits without pushing the tag: no release workflow will run.
 - Tag/version mismatch (`package.json` version and git tag do not match).
 - Running `npm run release:notes` without GitHub CLI installed or authenticated.
-- Inline formatting (backticks, bold, links), nested bullets, or a missing `CHANGELOG.md` section fails `npm run release:notes -- <version> --check`.
+- Unsupported formatting (including raw HTML, bare URLs, non-HTTPS links, wrapped lines, or deeper than one nested bullet level), or a missing `CHANGELOG.md` section fails `npm run release:notes -- <version> --check`.
 - Forgetting to review the GitHub release entry after CI finishes.
 - Reusing an existing tag name (delete/recreate carefully if needed).
 

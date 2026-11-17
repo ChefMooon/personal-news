@@ -129,10 +129,10 @@ and release notes:
 8. Add its feature-specific Settings tab and manifest-driven Features-tab
    behavior. Use `settingsTabId` for links, and verify disabled features are
    hidden from the appropriate routes, navigation, and widget picker.
-9. Add a plain-text `CHANGELOG.md` bullet explaining that the new feature is
+9. Add a `CHANGELOG.md` bullet explaining that the new feature is
    off by default for existing users. Follow the
-   [release guide](HOW-TO-RELEASE.md): release-note bullets cannot contain
-   Markdown formatting, links, URLs, or inline HTML.
+   [release guide](HOW-TO-RELEASE.md) for the supported release-note Markdown
+   subset and limits.
 
 ## 6. Updating setup requirements
 
@@ -161,9 +161,10 @@ as all seen, not as a reason to show every badge.
 
 The wizard's optional "What's in this version" action reads the current
 release's bundled notes and does not acknowledge the separate post-update
-What's New flow. Add user-facing release notes as plain-text CHANGELOG bullets
-that pass the release-note validator. For every newly added feature, explicitly
-say in that release's CHANGELOG that it starts off for existing users.
+What's New flow. Add user-facing release notes using the supported Markdown
+subset in the [release guide](HOW-TO-RELEASE.md), and validate them before
+release. For every newly added feature, explicitly say in that release's
+CHANGELOG that it starts off for existing users.
 
 ## 9. Testing and known gotchas
 
@@ -206,14 +207,14 @@ unchanged.
 - Writing flags directly in the database and bypassing the dispatcher (dev fixtures do this).
 - Adding `onboarding_completed` or `features_seen_ids` to `genericSettingKeys`.
 - Using `npm run lint` as a check; its script passes `--fix` and rewrites files.
-- Adding backticks, bold, or links to CHANGELOG bullets; `validateReleaseNotesMarkdown` rejects them.
+- Adding unsupported CHANGELOG formatting such as raw HTML, bare URLs, non-HTTPS links, wrapped lines, or more than one nested bullet level.
 
 ## Quick verification
 
 Run the focused checks that cover the changed surface:
 
 ```powershell
-npm test -- changelog-notes
+npm test -- release-notes-markdown
 npm test -- onboarding
 npm run test:feature-enablement-browser
 npm run test:onboarding-browser

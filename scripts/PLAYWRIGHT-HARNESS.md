@@ -176,8 +176,10 @@ Two hooks exist only for this harness (`PERSONAL_NEWS_ELECTRON_HARNESS=1` in an
 unpackaged build) and are rejected or not registered otherwise:
 
 - `updates:simulateStatus` takes `{ version, releaseNotesHtml }` and emits a
-  normal `downloaded` update status with parsed notes. The simulated update
-  cannot be installed.
+  normal `downloaded` update status with parsed notes. The HTML passes through
+  the release-notes allowlist adapter; supported tags are `h3`, `p`, `ul`,
+  `li`, `strong`, `em`, `code`, and `a[href]`. Unsupported tags or malformed
+  content produce no notes. The simulated update cannot be installed.
 - `settings:get` and `settings:set` accept the key `whats_new_last_seen_version`.
 
 To inspect the dialog design manually, launch the unpackaged app with

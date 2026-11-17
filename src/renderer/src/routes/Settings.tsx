@@ -28,6 +28,7 @@ import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import { Switch } from "../components/ui/switch";
 import { WhatsNewDialog } from "../components/WhatsNewDialog";
+import { hasReleaseNotesContent } from "../lib/release-notes";
 import { FeaturesSettingsTab } from "../components/FeaturesSettingsTab";
 import { useTheme } from "../providers/ThemeProvider";
 import { useYouTubeChannels } from "../hooks/useYouTubeChannels";
@@ -1994,7 +1995,7 @@ function GeneralTab(): React.ReactElement {
                 <div className="flex flex-col items-end gap-1">
                   <span className="text-xs text-muted-foreground">Downloaded update {updateStatus.downloadedVersion}</span>
                   <div className="flex items-center gap-2">
-                    {updateStatus.downloadedReleaseNotes?.sections.length ? (
+                    {hasReleaseNotesContent(updateStatus.downloadedReleaseNotes) ? (
                       <Button variant="outline" size="sm" onClick={() => setWhatsNewOpen(true)}>
                         See what's new
                       </Button>

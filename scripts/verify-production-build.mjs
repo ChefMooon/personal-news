@@ -159,7 +159,7 @@ function verifySmokeReport() {
   if (report.whatsNewEntryPresent !== true) {
     throw new Error(
       "The packaged build does not contain a readable CHANGELOG entry for the app version. " +
-        "Check that the version's '## [x.y.z] - date' section exists in CHANGELOG.md and uses only '### ' headings and '- ' bullets, " +
+        "Check that the version's '## [x.y.z] - date' section exists in CHANGELOG.md and uses ### headings, bullets, limited inline formatting and at most one nested list level, " +
         "then run 'npm run release:notes -- <version> --check'.",
     );
   }

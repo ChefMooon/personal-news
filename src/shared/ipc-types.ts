@@ -1,5 +1,7 @@
 // IPC channel name constants and payload types
 
+import type { ReleaseNotes } from "./release-notes-markdown.mjs";
+
 export const IPC = {
   APP_SHOW_TRAY_HINT: "app:showTrayHint",
   WINDOW_MINIMIZE: "window:minimize",
@@ -1285,15 +1287,17 @@ export interface AstronomyUpdatedEvent {
   ok: boolean;
 }
 
-export interface ReleaseNotesSection {
-  /** null = bullets that appear before any heading */
-  heading: string | null;
-  items: string[];
-}
+export type {
+  Block,
+  Inline,
+  ListItem,
+  ReleaseNotes,
+  ReleaseNotesSection,
+} from "./release-notes-markdown.mjs";
 
-export interface ReleaseNotesDocument {
-  /** Never contains empty sections. */
-  sections: ReleaseNotesSection[];
+/** fallbackText is set only for an invalid bundled entry, with sections empty. */
+export interface ReleaseNotesDocument extends ReleaseNotes {
+  fallbackText?: string;
 }
 
 export interface WhatsNewPayload {

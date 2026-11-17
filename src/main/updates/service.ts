@@ -8,6 +8,7 @@ import type {
 } from "../../shared/ipc-types";
 import { isElectronHarnessRun } from "../harness-mode";
 import { parseUpdaterReleaseNotes } from "./release-notes";
+import { readValidBundledNotes } from "./bundled-notes";
 import { getSetting } from "../settings/store";
 
 const AUTO_UPDATE_CHECK_ENABLED_KEY = "app_auto_update_check_enabled";
@@ -59,8 +60,8 @@ let simulatedDownload = false;
 
 let statusListener: ((status: UpdateStatusEvent) => void) | null = null;
 
-function normalizeReleaseNotes(input: unknown): ReleaseNotesDocument | null {
-  return parseUpdaterReleaseNotes(input);
+function normalizeReleaseNotes(version: string | undefined, input: unknown): ReleaseNotesDocument | null {
+  return (version ? readValidBundledNotes(version) : null) ?? parseUpdaterReleaseNotes(input);
 }
 
 function emitStatus(
@@ -149,7 +150,7 @@ export async function initializeAutoUpdates(): Promise<void> {
       message: `Update ${info.version} is available. Downloading in the background.`,
       version: info.version,
       releaseDate: info.releaseDate,
-      releaseNotes: normalizeReleaseNotes(info.releaseNotes),
+      releaseNotes: normalizeReleaseNotes(info.version, info.releaseNotes),
       operationOrigin: activeCheckOrigin,
       operationPhase: "downloading",
       lastCheckAt: Date.now(),
@@ -194,13 +195,13 @@ export async function initializeAutoUpdates(): Promise<void> {
       message: `Update ${info.version} has been downloaded and is ready to install.`,
       version: info.version,
       releaseDate: info.releaseDate,
-      releaseNotes: normalizeReleaseNotes(info.releaseNotes),
+      releaseNotes: normalizeReleaseNotes(info.version, info.releaseNotes),
       downloadedReady: true,
       ...(latestStatus.installRequested ? {} : { installRequested: false }),
       operationPhase: latestStatus.installRequested ? "install-requested" : "ready",
       downloadedVersion: info.version,
       downloadedReleaseDate: info.releaseDate,
-      downloadedReleaseNotes: normalizeReleaseNotes(info.releaseNotes),
+      downloadedReleaseNotes: normalizeReleaseNotes(info.version, info.releaseNotes),
     });
   });
 
@@ -336,7 +337,7 @@ export function simulateDownloadedUpdateForHarness(
     return { ok: false, error: "Invalid simulated release notes." };
   }
 
-  const notes = parseUpdaterReleaseNotes(html);
+  const notes = normalizeReleaseNotes(version, html);
   simulatedDownload = true;
   emitStatus({
     state: "downloaded",
