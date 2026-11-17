@@ -75,6 +75,7 @@ export function SportsMediumLayout({
           <FeaturedNextGame
             game={featuredNextGame}
             teams={teams}
+            teamEventsById={teamEventsById}
             showTime={showTime}
             showVenue={showVenue}
             leaguesById={leaguesById}

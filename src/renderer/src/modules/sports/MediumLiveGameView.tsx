@@ -8,6 +8,9 @@ import { Badge } from "../../components/ui/badge";
 import { ScrollArea } from "../../components/ui/scroll-area";
 import { TeamAvatar } from "./TeamAvatar";
 import { UpdatedScore } from "./UpdatedScore";
+import { GameCardFooter } from "./GameCardFooter";
+import { SportLabel } from "./SportLabel";
+import { formatPreviousResult } from "./game-card-utils";
 import { cn } from "../../lib/utils";
 import { getPreviousGame, resolveTrackedTeamSide } from "./side-resolution";
 import type { LeaguesById } from "./league-display";
@@ -159,6 +162,7 @@ export function MediumLiveGameView({
   const status = isLive
     ? (selectedGame.status ?? "Live")
     : formatEventTime(selectedGame);
+  const previousText = formatPreviousResult(previousGame, selectedTeam);
   const venueLine =
     formatVenueLine(
       selectedGame,
@@ -233,9 +237,10 @@ export function MediumLiveGameView({
           >
             {isLive ? status : phase === "scheduled" ? "Today" : "Final"}
           </Badge>
-          <span className="truncate text-xs text-muted-foreground">
-            {selectedGame.sport}
-          </span>
+          <SportLabel
+            sport={selectedGame.sport}
+            size={dense ? "dense" : "default"}
+          />
         </div>
         <div
           className={cn(
@@ -304,35 +309,12 @@ export function MediumLiveGameView({
             dense={dense}
           />
         </div>
-        <div
-          className={cn(
-            "grid border-t text-muted-foreground",
-            showVenue ? "grid-cols-2 divide-x" : "grid-cols-1",
-            dense ? "mt-2 shrink-0 pt-1.5 text-[11px]" : "mt-3 pt-2 text-xs",
-          )}
-        >
-          {showVenue ? (
-            <div className="min-w-0 pr-3 text-left">
-              <p className="font-semibold uppercase tracking-wide">Location</p>
-              <p className="truncate" title={venueLine}>
-                {venueLine}
-              </p>
-            </div>
-          ) : null}
-          <div
-            className={cn(
-              "min-w-0",
-              showVenue ? "pl-3 text-right" : "text-left",
-            )}
-          >
-            <p className="font-semibold uppercase tracking-wide">Previous</p>
-            <p className="truncate" title={previousGame?.eventDate}>
-              {previousGame
-                ? `${previousGame.eventDate} · ${previousGame.awayScore ?? "-"}-${previousGame.homeScore ?? "-"}`
-                : "No previous game data"}
-            </p>
-          </div>
-        </div>
+        <GameCardFooter
+          size={dense ? "dense" : "default"}
+          showVenue={showVenue}
+          venueLine={venueLine}
+          previousText={previousText}
+        />
       </div>
     </section>
   );

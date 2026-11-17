@@ -1979,7 +1979,10 @@ try {
     const sportsWidget = page.locator(
       `[data-widget-instance-id="${sportsWidgetIds[size]}"]`,
     );
-    await sportsWidget.getByText(/Next up/i).waitFor();
+    await sportsWidget
+      .getByText(/Next up/i)
+      .first()
+      .waitFor();
     const nextUpCard = sportsWidget.locator("[data-sports-next-up]");
     await nextUpCard.waitFor();
     const fill = await nextUpCard.evaluate((card, widgetSize) => {
@@ -2008,10 +2011,29 @@ try {
       const bodyRect = body.getBoundingClientRect();
       const first = body.firstElementChild.getBoundingClientRect();
       const last = body.lastElementChild.getBoundingClientRect();
+      const chip = card.querySelector("[data-sports-sport-label]");
+      const pill = chip ? chip.previousElementSibling : null;
+      const chipRect = chip ? chip.getBoundingClientRect() : null;
+      const pillRect = pill ? pill.getBoundingClientRect() : null;
+      const footer = Array.from(card.children).find((child) =>
+        /previous/i.test(child.textContent ?? ""),
+      );
+      const rect = (value) =>
+        value
+          ? {
+              top: value.top,
+              right: value.right,
+              bottom: value.bottom,
+              left: value.left,
+              width: value.width,
+              height: value.height,
+            }
+          : null;
       return {
         cardH: cardRect.height,
         cardTop: cardRect.top,
         cardBottom: cardRect.bottom,
+        cardRight: cardRect.right,
         layoutTop: layoutRect ? layoutRect.top : null,
         layoutBottom: layoutRect ? layoutRect.bottom : null,
         parentH: parentRect.height,
@@ -2022,6 +2044,14 @@ try {
         regionH: region ? region.getBoundingClientRect().height : null,
         viewportScrollH: viewport ? viewport.scrollHeight : null,
         viewportClientH: viewport ? viewport.clientHeight : null,
+        chipText: chip ? chip.textContent.trim() : null,
+        chipHasIcon: chip
+          ? chip.querySelector('svg[aria-hidden="true"]') !== null
+          : false,
+        chipRect: rect(chipRect),
+        pillRect: rect(pillRect),
+        cardText: card.innerText,
+        footerText: footer ? footer.innerText : null,
       };
     }, size);
     assert(
@@ -2063,6 +2093,60 @@ try {
       !widgetText.includes("No games today"),
       `Sports ${size} retained the no-games-today empty state`,
     );
+    assert(
+      /location/i.test(fill.cardText) && /previous/i.test(fill.cardText),
+      `Sports ${size} Next up card lost its Location or Previous footer: ${fill.cardText.slice(0, 320)}`,
+    );
+    assert(
+      typeof fill.chipText === "string" && fill.chipText.length > 0,
+      `Sports ${size} Next up card has no sport label text`,
+    );
+    assert(
+      fill.chipHasIcon,
+      `Sports ${size} Next up sport label has no aria-hidden icon`,
+    );
+    assert(
+      fill.chipRect !== null &&
+        fill.pillRect !== null &&
+        Math.abs(fill.chipRect.height - fill.pillRect.height) <= 2,
+      `Sports ${size} sport label does not line up with the pill: chip ${JSON.stringify(fill.chipRect)} pill ${JSON.stringify(fill.pillRect)}`,
+    );
+    assert(
+      fill.chipRect !== null && fill.chipRect.right <= fill.cardRight + 1,
+      `Sports ${size} sport label overflows the card: chip ${JSON.stringify(fill.chipRect)} card right ${fill.cardRight}`,
+    );
+    // The fixture's first tracked team is the baseball home team
+    // (Fixture Owls), and its yesterday FT fixture is its previous game, so
+    // the result pattern is deterministic.
+    assert(
+      typeof fill.footerText === "string" && /\d+ - \d+/.test(fill.footerText),
+      `Sports ${size} Next up Previous did not render a shaped result: ${JSON.stringify(fill.footerText)}`,
+    );
+  }
+
+  for (const size of ["medium", "large"]) {
+    const editSportsWidget = page.locator(
+      `[data-widget-instance-id="${sportsWidgetIds[size]}"]`,
+    );
+    await editSportsWidget
+      .getByRole("button", { name: "Sports widget settings" })
+      .click();
+    const preview = editSportsWidget.locator(".sports-card-edit__preview");
+    const previewNextUp = preview.locator("[data-sports-next-up]");
+    await previewNextUp.waitFor();
+    const previewBox = await previewNextUp.boundingBox();
+    assert(
+      previewBox && previewBox.width > 0 && previewBox.height > 0,
+      `Sports ${size} edit preview did not show a sized Next up card: ${JSON.stringify(previewBox)}`,
+    );
+    assert(
+      (await preview.locator("[data-sports-sport-label]").count()) > 0 &&
+        /Next up/i.test(await previewNextUp.innerText()),
+      `Sports ${size} edit preview Next up card lost its sport label or pill text`,
+    );
+    await editSportsWidget
+      .getByRole("button", { name: "Close settings" })
+      .click();
   }
 
   const apiErrors = await page.evaluate(

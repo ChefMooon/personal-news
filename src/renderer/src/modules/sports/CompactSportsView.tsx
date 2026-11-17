@@ -7,6 +7,9 @@ import { Badge } from "../../components/ui/badge";
 import { ScrollArea } from "../../components/ui/scroll-area";
 import { TeamAvatar } from "./TeamAvatar";
 import { UpdatedScore } from "./UpdatedScore";
+import { GameCardFooter } from "./GameCardFooter";
+import { SportLabel } from "./SportLabel";
+import { formatPreviousResult, shortTeamName } from "./game-card-utils";
 import {
   getGameOutcome,
   getGamePhase,
@@ -50,16 +53,6 @@ function formatNextGameLabel(game: SportEvent): string {
 
 function getCompactBadgeClasses(game: SportEvent): string {
   return getGamePhaseBadgeClasses(game);
-}
-
-function shortTeamName(name: string): string {
-  const words = name.trim().split(/\s+/);
-  return words.length > 1
-    ? words
-        .map((word) => word[0])
-        .join("")
-        .slice(0, 4)
-    : name.slice(0, 8);
 }
 
 function CompactTeamCard({
@@ -126,39 +119,7 @@ function CompactGameSummary({
       : outcome === "loss"
         ? "text-red-400"
         : "";
-  const previousTrackedSide =
-    previousGame && trackedTeam
-      ? resolveTrackedTeamSide(
-          previousGame,
-          trackedTeam.teamId,
-          trackedTeam.name,
-          trackedTeam.leagueId,
-        )
-      : null;
-  const previousTrackedTeam =
-    previousGame && previousTrackedSide
-      ? previousTrackedSide === "home"
-        ? {
-            name: previousGame.homeTeam,
-            score: previousGame.homeScore,
-          }
-        : {
-            name: previousGame.awayTeam,
-            score: previousGame.awayScore,
-          }
-      : null;
-  const previousOpponent =
-    previousGame && previousTrackedSide
-      ? previousTrackedSide === "home"
-        ? {
-            name: previousGame.awayTeam,
-            score: previousGame.awayScore,
-          }
-        : {
-            name: previousGame.homeTeam,
-            score: previousGame.homeScore,
-          }
-      : null;
+  const previousText = formatPreviousResult(previousGame, trackedTeam);
   const venueLine =
     formatVenueLine(game, getLeagueCountry(game, leaguesById)) ?? "Venue TBD";
   const trackedIsHome = trackedSide === "home";
@@ -202,9 +163,7 @@ function CompactGameSummary({
               ? "Final"
               : "Today"}
         </Badge>
-        <span className="truncate text-[11px] text-muted-foreground">
-          {game.sport}
-        </span>
+        <SportLabel sport={game.sport} size="compact" />
       </div>
       <div
         className={cn(
@@ -252,31 +211,12 @@ function CompactGameSummary({
           </p>
         </div>
       </div>
-      <div
-        className={cn(
-          "mt-2 grid min-w-0 border-t pt-1.5 text-[10px] text-muted-foreground",
-          showVenue ? "grid-cols-2 divide-x" : "grid-cols-1",
-        )}
-      >
-        {showVenue ? (
-          <div className="min-w-0 pr-2 text-left">
-            <p className="font-semibold uppercase tracking-wide">Location</p>
-            <p className="truncate" title={venueLine}>
-              {venueLine}
-            </p>
-          </div>
-        ) : null}
-        <div
-          className={cn("min-w-0", showVenue ? "pl-2 text-right" : "text-left")}
-        >
-          <p className="font-semibold uppercase tracking-wide">Previous</p>
-          <p className="truncate" title={previousGame?.awayTeam}>
-            {previousTrackedTeam && previousOpponent
-              ? `${shortTeamName(previousTrackedTeam.name)} ${previousTrackedTeam.score ?? "-"} - ${previousOpponent.score ?? "-"} ${shortTeamName(previousOpponent.name)}`
-              : "No previous game"}
-          </p>
-        </div>
-      </div>
+      <GameCardFooter
+        size="compact"
+        showVenue={showVenue}
+        venueLine={venueLine}
+        previousText={previousText}
+      />
     </div>
   );
 }
@@ -468,6 +408,7 @@ export function CompactSportsView({
             <FeaturedNextGame
               game={featured}
               teams={teams}
+              teamEventsById={teamEventsById}
               showTime={showTime}
               showVenue={showVenue}
               leaguesById={leaguesById}
