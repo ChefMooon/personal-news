@@ -4,6 +4,17 @@ All notable changes to this project are documented in this file.
 
 The format follows Keep a Changelog, and this project uses Semantic Versioning.
 
+## [1.6.2] - 2026-11-18
+
+### Changed
+
+- Improved release notes so update information is displayed safely and consistently.
+
+### Fixed
+
+- Made the Sports Next Up card keep the same information and behavior as the Today card.
+- Added a clear fallback when an update release-notes link cannot be opened.
+
 ## [1.6.1] - 2026-11-13
 
 ### Fixed
