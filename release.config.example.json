@@ -1,0 +1,39 @@
+{
+  "schema": 1,
+  "stack": "electron",
+  "productName": "Demo App",
+  "releaseBranch": "main",
+  "releaseTitle": "{tag}",
+  "versionFiles": ["package.json", "package-lock.json"],
+  "changelog": { "file": "CHANGELOG.md", "style": "user", "format": "release-notes-md-v1" },
+  "verify": ["npm run lint", "npm test", "npm run build"],
+  "platforms": {
+    "windows": {
+      "enabled": true,
+      "build": "ci",
+      "assets": [
+        "{productName}-{version}-Setup-x64.exe",
+        "{productName}-{version}-Setup-x64.exe.blockmap",
+        "latest.yml"
+      ]
+    },
+    "macos": {
+      "enabled": false,
+      "build": "ci",
+      "assets": [
+        "{productName}-{version}-*.dmg",
+        "{productName}-{version}-*.dmg.blockmap",
+        "{productName}-{version}-*-mac.zip",
+        "latest-mac.yml"
+      ]
+    },
+    "linux": {
+      "enabled": false,
+      "build": "ci",
+      "assets": [
+        "{productName}-{version}-*.AppImage",
+        "latest-linux.yml"
+      ]
+    }
+  }
+}

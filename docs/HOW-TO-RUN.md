@@ -233,96 +233,20 @@ The Windows build embeds `resources/icon.ico` into the packaged executable and
 shortcuts. Code signing is separate: an unsigned build can show the correct
 icon, but may produce SmartScreen or reputation warnings.
 
-This is the local packaging command. The automated GitHub release workflow uses `npm run build:win -- --publish always` after you push a matching tag.
+This is the local packaging command. The automated GitHub release workflow builds the configured Windows target into a verified GitHub draft after you push a matching tag.
 
 ## Quick Release Checklist
 
-- Confirm the app version in `package.json` matches the release you want to ship
-- Run `npm run verify:production:win`
-- Update the matching `CHANGELOG.md` entry
-- Create an annotated tag like `v1.3.1`
-- Push the tag with `git push origin v1.3.1`
-- Wait for the GitHub Actions release workflow to finish
-- Run `npm run release:notes -- 1.3.1 release` if you need to apply changelog notes to the GitHub release
-- Confirm the new GitHub Release and Windows installer asset were created
+Use the repository `/release-update` skill for the full release procedure. It
+reads `release.config.json`, runs the configured checks, pushes the version
+tag, waits for the matching CI run, and verifies the resulting draft before
+offering publication. Run `npm run verify:production:win` as part of the
+configured checks.
 
 ## Publish a New Release
 
-Releases are published automatically from a git tag push. The workflow listens for tags that match `v*.*.*`, so a tag like `v1.3.1` will start the Windows release job.
-
-This section is the short version. For the full step-by-step GitHub release procedure, use [HOW-TO-RELEASE.md](HOW-TO-RELEASE.md).
-
-### Step 1: Update the version
-
-Make sure the app version in `package.json` matches the release you want to publish. The installer and release assets use that version number in their file names.
-
-If you want npm to update the version for you, use one of these commands:
-
-```bash
-npm version patch
-npm version minor
-npm version major
-```
-
-If you update the version manually, keep the new version consistent with the tag you plan to push.
-
-### Step 2: Verify the release build locally
-
-Run the Windows verification pipeline before publishing:
-
-```bash
-npm run verify:production:win
-```
-
-This confirms the app builds, packages, and boots in smoke-test mode with the expected migrations and native binaries.
-It also checks that generated icon assets are current and that the packaged ICO
-contains the expected Windows sizes.
-
-After installing a new build, test from a clean install location. Remove old
-desktop or Start Menu shortcuts and unpin the previous taskbar shortcut before
-checking the executable, shortcuts, and running taskbar button. Windows can
-cache icon associations, so an old pinned shortcut is not evidence that the new
-installer contains the wrong artwork.
-
-### Step 3: Create the release tag
-
-Create an annotated tag that matches the version you are shipping. For example, if the app version is `1.3.1`, create `v1.3.1`:
-
-```bash
-git tag -a v1.3.1 -m "Release v1.3.1"
-```
-
-### Step 4: Push the tag to GitHub
-
-Push the tag to the remote repository:
-
-```bash
-git push origin v1.3.1
-```
-
-Pushing the tag is the release trigger. A normal commit push will not start the release workflow.
-
-### Step 5: Wait for GitHub Actions to finish
-
-The `Release (Windows)` workflow runs on `windows-latest`, installs dependencies with `npm ci`, then executes:
-
-```bash
-npm run build:win -- --publish always
-```
-
-That job uses `GH_TOKEN` from `secrets.GITHUB_TOKEN` and publishes the Windows installer artifacts to the GitHub release associated with the tag.
-
-### Step 6: Check the published release
-
-After the workflow completes, open the GitHub Releases page and confirm that:
-
-- The new release exists for the tag you pushed
-- The Windows installer asset was uploaded
-- The release notes and asset version match the tag and `package.json`
-
-If you use `npm run release:notes`, make sure GitHub CLI (`gh`) is installed and authenticated first.
-
-If the workflow fails, inspect the Actions run for the tag push and rerun after fixing the build issue.
+For the tag-triggered CI process, retry command, verified draft handoff, and
+confirmed publish step, follow [HOW-TO-RELEASE.md](HOW-TO-RELEASE.md).
 
 ## Verify Production Build (Windows)
 
@@ -344,6 +268,14 @@ This command performs all required checks:
 Smoke results are written to `dist/smoke-test-report.json`.
 
 This is the current verified Windows pre-release workflow for the repository. The Electron window opens automatically during smoke mode. No external services or API keys are required for the smoke test itself.
+
+The verification also checks that generated icon assets are current and that
+the packaged ICO contains the expected Windows sizes. After installing a new
+build, test from a clean install location. Remove old desktop or Start Menu
+shortcuts and unpin the previous taskbar shortcut before checking the
+executable, shortcuts, and running taskbar button. Windows can cache icon
+associations, so an old pinned shortcut is not evidence that the new installer
+contains the wrong artwork.
 
 ## What to Expect
 

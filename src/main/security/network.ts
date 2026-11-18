@@ -1,5 +1,6 @@
 export interface BoundedFetchOptions extends RequestInit {
   timeoutMs?: number;
+  /** Size limit for the body; enforced by the body readers (readBoundedText), not by fetchBounded. */
   maxBytes?: number;
   maxRedirects?: number;
   validateRedirect?: (from: URL, to: URL) => boolean;
@@ -26,7 +27,6 @@ export async function fetchBounded(
 ): Promise<Response> {
   const {
     timeoutMs = 10_000,
-    maxBytes = 2_000_000,
     maxRedirects = 5,
     validateRedirect,
     ...requestInit

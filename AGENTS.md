@@ -70,5 +70,5 @@ Never use the live production database for tests or test writes. Harness scripts
 
 - Packaged production uses its existing Electron `userData` profile. `npm run dev` and `npm run start` share a persistent Development profile and its single-instance lock; they cannot run as separate instances at the same time.
 - Use `docs/HOW-TO-RUN.md` for setup and packaging details and `docs/HOW-TO-RELEASE.md` for the release process. Run `npm run verify:production:win` for the documented Windows production smoke verification.
-- Use `npm run release:notes` for changelog-based release note generation. Check the current `package.json` before writing version-specific release guidance.
+- Use the `/release-update` skill and `docs/HOW-TO-RELEASE.md` for the release process.
 - Never create a Git worktree unless the user asks for one or grants permission.

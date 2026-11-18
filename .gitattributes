@@ -1,0 +1,13 @@
+scripts/release-lib.mjs eol=lf
+scripts/release-notes-markdown.mjs eol=lf
+scripts/release-notes-markdown.d.mts eol=lf
+scripts/release-notes-markdown.corpus.mjs eol=lf
+scripts/check-changelog.mjs eol=lf
+scripts/extract-release-notes.mjs eol=lf
+scripts/check-version-consistency.mjs eol=lf
+scripts/release-prepare.mjs eol=lf
+scripts/verify-release-draft.mjs eol=lf
+scripts/wait-for-run.mjs eol=lf
+scripts/release-scripts.test.mjs eol=lf
+scripts/release-notes-markdown.test.mjs eol=lf
+fixtures/release-notes-md-v1/cases.json eol=lf

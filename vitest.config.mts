@@ -8,5 +8,9 @@ export default defineConfig({
     environment: "node",
     setupFiles: ["./src/test/setup.ts"],
     include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
+    exclude: [
+      "scripts/release-scripts.test.mjs",
+      "scripts/release-notes-markdown.test.mjs",
+    ],
   },
 });

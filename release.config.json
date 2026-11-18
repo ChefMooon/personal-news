@@ -1,0 +1,39 @@
+{
+  "schema": 1,
+  "stack": "electron",
+  "productName": "Personal News",
+  "releaseBranch": "main",
+  "releaseTitle": "{tag}",
+  "versionFiles": ["package.json", "package-lock.json"],
+  "changelog": { "file": "CHANGELOG.md", "style": "user", "format": "release-notes-md-v1" },
+  "verify": ["npm run lint:check", "npm run typecheck", "npm test", "npm run verify:production:win"],
+  "platforms": {
+    "windows": {
+      "enabled": true,
+      "build": "ci",
+      "assets": [
+        "Personal-News-{version}-Setup-x64.exe",
+        "Personal-News-{version}-Setup-x64.exe.blockmap",
+        "latest.yml"
+      ]
+    },
+    "macos": {
+      "enabled": false,
+      "build": "ci",
+      "assets": [
+        "{productName}-{version}-*.dmg",
+        "{productName}-{version}-*.dmg.blockmap",
+        "{productName}-{version}-*-mac.zip",
+        "latest-mac.yml"
+      ]
+    },
+    "linux": {
+      "enabled": false,
+      "build": "ci",
+      "assets": [
+        "{productName}-{version}-*.AppImage",
+        "latest-linux.yml"
+      ]
+    }
+  }
+}

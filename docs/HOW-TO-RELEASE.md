@@ -1,127 +1,59 @@
-# How to Release (Tag-Triggered GitHub Action)
+# How to Release
 
-This is the step-by-step guide to publish a tagged GitHub release for this repo.
+Use the repository `/release-update` skill for an end-to-end release. It reads
+[`release.config.json`](../release.config.json), checks the version and
+changelog, runs the configured verification commands, creates and pushes the
+annotated tag, waits for CI, verifies the GitHub draft, and asks before
+publishing. Follow its checkpoints and stop on any failed check.
 
-Use this guide together with [HOW-TO-RUN.md](HOW-TO-RUN.md): that document covers local setup, packaging, and the verified pre-release check, while this document covers the GitHub release handoff.
+This guide summarizes the handoff and points to the project configuration.
+For local setup, packaging, and Windows production verification, see
+[`HOW-TO-RUN.md`](HOW-TO-RUN.md).
 
-The release workflow is triggered only when you push a git tag that matches `v*.*.*` (example: `v1.3.1`).
+## Release configuration
 
-## One-Time Context
+[`release.config.json`](../release.config.json) is the source of truth for the
+release branch, version files, changelog format, verification commands,
+platforms, asset patterns, and draft title. Keep it aligned with
+`package.json`, `package-lock.json`, `CHANGELOG.md`, and
+`.github/workflows/release.yml`.
 
-- GitHub Action: `.github/workflows/release-tag.yml`
-- Trigger: `push` on tags like `v1.3.1`
-- Build/publish command used by CI: `npm run build:win -- --publish always`
-- Current automated publish target: Windows installer artifacts
-- Release note helper requirement: GitHub CLI (`gh`) must be installed and authenticated before running `npm run release:notes`
+Release notes are validated in the `release-notes-md-v1` format. The prepare
+job puts the matching changelog entry into the GitHub draft, and the app also
+uses the bundled changelog for its in-app What's New display. Add and validate
+the changelog entry before starting the release.
 
-## Release Steps
+## Release flow
 
-1. Make sure you are on `main` and fully up to date:
+1. Confirm the configured release branch is current and the working tree has
+   only the release metadata changes permitted by the skill.
+2. Add the changelog entry and set the version consistently in
+   `package.json` and `package-lock.json`. A prerelease uses a `-beta.N`
+   version, for example `2.0.0-beta.1`.
+3. Run every command in the `verify` list in `release.config.json`, in order.
+   The skill stops if any check fails.
+4. Commit and push the release metadata to the configured branch. The skill
+   creates an annotated `vX.Y.Z` or `vX.Y.Z-beta.N` tag at the verified commit
+   and pushes it. Pushing the tag starts `.github/workflows/release.yml`.
+5. Wait for the workflow run matching that tag and commit. CI prepares one
+   GitHub draft, builds the enabled CI platforms into it, and verifies the
+   resulting draft and assets.
+6. Review the verified draft at the link provided by the skill. The release
+   remains unpublished until you explicitly choose to publish it.
 
-```bash
-git checkout main
-git pull origin main
-```
-
-2. Choose the version you are releasing and keep that same version in every step below.
-
-Example in this guide: `1.3.1` and tag `v1.3.1`.
-
-3. Confirm `CHANGELOG.md` includes the matching version section and final notes, and validate it before bumping the version:
-
-```bash
-npm run release:notes -- 1.3.1 --check
-```
-
-The section may use `### Heading`, one-line paragraphs, `-` bullets with one nested level, inline `code`, **bold**, *italic*, and `[text](https://...)` links. Raw HTML, images, tables, numbered lists, blockquotes, fenced code, other heading levels, bare URLs, non-HTTPS links, wrapped lines, and deeper nesting are forbidden. Limits are 500 characters per line, 2,048 per URL, 8,000 per entry, and 60 bullets. The app bundles this section at build time and the in-app "What's new" dialog parses it, so the check fails on anything else.
-
-4. Update app version in `package.json` and `package-lock.json` to the release version.
-
-You can do it automatically:
-
-```bash
-npm version 1.3.1 --no-git-tag-version
-```
-
-**Note:** Run this command to update `package-lock.json`
-```bash
-npm install
-```
-
-5. Verify the release build locally (Windows):
+If a build fails, fix the cause and retry the workflow on the existing tag:
 
 ```bash
-npm run verify:production:win
+gh workflow run release.yml --repo OWNER/REPO --ref vX.Y.Z
 ```
 
-This verification also fails if generated icon assets are stale and checks the
-multi-resolution ICO copied into the unpacked application. After installation,
-remove old shortcuts and unpin the previous taskbar shortcut before checking
-the new executable and taskbar icon. Signing affects SmartScreen trust, not
-whether the icon resource is embedded.
+Do not delete, move, or recreate a tag or release to retry. The skill waits
+for the retry run and verifies the existing draft again.
 
-6. Commit the release prep changes:
+## Adding macOS or Linux
 
-```bash
-git add package.json package-lock.json CHANGELOG.md
-git commit -m "chore(release): v1.3.1"
-git push origin main
-```
-
-7. Create the annotated release tag:
-
-```bash
-git tag -a v1.3.1 -m "Release v1.3.1"
-```
-
-8. Push the tag. This triggers the GitHub Action:
-
-```bash
-git push origin v1.3.1
-```
-
-9. Open GitHub Actions and watch the `Release (Windows)` workflow for that tag run.
-
-10. Wait for the workflow to finish successfully.
-
-11. Open GitHub Releases and find the new release for that tag.
-
-12. Populate the GitHub release notes from the matching `CHANGELOG.md` section:
-
-```bash
-npm run release:notes -- 1.3.1 release
-```
-
-The helper strips the version heading, keeps the remaining markdown formatting intact, and applies those notes directly to the GitHub release for the matching tag.
-
-13. Review the release entry and confirm the Windows installer asset is attached.
-
-If the GitHub release is still in draft state, publish it.
-
-This repository's release automation is currently centered on Windows artifacts.
-
-## Quick Verification After Publishing
-
-1. Confirm the release exists for the tag you pushed.
-2. Confirm installer asset exists (example name: `Personal News-1.3.1-Setup-x64.exe`).
-3. Download and install quickly to smoke-check startup.
-
-## Common Mistakes
-
-- Pushing commits without pushing the tag: no release workflow will run.
-- Tag/version mismatch (`package.json` version and git tag do not match).
-- Running `npm run release:notes` without GitHub CLI installed or authenticated.
-- Unsupported formatting (including raw HTML, bare URLs, non-HTTPS links, wrapped lines, or deeper than one nested bullet level), or a missing `CHANGELOG.md` section fails `npm run release:notes -- <version> --check`.
-- Forgetting to review the GitHub release entry after CI finishes.
-- Reusing an existing tag name (delete/recreate carefully if needed).
-
-## If You Need to Re-Run a Tag
-
-Only do this if you understand the impact on release history.
-
-```bash
-git tag -d v1.3.1
-git push origin :refs/tags/v1.3.1
-git tag -a v1.3.1 -m "Release v1.3.1"
-git push origin v1.3.1
-```
+Use the **Add macOS or Linux later** checklist in the shared
+`C:\Users\justi\.claude\skills\release-skill-maintenance\references\release.config.md`
+reference. Update the platform configuration, workflow build and verification
+dependencies, and Electron build targets together. Confirm asset patterns
+against a real build, then run the release audit before enabling that platform.

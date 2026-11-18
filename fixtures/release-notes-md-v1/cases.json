@@ -1,0 +1,425 @@
+{
+  "format": "release-notes-md-v1",
+  "about": "Shared conformance corpus. Each case: input (string) or inputParts (strings and {repeat,times} objects), valid, and either plain/notes (valid) or violations [{line, contains}] (invalid). Violation lines are 1-based within the input. Extra violations are allowed; every listed one must be present. Copy unchanged into each project.",
+  "cases": [
+    {
+      "id": "valid-minimal",
+      "input": "### Added\n\n- Added dark mode.",
+      "valid": true,
+      "plain": "Added\n- Added dark mode.",
+      "notes": {"sections": [{"heading": "Added", "blocks": [{"type": "list", "items": [{"inline": [{"type": "text", "value": "Added dark mode."}], "children": []}]}]}]}
+    },
+    {
+      "id": "valid-two-sections",
+      "input": "### Added\n\n- A one.\n- A two.\n\n### Fixed\n\n- F one.",
+      "valid": true,
+      "plain": "Added\n- A one.\n- A two.\n\nFixed\n- F one."
+    },
+    {
+      "id": "valid-no-blank-after-heading",
+      "input": "### Fixed\n- Fixed a crash.",
+      "valid": true,
+      "plain": "Fixed\n- Fixed a crash."
+    },
+    {
+      "id": "valid-inline-code",
+      "input": "### Changed\n\n- Renamed the `Settings` page.",
+      "valid": true,
+      "plain": "Changed\n- Renamed the Settings page.",
+      "notes": {"sections": [{"heading": "Changed", "blocks": [{"type": "list", "items": [{"inline": [{"type": "text", "value": "Renamed the "}, {"type": "code", "value": "Settings"}, {"type": "text", "value": " page."}], "children": []}]}]}]}
+    },
+    {
+      "id": "valid-bold-italic",
+      "input": "### Changed\n\n- Improved **startup time** and *memory use*.",
+      "valid": true,
+      "plain": "Changed\n- Improved startup time and memory use.",
+      "notes": {"sections": [{"heading": "Changed", "blocks": [{"type": "list", "items": [{"inline": [{"type": "text", "value": "Improved "}, {"type": "bold", "children": [{"type": "text", "value": "startup time"}]}, {"type": "text", "value": " and "}, {"type": "italic", "children": [{"type": "text", "value": "memory use"}]}, {"type": "text", "value": "."}], "children": []}]}]}]}
+    },
+    {
+      "id": "valid-https-link",
+      "input": "### Changed\n\n- See the [release page](https://github.com/ChefMooon/example/releases) for details.",
+      "valid": true,
+      "plain": "Changed\n- See the release page for details.",
+      "notes": {"sections": [{"heading": "Changed", "blocks": [{"type": "list", "items": [{"inline": [{"type": "text", "value": "See the "}, {"type": "link", "href": "https://github.com/ChefMooon/example/releases", "children": [{"type": "text", "value": "release page"}]}, {"type": "text", "value": " for details."}], "children": []}]}]}]}
+    },
+    {
+      "id": "valid-nested-bullets",
+      "input": "### Added\n\n- Added export.\n  - Supports PDF.\n  - Supports CSV.\n- Added import.",
+      "valid": true,
+      "plain": "Added\n- Added export.\n  - Supports PDF.\n  - Supports CSV.\n- Added import.",
+      "notes": {"sections": [{"heading": "Added", "blocks": [{"type": "list", "items": [{"inline": [{"type": "text", "value": "Added export."}], "children": [{"inline": [{"type": "text", "value": "Supports PDF."}]}, {"inline": [{"type": "text", "value": "Supports CSV."}]}]}, {"inline": [{"type": "text", "value": "Added import."}], "children": []}]}]}]}
+    },
+    {
+      "id": "valid-paragraph-and-bullets",
+      "input": "### Changed\n\nThe update dialog was redesigned.\n\n- Larger text.",
+      "valid": true,
+      "plain": "Changed\nThe update dialog was redesigned.\n- Larger text.",
+      "notes": {"sections": [{"heading": "Changed", "blocks": [{"type": "paragraph", "inline": [{"type": "text", "value": "The update dialog was redesigned."}]}, {"type": "list", "items": [{"inline": [{"type": "text", "value": "Larger text."}], "children": []}]}]}]}
+    },
+    {
+      "id": "valid-italic-inside-bold",
+      "input": "### Changed\n\n- **Faster *search* results**.",
+      "valid": true,
+      "plain": "Changed\n- Faster search results."
+    },
+    {
+      "id": "valid-code-inside-bold",
+      "input": "### Changed\n\n- **Use `npm ci`** now.",
+      "valid": true,
+      "plain": "Changed\n- Use npm ci now."
+    },
+    {
+      "id": "valid-link-with-code-label",
+      "input": "### Changed\n\n- Read the [`npm ci` docs](https://docs.npmjs.com/cli/ci) first.",
+      "valid": true,
+      "plain": "Changed\n- Read the npm ci docs first."
+    },
+    {
+      "id": "valid-crlf",
+      "input": "### Added\r\n\r\n- Added a thing.\r\n",
+      "valid": true,
+      "plain": "Added\n- Added a thing."
+    },
+    {
+      "id": "valid-bom",
+      "input": "﻿### Added\n\n- Added a thing.",
+      "valid": true,
+      "plain": "Added\n- Added a thing."
+    },
+    {
+      "id": "valid-surrounding-blank-lines",
+      "input": "\n\n### Added\n\n- Added a thing.\n\n\n",
+      "valid": true,
+      "plain": "Added\n- Added a thing."
+    },
+    {
+      "id": "valid-snake-case-underscores",
+      "input": "### Fixed\n\n- Renamed snake_case_names and file_name.txt.",
+      "valid": true,
+      "plain": "Fixed\n- Renamed snake_case_names and file_name.txt."
+    },
+    {
+      "id": "valid-lone-asterisks",
+      "input": "### Fixed\n\n- Handles 2 * 3 and a * b correctly.",
+      "valid": true,
+      "plain": "Fixed\n- Handles 2 * 3 and a * b correctly."
+    },
+    {
+      "id": "valid-literal-brackets",
+      "input": "### Added\n\n- Added a [WIP] badge.",
+      "valid": true,
+      "plain": "Added\n- Added a [WIP] badge."
+    },
+    {
+      "id": "valid-angle-brackets-with-spaces",
+      "input": "### Fixed\n\n- Values like 5 < 10 and 10 > 5 work.",
+      "valid": true,
+      "plain": "Fixed\n- Values like 5 < 10 and 10 > 5 work."
+    },
+    {
+      "id": "valid-url-inside-code",
+      "input": "### Changed\n\n- Run `curl https://example.com` to test.",
+      "valid": true,
+      "plain": "Changed\n- Run curl https://example.com to test."
+    },
+    {
+      "id": "valid-html-entities-stay-literal",
+      "input": "### Fixed\n\n- Escaped &lt;script&gt; stays literal text.",
+      "valid": true,
+      "plain": "Fixed\n- Escaped &lt;script&gt; stays literal text."
+    },
+    {
+      "id": "valid-unicode-and-emoji",
+      "input": "### Added\n\n- Added 日本語 and émoji 🎉 support.",
+      "valid": true,
+      "plain": "Added\n- Added 日本語 and émoji 🎉 support."
+    },
+    {
+      "id": "valid-line-at-limit-500",
+      "inputParts": ["### Added\n\n- ", {"repeat": "a", "times": 498}],
+      "valid": true
+    },
+    {
+      "id": "invalid-raw-html",
+      "input": "### Added\n\n- Added <b>bold</b> text.",
+      "valid": false,
+      "violations": [{"line": 3, "contains": "raw HTML"}]
+    },
+    {
+      "id": "invalid-script-tag",
+      "input": "### Added\n\n- <script>alert(1)</script>",
+      "valid": false,
+      "violations": [{"line": 3, "contains": "raw HTML"}]
+    },
+    {
+      "id": "invalid-img-tag-with-handler",
+      "input": "### Added\n\n- <img src=x onerror=alert(1)>",
+      "valid": false,
+      "violations": [{"line": 3, "contains": "raw HTML"}]
+    },
+    {
+      "id": "invalid-html-comment",
+      "input": "### Added\n\n- <!-- hidden -->",
+      "valid": false,
+      "violations": [{"line": 3, "contains": "raw HTML"}]
+    },
+    {
+      "id": "invalid-autolink",
+      "input": "### Added\n\n- <https://example.com>",
+      "valid": false,
+      "violations": [{"line": 3, "contains": "raw HTML"}]
+    },
+    {
+      "id": "invalid-markdown-image",
+      "input": "### Added\n\n- ![logo](https://example.com/a.png)",
+      "valid": false,
+      "violations": [{"line": 3, "contains": "images"}]
+    },
+    {
+      "id": "invalid-javascript-link",
+      "input": "### Added\n\n- [click](javascript:alert(1))",
+      "valid": false,
+      "violations": [{"line": 3, "contains": "only https"}]
+    },
+    {
+      "id": "invalid-http-link",
+      "input": "### Added\n\n- [site](http://example.com)",
+      "valid": false,
+      "violations": [{"line": 3, "contains": "only https"}]
+    },
+    {
+      "id": "invalid-data-link",
+      "input": "### Added\n\n- [x](data:text/html;base64,AAAA)",
+      "valid": false,
+      "violations": [{"line": 3, "contains": "only https"}]
+    },
+    {
+      "id": "invalid-mailto-link",
+      "input": "### Added\n\n- [mail](mailto:a@b.co)",
+      "valid": false,
+      "violations": [{"line": 3, "contains": "only https"}]
+    },
+    {
+      "id": "invalid-relative-link",
+      "input": "### Added\n\n- [x](/relative/path)",
+      "valid": false,
+      "violations": [{"line": 3, "contains": "absolute https"}]
+    },
+    {
+      "id": "invalid-link-credentials",
+      "input": "### Added\n\n- [x](https://user:pass@example.com/)",
+      "valid": false,
+      "violations": [{"line": 3, "contains": "credentials"}]
+    },
+    {
+      "id": "invalid-link-title",
+      "input": "### Added\n\n- [x](https://example.com \"title\")",
+      "valid": false,
+      "violations": [{"line": 3, "contains": "link titles"}]
+    },
+    {
+      "id": "invalid-link-url-exceeds-line-limit",
+      "inputParts": ["### Added\n\n- [x](https://example.com/", {"repeat": "a", "times": 2040}, ")"],
+      "valid": false,
+      "violations": [{"line": 3, "contains": "longer than 500"}]
+    },
+    {
+      "id": "invalid-nested-link-leaves-bare-url",
+      "input": "### Added\n\n- [a [b](https://x.com) c](https://y.com)",
+      "valid": false,
+      "violations": [{"line": 3, "contains": "bare URL"}]
+    },
+    {
+      "id": "invalid-bare-url",
+      "input": "### Added\n\n- Visit https://example.com today.",
+      "valid": false,
+      "violations": [{"line": 3, "contains": "bare URL"}]
+    },
+    {
+      "id": "invalid-numbered-list",
+      "input": "### Added\n\n1. First",
+      "valid": false,
+      "violations": [{"line": 3, "contains": "numbered"}]
+    },
+    {
+      "id": "invalid-h4-heading",
+      "input": "### Added\n\n#### Details\n\n- x.",
+      "valid": false,
+      "violations": [{"line": 3, "contains": "only '### '"}]
+    },
+    {
+      "id": "invalid-h2-heading-in-entry",
+      "input": "## Another\n\n- x.",
+      "valid": false,
+      "violations": [{"line": 1, "contains": "only '### '"}]
+    },
+    {
+      "id": "invalid-blockquote",
+      "input": "### Added\n\n> quote\n\n- x.",
+      "valid": false,
+      "violations": [{"line": 3, "contains": "blockquotes"}]
+    },
+    {
+      "id": "invalid-code-fence",
+      "input": "### Added\n\n```js\nalert(1)\n```\n\n- x.",
+      "valid": false,
+      "violations": [{"line": 3, "contains": "code fences"}]
+    },
+    {
+      "id": "invalid-table",
+      "input": "### Added\n\n| a | b |\n|---|---|\n\n- x.",
+      "valid": false,
+      "violations": [{"line": 3, "contains": "tables"}]
+    },
+    {
+      "id": "invalid-horizontal-rule",
+      "input": "### Added\n\n---\n\n- x.",
+      "valid": false,
+      "violations": [{"line": 3, "contains": "horizontal rules"}]
+    },
+    {
+      "id": "invalid-wrapped-bullet-indented",
+      "input": "### Added\n\n- A long bullet that\n  continues here.",
+      "valid": false,
+      "violations": [{"line": 4, "contains": "wrapped"}]
+    },
+    {
+      "id": "invalid-wrapped-bullet-flush",
+      "input": "### Added\n\n- First line\ncontinued here",
+      "valid": false,
+      "violations": [{"line": 4, "contains": "wrapped line"}]
+    },
+    {
+      "id": "invalid-wrapped-paragraph",
+      "input": "### Changed\n\nLine one\nLine two\n\n- x.",
+      "valid": false,
+      "violations": [{"line": 4, "contains": "wrapped line"}]
+    },
+    {
+      "id": "invalid-nesting-too-deep",
+      "input": "### Added\n\n- a\n  - b\n    - c",
+      "valid": false,
+      "violations": [{"line": 5, "contains": "one level"}]
+    },
+    {
+      "id": "invalid-tab-indent",
+      "input": "### Added\n\n- a\n\t- b",
+      "valid": false,
+      "violations": [{"line": 4, "contains": "tab"}]
+    },
+    {
+      "id": "invalid-star-bullet",
+      "input": "* item",
+      "valid": false,
+      "violations": [{"line": 1, "contains": "use '- '"}]
+    },
+    {
+      "id": "invalid-empty-bullet",
+      "input": "### Added\n\n-",
+      "valid": false,
+      "violations": [{"line": 3, "contains": "empty bullet"}]
+    },
+    {
+      "id": "invalid-bullet-before-heading",
+      "input": "- Added thing.",
+      "valid": false,
+      "violations": [{"line": 1, "contains": "before the first"}]
+    },
+    {
+      "id": "invalid-heading-without-content",
+      "input": "### Added\n\n### Fixed\n\n- x.",
+      "valid": false,
+      "violations": [{"line": 1, "contains": "no content"}]
+    },
+    {
+      "id": "invalid-no-bullets",
+      "input": "### Added\n\nJust a paragraph.",
+      "valid": false,
+      "violations": [{"line": 1, "contains": "no bullet"}]
+    },
+    {
+      "id": "invalid-empty-entry",
+      "input": "",
+      "valid": false,
+      "violations": [{"line": 1, "contains": "empty"}]
+    },
+    {
+      "id": "invalid-unbalanced-bold",
+      "input": "### Added\n\n- Fixed **a crash.",
+      "valid": false,
+      "violations": [{"line": 3, "contains": "unbalanced bold"}]
+    },
+    {
+      "id": "invalid-unbalanced-code",
+      "input": "### Added\n\n- Fixed `a crash.",
+      "valid": false,
+      "violations": [{"line": 3, "contains": "code marker"}]
+    },
+    {
+      "id": "invalid-triple-star",
+      "input": "### Added\n\n- ***wow***",
+      "valid": false,
+      "violations": [{"line": 3, "contains": "***"}]
+    },
+    {
+      "id": "invalid-underscore-italic",
+      "input": "### Added\n\n- Fixed _a crash_ today.",
+      "valid": false,
+      "violations": [{"line": 3, "contains": "use * for italic"}]
+    },
+    {
+      "id": "invalid-double-underscore-bold",
+      "input": "### Added\n\n- __bold__ text",
+      "valid": false,
+      "violations": [{"line": 3, "contains": "use ** for bold"}]
+    },
+    {
+      "id": "invalid-nested-bold",
+      "input": "### Added\n\n- **a **b** c**",
+      "valid": false,
+      "violations": [{"line": 3, "contains": "bold"}]
+    },
+    {
+      "id": "invalid-line-over-limit-501",
+      "inputParts": ["### Added\n\n- ", {"repeat": "a", "times": 499}],
+      "valid": false,
+      "violations": [{"line": 3, "contains": "longer than 500"}]
+    },
+    {
+      "id": "invalid-entry-over-limit",
+      "inputParts": ["### Added\n\n", {"repeat": "- aaaaaaaa\n", "times": 800}],
+      "valid": false,
+      "violations": [{"line": 1, "contains": "longer than 8000"}]
+    },
+    {
+      "id": "invalid-too-many-bullets",
+      "inputParts": ["### Added\n\n", {"repeat": "- x\n", "times": 61}],
+      "valid": false,
+      "violations": [{"line": 1, "contains": "limit is 60"}]
+    },
+    {
+      "id": "invalid-control-character",
+      "input": "### Added\n\n- bad \u0007 char",
+      "valid": false,
+      "violations": [{"line": 3, "contains": "control"}]
+    },
+    {
+      "id": "invalid-bidi-override",
+      "input": "### Added\n\n- evil ‮ text",
+      "valid": false,
+      "violations": [{"line": 3, "contains": "bidirectional"}]
+    },
+    {
+      "id": "hostile-asterisk-run",
+      "inputParts": ["### Added\n\n- ", {"repeat": "*", "times": 498}],
+      "valid": false,
+      "violations": [{"line": 3, "contains": "***"}]
+    },
+    {
+      "id": "hostile-alternating-emphasis",
+      "inputParts": ["### Added\n\n- ", {"repeat": "*a", "times": 249}],
+      "valid": false,
+      "violations": [{"line": 3, "contains": "unbalanced italic"}]
+    }
+  ]
+}

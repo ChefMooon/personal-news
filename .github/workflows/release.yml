@@ -1,0 +1,95 @@
+# Electron release workflow. Build with Node 24 and package Windows artifacts into the prepared draft.
+# Trigger: a pushed tag vX.Y.Z (created by the release-update skill at a verified commit).
+# Retry: gh workflow run release.yml --ref vX.Y.Z   (never delete or move the tag)
+# electron-builder must keep "releaseType": "draft" so it uploads into the draft the prepare job created.
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Verify tag and prepare draft
+    runs-on: ubuntu-latest
+    outputs:
+      release_id: ${{ steps.prepare.outputs.release_id }}
+      version: ${{ steps.prepare.outputs.version }}
+    steps:
+      - name: Require a tag ref
+        if: github.ref_type != 'tag'
+        run: |
+          echo "::error::Run this workflow on a vX.Y.Z tag ref (gh workflow run release.yml --ref vX.Y.Z)."
+          exit 1
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Verify tag, versions and changelog; find or create the draft
+        id: prepare
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/release-prepare.mjs --tag "${{ github.ref_name }}" --repo "${{ github.repository }}"
+
+  build-windows:
+    name: Build and upload (Windows)
+    needs: prepare
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - name: Build
+        run: npm run build
+
+      - name: Lint
+        run: npm run lint:check
+
+      - name: Test
+        run: npm run test
+
+      - name: Package and upload to the draft
+        run: "npx electron-builder --win --publish always"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+  # To add macOS or Linux: enable the platform in release.config.json, then uncomment and adapt one job below,
+  # add it to the verify job's needs list, and add any signing secrets it needs. See references/release.config.md.
+  #
+  # build-macos:
+  #   needs: prepare
+  #   runs-on: macos-latest
+  #   steps: [same as build-windows, with: npx electron-builder --mac --publish always]
+  # build-linux:
+  #   needs: prepare
+  #   runs-on: ubuntu-latest
+  #   steps: [same as build-windows, with: npx electron-builder --linux --publish always]
+
+  verify:
+    name: Verify the draft
+    needs: [prepare, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Verify draft assets and notes against release.config.json
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/verify-release-draft.mjs --repo "${{ github.repository }}" --tag "${{ github.ref_name }}" --expect draft --notes --platforms ci
