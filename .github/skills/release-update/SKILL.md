@@ -1,7 +1,7 @@
 ---
 name: release-update
-description: 'Prepare and ship a Personal News release: changelog entry, version bump, checks, tag, CI build, draft verification, and an optional confirmed publish. Use when asked to release, cut a version, tag a release, or publish an update. Requires a version such as 1.2.0 or 1.2.0-beta.1.'
-argument-hint: 'Version, for example 1.2.0 or 1.2.0-beta.1'
+description: 'Prepare and ship a Personal News release: changelog entry, version bump, checks, tag, CI build, draft verification, and an optional confirmed publish. Use when asked to release, cut a version, tag a release, or publish an update. Requires a version such as 1.2.0 or 1.2.0-beta.1, or major, minor or patch to increment the current version.'
+argument-hint: 'Version (1.2.0, 1.2.0-beta.1) or major, minor, patch'
 user-invocable: true
 ---
 
@@ -13,7 +13,8 @@ The release ends as a **verified draft** with a link. Publishing is a separate c
 
 ## Inputs
 
-- `version`: `X.Y.Z` or `X.Y.Z-beta.N` (semver, optional leading `v`). If missing, ask with `vscode/askQuestions` (header `version`). It must be strictly greater than the version in `package.json`; re-ask until it is.
+- `version`: `X.Y.Z` or `X.Y.Z-beta.N` (semver, optional leading `v`), or one of `major`, `minor`, `patch`. If missing, ask with `vscode/askQuestions` (header `version`). The resolved version must be strictly greater than the version in `package.json`; re-ask until it is.
+- **Bump keywords.** Resolve `major`, `minor` or `patch` once, before any other step, from the current version in `package.json` using standard semver: `patch` 1.2.3 -> 1.2.4, `minor` 1.2.3 -> 1.3.0, `major` 1.2.3 -> 2.0.0. From a prerelease current version (for example 1.2.3-beta.2), `patch` gives 1.2.3, `minor` gives 1.3.0 and `major` gives 2.0.0, as semver defines. If the project has `scripts/bump-version.mjs`, cross-check with `npm run bump-version -- <keyword> --dry-run` and stop if the two differ. Show the resolved `X.Y.Z` and the current version, ask the user to confirm it (header `version`), then use that explicit `X.Y.Z` for every later step (changelog, bump, tag). A keyword never produces a prerelease: a `-beta.N` release needs an explicit version.
 - The tag is always `vX.Y.Z[-pre.N]`. Prerelease versions create a prerelease draft.
 
 Read `release.config.json` first. It defines the stack, the release branch, the version files, the checks, the platforms, and the expected assets. Stop and report any config problem; do not guess values.
